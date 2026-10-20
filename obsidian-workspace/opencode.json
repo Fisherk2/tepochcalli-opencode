@@ -75,9 +75,9 @@
     }
   },
   "instructions": [
-    "obsidian-workspace/.opencode/skills/obsidian-markdown/SKILL.md", 
-    "obsidian-workspace/.opencode/skills/obsidian-cli/SKILL.md", 
-    "obsidian-workspace/.opencode/skills/obsidian-vault/SKILL.md", 
+    "obsidian-workspace/.opencode/skills/obsidian-markdown/SKILL.md",
+    "obsidian-workspace/.opencode/skills/obsidian-cli/SKILL.md",
+    "obsidian-workspace/.opencode/skills/obsidian-vault/SKILL.md",
     "obsidian-workspace/.opencode/skills/markdown-mermaid-writing/SKILL.md"
   ],
   "references": {
@@ -99,19 +99,6 @@
   },
   "mcp": {
     "servers": {
-      "codebase-memory-mcp": {
-        "disabled": false
-      },
-      "context7": {
-        "disabled": false,
-        "type": "remote",
-        "url": "https://mcp.context7.com/mcp"
-      },
-      "chrome-devtools": {
-        "type": "local",
-        "command": ["npx", "-y", "chrome-devtools-mcp@1.7.0"],
-        "disabled": true
-      },
       "excel": {
         "type": "local",
         "command": ["uvx", "excel-mcp-server", "stdio"],
@@ -127,16 +114,6 @@
           "MCP_JUPYTER_TOKEN": "{env:MCP_JUPYTER_TOKEN}",
           "MCP_JUPYTER_NOTEBOOK_PATH": "agent_demo.ipynb"
         }
-      },
-      "vercel-grep": {
-        "disabled": false,
-        "type": "remote",
-        "url": "https://mcp.grep.app"
-      },
-      "gitmcp": {
-        "disabled": false,
-        "type": "remote",
-        "url": "https://gitmcp.io/docs"
       }
     }
   },
