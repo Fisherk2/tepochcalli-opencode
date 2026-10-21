@@ -20,25 +20,32 @@
   - 📦 Versions ancladas: `cocoindex==1.0.25` · `lancedb==0.40.0` · `sentence-transformers==6.2.0` · `torch==2.14.1` · CPython 3.12.14. Extras **con guion**: `cocoindex[lancedb,sentence-transformers]`.
   - Dep.: — · Tamaño: M
 
-- [ ] **T2 · Cimientos del paquete: pyproject pineado, uv.lock, venv 3.12, gitignore del runtime**
+- [x] **T2 · Cimientos del paquete: pyproject pineado, uv.lock, venv 3.12, gitignore del runtime** ✅ *hecho — `3716d99` + `3f1b292`*
   - Subagentes: `python-pro`, `dependency-manager` · Skills: `source-driven-development`, `dependency-audit`, `env-setup`, `clean-code`
   - AC: pines `cocoindex==1.0.25` (+extra `lancedb`), `sentence-transformers>=3.3.1,<4`, `docling>=2,<3` (sin GPU); `uv.lock` commiteado; `.python-version`=3.12; `tepochcalli_flow` importable; `.gitignore` ignora `{venv,db,models,bin,config}` y **no** ignora `{flow,pyproject.toml,uv.lock}`; ruff `ANN` activo y limpio; auditoría de CVEs en el commit
   - Verificar: `rm -rf .tepochcalli/venv && uv sync && uv run pytest` desde cero; `git check-ignore -v` en ambas direcciones
   - Dep.: T1 · Tamaño: M
+  - ✅ **Verificado:** `uv.lock` con `cocoindex[lancedb,sentence-transformers]==1.0.25` + `docling>=2,<3`; `lancedb`/`pyarrow` **no** pineados aparte; `.python-version`=3.12; paquete editable con `__version__`; `git check-ignore` en ambas direcciones (con barra final — sin ella git no reconoce dirs inexistentes); ruff `ANN` + `line-length=100` limpio; auditoría CVE/licencia **sin bloqueantes** (las 9 versiones no afectadas, licencias MIT/Apache-2.0, compatibles con el LICENSE MIT del repo) cerrada en `3f1b292`.
+  - 📌 **Hallazgos que recaen en tareas posteriores:**
+    * **NTFS rompe los bits ejecutables** — `/mnt/HDDFish` es `fuseblk`, `chmod +x` devuelve `644`. Los scripts de `venv/bin/` son inejecutables → `uv run pytest` / `uv run ruff` caen al Python global 3.14. **Workarounds: `uv run python -m <mod>` y `uvx ruff@<lock>`** (servidos desde ext4). ⚠️ Afecta a **Phase 3**: el `venv/bin/tepochcalli-mcp` será inejecutable si el vault del usuario vive en NTFS bajo Linux → nota en ADR-004 / spec-mcp-server.
+    * **`UV_PROJECT_ENVIRONMENT=venv` es obligatorio** — uv 0.12.9 rechaza `project-environment` en `[tool.uv]`; solo existe vía env var. T3+ y el wizard de Phase 3 deben exportarlo.
+    * **torch a ruedas CPU** (`3f1b292`): venv **6,3 GB → 2,0 GB**, paquetes CUDA en lock **19 → 0**, `torch 2.14.1+cpu`. Requiere declarar `torch`/`torchvision` como dependencias **directas** porque `tool.uv.sources` no aplica a transitivas (upstream `astral-sh/uv#9446`); `torchvision` debía moverse también (ABI CUDA → `operator torchvision::nms does not exist`, revienta solo al parsear PDF → habría estallado en **T7**). Las 9 aserciones del spike re-verificadas en verde bajo CPU.
+    * **TRD §4 queda stale** — planifica `sentence-transformers >=3,<4` pero el lock fija **6.2.0**. Decisión pendiente del usuario en un cambio aparte (T2 no lo editó por alcance).
+    * **docling pineado por rango** `>=2,<3` (advisory de la auditoría): el `uv.lock` es la única garantía de reproducibilidad.
 
 - [ ] **T3 · Config loader y resolución del cache de modelos (cierra la decisión `SBERT_HOME`)**
   - Subagentes: `python-pro`, `security-auditor` · Skills: `solid`, `clean-code`, `test-driven-development`, `security-and-hardening`
-  - AC: `tomllib` con fallbacks a default (MiniLM/384d/1024/128/top_k=5); `provider` ∈ {local, litellm}; `api_key_env` nunca en `repr`/logs; `SENTENCE_TRANSFORMERS_HOME` y `HF_HOME` → `<vault>/.tepochcalli/models`; `tepochcalli.toml.example` commiteado
-  - Verificar: `uv run pytest tests/phase1/test_config.py -v` verde
+  - AC: `tomllib` con fallbacks a default (**MiniLM / 384d / `chunk_size=1536` / `overlap=192` bytes / `top_k=5`** — *corregido por D11*); `provider` ∈ {local, litellm}; **`device` default `"cpu"`** (E1, añadido por D11); `api_key_env` **nunca** en `repr`/logs; `SENTENCE_TRANSFORMERS_HOME` y `HF_HOME` → `<vault>/.tepochcalli/models`; `tepochcalli.toml.example` commiteado y **conforme a `spec-embeddings.md` §tepochcalli.toml** (que ya lleva 1536/192 y `device`)
+  - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest tests/phase1/test_config.py -v` verde *(NTFS: sin `python -m` no funciona)*
   - Dep.: T2 · Tamaño: S
 
-### ⛔ CP-A · Cimientos — *1/5 · NO desbloqueado*
+### ⛔ CP-A · Cimientos — *4/5 · NO desbloqueado (falta T3)*
 - [x] API v1 probada y spec corregida ✅ *(T1, `0978790`)*
-- [ ] ⏳ **Revisión humana de la enmienda de la spec** — pendiente del usuario: `specs/spec-rag-engine.md` §Proposed Solution/§Fuentes/§Chunking/§Embeddings, `specs/spec-embeddings.md` §tepochcalli.toml, y `docs/WORKFLOW.md` §8 (D11/D12 + nota de mapeo D11)
-- [ ] `uv sync` reproducible desde cero → **T2**
-- [ ] Pines exactos + ruff limpio → **T2**
-- [ ] `tepochcalli.toml` real nunca commiteable → **T3**
-- ⚠️ **Gate:** T2 NO arranca hasta que el usuario revise la enmienda — el esqueleto de T2 y T5 se apoyan directamente en el esqueleto v1 corregido.
+- [x] Revisión humana de la enmienda ✅ *(usuario: «Continua», 2026-10-21)*
+- [x] `uv sync` reproducible desde cero ✅ *(T2, `3716d99`)*
+- [x] Pines exactos + ruff limpio ✅ *(T2; auditoría CVE sin bloqueantes en `3f1b292`)*
+- [ ] ⏳ `tepochcalli.toml` real nunca commiteable → **T3** (única entrada pendiente)
+- ⚠️ **Gate:** T4 (Sub-fase B) NO arranca hasta que T3 cierre la última entrada de CP-A.
 
 ---
 
