@@ -29,7 +29,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `specs/spec-agent-workflow.md`).
 * Sin demonios, sin puertos: solo stdio local y archivos embebidos (ADR-002).
 * `obsidian-workspace/.opencode/` (agents/commands/skills) ya existe: se DOCUMENTA, no se
-  modifica sin tarea explícita de Phase 4.
+  modifica sin blueprint Approved (Phase 4) y tarea de ejecución autorizada (Phase 5).
 * Convención de folders numerados del vault (D9.1): `00-Resources/` = entrada del usuario
   (única indexable, anidamiento libre); `01-…-05-…` = bandejas del agente (incluye
   `04-review/` y `05-outputs/`; el usuario lee, extrae y borra — no deposita ni edita);
