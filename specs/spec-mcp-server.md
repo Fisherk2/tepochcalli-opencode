@@ -4,11 +4,11 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (capa MCP Server), ADR-005 (ports/adapters), specs/spec-rag-engine.md, specs/spec-markitdown.md, docs/WORKFLOW.md Phase 2
+* **Traceability:** docs/UH.md (capa MCP Server), ADR-005 (ports/adapters), ADR-007 (tool `rag_status` + dialecto `E_*`, D7.3), specs/spec-rag-engine.md, specs/spec-markitdown.md, specs/spec-embeddings.md, docs/WORKFLOW.md Phase 2
 
 ## Summary
 
-`tepochcalli-rag` es un servidor MCP en Python (`.tepochcalli/mcp/`) que corre como proceso stdio local dentro del venv del proyecto y expone al harness OpenCode V2 tres herramientas con contrato fijo: `search`, `index_refresh` y `add_source`. Es el puerto (hexagonal) detrás del cual vive el motor CocoIndex/LanceDB; garantiza respuestas con citas estructuradas y presupuesto de tokens ≤2000 por consulta.
+`tepochcalli-rag` es un servidor MCP en Python (`.tepochcalli/mcp/`) que corre como proceso stdio local dentro del venv del proyecto y expone al harness OpenCode V2 cuatro herramientas con contrato fijo: `search`, `index_refresh`, `add_source` y `rag_status` (observabilidad D7.3/ADR-007). Es el puerto (hexagonal) detrás del cual vive el motor CocoIndex/LanceDB; garantiza respuestas con citas estructuradas y presupuesto de tokens ≤2000 por consulta.
 
 ## Problem / Motivation
 
@@ -25,6 +25,7 @@ Sin una frontera tipada, el agente leería archivos crudos del vault (tokens por
 * Presupuesto de tokens por respuesta: diseño determinista ≤~1600 tokens de payload (criterio 4, con margen).
 * `index_refresh` delta-only con reporte `{scanned, indexed, skipped, elapsed}` (criterio 2).
 * `add_source` = conversión markitdown + escritura en `00-Resources/<subdir>/` + refresh (criterio 7).
+* `rag_status` = diagnóstico del provider/embedder e índice (estado `ok`/`degraded`, motivos `E_*` con `fix_hint` accionable), coste <200 tokens por forma (D7.3/ADR-007).
 
 ### Non-Goals
 
@@ -83,9 +84,41 @@ Contrato: `add_source(uri: str, subdir: str | None = None)` — convierte URL/ar
 
 * Validación en el borde: `subdir` normalizado, sin `..`, queda dentro de `00-Resources/`; `uri` acepta `http(s):`, `file:` (ver advertencia de seguridad).
 
+### Tool `rag_status` (D7.3/ADR-007)
+
+Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo del provider de embeddings, el índice y la config; es barato por diseño (<200 tokens, ver §Presupuesto de tokens) para que el agente lo llame ante cualquier `E_*` sin penalizar la conversación.
+
+```jsonc
+// request (arguments del tool call)
+{ }
+
+// response — instalación sana (salida 1 del menú del wizard)
+{ "embedder": { "mode": "local",
+                "model": "paraphrase-multilingual-MiniLM-L12-v2",
+                "dims": 384, "provider": null },
+  "index":    { "rows": 1240, "model_matches_config": true,
+                "last_refresh": "2026-10-21T14:32:10Z", "db_size_bytes": 18400000 },
+  "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true },
+  "health":   { "state": "ok", "reason": null, "fix_hint": null } }
+
+// response — instalación con "Configurar después" (salida 5 del menú embedder)
+{ "embedder": { "mode": "none", "model": null, "dims": null, "provider": null },
+  "index":    { "rows": 0, "model_matches_config": true,
+                "last_refresh": null, "db_size_bytes": 0 },
+  "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true },
+  "health":   { "state": "degraded", "reason": "E_NO_EMBEDDER",
+                "fix_hint": "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`" } }
+```
+
+* Salida 5 ("Configurar después"): el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config.
+
+* `embedder.mode`: `local` (peso en `.tepochcalli/models/`), `api` (LiteLLM: `provider` nombra el proveedor, `model` su id) o `none` (sin provider — salida 5).
+* `index.model_matches_config`: `false` cuando el campo `model` de los metadatos del índice ≠ `[embedding].model` de config (gate anti-cruce de dims; el índice registra `model + dims` en la instalación, D7.1).
+* `health.reason` usa exclusivamente los códigos de §Códigos de error estructurados; `fix_hint` es la solución exacta para el usuario (la regla del vault en specs/spec-agent-workflow.md obliga al agente a reportarla, no el error crudo).
+
 ### Manejo de errores (formato único)
 
-Toda falla → tool result con `isError` y payload JSON canónico (nunca texto libre):
+Toda falla → tool result con `isError` y payload JSON canónico (nunca texto libre): los códigos heredados llevan `details`; los códigos `E_*` de D7.3 llevan `fix_hint` (ver §Códigos de error estructurados).
 
 ```jsonc
 { "error": { "code": "INDEX_EMPTY",
@@ -97,10 +130,31 @@ Toda falla → tool result con `isError` y payload JSON canónico (nunca texto l
 |---|---|---|
 | `VALIDATION_ERROR` | argumentos inválidos (top_k>20, glob malformado, subdir fuera de 00-Resources) | reintentar corrigiendo args |
 | `INDEX_EMPTY` | tabla `chunks` inexistente | invocar `index_refresh()` |
-| `INDEX_STALE_MODEL` | dims/modelo del índice ≠ config actual | avisar usuario: requiere re-index (spec-embeddings) |
+| `INDEX_STALE_MODEL` | dims/modelo del índice ≠ config actual | avisar usuario: requiere `tepochcalli reindex --confirm` (spec-embeddings; alias D7.3: `E_MODEL_MISMATCH`) |
 | `ENGINE_LOCKED` | refresh concurrente en curso | reintentar en segundos |
 | `SOURCE_UNREACHABLE` | add_source no pudo fetch/convertir | sugerir descarga manual + `index_refresh()` |
 | `INTERNAL` | inesperado (detalles al log, no al cliente) | reportar issue |
+
+### Códigos de error estructurados (D7.3/ADR-007)
+
+Además de los códigos heredados de la tabla anterior, los tools emitidos desde la frontera de provider usan el dialecto `E_*` con payload `{error:{code,message,fix_hint}}:
+
+```jsonc
+{ "error": { "code": "E_API_AUTH",
+             "message": "La clave de OpenAI (LiteLLM) fue rechazada al incrustar la query.",
+             "fix_hint": "Ejecuta `tepochcalli config embedder` y re-ingresa la clave; la clave nunca se registra en logs" } }
+```
+
+| Código | Significado | Tools que pueden emitirlo |
+|---|---|---|
+| `E_NO_EMBEDDER` | sin modelo local ni API configurada (modo `none`) | `search`, `index_refresh`, `add_source` (diagnóstico en `rag_status`) |
+| `E_API_AUTH` | clave de API inválida/expirada — detectada al primer embed; se nombra el proveedor, la clave NUNCA se loggea | `search`, `index_refresh`, `add_source` |
+| `E_MODEL_MISMATCH` | `config.model` ≠ modelo registrado en los metadatos del índice; `search` se niega a cruzar dims | `search`, `index_refresh` |
+| `E_MODEL_INVALID` | modelo custom de HuggingFace que fallaría el test-embed o no es embedding model (p.ej. `models/` corrompido post-instalación) | `search`, `index_refresh`, `add_source` |
+| `E_OFFLINE_NO_CACHE` | modo `--offline` sin `models/` cacheado ni config API presente | `search`, `index_refresh`, `add_source` |
+
+* Nota de compatibilidad: `E_MODEL_MISMATCH` es el término D7.3 de la condición que el código heredado `INDEX_STALE_MODEL` ya describía; mientras los contract tests de v1 lo fijan, ambos viajan en el payload (`code` = `E_MODEL_MISMATCH`, `details.legacy_code` = `INDEX_STALE_MODEL`). Los demás `E_*` son nuevos y no tienen alias.
+* Regla del vault (`AGENTS.md` del workspace, specs/spec-agent-workflow.md): ante cualquier `E_*`, el agente llama `rag_status()` y reporta al usuario la solución exacta del `fix_hint`, no el error crudo.
 
 ### Presupuesto de latencia (<500ms, criterio 3)
 
@@ -122,6 +176,7 @@ Diseño determinista en el server (no depende del modelo):
 * Overhead de citación por resultado ≈25 tokens (path+heading+offsets compactos) → +125 tokens.
 * Techo duro: si la suma estimada (tokenizador aprox chars/4 para ES/EN) excede 1600, se descartan resultados de menor `score` y se marca `truncated: true` — deja ≥400 tokens de margen para la pregunta del usuario y la respuesta generada dentro de los 2000 totales.
 * Fixtures de test assertan la cota con queries adversas (unicode, listas, PDFs con tablas).
+* `rag_status`: su shape fijo de cuatro bloques (`embedder/index/config/health`) lo mantiene **<200 tokens** por construcción — el coste de llamarlo ante cualquier `E_*` es despreciable (D7.3/ADR-007).
 
 ### Carga de configuración
 
@@ -147,6 +202,7 @@ Diseño determinista en el server (no depende del modelo):
 ## Testing Strategy
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
+* Contract tests D7.3: `rag_status` con shape exacto de los 4 bloques y <200 tokens; los cinco códigos `E_*` (`E_NO_EMBEDDER`, `E_API_AUTH`, `E_MODEL_MISMATCH`, `E_MODEL_INVALID`, `E_OFFLINE_NO_CACHE`) con payload `{error:{code,message,fix_hint}}`; instalación degraded (salida 5) → `search` = `E_NO_EMBEDDER` + `rag_status` = `degraded` con `fix_hint`.
 * Fixtures de presupuesto: asserts de tokens ≤1600 payload y de `took_ms` <500 en CI con HW de referencia (metodología TRD).
 * Golden answers: queries ES/EN sobre la muestra de `00-Resources/` (md+PDF) verificando que cada resultado cite `source_path` real y offsets reproducibles.
 
@@ -155,6 +211,7 @@ Diseño determinista en el server (no depende del modelo):
 * Solo stdio local; sin binding de red (docs/SECURITY.md).
 * `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera de `00-Resources/` ni lee fuera del vault salvo `file:` explícito en `add_source` (riesgo documentado del canal markitdown).
 * Errores `INTERNAL` nunca exponen stack traces al harness.
+* Las claves API nunca aparecen en logs ni en payloads de error: `E_API_AUTH` nombra solo el proveedor (D7.3/ADR-007); la clave vive únicamente en `.tepochcalli/config/tepochcalli.toml` (gitignored) o `{env:VAR}`.
 
 ## Rollback / Monitoring
 
@@ -169,4 +226,4 @@ Diseño determinista en el server (no depende del modelo):
 
 * MCP Python SDK — https://github.com/modelcontextprotocol/python-sdk
 * OpenCode V2 MCP servers — https://opencode.ai/v2/docs/mcp-servers/
-* ADR-005; specs/spec-rag-engine.md; specs/spec-markitdown.md
+* ADR-005; ADR-007 (`rag_status` + dialecto `E_*`, D7.3); specs/spec-rag-engine.md; specs/spec-markitdown.md; specs/spec-embeddings.md
