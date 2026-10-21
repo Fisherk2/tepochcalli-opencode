@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (deuda cognitiva 6), ADR-006 (modelo default), ADR-007 (selección de provider en instalación, D7), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-mcp-server.md (`rag_status`, códigos `E_*`)
+* **Traceability:** docs/UH.md (deuda cognitiva 6), ADR-006 (modelo default), ADR-007 (selección de provider en instalación, D7), ADR-008 (transparencia de hardware y swap atómico, D8), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-mcp-server.md (`rag_status`, códigos `E_*`)
 
 ## Summary
 
@@ -77,10 +77,10 @@ El wizard incluye un paso **"Embedding provider"** (ubicación y rollback en spe
 | 4 | API externa vía LiteLLM (OpenAI/Cohere/Voyage/Ollama-compatible) | `litellm` / model del proveedor | ninguna | Clave en `.tepochcalli/config/tepochcalli.toml` (gitignored, nunca en logs); sin descarga local; coste por token advertido |
 | 5 | "Configurar después" | ninguno — `mode: none` | ninguna | el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config |
 
-#### Gate test-embed (salida 3)
+#### Gate test-embed y prueba de footprint (salidas locales — D7.1 + D8.1)
 
-1. El wizard descarga el ID de HuggingFace propuesto (con `HF_TOKEN` opcional si el modelo es gated).
-2. Incrusta la frase de prueba `"tepochcalli embedding check"` con sentence-transformers.
+1. Para las salidas 1-3 (todo camino local, presets y HF custom por igual) el wizard descarga el modelo y corre la prueba de embedding: incrusta la frase de prueba `"tepochcalli embedding check"` con sentence-transformers **mientras muestrea el RSS pico del proceso** — la huella medida (`medido`) se muestra en la fila del menú; para la salida 3 la prueba actúa además como portero de validez.
+2. El wizard descarga el ID de HuggingFace propuesto (con `HF_TOKEN` opcional si el modelo es gated — el campo `gated` de la API de HF lo anuncia antes de la descarga, D8.1).
 3. Exige: respuesta vectorial válida (dims > 0, floats finitos) y lectura del nombre real del modelo desde su config.
 4. Escribe `model + dims` en los metadatos del índice (`.tepochcalli/db/`); `search` los usará luego para rechazar cruces de dimensiones (`E_MODEL_MISMATCH`, spec-mcp-server).
 5. Cualquier fallo → `E_MODEL_INVALID`: el candidato se rechaza —incluidos modelos que sentence-transformers cargaría en silencio como no-embeddings— y el wizard vuelve al menú sin escribir config.
@@ -94,17 +94,23 @@ Embebido en el binario Rust del wizard vía `include_str!`. Actualizar modelos =
 | `name` | string | Etiqueta mostrada en el menú |
 | `hf_id` | string | ID en HuggingFace (p.ej. `BAAI/bge-m3`) |
 | `dims` | integer | Dimensiones del vector (384, 1024…) |
-| `size_mb` | integer | Peso estimado de la descarga |
+| `size_mb` | integer | Peso estimado de la descarga (blob HF) |
 | `gpu_recommended` | boolean | Muestra aviso de GPU recomendada (no bloquea) |
 | `recommended_flag` | boolean | Marca RECOMENDADO / pre-seleccionado (exactamente un preset) |
+| `disk_mb` | integer | (D8.1, presets.toml v2) Disco a ocupar en `models/` tras la descarga |
+| `min_ram_gb` | float | (D8.1) RAM mínima para que el modelo funcione en CPU |
+| `rec_ram_gb` | float | (D8.1) RAM cómoda (holgada) — denominador del ratio de badge D8.2 |
 
 ```toml
-# presets.toml (embebido en el binario)
+# presets.toml (embebido en el binario) — v2 con campos de hardware (D8.1/ADR-008)
 [[preset]]
 name = "MiniLM multilingüe (default)"
 hf_id = "paraphrase-multilingual-MiniLM-L12-v2"
 dims = 384
 size_mb = 470
+disk_mb = 500
+min_ram_gb = 0.7
+rec_ram_gb = 1.0
 gpu_recommended = false
 recommended_flag = true
 
@@ -113,9 +119,39 @@ name = "BGE-M3 (GPU)"
 hf_id = "BAAI/bge-m3"
 dims = 1024
 size_mb = 2300
+disk_mb = 2300
+min_ram_gb = 2.4
+rec_ram_gb = 2.9
 gpu_recommended = true
 recommended_flag = false
 ```
+
+#### Tres fuentes de verdad de los requisitos (D8.1/ADR-008)
+
+Cada fila del menú muestra `💾 disk (MB) · 🧠 RAM requirement · 🎮 GPU status` ANTES de la
+selección, para presets y para IDs libres de HuggingFace. Fuentes en orden decreciente de
+certidumbre; **todo número mostrado se etiqueta con su procedencia** (`medido`/`estimado`/`declarado`)
+— nunca presentar una estimación como promesa (NFR cero-sorpresas).
+
+| Fuente | Certidumbre | Cómo se obtiene | Cuándo aplica |
+|---|---|---|---|
+| **Medido** | ground truth | muestreo del RSS pico durante la prueba de embedding del gate test-embed (salidas 1-3, presets y HF custom por igual) | tras ejercitar el modelo en el host real |
+| **Estimado (API HF)** | fórmula sobre metadatos | consulta a la API pública de HF antes de la descarga (tabla §abajo) | cualquier id de HF, pre-elección |
+| **Declarado (presets.toml v2)** | curado por mantenedores | campos `disk_mb`, `min_ram_gb`, `rec_ram_gb`, `gpu_recommended` | presets; fallback cuando no hay red ni sondeo |
+
+#### Extracción de requisitos vía API pública de HuggingFace (D8.1)
+
+Para CUALQUIER id de HF (preset o libre), el wizard consulta la API pública ANTES de descargar:
+
+| Campo de la API HF | Uso en el menú |
+|---|---|
+| `safetensors.parameters.total` | conteo de parámetros → RAM estimada con la fórmula canónica `params × 4 bytes × 1.3 overhead factor` (fp32, CPU resident); VRAM para modo GPU: el mismo tamaño de pesos + margen de activaciones |
+| tamaños de blobs de `model.safetensors` | requisito de disco exacto (`disk_mb` estimado) |
+| `gated` | si es `true` → el requisito de `HF_TOKEN` se surfaced temprano, antes de intentar la descarga |
+| `pipeline_tag` + tags | pre-filtro barato antes del gate: tags válidos = `sentence-similarity` / `feature-extraction` / `sentence-transformers`; un modelo sin ninguno de los tres se rechaza como "not an embedding model" con semántica `E_MODEL_INVALID` (sin tocar disco) |
+
+* Verificación en vivo (2026-10-21): `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` reporta `safetensors.parameters.total` = 117.6M → RAM estimada ≈ 117.6M × 4 B × 1.3 ≈ 0.61 GB, consistente con la fila de ejemplo de badges (host 4 GB: `recommended`).
+* Host sin red o API inalcanzable: el número estimado degrada a `declarado` (presets) o a "sin dato" (id libre); la instalación nunca falla por esto (misma regla de fallback que D8.2 en specs/spec-installer-wizard.md).
 
 #### HF_TOKEN
 
@@ -170,6 +206,8 @@ top_k_default = 5
 * Sin GPU obligatoria para el default. Si RAM <8GB: el wizard aborta con mensaje y requisitos (no instala "mitad").
 
 ### Procedimiento de swap de modelo
+
+Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap atómico sin reinstalar — el índice viejo permanece servable durante el re-index y el modelo viejo solo se borra tras el éxito (`--keep-previous` desactiva el GC). La secuencia de estados e invariantes viven en specs/spec-installer-wizard.md §Swap atómico; no se duplican aquí. El procedimiento manual equivalente:
 
 1. Editar `[embedding]` en `tepochcalli.toml`.
 2. El próximo `index_refresh` detecta mismatch (campo `model` de las filas vs config) → responde `INDEX_STALE_MODEL` (spec-mcp-server §errores; dialecto D7.3: `E_MODEL_MISMATCH`) y `search` se niega a cruzar dims.
