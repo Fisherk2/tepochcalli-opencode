@@ -19,9 +19,9 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * Cuatro capas con dependencias que apuntan hacia el contrato MCP: `opencode.json/.opencode` →
   (MCP stdio) → `tepochcalli-rag` → flow CocoIndex → LanceDB. El harness NUNCA habla con el
   motor directamente; el motor NUNCA habla con el harness (ADR-005, `specs/adr/`).
-* **Decisiones D1-D6 confirmadas** (motor, `.tepochcalli/`, LanceDB, MiniLM, wizard, contratos
-  MCP): cambiar una exige ADR nuevo en `specs/adr/` que reemplace al anterior — nunca re-editar
-  un ADR Accepted.
+* **Decisiones D1-D7 confirmadas** (motor, `.tepochcalli/`, LanceDB, MiniLM, wizard, contratos
+  MCP, selección de embedder): cambiar una exige ADR nuevo en `specs/adr/` que reemplace al
+  anterior — nunca re-editar un ADR Accepted.
 * Runtime bajo **`.tepochcalli/`** (engine-neutral): `flow/` `mcp/` `db/` `models/` `venv/`
   `bin/` `config/` + `pyproject.toml`. Layout canónico en `specs/spec-vault-structure.md`.
 * **MCP-first en el vault:** toda respuesta sobre `00-Resources/` pasa por `search` de
@@ -77,7 +77,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Wizard Rust: fases, rollback, cargo-dist |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | markitdown-mcp: conversión a Markdown + seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | 9 comandos, 5 agentes, auditoría de skills |
-| [specs/adr/](specs/adr/) | ADR-001…006 (todas Accepted, 2026-10-21) |
+| [specs/adr/](specs/adr/) | ADR-001…007 (todas Accepted, 2026-10-21) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagramas C4/secuencia + inventario + índice ADR |
 | [docs/PRD.md](docs/PRD.md) · [docs/TRD.md](docs/TRD.md) | Requisitos de producto / técnicos |
 | [docs/APPFLOW.md](docs/APPFLOW.md) | Journeys de usuario (diarios, wizard, fallo) |

@@ -55,7 +55,7 @@ repo                                # este repositorio (producto + plantilla)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
 │   ├── spec-*.md                   #   7 specs (motor, MCP, vault, embeddings, wizard…)
-│   └── adr/adr-NNN-*.md            #   6 ADRs aceptados 2026-10-21
+│   └── adr/adr-NNN-*.md            #   7 ADRs aceptados 2026-10-21
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
     ├── 00-Resources/ 01-tasks/ 02-drafts/ 03-citations/
@@ -65,7 +65,7 @@ repo                                # este repositorio (producto + plantilla)
     └── (wizard Rust lo materializa en el vault del usuario)
 ```
 
-## Stack técnico (decisiones D1-D6, inmutables sin ADR nuevo)
+## Stack técnico (decisiones D1-D7, inmutables sin ADR nuevo)
 
 | Componente | Decisión | ADR |
 |---|---|---|
@@ -73,8 +73,9 @@ repo                                # este repositorio (producto + plantilla)
 | Runtime dir | **`.tepochcalli/`** engine-neutral (flow/mcp/db/models/venv/bin/config) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) (db) + layout D2 |
 | Vector store | **LanceDB embebido** (file-based, sin daemon/puerto) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) |
 | Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
+| Selección de embedder (wizard) | **menú "Embedding provider"** con default preseleccionado; `presets.toml` como datos; modo `degraded` + `rag_status` (D7) | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
 | Instalador | **TUI Rust + cargo-dist + GitHub Releases** (`curl|sh`, `cargo binstall`); NO bunx | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) |
-| Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md) |
+| Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
 | Conversor soporte | **markitdown-mcp** (oficial, stdio local, mismo venv) | specs/spec-markitdown.md |
 | Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) |
 
@@ -93,7 +94,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 
 | Siempre (Always) | Preguntar antes (Ask first) | Nunca (Never) |
 |---|---|---|
-| Respetar contratos D1-D6 o escribir ADR nuevo | Añadir dependencias al `pyproject.toml` pineado | Commitear claves, `config/`, `db/`, `models/`, `venv/` |
+| Respetar contratos D1-D7 o escribir ADR nuevo | Añadir dependencias al `pyproject.toml` pineado | Commitear claves, `config/`, `db/`, `models/`, `venv/` |
 | Specs antes que código; commits atómicos Convención | Cambiar top_k por default o tamaño de chunk | Modificar `docs/UH.md`, `obsidian-workspace/.opencode/` (agents/commands/skills), `README.md`, `LICENSE` |
 | Validar entradas en el borde MCP (`add_source` rutas) | Añadir un nuevo MCP server al payload | Exponer el RAG por red (stdio local únicamente) |
 | Citas estructuradas en toda respuesta RAG | Re-index strategy distinta de "swap=full" | Hacer que el instalador toque `.obsidian/` |
@@ -122,6 +123,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) | uv + venv local de proyecto | Accepted 2026-10-21 |
 | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md) | MCP como capa ports/adapters (`tepochcalli-rag`) | Accepted 2026-10-21 |
 | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como modelo default | Accepted 2026-10-21 |
+| [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4; reemplaza solo ADR-006 §4.1) | Accepted 2026-10-21 |
 
 ## Referencias
 
