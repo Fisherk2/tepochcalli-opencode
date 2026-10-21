@@ -64,7 +64,7 @@ nativas.
 7. Pueda procesar distintos formatos de texto, si no, utilizar el convertidor Markdown para que pueda manipularse adecuadamente.
 
 Verificación: metodología y fixtures en [docs/TRD.md](TRD.md); gate final en
-[docs/WORKFLOW.md](WORKFLOW.md) Phase 5; enlaces de cobertura en [SPEC.md](../SPEC.md).
+[docs/WORKFLOW.md](WORKFLOW.md) Phase 6 (E2E); enlaces de cobertura en [SPEC.md](../SPEC.md).
 
 ## 7. Métricas de producto
 
@@ -78,5 +78,5 @@ Verificación: metodología y fixtures en [docs/TRD.md](TRD.md); gate final en
 |---|---|---|
 | CocoIndex API inestable (early-stage) | pin de versión en pyproject; escape hatch documentado | ADR-001/004, spec-rag-engine |
 | Docling lento en PDFs enormes | exclusión del criterio de 30s para casos extremos; progreso visible; TD-2 | TECH_DEBT |
-| Payload de skills inflado (208) | auditoría Anexo A → aseo Phase 4 | spec-agent-workflow |
+| Payload de skills inflado (208) | auditoría Anexo A → matriz de conflictos Phase 4 (blueprint) → aseo ejecutado en Phase 5 | spec-agent-workflow |
 | Usuario espera funcionamiento offline total | comunicación clara: primer arranque requiere internet; `--offline` solo con caché | TRD, wizard UX |

@@ -87,7 +87,7 @@ todo egress y exige caché previa.
 ## Hardening futuro (no bloquea v1)
 
 * SBOM por release (cargo + uv) y `cargo audit`/`pip-audit` en CI (skill dependency-audit).
-* Opción de cifrado en reposo del índice (LanceDB sin cifra hoy): evaluar en Phase 5+.
+* Opción de cifrado en reposo del índice (LanceDB sin cifra hoy): evaluar en Phase 6+.
 * Plugin OpenCode con validación dura de reglas (reemplazo de AGENTS.md, TD-6).
 
 ## Contactos y enlaces
