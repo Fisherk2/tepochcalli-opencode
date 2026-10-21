@@ -1,27 +1,103 @@
-# Navigation Flow – [Product] v[MVP]
-**Date:** [YYYY-MM-DD] | **Author:** [Name]
+# Navigation Flow — Tepochcalli v1
+**Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec)
 
-## 1. Actors and Roles
-| Role | Permissions | Initial Screens |
-|------|-------------|-----------------|
+## 1. Actores y roles
 
-## 2. Flow Diagrams per Use Case
-- Diagram link (Mermaid/Draw.io/Figma)
-- Notation: Start → Screen → Decision → Action → End
+| Rol | Descripción | Superficies | Inicial |
+|---|---|---|---|
+| Investigador (humano) | Dueño del vault | Obsidian (notas/PDFs) + terminal OpenCode | abrir vault |
+| Itzamná | Orquestador del workspace | enrutamiento, estado, sugerencias | conversación |
+| Especialistas | Nezahualcóyotl · Pochteca · Chilam · Tlacuilo | comandos `/rubric…/update` | vía Itzamná |
+| tepochcalli-rag | MCP tools | `search`, `index_refresh`, `add_source` | tool-call del agente |
+| markitdown | MCP conversor | `convert_to_markdown` | vía `add_source` o agente |
 
-## 3. Navigation Matrix
-| Origin | Destination | Trigger | Condition | Required Global State | Rollback/Cancel |
-|--------|-------------|---------|-----------|-----------------------|-----------------|
+Nota: la UI del producto es Obsidian + OpenCode; no hay pantallas propias (out of scope PRD §5).
 
-## 4. Alternative Flows and Errors
-- Auth failed, unstable network, denied permissions, invalid data:
-- Recovery strategy:
+## 2. Journey (a) — flujo diario de investigación (9 comandos)
 
-## 5. Navigation State Management
-- Local vs. global state:
-- Persistence (sessionStorage, tokens, cache):
-- Deep linking / protected routes:
+```mermaid
+flowchart TD
+    A["Usuario abre vault y describe tema a Itzamná"] --> B["/rubric (Nezahualcóyotl)<br/>matriz: pregunta, alcance, criterios"]
+    B --> C["/research (Pochteca)<br/>index_refresh + search en 00-Resources + web<br/>sin escritura en vault"]
+    C --> D["/validate (Chilam)<br/>informe de calidad, contradicciones"]
+    D -->|No| C
+    D -->|Sí| E["/synthesize (Nezahualcóyotl)<br/>ejes temáticos + outline"]
+    E --> F["/cite (Chilam)<br/>referencias APA/MLA/Chicago + trazabilidad"]
+    E --> G["/draft (Tlacuilo) en 02-drafts/<br/>redacción con citas de /cite"]
+    G --> H["/review (Chilam)<br/>revisión por pares simulada"]
+    H -->|Correcciones| E
+    H -->|Aprobado| I["documento final en 03-citations/+02-drafts"]
+    I --> J["/transform (Tlacuilo)<br/>CSV/Excel · Jupyter · presentación · mapa mental"]
+    I --> K["/update (Tlacuilo)<br/>correcciones puntuales posteriores"]
+```
 
-## 6. Traceability
-| Flow-ID | PRD REQ-ID | UI Screen | Technical Component |
-|---------|------------|-----------|---------------------|
+Regla transversal: todo paso que consulte material propio pasa primero por `search`
+(MCP-first, spec-agent-workflow §AGENTS.md); los resultados citan `source_path`+`heading`.
+
+## 3. Journey (b) — "añado un PDF y pregunto 30s después"
+
+1. Usuario arrastra `paper.pdf` a `00-Resources/lit/` en Obsidian (o por gestor de archivos).
+2. Pregunta en OpenCode: "¿qué dice paper.pdf sobre X?"
+3. El agente (regla AGENTS.md) invoca `tepochcalli-rag.index_refresh()` →
+   respuesta `{scanned, indexed:1, skipped, elapsed_ms}` (Δ<30s para material típico;
+   PDF grande puede tardar más — progreso visible).
+4. Agente invoca `search("X", path_filter="00-Resources/lit/**")` (<500ms).
+5. Respuesta generada con citas: `00-Resources/lit/paper.pdf » 2.3 Medidas de resultado (chars 4120-5088)`.
+6. Usuario navega en Obsidian al PDF y ve el pasaje exacto — bucle completo sin salir del vault.
+
+## 4. Journey (c) — "convierte esta URL a mis fuentes"
+
+1. Usuario: "guarda https://…/informe como fuente en `lit-clima/`".
+2. Agente: `add_source(uri="https://…/informe", subdir="lit-clima/")`.
+3. Server: markitdown `convert_to_markdown(uri)` → markdown; escribe
+   `00-Resources/lit-clima/informe.md` con frontmatter `source_uri`/`converted_at`; ejecuta refresh.
+4. Agente confirma ruta citable; la fuente ya entra en futuras `search`.
+5. (Si el usuario prefiriera conversión manual: la herramienta markitdown está expuesta
+   directamente; el resultado sigue requiriendo `index_refresh` — o `add_source` de un `file:` URI.)
+
+## 5. Journey (d) — primer arranque con wizard
+
+1. Usuario (VM/host limpio): `curl -L https://github.com/Fisherk2/…/install.sh | sh`
+   (o `cargo binstall tepochcalli`).
+2. Ejecuta `tepochcalli` → TUI: bienvenida → detección de prereqs (Obsidian, OpenCode V2;
+   si falta algo: instrucciones y salida limpia).
+3. Elige/crea directorio del vault → el wizard materializa el payload (carpetas numeradas,
+   `.opencode/`, `opencode.json`, `AGENTS.md`, muestras en `00-Resources/`).
+4. Barra de progreso por fases: bootstrap `uv` → `uv venv` + `uv sync` (1-2GB wheels,
+   requiere internet) → descarga MiniLM (~470MB) → indexación inicial de muestras →
+   merge/validación de `mcp.servers`.
+5. Fin: "abre Obsidian en `<ruta>`, ejecuta `opencode`, prueba /rubric". El usuario NO
+   instaló Python/Node ni tecleó comandos de dependencias.
+6. Smoke: usuario añade una nota a `00-Resources/` → journey (b) funciona.
+
+Flags: `--offline` (re-instalación con cachés; sin red), `--skip-model` (omitir fase de
+modelo; `search` reportará INDEX_EMPTY hasta completarla).
+
+## 6. Journey (e) — fallo y recuperación
+
+1. Caída de red durante fase 5 (venv sync): el wizard detecta fallo, **rollback compensado**
+   (`rm -rf .tepochcalli/venv/`), panel rojo con: fase, causa, comando de reintento
+   (`tepochcalli install --resume`), ruta de log (fuera del vault).
+2. Usuario restaura red → `--resume` reutiliza fases previas válidas (bin/, payload) → completa.
+3. Fallo de fase 8 (merge opencode.json): se revierte desde `.bak`; el vault ya instalado es
+   usable sin MCP hasta reintentar.
+4. Usuario borra el runtime a mano o `tepochcalli uninstall --vault <ruta>` → vault vuelve a
+   estado pre-instalación; sus notas intactas.
+5. Índice corrupto (ej. copia de vault entre plataformas): `search` → INTERNAL/INDEX_* con
+   guía "borra .tepochcalli/db/ y index_refresh()"; reconstrucción desde fuentes (índice derivado).
+
+Regla maestra de journeys e): **ningún fallo pierde datos del usuario** — solo artefactos
+derivados/installables se deshacen. Ver diagrama de fases en
+[../specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md).
+
+## 7. Mapa de navegación del vault (referencia rápida del usuario)
+
+```text
+00-Resources/   → meter aquí todo lo consultable (libre subniveles)
+01-tasks/       → notas de trabajo del pipeline (no indexadas v1)
+02-drafts/      → borradores de /draft, artefactos de /transform
+03-citations/   → bibliografía gestionada por /cite
+.opencode/      → agentes/comandos/skills del harness (no tocar sin plan)
+.tepochcalli/   → runtime RAG (borrable/desinstalable, ver SECURITY/TRD)
+opencode.json   → config del harness (el wizard administra solo mcp.servers)
+```
