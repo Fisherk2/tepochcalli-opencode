@@ -4,11 +4,11 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-003 (cargo-dist), ADR-004 (uv/venv), specs/spec-vault-structure.md (payload), docs/APPFLOW.md (journey d)
+* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-003 (cargo-dist), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
 
 ## Summary
 
-`tepochcalli` es una TUI en Rust, distribuida vía cargo-dist + GitHub Releases (ADR-003), que materializa un vault de Obsidian listo-para-usar: instala el payload del workspace (espejo del modelo `template/` de Fisherk2/codice-opencode, aquí `obsidian-workspace/`), bootea `uv`, crea el venv del proyecto, descarga el modelo de embeddings, ejecuta la indexación inicial de `00-Resources/` y valida/fusiona las entradas `mcp.servers` de `opencode.json`. Cada corrida es atómica con rollback en fallo.
+`tepochcalli` es una TUI en Rust, distribuida vía cargo-dist + GitHub Releases (ADR-003), que materializa un vault de Obsidian listo-para-usar: instala el payload del workspace (espejo del modelo `template/` de Fisherk2/codice-opencode, aquí `obsidian-workspace/`), bootea `uv`, crea el venv del proyecto, presenta el paso **"Embedding provider"** (menú de cinco salidas de ADR-007/D7.1 con `paraphrase-multilingual-MiniLM-L12-v2` pre-seleccionado), ejecuta la indexación inicial de `00-Resources/` y valida/fusiona las entradas `mcp.servers` de `opencode.json`. Cada corrida es atómica con rollback en fallo; la salida 5 del menú ("Configurar después") degrada RAG honestamente sin abortar la instalación.
 
 ## Problem / Motivation
 
@@ -23,7 +23,7 @@ Preguntas abiertas de UH.md: ¿qué gestor de paquetes?, ¿debo registrarme en a
 * Oneliner de instalación: `curl -L https://github.com/Fisherk2/tepochcalli-opencode/releases/latest/download/install.sh | sh` o `cargo binstall tepochcalli` (ADR-003).
 * Flujo atómico de 8 fases con rollback por compensación (ver Detailed Design).
 * Idempotencia: re-ejecutar = reparación/no-op, nunca duplicados.
-* Flags `--offline` (usa cachés locales, sin red) y `--skip-model` (omite la descarga del embedder).
+* Flags `--offline` (usa cachés locales, sin red — válido solo con `models/` o config API presente) y `--skip-model` (equivale a la salida 5 del menú embedder: instalar sin provider).
 * UX de fallo accionable: qué fase, por qué, qué hacer, dónde está el log.
 
 ### Non-Goals
@@ -48,18 +48,24 @@ flowchart TD
     F2 --> F3["3 Extraer payload template a &lt;vault&gt; (merge sin sobreescribir)"]
     F3 --> F4["4 Bootstrap uv en .tepochcalli/bin/ (uv instala CPython gestionado)"]
     F4 --> F5["5 uv venv + uv sync en .tepochcalli/venv/ (deps pineadas)"]
-    F5 --> F6["6 Descarga modelo MiniLM a .tepochcalli/models/ (flag --skip-model la omite)"]
-    F6 --> F7["7 Indexación inicial de 00-Resources/ (muestra incluida)"]
+    F5 --> F6["6 Paso Embedding provider — menú D7.1 (preselección, presets, test-embed, API LiteLLM, Configurar después)"]
+    F6 -->|"salidas 1-4"| F7["7 Indexación inicial de 00-Resources/ (muestra incluida)"]
+    F6 -.->|"salida 5 o fallback por fallo de descarga/validación"| F8
     F7 --> F8["8 Merge/validar mcp.servers en opencode.json + verificación end-to-end"]
     F8 --> OK["Listo: abrir el vault y usar OpenCode"]
+    F8 -.->|"estado degraded"| CHK["Checklist final de re-entrada: tepochcalli config embedder + index_refresh"]
     F1 -. fallo .-> X["Rollback compensado + log + exit code"]
     F4 -. fallo .-> X
     F5 -. fallo .-> X
-    F6 -. fallo .-> X
     F7 -. fallo .-> X
     F8 -. fallo .-> X
     F2 -. usuario cancela .-> X
 ```
+
+Nota D7: el paso "Embedding provider" (fase 6) va **entre** el venv sync (fase 5) y la indexación
+inicial (fase 7) para las salidas 1-4 del menú; la salida 5 ("Configurar después") **omite la
+fase 7** y termina con el checklist degraded. Un fallo de descarga o validación del modelo en la
+fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, fila 6).
 
 | # | Fase | Compensación en fallo |
 |---|---|---|
@@ -68,12 +74,13 @@ flowchart TD
 | 3 | Copiar payload (carpetas numeradas, `.opencode/` con agents/commands/skills, `AGENTS.md` del vault, `opencode.json` base, `00-Resources/` con muestras md+PDF) | borrar lo copiado en esta corrida (marca `.tepochcalli/.install-intent`) |
 | 4 | Descargar binario `uv` → `.tepochcalli/bin/`; uv asegura CPython gestionado (el usuario NO necesita Python) | eliminar `bin/` |
 | 5 | `uv venv .tepochcalli/venv` + `uv sync` desde `pyproject.toml` (`cocoindex[lancedb]`, `sentence-transformers`, `docling`, `markitdown-mcp`) | `rm -rf venv/` |
-| 6 | Descargar `paraphrase-multilingual-MiniLM-L12-v2` a `models/` (SBERT/HF_HOME) | `rm -rf models/` |
-| 7 | Correr flow: index inicial de `00-Resources/` (incluye parse Docling de PDF de muestra) | `rm -rf db/ flow state` |
+| 6 | Paso **"Embedding provider"** (menú D7.1/ADR-007): salida 1 `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado (~470MB a `models/`), salida 2 presets `BAAI/bge-m3` / `all-MiniLM-L6-v2` de `presets.toml` con peso estimado y detección de GPU (advertencia, no bloqueo), salida 3 ID libre de HuggingFace tras el gate **test-embed** (`HF_TOKEN` opcional para gated), salida 4 API LiteLLM con clave en `config/tepochcalli.toml` (gitignored), salida 5 "Configurar después" | un fallo de descarga/validación **no aborta**: `rm -rf models/` parcial + fallback a salida 5 (instalación completa en estado `degraded`) |
+| 7 | Correr flow: index inicial de `00-Resources/` (incluye parse Docling de PDF de muestra; **omitida en salida 5**) | `rm -rf db/ flow state` |
 | 8 | Fusionar entradas MCP en `opencode.json` (ver abajo) y smoke-test `search` sobre la muestra | revertir `opencode.json` desde backup `.bak` |
 
 * La fase 1 no puede "deshacerse"; las fases 3-8 crean solo artefactos propios → la compensación es puramente de archivos bajo rutas del runtime/payload de esta corrida. Nunca se tocan `.obsidian/` ni archivos previos del usuario (la merge del payload omite existentes salvo plantillas gestionadas).
 * Si la fase 8 detecta una entrada `tepochcalli-rag` previa, la valida (comando apunta al venv actual) y solo la reescribe si difiere, conservando las demás servers del usuario.
+* **Semántica de rollback del provider (D7.1):** si la descarga o el gate test-embed de la fase 6 fallan tras el reintento, el wizard **cae a la salida 5 en vez de abortar**: el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config.
 
 ### Merge/validación del bloque MCP (fase 8, resultado esperado)
 
@@ -98,9 +105,17 @@ flowchart TD
 
 ### Flags
 
-* `--offline`: omite fases que requieren red (descarga payload/modelo/wheels): requiere caché previa (`models/`, cache uv). Si falta algo, fallo limpio diciendo qué se necesita descargar.
-* `--skip-model`: instala todo pero omite fase 6; `search` reportará `INDEX_EMPTY` hasta que un `tepochcalli model` posterior descargue el embedder.
+* `--offline`: omite fases que requieren red (descarga payload/modelo/wheels): requiere caché previa (`models/`, cache uv). Regla D7.3: `--offline` solo es válido si existe `models/` cacheado **o** una config de API externa presente; si falta lo necesario, fallo limpio con `E_OFFLINE_NO_CACHE` nombrando qué se necesita descargar.
+* `--skip-model`: equivale no-interactivamente a la salida 5 del menú embedder ("Configurar después"): el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config. `search` responderá `E_NO_EMBEDDER` hasta completar la re-entrada.
 * (v2 sugerido) `--vault <ruta>`, `--non-interactive` para CI.
+
+### Re-entrada y superficie CLI post-instalación (D7.4/ADR-007)
+
+* `tepochcalli config embedder` — reabre el menú "Embedding provider" (D7.1) sobre un vault ya instalado; escribe `[embedding]` en `config/tepochcalli.toml`, corre el gate test-embed para IDs libres, y tras un cambio de modelo advierte del `E_MODEL_MISMATCH` pendiente ofreciendo el re-index.
+* `tepochcalli reindex --confirm` — swap de modelo = re-index completo **destructivo** (vacía y regenera `chunks` en `.tepochcalli/db/`); requiere confirmación explícita; procedimiento alineado con specs/spec-embeddings.md §Procedimiento de swap de modelo.
+* `tepochcalli install [--resume]` — corrida atómica de 8 fases (arriba); `--resume` reusa artefactos válidos.
+* `tepochcalli uninstall --vault <ruta>` — ver §Rollback / Monitoring.
+* Checklist de re-entrada (salida 5): `tepochcalli config embedder` → provider + descarga/API → `index_refresh()` (o re-ejecutar `install --resume`) → smoke-test `search`. El wizard lo imprime al terminar la instalación degraded.
 
 ### Versionado y release (D5/ADR-003)
 
@@ -132,12 +147,14 @@ flowchart TD
 * Idempotencia: `install` dos veces → mismo estado, cero duplicados en `opencode.json` ni en `00-Resources/` (SPEC.md §Testing).
 * Fallo inducido: matar la red en fase 5/6 → assert del rollback correspondiente y `.bak` intacto.
 * `--offline` segunda corrida (con cachés) → éxito sin red (fixture en CI con cache uv/`models/` pre-cargados).
+* Salida 5 del menú embedder (y `--skip-model`): assert de instalación COMPLETA sin fase 7 + checklist degraded impreso + `search` → `E_NO_EMBEDDER` + `rag_status` → `degraded` con `fix_hint` (ADR-007 §8).
+* Gate test-embed: fixture con ID HF no-embedding → rechazo en fase 6, sin half-config escrita, fallback a salida 5 (no abort).
 
 ## Security Considerations
 
 * Verificación SHA-256 de assets de release; `curl | sh` documentado con el caveat de inspección (docs/SECURITY.md).
 * El modelo se descarga de HuggingFace; uv baja wheels de PyPI — ambas provenancias declaradas en SECURITY.
-* El wizard no escribe claves: solo referencia `api_key_env` (config la decide el usuario después).
+* El wizard solo escribe la clave API de la salida 4 (LiteLLM) en `.tepochcalli/config/tepochcalli.toml` (gitignored) — nunca en logs, `opencode.json` ni fuera del vault; `HF_TOKEN` vive solo en el entorno del proceso de descarga (specs/spec-embeddings.md §HF_TOKEN).
 
 ## Rollback / Monitoring
 
@@ -153,4 +170,4 @@ flowchart TD
 * Fisherk2/codice-opencode (modelo `template/` → instalación)
 * cargo-dist — https://opensource.axo.dev/cargo-dist/
 * uv — https://docs.astral.sh/uv/
-* ADR-003 / ADR-004; docs/APPFLOW.md journeys d y e
+* ADR-003 / ADR-004 / ADR-007 (paso embedder + re-entrada); docs/APPFLOW.md journeys d y e
