@@ -110,6 +110,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Proposed | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | Proposed | markitdown-mcp: config V2, `convert_to_markdown`, fallback, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
+| [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | Blueprint V2 del payload (agentes/comandos/AGENTS.md) — ejecución Phase 4 |
 
 (Plantillas: [specs/spec-template.md](specs/spec-template.md), [specs/adr/adr-template.md](specs/adr/adr-template.md).)
 
