@@ -1,0 +1,25 @@
+# Plantilla de configuración del flow Tepochcalli (spec-embeddings.md §"Estructura
+# de `tepochcalli.toml` (config/)", D11).
+#
+# El archivo REAL vive en `.tepochcalli/config/tepochcalli.toml`, está en .gitignore
+# y NUNCA se commitea (puede contener la variable de una API key). Para usar esta
+# plantilla: mkdir -p config && cp tepochcalli.toml.example config/tepochcalli.toml
+# (relativo a este directorio `.tepochcalli/`).
+#
+# Claves ausentes = default; TOML malformado o claves desconocidas = warning + default
+# (el loader nunca lanza; ver flow/tepochcalli_flow/config.py).
+
+[embedding]
+provider = "local"            # local | litellm
+model = "paraphrase-multilingual-MiniLM-L12-v2"
+device = "cpu"                # device explícito para SentenceTransformerEmbedder(..., device=...); sobre-escribible por el usuario (ADR-008)
+# provider = "litellm"
+# model = "openai/text-embedding-3-small"
+# api_key_env = "TEPOCHCALLI_EMBED_API_KEY"
+
+[chunking]
+max_chunk_size = 1536         # unidad: BYTES, no chars (el splitter mide bytes) — ver F4, spec-rag-engine.md §Chunking
+overlap = 192                 # 12,5% de max_chunk_size (mismo ratio que el 128/1024 original en chars)
+
+[search]
+top_k_default = 5
