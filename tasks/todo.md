@@ -14,7 +14,8 @@
 - [ ] **T1 · Spike: anclar la API real de CocoIndex v1 y enmendar la spec congelada**
   - Subagentes: `python-pro`, `tool-evaluator`, `minimal-change-engineer` · Skills: `source-driven-development`, `find-docs`, `documentation-and-adrs`, `clean-code`
   - AC: venv 3.12 con `cocoindex==1.0.25`; spike `localfs → split → embed → LanceDB → update_blocking` verde; **hallazgos documentados** (offsets de chunk, purga al borrar, `PatternFilePathMatcher`); `specs/spec-rag-engine.md` §Proposed Solution actualizado a API v1; `docs/WORKFLOW.md` §8 con entrada **D11** (no-ADR); `docs/UH.md` / `README.md` / `LICENSE` / `opencode.json` / `obsidian-workspace/.opencode/` intactos
-  - Verificar: script del spike sin `ImportError`/`AttributeError`; `markdownlint specs docs` limpio; `git diff --stat` solo toca `specs/` y `docs/`
+  - Verificar: script del spike sin `ImportError`/`AttributeError`; **la enmienda no introduce errores markdownlint nuevos** (baseline pre-existente: 63 = 58 MD060 + 3 MD034 + 1 MD038 + 1 MD022); `git diff --stat` toca solo `specs/`, `docs/` y `.markdownlint.json`
+  - ⚠️ **AC de lint redefinido por el usuario (2026-10-21):** el repo **no tenía** `.markdownlint.json` aunque `docs/CODE_STYLE.md` prometía «MD013 desactivado». T1 lo crea (solo `MD013:false`, para no apagar reglas que señalan fallos reales) y el AC pasa de «markdownlint limpio» a **«cero errores nuevos»**; los 63 pre-existentes quedan como deuda pre-existente. Amplía el diff de T1 a `.markdownlint.json` — autorizado explícitamente.
   - Dep.: — · Tamaño: M
 
 - [ ] **T2 · Cimientos del paquete: pyproject pineado, uv.lock, venv 3.12, gitignore del runtime**
