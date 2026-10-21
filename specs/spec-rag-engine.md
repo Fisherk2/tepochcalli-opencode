@@ -37,23 +37,85 @@ Un investigador deposita PDFs y notas en `00-Resources/` con su propia organizac
 
 Un módulo Python declarativo `tepochcalli_flow` (en `.tepochcalli/flow/`) que define una tabla de documentos fuente (`localfs` source con `watch`), transformaciones memoizadas con `@coco.fn(memo=True)` y un target `LanceDB`. La incrementalidad es estructural: CocoIndex firma el contenido de cada etapa y solo recomputa lo cambiado; los chunks hijos de un documento inmutable se reutilizan por memoización.
 
+**Versión pineada (spike verificado 2026-10-21):** `cocoindex==1.0.25` — extras `cocoindex[lancedb,sentence-transformers]`; entorno resuelto `lancedb==0.40.0`, `sentence-transformers==6.2.0`, `torch==2.14.1`, CPython 3.12.14. La CLI de v1 **no tiene paso `setup`**: subcomandos `drop, init, ls, show, update`, con el estado del engine en `COCOINDEX_DB`. La idempotencia se afirma sobre las estadísticas del data plane (`process_file: unchanged=N, adds=0, deletes=0, reprocess=0`), porque los componentes de traversa `app_main` reportan `reprocess=1` por diseño (E2).
+
 ```python
-# .tepochcalli/flow/tepochcalli_flow/pipeline.py (esqueleto del flujo)
+# .tepochcalli/flow/tepochcalli_flow/pipeline.py (esqueleto del flujo; cocoindex==1.0.25)
+from collections.abc import AsyncIterator
+
 import cocoindex as coco
-from cocoindex.processing import chunking
+from cocoindex.connectors import lancedb, localfs
+from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
+from cocoindex.ops.text import RecursiveSplitter
+from cocoindex.resources.chunk import Chunk
+from cocoindex.resources.file import FileLike, PatternFilePathMatcher
+from cocoindex.resources.id import IdGenerator
 
-@coco.component
-@coco.fn(memo=True)
-def parse_document(source: coco.Text) -> coco.Text:
-    """md: paso directo; pdf: Docling (CPU) a markdown."""
-    ...
+MODEL_ID = "paraphrase-multilingual-MiniLM-L12-v2"
+DEVICE = "cpu"  # [embedding] device en tepochcalli.toml (default "cpu", E1)
+SPLITTER = RecursiveSplitter()
+RESOURCES_DIR = ...  # 00-Resources/ (raíz del vault)
 
-@coco.fn(memo=True)
-def split_and_embed(doc: coco.Text) -> coco.Vector[384]:
-    chunks = chunking.recursive_splitter(
-        doc, policy=coco.TextChunkingPolicy(max_chunk_size=1024, overlap=128)
+# ChunkRow: dataclass de esquema — {id, source_path, doc_kind, heading, char_start,
+# char_end, text, embedding, model, indexed_at} (glue real de Phase 1)
+
+LANCE_DB = coco.ContextKey[lancedb.LanceAsyncConnection]("tepochcalli_db")
+EMBEDDER = coco.ContextKey[SentenceTransformerEmbedder]("embedder", detect_change=True)
+
+
+@coco.lifespan
+async def provide_resources(builder) -> AsyncIterator[None]:
+    builder.provide(LANCE_DB, await lancedb.connect_async("./.tepochcalli/db/tepochcalli.lance"))
+    builder.provide(EMBEDDER, SentenceTransformerEmbedder(MODEL_ID, device=DEVICE))
+    yield
+
+
+@coco.fn
+async def write_chunk(
+    chunk: Chunk, ..., id_gen: IdGenerator, table: lancedb.TableTarget[ChunkRow]
+) -> None:
+    table.declare_row(
+        row=ChunkRow(
+            id=await id_gen.next_id(chunk.text),  # ids estables por chunk (condición 3/3 de F2)
+            char_start=chunk.start.char_offset,  # cita exacta vía offsets (F1)
+            char_end=chunk.end.char_offset,
+            text=chunk.text,
+            embedding=await coco.use_context(EMBEDDER).embed(chunk.text),  # F6: normalize_embeddings va en embed()
+            # ... source_path, doc_kind, heading (DERIVADA de las líneas previas a char_start; F1), model, indexed_at
+        )
     )
-    ...
+
+
+@coco.fn(memo=True)
+async def index_file(file: FileLike, table: lancedb.TableTarget[ChunkRow]) -> None:
+    text = await file.read_text()  # F1: text[chunk.start.char_offset:chunk.end.char_offset] == chunk.text
+    chunks = SPLITTER.split(text, chunk_size=1536, chunk_overlap=192, language="markdown")  # bytes (F4)
+    await coco.map(write_chunk, chunks, ..., IdGenerator(), table)  # ... = glue de Phase 1
+
+
+async def build_flow(app: coco.App) -> None:
+    # target gestionado (condición 1/3 de la purga automática al borrar la fuente, F2)
+    table = await lancedb.mount_table_target(
+        LANCE_DB,
+        "chunks",
+        table_schema=await lancedb.TableSchema.from_class(ChunkRow, primary_key=["id"]),
+    )
+    # source: included SOLO no excluye dirs-punto; excluded explícito es obligatorio (F3)
+    files = localfs.walk_dir(
+        RESOURCES_DIR,
+        recursive=True,
+        path_matcher=PatternFilePathMatcher(
+            included_patterns=["**/*.md", "**/*.markdown", "**/*.txt", "**/*.pdf"],
+            excluded_patterns=["**/.*", "**/.git/**"],
+        ),
+    )
+    # F5: >100MB / symlink roto -> skipped con motivo: chequeo NUESTRO, no del conector
+    await coco.mount_each(index_file, files.items(), table)  # condiciones 2/3 y 3/3 de F2
+    table.declare_vector_index(column="embedding")
+    table.declare_fts_index(column="text")
+
+
+app = coco.App(coco.AppConfig(name="tepochcalli"), build_flow)  # run: `cocoindex update`
 ```
 
 ## Detailed Design
@@ -62,13 +124,16 @@ def split_and_embed(doc: coco.Text) -> coco.Vector[384]:
 
 * **`localfs` sobre `00-Resources/`**, recursivo, con filtros de extensión por whitelist: `.md`, `.markdown`, `.txt`, `.pdf` (+ `.docx/.pptx/.xlsx` opcionales vía conversión markitdown, ver spec-markitdown §fallback).
 * Exclusiones: rutas con `.`-prefijo en cualquier segmento, `.git/`, symlinks rotos, archivos >100MB (se registran como `skipped`, no fallan el delta).
+* **F3 (trampa verificada):** `included_patterns=["**/*.md"]` por sí solo **NO excluye directorios-punto** — en el globset de Rust subyacente `*` casa segmentos iniciales con `.` (experimento control: `.oculto/ignorar.md` queda INCLUIDO con solo el include). La exclusión de segmentos `.`-prefijo exige `excluded_patterns=["**/.*"]` explícito (más `**/.git/**`); los globs son relativos al root del walk y usan barras normales. Fuente: [connectors/localfs.md](https://cocoindex.io/docs/connectors/localfs.md).
+* **F5 (regla nuestra, no del conector):** `localfs.walk_dir(path, *, live=False, recursive=False, path_matcher=None, rescan_interval=...)` no ofrece ni límite de tamaño ni hook de errores — un symlink roto se omite en silencio a nivel del walk y un archivo chmod-000 solo cuenta 1 error sin abortar el delta. En consecuencia la regla ">100MB → `skipped` con motivo, sin fallar el delta" **no la satisface el conector**: hay que implementarla nosotros (custom `FilePathMatcher` con `stat()`, o chequeo de tamaño sobre `FileLike` dentro de la función por archivo). Fuente: [connectors/localfs.md](https://cocoindex.io/docs/connectors/localfs.md).
 * El anidamiento interno es libre: el source recorre el árbol y `source_path` del chunk conserva la ruta relativa completa → preserva la organización del usuario como metadato de cita.
 
 ### Chunking
 
 * `RecursiveSplitter` con separators en orden: heading Markdown (`#`), párrafo (`\n\n`), oración (`. `), palabra.
-* `max_chunk_size = 1024` chars, `overlap = 128` chars. El overlap cubre frases cortadas entre chunks sin inflar el índice (~14% de chunks adicionales).
+* **F4 — el splitter mide en BYTES, no en chars** (verificado empírico con `chunk_size=200`: texto CJK cortado a 65 chars / **195 bytes**; español con `ñ` a 167 chars / **195 bytes** — la longitud en bytes sigue a `chunk_size`, la de chars no). Presupuesto reescrito en bytes, decisión de usuario 2026-10-21: **`chunk_size=1536`, `chunk_overlap=192`** — conserva la intención original de ~1024 caracteres de prosa española (1536 bytes con holgura para la expansión UTF-8 de acentos y `ñ`) y el ratio de overlap declarado (192/1536 = 128/1024 = **12,5%**; ~14% de chunks adicionales). El overlap cubre frases cortadas entre chunks sin inflar el índice. Fuente: [ops/text.md](https://cocoindex.io/docs/ops/text.md).
 * Por chunk se derivan metadatos de cita: `source_path` (relativo a la raíz del vault), `heading` (último heading padre visto, o título del PDF), `char_start`/`char_end` (offsets dentro del texto extraído), `doc_kind` (md|pdf|txt), `model` (nombre del embedder, para detección de índice mixto — ADR-006).
+* **F1 — offsets citables exactos:** `Chunk` (`from cocoindex.resources.chunk import Chunk`) es un dataclass congelado con `text: str` y `start`/`end: TextPosition` (`byte_offset`, `char_offset`, `line` 1-based, `column` 1-based). La cita se toma de `chunk.start.char_offset` / `chunk.end.char_offset`, sobre los que se cumple exactamente `text[chunk.start.char_offset : chunk.end.char_offset] == chunk.text` al indexar sobre la salida de `FileLike.read_text()` (verificado 51/51 filas). **`heading` NO es campo de `Chunk`** — se deriva escaneando las líneas previas a `char_start` (o el título del PDF). Fuente: [ops/text.md](https://cocoindex.io/docs/ops/text.md), [common_resources/data_types.md](https://cocoindex.io/docs/common_resources/data_types.md).
 
 ### Ruta PDF (Docling, CPU)
 
@@ -78,7 +143,9 @@ def split_and_embed(doc: coco.Text) -> coco.Vector[384]:
 
 ### Embeddings
 
-* Default: `SentenceTransformerEmbedder(model="paraphrase-multilingual-MiniLM-L12-v2")` con cache en `.tepochcalli/models/` (vía `SENTENCE_TRANSFORMERS_HOME`/`HF_HOME` exportados por el venv/wizard) — ADR-006.
+* Default: `SentenceTransformerEmbedder(model_name_or_path="paraphrase-multilingual-MiniLM-L12-v2", device=...)` con cache en `.tepochcalli/models/` (vía `SENTENCE_TRANSFORMERS_HOME`/`HF_HOME` exportados por el venv/wizard) — ADR-006.
+* **E1 — `device` explícito (decisión de usuario 2026-10-21):** el flow lee la clave `device` de `[embedding]` en `tepochcalli.toml`, **default `"cpu"`**, y la pasa a `SentenceTransformerEmbedder(..., device=...)`. El GPU local de esta host (GTX 1050, `sm_61`) no tiene kernels en el `torch 2.14.1+cu130` resuelto; el default CPU es coherente con ADR-006 (local-first) y ADR-008 (hardware transparente y sobre-escribible por el usuario).
+* **F6 — corrección de doc-drift (source instalada manda sobre la página de docs):** a `cocoindex==1.0.25`, `SentenceTransformerEmbedder.__init__` solo acepta `model_name_or_path`, `device` y `trust_remote_code`; `normalize_embeddings` es parámetro de `embed()` (default `True`), no del constructor — el snippet de la página de docs lanzaría `TypeError`. Fuente: [ops/sentence_transformers.md](https://cocoindex.io/docs/ops/sentence_transformers.md).
 * Opcional: LiteLLM embedder externo (100+ proveedores) configurable en `.tepochcalli/config/tepochcalli.toml`; el flow lee proveedor/modelo de ahí, nunca hardcodea (spec-embeddings).
 * Cambio de modelo ⇒ re-index completo: el flow versiona el modelo en los datos; mismatch ⇒ `search` degrada con error tipado (ADR-006 §Consequences).
 

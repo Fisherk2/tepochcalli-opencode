@@ -182,13 +182,14 @@ specs/spec-mcp-server.md §Códigos de error estructurados (ADR-007 §4.3).
 [embedding]
 provider = "local"            # local | litellm
 model = "paraphrase-multilingual-MiniLM-L12-v2"
+device = "cpu"                # device explícito para SentenceTransformerEmbedder(..., device=...); sobre-escribible por el usuario (ADR-008)
 # provider = "litellm"
 # model = "openai/text-embedding-3-small"
 # api_key_env = "TEPOCHCALLI_EMBED_API_KEY"
 
 [chunking]
-max_chunk_size = 1024
-overlap = 128
+max_chunk_size = 1536         # unidad: BYTES, no chars (el splitter mide bytes) — ver F4, spec-rag-engine.md §Chunking
+overlap = 192                 # 12,5% de max_chunk_size (mismo ratio que el 128/1024 original en chars)
 
 [search]
 top_k_default = 5
@@ -211,7 +212,7 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 
 1. Editar `[embedding]` en `tepochcalli.toml`.
 2. El próximo `index_refresh` detecta mismatch (campo `model` de las filas vs config) → responde `INDEX_STALE_MODEL` (spec-mcp-server §errores; dialecto D7.3: `E_MODEL_MISMATCH`) y `search` se niega a cruzar dims.
-3. Ejecutar re-index completo: vaciar tabla `chunks` en `.tepochcalli/db/` y regenerar (`cocoindex` setup+update). El wizard ofrece el comando destructivo con confirmación explícita `tepochcalli reindex --confirm` (D7.4, specs/spec-installer-wizard.md §Re-entrada; no se duplica el procedimiento aquí).
+3. Ejecutar re-index completo: vaciar tabla `chunks` en `.tepochcalli/db/` y regenerar (`cocoindex update` — la CLI de v1 no tiene paso `setup`, D11). El wizard ofrece el comando destructivo con confirmación explícita `tepochcalli reindex --confirm` (D7.4, specs/spec-installer-wizard.md §Re-entrada; no se duplica el procedimiento aquí).
 4. Consecuencia registrada: docs/TECH_DEBT.md TD-3 (re-index = tiempo de CPU proporcional al corpus; sin modelo externo, sin costo $).
 
 ## Alternatives Considered
