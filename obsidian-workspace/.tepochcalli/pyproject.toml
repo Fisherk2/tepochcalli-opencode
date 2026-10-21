@@ -10,7 +10,31 @@ dependencies = [
     "cocoindex[lancedb,sentence-transformers]==1.0.25",
     # Docling 2.x series, CPU only — no GPU extra (docs/TRD.md §4).
     "docling>=2,<3",
+    # Torch: transitive via sentence-transformers/docling, but declared direct
+    # so [tool.uv.sources] routes it to the CPU index below — uv ignores source
+    # pins on transitive deps (uv 0.12.9; astral-sh/uv#9446). PyPI's Linux
+    # wheels drag in the CUDA stack (19 pkgs, ~5 GB) we cannot use (E1: no
+    # sm_61 kernels). Direct pin keeps the T1-verified 2.14.1 (docs/TRD.md §3
+    # venv budget 1-2 GB). Source: https://docs.astral.sh/uv/concepts/indexes/
+    # #pinning-a-package-to-an-index
+    "torch==2.14.1",
+    # torchvision (via docling-ibm-models): PyPI wheel links against the CUDA
+    # torch ABI -> `operator torchvision::nms does not exist` under +cpu; the
+    # CPU index ships the matching +cpu build.
+    "torchvision==0.29.1",
 ]
+
+# Only torch/torchvision may resolve from this index; everything else stays on
+# PyPI. Source: https://docs.astral.sh/uv/guides/integration/pytorch/
+# #using-a-pytorch-index
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+torchvision = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
 
 [dependency-groups]
 dev = [
