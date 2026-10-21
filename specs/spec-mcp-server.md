@@ -129,7 +129,7 @@ Toda falla → tool result con `isError` y payload JSON canónico (nunca texto l
 | Code | Significado | Acción sugerida del agente |
 |---|---|---|
 | `VALIDATION_ERROR` | argumentos inválidos (top_k>20, glob malformado, subdir fuera de 00-Resources) | reintentar corrigiendo args |
-| `INDEX_EMPTY` | tabla `chunks` inexistente | invocar `index_refresh()` |
+| `INDEX_EMPTY` | tabla `chunks` inexistente **con embedder configurado** (sin embedder el estado es `E_NO_EMBEDDER`, que tiene precedencia) | invocar `index_refresh()`; si devuelve `E_NO_EMBEDDER` → `rag_status()` y reportar fix_hint |
 | `INDEX_STALE_MODEL` | dims/modelo del índice ≠ config actual | avisar usuario: requiere `tepochcalli reindex --confirm` (spec-embeddings; alias D7.3: `E_MODEL_MISMATCH`) |
 | `ENGINE_LOCKED` | refresh concurrente en curso | reintentar en segundos |
 | `SOURCE_UNREACHABLE` | add_source no pudo fetch/convertir | sugerir descarga manual + `index_refresh()` |
