@@ -30,8 +30,10 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * Sin demonios, sin puertos: solo stdio local y archivos embebidos (ADR-002).
 * `obsidian-workspace/.opencode/` (agents/commands/skills) ya existe: se DOCUMENTA, no se
   modifica sin tarea explícita de Phase 4.
-* Convención de folders numerados del vault: `00-Resources/` (indexable, anidamiento libre),
-  `01-tasks/`, `02-drafts/`, `03-citations/`; runtime en carpetas con prefijo punto.
+* Convención de folders numerados del vault (D9.1): `00-Resources/` = entrada del usuario
+  (única indexable, anidamiento libre); `01-…-05-…` = bandejas del agente (incluye
+  `04-review/` y `05-outputs/`; el usuario lee, extrae y borra — no deposita ni edita);
+  `10+` = biblioteca personal (no indexada v1); runtime en carpetas con prefijo punto.
 
 ## Code Style Rules
 

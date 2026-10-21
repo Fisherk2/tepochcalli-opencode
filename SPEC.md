@@ -58,7 +58,7 @@ repo                                # este repositorio (producto + plantilla)
 │   └── adr/adr-NNN-*.md            #   7 ADRs aceptados 2026-10-21
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
-    ├── 00-Resources/ 01-tasks/ 02-drafts/ 03-citations/
+    ├── 00-Resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10+ biblioteca personal
     ├── .opencode/{agents,commands,skills}/
     ├── .tepochcalli/               # runtime RAG (D2): flow/ mcp/ db/ models/ venv/ bin/ config/
     ├── AGENTS.md  opencode.json
