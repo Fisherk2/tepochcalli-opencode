@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (secciones "Agent Workflow" y skills), docs/APPFLOW.md, specs/spec-mcp-server.md (regla MCP-first)
+* **Traceability:** docs/UH.md (secciones "Agent Workflow" y skills), docs/APPFLOW.md, specs/spec-mcp-server.md (regla MCP-first), specs/spec-vault-structure.md (zonas de propiedad D9.1); mapa comandos→bandejas **D9.2** y desviación de permisos **D9.3** confirmadas por el usuario vía question tool el 2026-10-21 (sin ADR nuevo, por decisión del usuario)
 
 ## Summary
 
@@ -12,7 +12,7 @@ Documenta la capa de metodología del workspace: los 9 comandos de investigació
 
 ## Problem / Motivation
 
-El valor del vault no es solo RAG: es convertirlo en pipeline de investigación reproducible. Sin permisos por agente (Pochteca no escribe; Tlacuilo no navega), la metodología de UH.md degenera en un chat genérico. Y sin regla MCP-first documentada, el agente gastaría tokens leyendo archivos crudos en vez de buscar en el índice.
+El valor del vault no es solo RAG: es convertirlo en pipeline de investigación reproducible. Sin permisos por agente (Pochteca solo escribe su bandeja de evidencia `01-tasks/research/`; Tlacuilo no navega), la metodología de UH.md degenera en un chat genérico. Y sin regla MCP-first documentada, el agente gastaría tokens leyendo archivos crudos en vez de buscar en el índice.
 
 > Como investigador, quiero invocar `/research`, `/validate`, `/draft` sabiendo qué agente puede tocar qué, con citas garantizadas por el índice.
 
@@ -50,17 +50,36 @@ Se adopta el workflow de UH.md como contrato del workspace. La auditoría de ski
 | `/transform` | Diseminación | Convierte la investigación a CSV/Excel, cuaderno Jupyter, presentación o mapa mental. |
 | `/update` | Mantenimiento | Inyecta nueva información o corrige datos puntuales sin reiniciar el flujo. |
 
+### Mapa de comandos→bandejas (D9.2 — canónico)
+
+Cada comando escribe en UNA única bandeja (mapeo TOTAL: los 9 comandos están asignados; y ÚNICO: ningún comando tiene dos bandejas de salida; leer a través de otras bandejas — p.ej. `/transform` lee `02-drafts/` y `03-citations/`— es normal y no cuenta como salida):
+
+| Bandeja | Dueño | Comandos |
+|---|---|---|
+| `00-Resources/` | usuario (el agente solo vía `add_source`) | ingesta; `/research` la lee vía `search` |
+| `01-tasks/` | Nezahualcóyotl | `/rubric`, `/synthesize` (plan, outline, todo) |
+| `01-tasks/research/` | **Pochteca** | `/research` (ver D9.3 — desviación documentada del UH) |
+| `02-drafts/` | Tlacuilo | `/draft`, `/update` |
+| `03-citations/` | Chilam | `/cite` |
+| `04-review/` | Chilam | `/validate`, `/review` — NUEVO: informes de calidad de datos y revisiones por pares |
+| `05-outputs/` | Tlacuilo | `/transform` — NUEVO: CSV/Excel, notebooks, presentaciones, mapas mentales (artefactos de diseminación separados de borradores) |
+
+* **Formato de auditoría:** los informes de `/validate` y `/review` aterrizan en `04-review/` con frontmatter `{command, agent, target_doc, verdict}` (log auditable del estado de cada documento evaluado).
+* Las notas de evidencia de `/research` en `01-tasks/research/` exigen frontmatter `{agent, timestamp, fuentes, método}` en cada nota.
+
 ### Agentes primarios (5)
 
 | Agente | Rol | Comandos | Permisos (resumen D/manifest) |
 |---|---|---|---|
 | **Itzamná** | Orquestador / interfaz del usuario | ninguno | Lectura/escritura de contexto: lee estado del workspace, enruta, NO ejecuta el pipeline |
 | **Nezahualcóyotl** | Arquitecto de investigación | `/rubric` `/synthesize` | Escritura solo de planificación (rúbricas, esquemas); sin web ni redacción final |
-| **Pochteca** | Explorador/recolección | `/research` | Solo lectura del workspace + navegación web + MCPs/lectores; **sin permisos de escritura** |
+| **Pochteca** | Explorador/recolección | `/research` | lectura total del workspace + navegación web + MCPs/lectores + escritura ÚNICAMENTE en `01-tasks/research/` (desviación documentada del UH, decisión usuario 2026-10-21 — ver párrafo siguiente) |
 | **Chilam** | Auditor | `/validate` `/cite` `/review` | Lectura total; escritura limitada a registros de auditoría, bases de citas y notas de revisión |
 | **Tlacuilo** | Ingeniero de artefactos | `/draft` `/transform` `/update` | Escritura en workspace (documentos, hojas de cálculo, código); **sin navegación web** |
 
 Justificación histórica de cada nombre: ver docs/UH.md (tabla "Agentes Primarios") — no se duplica aquí (progressive disclosure).
+
+**Desviación documentada del UH (decisión usuario 2026-10-21):** docs/UH.md establece para Pochteca "**Estrictamente sin permisos de escritura** en el workspace del usuario". El usuario decidió explícitamente UNA excepción: Pochteca puede escribir **solo** en `01-tasks/research/`, con frontmatter obligatorio `{agent, timestamp, fuentes, método}` en cada nota. Justificación: la evidencia recolectada debe sobrevivir entre `/research → /validate → /synthesize` (sin bandeja propia, el trabajo de Pochteca moriría en el contexto de la sesión); la separación de poderes se preserva acotando la escritura a UN tray y prohibiendo el resto del vault (root de `01-tasks/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/`, `00-Resources/` y carpetas personales: denegadas). UH.md se mantiene inmutable como fuente de requisitos; esta spec registra la desviación y su rationale, no la re-litiga.
 
 ### Grafo metodológico (de UH.md)
 
@@ -85,9 +104,10 @@ graph TD
 1. **Regla MCP-first:** para cualquier pregunta sobre material de `00-Resources/`, el agente DEBE invocar `tepochcalli-rag` `search` antes de leer archivos; `index_refresh()` antes de la primera búsqueda de una sesión si hay dudas de frescura; `add_source()` para convertir/ingerir material nuevo. Después de eso, puede usar otras herramientas/MCPs que el usuario configure.
 2. **Política de citas:** toda afirmación basada en chunks recuperados cita `source_path` + `heading` (+ offsets si disponibles), en el formato definido por `/cite`.
 3. **Presupuesto:** instrucción de no pedir `top_k` > 8 y de re-queryar antes que ensanchar contexto.
-4. **No-interferencia:** nunca escribir fuera de 01/02/03 y `00-Resources/_inbox/` (salvo `/transform` explícito); jamás tocar `.obsidian/` ni `.tepochcalli/` manualmente.
+4. **No-interferencia:** nunca escribir fuera de las bandejas 01-05 según el mapa de trays (D9.2) y de `00-Resources/_inbox/` (solo vía `add_source`); jamás tocar `.obsidian/` ni `.tepochcalli/` manualmente.
 5. **Modificabilidad:** el usuario puede editar este AGENTS.md — el wizard nunca lo sobreescribe si existe con cambios.
 6. **Placeholder futuro:** cuando exista el plugin/tool de OpenCode V2 (nota de UH.md), la sección 1 se reduce a un placeholder que el plugin inyecta automáticamente (TECH_DEBT TD-6).
+7. **no-contaminación de bandejas (D9.1):** el agente debe ADVERTIR si encuentra archivos depositados por el usuario dentro de las bandejas 01-05 — podría consumirlos por error en el pipeline; el usuario lee/extrae/borra, no deposita ni edita en sitio. Las bandejas se regeneran: borrarlas es seguro (semántica de caché).
 
 ## Alternatives Considered
 
@@ -96,14 +116,14 @@ graph TD
 
 ## Trade-offs
 
-* ✅ **Pros:** metodología explícita y testeable; separación de poderes (auditor no redacta, explorador no escribe).
+* ✅ **Pros:** metodología explícita y testeable; separación de poderes (auditor no redacta, explorador solo escribe su bandeja — D9.3).
 * ⚠️ **Cons / Risks:** 5 agentes + 9 comandos = superficie grande que debe permanecer coherente con los contratos MCP; skills infladas (208) degradan contexto del harness.
 * ⚖️ **Neutral:** el vault distribuido pesa más por skills; se mitiga con Anexo A.
 
 ## Testing Strategy
 
 * E2E golden-vault: `/rubric → /research → …` sobre la muestra del wizard asserta que `/research` usa `tepochcalli-rag.search` (captura de tool-calls) y que las citas resuelven a rutas reales.
-* Permiso: fixtures de configuración OpenCode verifican `tools`/`permission` por agente (sin escritura Pochteca, sin web Tlacuilo).
+* Permiso: fixtures de configuración OpenCode verifican `tools`/`permission` por agente (D9.3): escritura de Pochteca permitida **solo** bajo `01-tasks/research/` y **denegada en todo lo demás**; navegación web permitida en Pochteca; sin web en Tlacuilo.
 * Regresión de skills: tras el aseo de /plan, lista blanca versionada en `.opencode/skills.lock` equivalente.
 
 ## Security Considerations
