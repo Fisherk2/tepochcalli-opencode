@@ -90,7 +90,34 @@ Regla maestra de journeys e): **ningún fallo pierde datos del usuario** — sol
 derivados/installables se deshacen. Ver diagrama de fases en
 [../specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md).
 
-## 7. Mapa de navegación del vault (referencia rápida del usuario)
+## 7. Journey (f) — "Elegí el modelo equivocado" — cambio sin reinstalar (D8.4/ADR-008)
+
+Síntomas típicos: índice lento o con picos de memoria en un host de 4 GB (se ignoró el badge
+`no recomendado` de `BAAI/bge-m3`), o simplemente "cambié de opinión" tras la instalación.
+
+1. Usuario (terminal, fuera de Obsidian): `tepochcalli config embedder`.
+2. El wizard muestra el estado actual (model, dims, filas del índice, tamaño de db — lectura local con forma `rag_status`) y el menú D7.1 con transparencia D8.1 (💾 disk · 🧠 RAM · 🎮 GPU, etiquetado `medido`/`estimado`/`declarado`) y badges D8.2.
+3. Usuario elige el nuevo embedder → advertencia explícita: re-index completo requerido (LanceDB no puede mezclar dims), tiempo estimado; confirma con `--confirm`.
+4. Descarga + gate test-embed (RSS medido) + re-index con el índice viejo **siguiendo servible** (las `search` del agente responden contra las filas viejas durante todo el proceso).
+5. Éxito → conmutación atómica de config + metadatos; el modelo viejo se purga de `models/` (auto-GC; `--keep-previous` lo conserva). El workspace NO se reinstaló.
+
+```mermaid
+flowchart TD
+    SYM["Síntoma: índice lento o elección errónea"] --> CMD["tepochcalli config embedder"]
+    CMD --> SHOW["Muestra estado actual (forma rag_status)"]
+    SHOW --> MENU["Menú D7.1 con transparencia D8.1 y badges D8.2"]
+    MENU --> WARN["Advertencia: re-index completo (LanceDB no mezcla dims) — requiere --confirm"]
+    WARN --> SWAP["Descarga + gate test-embed (RSS medido) + re-index"]
+    SWAP -.->|"durante todo el proceso"| OLD["Índice viejo intacto y servible (search OK)"]
+    SWAP -->|"éxito"| ATOMIC["Conmutación atómica de config + metadatos → auto-GC del modelo viejo (--keep-previous lo conserva)"]
+    SWAP -->|"fallo en cualquier paso"| RB["Rollback: config, índice viejo y modelo viejo intactos (cero cambio de estado)"]
+    ATOMIC --> OK["Búsqueda sobre el nuevo embedder; sin reinstalar el workspace"]
+```
+
+Variante de higiene (P2): `tepochcalli models list` / `tepochcalli models prune` para inventariar
+y limpiar caches de modelos huérfanos tras varios swaps.
+
+## 8. Mapa de navegación del vault (referencia rápida del usuario)
 
 ```text
 00-Resources/   → meter aquí todo lo consultable (libre subniveles)
