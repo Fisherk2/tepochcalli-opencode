@@ -1,0 +1,44 @@
+[project]
+name = "tepochcalli-flow"
+version = "0.1.0"
+description = "Tepochcalli RAG flow: incremental CocoIndex pipeline for the Obsidian vault"
+requires-python = ">=3.12"
+dependencies = [
+    # Pins verified by the T1 spike on 2026-10-21 (uv 0.12.9, CPython 3.12.14).
+    # Extras are hyphenated; lancedb/pyarrow come from the [lancedb] extra
+    # (docs/TRD.md §4: never pin them directly -> avoid version divergence).
+    "cocoindex[lancedb,sentence-transformers]==1.0.25",
+    # Docling 2.x series, CPU only — no GPU extra (docs/TRD.md §4).
+    "docling>=2,<3",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-cov",
+    "ruff",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# ANN: strict type hints (docs/CODE_STYLE.md). D: docstrings. N: naming.
+# I: import sorting. B: bugbear. UP: pyupgrade. E/W/F: pycodestyle+pyflakes.
+select = ["E", "W", "F", "I", "ANN", "B", "D", "N", "UP"]
+# Conflicting pydocstyle pairs: keep D211 over D203, D212 over D213/D214.
+ignore = ["D203", "D213", "D214"]
+
+[tool.pytest.ini_options]
+testpaths = ["../../tests/phase1"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "flow"}
+
+[tool.setuptools.packages.find]
+where = ["flow"]

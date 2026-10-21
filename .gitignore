@@ -195,3 +195,13 @@ local.gradle
 *.override
 
 # To add a new rule: identify a specific category, avoid overly broad patterns
+
+# Tepochcalli runtime (specs/spec-vault-structure.md §Estrategia gitignore)
+# `venv/` (regla Python de arriba) ya cubre el entorno; estas reglas ancladas
+# cubren db/models/bin/config (que no estaban cubiertos a esa profundidad).
+# flow/, pyproject.toml, uv.lock y .python-version SON código fuente: se versionan.
+obsidian-workspace/.tepochcalli/venv/
+obsidian-workspace/.tepochcalli/db/
+obsidian-workspace/.tepochcalli/models/
+obsidian-workspace/.tepochcalli/bin/
+obsidian-workspace/.tepochcalli/config/
