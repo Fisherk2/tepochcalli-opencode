@@ -18,16 +18,16 @@ Nota: la UI del producto es Obsidian + OpenCode; no hay pantallas propias (out o
 ```mermaid
 flowchart TD
     A["Usuario abre vault y describe tema a Itzamná"] --> B["/rubric (Nezahualcóyotl)<br/>matriz: pregunta, alcance, criterios"]
-    B --> C["/research (Pochteca)<br/>index_refresh + search en 00-Resources + web<br/>sin escritura en vault"]
-    C --> D["/validate (Chilam)<br/>informe de calidad, contradicciones"]
+    B --> C["/research (Pochteca)<br/>index_refresh + search en 00-Resources + web<br/>escribe solo 01-tasks/research/ (frontmatter obligatorio)"]
+    C --> D["/validate (Chilam)<br/>informe de calidad en 04-review/, contradicciones"]
     D -->|No| C
     D -->|Sí| E["/synthesize (Nezahualcóyotl)<br/>ejes temáticos + outline"]
     E --> F["/cite (Chilam)<br/>referencias APA/MLA/Chicago + trazabilidad"]
     E --> G["/draft (Tlacuilo) en 02-drafts/<br/>redacción con citas de /cite"]
-    G --> H["/review (Chilam)<br/>revisión por pares simulada"]
+    G --> H["/review (Chilam)<br/>revisión por pares simulada en 04-review/"]
     H -->|Correcciones| E
-    H -->|Aprobado| I["documento final en 03-citations/+02-drafts"]
-    I --> J["/transform (Tlacuilo)<br/>CSV/Excel · Jupyter · presentación · mapa mental"]
+    H -->|Aprobado| I["documento final en 02-drafts/ (+ citas en 03-citations/)"]
+    I --> J["/transform (Tlacuilo)<br/>artefactos en 05-outputs/: CSV/Excel · Jupyter · presentación · mapa mental"]
     I --> K["/update (Tlacuilo)<br/>correcciones puntuales posteriores"]
 ```
 
@@ -122,12 +122,18 @@ y limpiar caches de modelos huérfanos tras varios swaps.
 
 ## 8. Mapa de navegación del vault (referencia rápida del usuario)
 
+Zonas de propiedad (D9.1, specs/spec-vault-structure.md): bandejas del agente = leer/extraer/borrar OK, **no depositar ni editar**; biblioteca personal = carpetas tuyas (no indexadas v1).
+
 ```text
-00-Resources/   → meter aquí todo lo consultable (libre subniveles)
-01-tasks/       → notas de trabajo del pipeline (no indexadas v1)
-02-drafts/      → borradores de /draft, artefactos de /transform
-03-citations/   → bibliografía gestionada por /cite
-.opencode/      → agentes/comandos/skills del harness (no tocar sin plan)
-.tepochcalli/   → runtime RAG (borrable/desinstalable, ver SECURITY/TRD)
-opencode.json   → config del harness (el wizard administra solo mcp.servers)
+00-Resources/       → # ENTRADA del usuario — meter aquí todo lo consultable (única fuente indexable; libre subniveles)
+01-tasks/           → # bandeja del agente (Nezahualcóyotl: /rubric, /synthesize) — no depositar/editar; leer/extraer/borrar OK
+01-tasks/research/  → # bandeja del agente (Pochteca: /research) — evidencia con frontmatter {agent, timestamp, fuentes, método}
+02-drafts/          → # bandeja del agente (Tlacuilo: /draft, /update) — no depositar/editar; leer/extraer/borrar OK
+03-citations/       → # bandeja del agente (Chilam: /cite) — no depositar/editar; leer/extraer/borrar OK
+04-review/          → # bandeja del agente (Chilam: /validate, /review) — informes de calidad y revisión por pares
+05-outputs/         → # bandeja del agente (Tlacuilo: /transform) — CSV/Excel, notebooks, presentaciones, mapas mentales
+10+ / 20+ / 30+     → # biblioteca personal del usuario — organiza resultados extraídos; NO indexada v1 (copia a 00-Resources/ para buscarla)
+.opencode/          → # agentes/comandos/skills del harness (no tocar sin plan)
+.tepochcalli/       → # runtime RAG (borrable/desinstalable, ver SECURITY/TRD)
+opencode.json       → # config del harness (el wizard administra solo mcp.servers)
 ```
