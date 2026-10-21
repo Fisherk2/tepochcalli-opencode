@@ -8,7 +8,7 @@
 | Investigador (humano) | Dueño del vault | Obsidian (notas/PDFs) + terminal OpenCode | abrir vault |
 | Itzamná | Orquestador del workspace | enrutamiento, estado, sugerencias | conversación |
 | Especialistas | Nezahualcóyotl · Pochteca · Chilam · Tlacuilo | comandos `/rubric…/update` | vía Itzamná |
-| tepochcalli-rag | MCP tools | `search`, `index_refresh`, `add_source` | tool-call del agente |
+| tepochcalli-rag | MCP tools | `search`, `index_refresh`, `add_source`, `rag_status` | tool-call del agente |
 | markitdown | MCP conversor | `convert_to_markdown` | vía `add_source` o agente |
 
 Nota: la UI del producto es Obsidian + OpenCode; no hay pantallas propias (out of scope PRD §5).
@@ -70,8 +70,11 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
    instaló Python/Node ni tecleó comandos de dependencias.
 6. Smoke: usuario añade una nota a `00-Resources/` → journey (b) funciona.
 
-Flags: `--offline` (re-instalación con cachés; sin red), `--skip-model` (omitir fase de
-modelo; `search` reportará INDEX_EMPTY hasta completarla).
+Flags: `--offline` (re-instalación con cachés; sin red), `--skip-model` = salida
+"Configurar después" del menú de embedder (ADR-007 D7.1-5): el vault se instala completo, la
+indexación inicial se omite y el RAG queda en estado `degraded`;
+`search`/`index_refresh`/`add_source` devuelven `E_NO_EMBEDDER` con `fix_hint`, y `rag_status()`
+reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedder` (flujo D8.4).
 
 ## 6. Journey (e) — fallo y recuperación
 
