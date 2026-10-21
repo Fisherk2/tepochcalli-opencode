@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (convención de carpetas, flujo de datos), ADR-002 (db embebida), ADR-004 (venv local), specs/spec-rag-engine.md, specs/spec-installer-wizard.md
+* **Traceability:** docs/UH.md (convención de carpetas, flujo de datos), ADR-002 (db embebida), ADR-004 (venv local), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2); capa **D9** (zonas de propiedad) confirmada por el usuario vía question tool el 2026-10-21 — sin ADR nuevo, por decisión explícita del usuario (spec-only)
 
 ## Summary
 
@@ -28,12 +28,17 @@ Un vault de Obsidian es una carpeta que el usuario edita visualmente, sincroniza
 ### Non-Goals
 
 * Gestionar el contenido de `.obsidian/` (propiedad del usuario; nunca se toca).
-* Indexar `01-tasks/`, `02-drafts/`, `03-citations/` en v1 (puede evaluarse en /plan futuro).
+* Indexar las bandejas del agente (`01-tasks/`…`05-outputs/`) o la biblioteca personal del usuario en v1 (puede evaluarse en /plan futuro).
 * Redefinir los agentes/comandos del harness (spec-agent-workflow los documenta; no se modifican).
 
 ## Proposed Solution
 
-Dos zonas con dueños distintos: la **zona de usuario** (carpetas numeradas, `AGENTS.md`, `opencode.json`) que el wizard instala y el usuario edita libremente, y la **zona de runtime** (`.tepochcalli/`, punto-prefijada) que solo administran el wizard y el propio sistema, ignorada por Obsidian por convención de carpetas ocultas y excluida de git por artefactos regenerables.
+Tres zonas de propiedad + una zona administrativa (D9.1, decisión confirmada del usuario 2026-10-21):
+
+* **Entrada del usuario** — `00-Resources/`: la ÚNICA carpeta donde el usuario deposita material; única fuente de indexación; el agente escribe ahí solo vía `add_source` bajo petición explícita del usuario (regla existente, intacta).
+* **Bandejas del agente** (`01-…-05-…`) — espacio de trabajo del agent workflow: bandejas de salida de los 9 comandos (mapa en specs/spec-agent-workflow.md §Mapa de comandos→bandejas). Semántica de caché: el usuario puede LEER, EXTRAER (copiar/mover hacia sus propias carpetas) y BORRAR (seguro: es regenerable); NO debe depositar archivos nuevos ni editar en sitio (no-contaminación: archivos sueltos rompen las convenciones del agent workflow).
+* **Biblioteca personal** (`10+`/`20+`/`30+`, carpetas creadas por el usuario) — organización personal de los resultados extraídos; NO indexada en v1 (si un artefacto final debe ser consultable, el usuario lo copia a `00-Resources/`).
+* **Zona de runtime** (prefijo punto: `.tepochcalli/`, `.opencode/`, `.obsidian/`) — la administran el wizard y el propio sistema; ignorada por Obsidian por convención de carpetas ocultas y excluida de git por artefactos regenerables.
 
 ## Detailed Design
 
@@ -41,11 +46,15 @@ Dos zonas con dueños distintos: la **zona de usuario** (carpetas numeradas, `AG
 
 ```text
 <mivault>/                          # raíz del vault (usuario)
-├── 00-Resources/                   # ÚNICA fuente de indexación (anidamiento libre)
+├── 00-Resources/                   # ENTRADA del usuario: ÚNICA fuente de indexación (anidamiento libre)
 │   └── ...                         #   p.ej. lit-pediatría/, datasets/, papers/*.pdf
-├── 01-tasks/                       # notas de trabajo (no indexadas v1)
-├── 02-drafts/                      # borradores de redacción (no indexados v1)
-├── 03-citations/                   # referencias/audit (no indexados v1)
+├── 01-tasks/                       # bandeja del agente — Nezahualcóyotl (/rubric, /synthesize) — no indexada v1
+│   └── research/                   #   sub-bandeja de Pochteca (única escritura suya permitida, D9.3)
+├── 02-drafts/                      # bandeja del agente — Tlacuilo (/draft, /update) — no indexados v1
+├── 03-citations/                   # bandeja del agente — Chilam (/cite) — no indexados v1
+├── 04-review/                      # bandeja del agente — Chilam (/validate, /review) — NUEVA (D9.2)
+├── 05-outputs/                     # bandeja del agente — Tlacuilo (/transform) — NUEVA (D9.2)
+├── 10-*/ 20-*/ 30-*/               # biblioteca personal (carpetas del usuario; NO indexadas v1)
 ├── .obsidian/                      # configuración Obsidian — intocable
 ├── .opencode/                      # harness: agents/, commands/, skills/ (existente)
 ├── .tepochcalli/                   # runtime RAG (D2) — ver siguiente sección
@@ -53,7 +62,16 @@ Dos zonas con dueños distintos: la **zona de usuario** (carpetas numeradas, `AG
 └── opencode.json                   # configuración OpenCode V2 (mcp.servers)
 ```
 
-Nota de convención: el nombre canónico de la fuente indexable es `00-Resources/` (este set de specs lo usa en todo momento). El scaffold actual del repo aparece como `00-resources/` (minúsculas); **Action Item para /plan**: alinear el scaffold del template al nombre canónico o declarar el alias en el wizard, para evitar dos ortografías entre especificación y payload (Obsidian enlaza rutas sensible a mayúsculas según SO).
+Nota de convención: el nombre canónico de la fuente indexable es `00-Resources/` (este set de specs lo usa en todo momento). El scaffold actual del repo aparece como `00-resources/` (minúsculas); **Action Item para /plan**: alinear el scaffold del template al nombre canónico o declarar el alias en el wizard, para evitar dos ortografías entre especificación y payload (Obsidian enlaza rutas sensible a mayúsculas según SO). Además, el scaffold TAMPOCO contiene `04-review/` ni `05-outputs/` (bandejas nuevas de D9.2): **Action Item para /plan (Phase 4)** — crear ambas carpetas en el template con sus dueños de la tabla §Mapa de propiedad.
+
+### Mapa de propiedad y acciones permitidas (D9.1)
+
+| Carpeta | Dueño | Usuario puede | Agente puede |
+|---|---|---|---|
+| `00-Resources/` | usuario (entrada única indexable) | leer · extraer · borrar · **depositar** · editar (anidamiento libre) | leer (vía `search` preferente); escribir SOLO por `add_source` con petición explícita |
+| `01-tasks/` · `02-drafts/` · `03-citations/` · `04-review/` · `05-outputs/` (bandejas del agente) | agente por comando (mapa D9.2 en specs/spec-agent-workflow.md) | leer · extraer · **borrar** (semántica de caché: regenerable) — NO depositar ni editar en sitio | escribir únicamente en su bandeja asignada; advertir ante archivos ajenos (no-contaminación) |
+| `10+`/`20+`/`30+` (biblioteca personal) | usuario | todo: leer · extraer · borrar · depositar · editar | solo lectura si el usuario lo pide; NUNCA escribe ahí (no indexada v1) |
+| `.obsidian/` · `.opencode/` · `.tepochcalli/` (zona de runtime) | Obsidian / harness / wizard | no tocar (fuera del flujo diario) | `.tepochcalli/` solo el wizard; los agentes jamás (regla 4 de spec-agent-workflow) |
 
 ### Layout de `.tepochcalli/` (D2)
 
@@ -91,6 +109,7 @@ El template de `.gitignore` del vault distribuido marca: `.tepochcalli/venv/`, `
 4. **Sin puertos escuchados** (ADR-002/005): verificable en tests con `ss -ltn` antes/después.
 5. **Escrituras atómicas dentro de `.tepochcalli/`**: el motor nunca toca archivos bajo `00-Resources/` (solo `add_source` escribe ahí, explícitamente por petición del usuario y dentro de la convención).
 6. **Compatibilidad de sync**: los artefactos ignorados por git no generan diffs de sincronización ruidosos.
+7. **Bandejas = espacio de trabajo del agente (no-contaminación)**: que el usuario deposite archivos dentro de las bandejas 01-05 NO es una configuración soportada (D9.1) — el agente asume las bandejas como suyas y debe ADVERTIR si encuentra archivos ajenos (podrían consumirse por error en el pipeline; regla replicada en spec-agent-workflow §AGENTS del vault). El usuario interactúa con las bandejas solo leyendo, extrayendo o borrando.
 
 ### `00-Resources/`: anidamiento libre + autodetección
 
