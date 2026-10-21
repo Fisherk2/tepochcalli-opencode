@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-003 (cargo-dist), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
+* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-003 (cargo-dist), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), ADR-008 (transparencia de hardware D8.1-D8.3 + swap atómico D8.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
 
 ## Summary
 
@@ -74,13 +74,60 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 | 3 | Copiar payload (carpetas numeradas, `.opencode/` con agents/commands/skills, `AGENTS.md` del vault, `opencode.json` base, `00-Resources/` con muestras md+PDF) | borrar lo copiado en esta corrida (marca `.tepochcalli/.install-intent`) |
 | 4 | Descargar binario `uv` → `.tepochcalli/bin/`; uv asegura CPython gestionado (el usuario NO necesita Python) | eliminar `bin/` |
 | 5 | `uv venv .tepochcalli/venv` + `uv sync` desde `pyproject.toml` (`cocoindex[lancedb]`, `sentence-transformers`, `docling`, `markitdown-mcp`) | `rm -rf venv/` |
-| 6 | Paso **"Embedding provider"** (menú D7.1/ADR-007): salida 1 `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado (~470MB a `models/`), salida 2 presets `BAAI/bge-m3` / `all-MiniLM-L6-v2` de `presets.toml` con peso estimado y detección de GPU (advertencia, no bloqueo), salida 3 ID libre de HuggingFace tras el gate **test-embed** (`HF_TOKEN` opcional para gated), salida 4 API LiteLLM con clave en `config/tepochcalli.toml` (gitignored), salida 5 "Configurar después" | un fallo de descarga/validación **no aborta**: `rm -rf models/` parcial + fallback a salida 5 (instalación completa en estado `degraded`) |
+| 6 | Paso **"Embedding provider"** (menú D7.1/ADR-007) con filas de transparencia de hardware (D8.1) y badges de detección del host (D8.2): salida 1 `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado (~470MB a `models/`), salida 2 presets `BAAI/bge-m3` / `all-MiniLM-L6-v2` de `presets.toml` con peso estimado y detección de GPU (advertencia, no bloqueo), salida 3 ID libre de HuggingFace tras el gate **test-embed** (`HF_TOKEN` opcional para gated), salida 4 API LiteLLM con clave en `config/tepochcalli.toml` (gitignored), salida 5 "Configurar después" | un fallo de descarga/validación **no aborta**: `rm -rf models/` parcial + fallback a salida 5 (instalación completa en estado `degraded`) |
 | 7 | Correr flow: index inicial de `00-Resources/` (incluye parse Docling de PDF de muestra; **omitida en salida 5**) | `rm -rf db/ flow state` |
 | 8 | Fusionar entradas MCP en `opencode.json` (ver abajo) y smoke-test `search` sobre la muestra | revertir `opencode.json` desde backup `.bak` |
 
 * La fase 1 no puede "deshacerse"; las fases 3-8 crean solo artefactos propios → la compensación es puramente de archivos bajo rutas del runtime/payload de esta corrida. Nunca se tocan `.obsidian/` ni archivos previos del usuario (la merge del payload omite existentes salvo plantillas gestionadas).
 * Si la fase 8 detecta una entrada `tepochcalli-rag` previa, la valida (comando apunta al venv actual) y solo la reescribe si difiere, conservando las demás servers del usuario.
 * **Semántica de rollback del provider (D7.1):** si la descarga o el gate test-embed de la fase 6 fallan tras el reintento, el wizard **cae a la salida 5 en vez de abortar**: el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config.
+
+### Transparencia de hardware y detección de host en el paso embedder (D8.1-D8.3/ADR-008)
+
+#### D8.1 — Filas de requisitos visibles ANTES de seleccionar (NFR cero-sorpresas)
+
+Cada fila del menú "Embedding provider" —presets y IDs libres de HuggingFace por igual— muestra
+pre-elección: `💾 disk (MB) · 🧠 RAM requirement · 🎮 GPU status`. Cada número lleva su
+procedencia (`medido`/`estimado`/`declarado`) — nunca presentar una estimación como promesa.
+Las tres fuentes y la extracción de metadatos (API de HF, fórmula `params × 4 bytes × 1.3
+overhead factor`) se especifican en specs/spec-embeddings.md §Tres fuentes de verdad de los
+requisitos; el RSS pico se muestrea en el gate test-embed para TODO camino local (salidas 1-3),
+no solo para IDs custom.
+
+#### D8.2 — Secuencia de detección del host (al entrar en el paso)
+
+1. **Sondeo base:** RAM total + disco libre vía crate `sysinfo`.
+2. **Sondeo GPU (opcional):** probe de `nvidia-smi`/`rocm-smi` en PATH; ausencia silenciosa = no hay GPU, **no es un error**.
+3. **Cómputo de badge por opción**, ratio = `rec_ram_gb` / RAM disponible:
+
+| Badge | Criterio (testeable) |
+|---|---|
+| `recommended` | la opción cabe con ≥50% de margen (ratio ≤ 2/3 de la RAM disponible) |
+| `viable` | cabe, con margen bajo |
+| `no recomendado` | el requerimiento estimado excede la RAM disponible, **o** `gpu_recommended` && sin GPU detectada |
+
+   Ejemplo (host de 4 GB de RAM, fila canónica para tests): MiniLM badge `recommended` (≈0.5 GB disk, ~0.9 GB est. RAM); `BAAI/bge-m3` badge `no recomendado` (≈2.3 GB disk, ~2.9 GB est. RAM).
+
+4. **Fallback:** si el sondeo falla (`/proc` ilegible, plataforma exótica) → usar valores declarados de `presets.toml`, **sin badge de veredicto**, y la instalación continúa normal — nunca un crash.
+
+#### D8.3 — Advertir, nunca bloquear (locked)
+
+El badge `no recomendado` es advertencia; la selección sigue siendo posible (cuantización,
+"sé lo que hago", la máquina más grande de mañana). No se re-regula: aplica la fila existente
+de la matriz de edge cases de specs/spec-embeddings.md ("GPU insuficiente para `BAAI/bge-m3` →
+advertencia, no bloqueo").
+
+### Swap de modelo atómico sin reinstalar (D8.4/ADR-008)
+
+Secuencia de estados de `tepochcalli config embedder` cuando el vault ya tiene un embedder
+activo (respuesta user-facing a "cambié de opinión / elegí mal"):
+
+1. **Mostrar estado actual:** model, dims, filas del índice, tamaño de db (lectura local con forma `rag_status`).
+2. **Elegir nuevo embedder:** el mismo menú D7.1 con transparencia D8.1 y badges D8.2.
+3. **Advertencia explícita de re-index:** re-index completo requerido (LanceDB no puede mezclar dimensiones — consecuencia ADR-006 §6); tiempo estimado desde el tamaño del índice actual; requiere `--confirm` (evoca el contrato D7.4: `tepochcalli reindex --confirm`).
+4. **Descarga + gate test-embed** del modelo nuevo (RSS medido registrado) **→ re-index** con el nuevo embedder. **Invariante: el índice viejo permanece intacto y servable durante todo el proceso** — el target gestionado de CocoIndex construye filas nuevas; la tabla vieja **no se elimina hasta el éxito**.
+5. **Éxito → conmutación atómica** de `config.model` + metadatos; **entonces** (y solo entonces) se borra el cache del modelo viejo de `models/` (auto-GC). El flag `--keep-previous` desactiva el borrado.
+6. **Fallo en cualquier paso → rollback:** config, índice viejo y modelo viejo quedan intactos (cambio de estado cero); el vault nunca queda en half-state. Durante todo el flujo, `search` solo degrada para la indexación de archivos nuevos, **nunca para lecturas del índice existente**.
 
 ### Merge/validación del bloque MCP (fase 8, resultado esperado)
 
@@ -111,10 +158,11 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 
 ### Re-entrada y superficie CLI post-instalación (D7.4/ADR-007)
 
-* `tepochcalli config embedder` — reabre el menú "Embedding provider" (D7.1) sobre un vault ya instalado; escribe `[embedding]` en `config/tepochcalli.toml`, corre el gate test-embed para IDs libres, y tras un cambio de modelo advierte del `E_MODEL_MISMATCH` pendiente ofreciendo el re-index.
+* `tepochcalli config embedder` — reabre el menú "Embedding provider" (D7.1) sobre un vault ya instalado; escribe `[embedding]` en `config/tepochcalli.toml`, corre el gate test-embed para IDs libres, y si hay un embedder activo ejecuta el flujo completo de swap atómico D8.4 (§Swap de modelo atómico; flags `--confirm`, `--keep-previous`).
 * `tepochcalli reindex --confirm` — swap de modelo = re-index completo **destructivo** (vacía y regenera `chunks` en `.tepochcalli/db/`); requiere confirmación explícita; procedimiento alineado con specs/spec-embeddings.md §Procedimiento de swap de modelo.
 * `tepochcalli install [--resume]` — corrida atómica de 8 fases (arriba); `--resume` reusa artefactos válidos.
 * `tepochcalli uninstall --vault <ruta>` — ver §Rollback / Monitoring.
+* (P2, nice-to-have D8.4) `tepochcalli models list` / `tepochcalli models prune` — higiene de la cache `models/` tras swaps: inventario con procedencia (medido/declarado) y limpieza de modelos huérfanos.
 * Checklist de re-entrada (salida 5): `tepochcalli config embedder` → provider + descarga/API → `index_refresh()` (o re-ejecutar `install --resume`) → smoke-test `search`. El wizard lo imprime al terminar la instalación degraded.
 
 ### Versionado y release (D5/ADR-003)
@@ -149,6 +197,8 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 * `--offline` segunda corrida (con cachés) → éxito sin red (fixture en CI con cache uv/`models/` pre-cargados).
 * Salida 5 del menú embedder (y `--skip-model`): assert de instalación COMPLETA sin fase 7 + checklist degraded impreso + `search` → `E_NO_EMBEDDER` + `rag_status` → `degraded` con `fix_hint` (ADR-007 §8).
 * Gate test-embed: fixture con ID HF no-embedding → rechazo en fase 6, sin half-config escrita, fallback a salida 5 (no abort).
+* D8.1/D8.2: host fixture de 4 GB → fila `BAAI/bge-m3` con badge `no recomendado` pero SELECCIONABLE; fila MiniLM `recommended`; todo número muestra etiqueta `medido`/`estimado`/`declarado`.
+* D8.4 swap atómico: durante el re-index una `search` resuelve contra el índice viejo (servable); tras éxito el modelo viejo no está en `models/` (sí con `--keep-previous`); descarga interrumpida a mitad del swap → cambio de estado cero (config/índice/modelo viejos byte-a-byte intactos).
 
 ## Security Considerations
 
@@ -170,4 +220,4 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 * Fisherk2/codice-opencode (modelo `template/` → instalación)
 * cargo-dist — https://opensource.axo.dev/cargo-dist/
 * uv — https://docs.astral.sh/uv/
-* ADR-003 / ADR-004 / ADR-007 (paso embedder + re-entrada); docs/APPFLOW.md journeys d y e
+* ADR-003 / ADR-004 / ADR-007 (paso embedder + re-entrada) / ADR-008 (transparencia hardware + swap atómico); docs/APPFLOW.md journeys d, e y f
