@@ -11,11 +11,13 @@
 
 ## Sub-fase A — Anclaje y cimientos
 
-- [ ] **T1 · Spike: anclar la API real de CocoIndex v1 y enmendar la spec congelada**
+- [x] **T1 · Spike: anclar la API real de CocoIndex v1 y enmendar la spec congelada** ✅ *hecho — `0978790`*
   - Subagentes: `python-pro`, `tool-evaluator`, `minimal-change-engineer` · Skills: `source-driven-development`, `find-docs`, `documentation-and-adrs`, `clean-code`
   - AC: venv 3.12 con `cocoindex==1.0.25`; spike `localfs → split → embed → LanceDB → update_blocking` verde; **hallazgos documentados** (offsets de chunk, purga al borrar, `PatternFilePathMatcher`); `specs/spec-rag-engine.md` §Proposed Solution actualizado a API v1; `docs/WORKFLOW.md` §8 con entrada **D11** (no-ADR); `docs/UH.md` / `README.md` / `LICENSE` / `opencode.json` / `obsidian-workspace/.opencode/` intactos
   - Verificar: script del spike sin `ImportError`/`AttributeError`; **la enmienda no introduce errores markdownlint nuevos** (baseline pre-existente: 63 = 58 MD060 + 3 MD034 + 1 MD038 + 1 MD022); `git diff --stat` toca solo `specs/`, `docs/` y `.markdownlint.json`
   - ⚠️ **AC de lint redefinido por el usuario (2026-10-21):** el repo **no tenía** `.markdownlint.json` aunque `docs/CODE_STYLE.md` prometía «MD013 desactivado». T1 lo crea (solo `MD013:false`, para no apagar reglas que señalan fallos reales) y el AC pasa de «markdownlint limpio» a **«cero errores nuevos»**; los 63 pre-existentes quedan como deuda pre-existente. Amplía el diff de T1 a `.markdownlint.json` — autorizado explícitamente.
+  - 📌 **Hechos verificados por spike (RED antes de GREEN, 9/9 aserciones):** F1 `chunk.start.char_offset` da cita exacta 51/51, `heading` **derivado** (no campo de `Chunk`) → recae sobre **T4** · F2 purga automática (target gestionado + `mount_each` + `IdGenerator`) · **F3 trampa**: `included_patterns` solos **NO** excluyen dirs-punto → `excluded_patterns=["**/.*"]` obligatorio → recae sobre **T5** · **F4 splitter mide BYTES** → presupuesto **1536/192** (decisión usuario) · **F5 `localfs` sin límite de tamaño ni hook** → el ">100MB skipped con motivo" es nuestro → recae sobre **T5** · F6 `normalize_embeddings` va en `embed()` · **E1 GPU `sm_61` sin kernels** → `[embedding] device` default `"cpu"` (decisión usuario) → recae sobre **T3/T6** · E2 idempotencia se lee del data plane, no del total.
+  - 📦 Versions ancladas: `cocoindex==1.0.25` · `lancedb==0.40.0` · `sentence-transformers==6.2.0` · `torch==2.14.1` · CPython 3.12.14. Extras **con guion**: `cocoindex[lancedb,sentence-transformers]`.
   - Dep.: — · Tamaño: M
 
 - [ ] **T2 · Cimientos del paquete: pyproject pineado, uv.lock, venv 3.12, gitignore del runtime**
@@ -30,12 +32,13 @@
   - Verificar: `uv run pytest tests/phase1/test_config.py -v` verde
   - Dep.: T2 · Tamaño: S
 
-### ⛔ CP-A · Cimientos
-- [ ] API v1 probada y spec corregida
-- [ ] `uv sync` reproducible desde cero
-- [ ] Pines exactos + ruff limpio
-- [ ] `tepochcalli.toml` real nunca commiteable
-- [ ] Revisión humana de la enmienda de la spec
+### ⛔ CP-A · Cimientos — *1/5 · NO desbloqueado*
+- [x] API v1 probada y spec corregida ✅ *(T1, `0978790`)*
+- [ ] ⏳ **Revisión humana de la enmienda de la spec** — pendiente del usuario: `specs/spec-rag-engine.md` §Proposed Solution/§Fuentes/§Chunking/§Embeddings, `specs/spec-embeddings.md` §tepochcalli.toml, y `docs/WORKFLOW.md` §8 (D11/D12 + nota de mapeo D11)
+- [ ] `uv sync` reproducible desde cero → **T2**
+- [ ] Pines exactos + ruff limpio → **T2**
+- [ ] `tepochcalli.toml` real nunca commiteable → **T3**
+- ⚠️ **Gate:** T2 NO arranca hasta que el usuario revise la enmienda — el esqueleto de T2 y T5 se apoyan directamente en el esqueleto v1 corregido.
 
 ---
 
