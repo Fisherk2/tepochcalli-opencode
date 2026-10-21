@@ -92,7 +92,8 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   como contexto; el contrato MCP (spec-mcp-server) se congela primero, después las adaptaciones.
 * Decisions reversibles (nombres de variables internas): inline, sin delegar. Decisiones D1-D6:
   NO se re-litigan en código — requieren ADR nuevo aprobado por el usuario.
-* Skills/agents del vault: solo Phase 4 de docs/WORKFLOW.md (audit actions en
-  spec-agent-workflow Anexo A) puede proponer instalar/retirar; en el repo padre nunca.
+* Skills/agents del vault: Phase 4 (diseño) propone instalar/retirar vía blueprint
+  (matriz de specs/spec-payload-vault.md, audit actions de spec-agent-workflow Anexo A);
+  Phase 5 (payload) ejecuta; en el repo padre nunca.
 * Paralelizable: Phase 1 (flow) y Phase 2 (server MCP) pueden ir en worktrees separados contra
   el contrato de datos; Phase 3 (wizard) requiere Phase 1-2 estables.

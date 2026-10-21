@@ -62,7 +62,7 @@ Tres zonas de propiedad + una zona administrativa (D9.1, decisión confirmada de
 └── opencode.json                   # configuración OpenCode V2 (mcp.servers)
 ```
 
-Nota de convención: el nombre canónico de la fuente indexable es `00-Resources/` (este set de specs lo usa en todo momento). El scaffold actual del repo aparece como `00-resources/` (minúsculas); **Action Item para /plan**: alinear el scaffold del template al nombre canónico o declarar el alias en el wizard, para evitar dos ortografías entre especificación y payload (Obsidian enlaza rutas sensible a mayúsculas según SO). Además, el scaffold TAMPOCO contiene `04-review/` ni `05-outputs/` (bandejas nuevas de D9.2): **Action Item para /plan (Phase 4)** — crear ambas carpetas en el template con sus dueños de la tabla §Mapa de propiedad.
+Nota de convención: el nombre canónico de la fuente indexable es `00-Resources/` (este set de specs lo usa en todo momento). El scaffold actual del repo aparece como `00-resources/` (minúsculas); **Action Item para /plan**: alinear el scaffold del template al nombre canónico o declarar el alias en el wizard, para evitar dos ortografías entre especificación y payload (Obsidian enlaza rutas sensible a mayúsculas según SO). Además, el scaffold TAMPOCO contiene `04-review/` ni `05-outputs/` (bandejas nuevas de D9.2): **Action Item para /plan (Phase 5, ejecución)** — crear ambas carpetas en el template con sus dueños de la tabla §Mapa de propiedad.
 
 ### Mapa de propiedad y acciones permitidas (D9.1)
 

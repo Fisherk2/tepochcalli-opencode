@@ -28,7 +28,7 @@ El valor del vault no es solo RAG: es convertirlo en pipeline de investigación 
 ### Non-Goals
 
 * Redefinir/redactar los archivos de agentes y comandos existentes (out of scope del manifiesto).
-* Elegir skills e instalarlas (esto produce RECOMENDACIONES; la acción vive en Phase 4 de docs/WORKFLOW.md).
+* Elegir skills e instalarlas (esto produce RECOMENDACIONES; la decisión vive en la matriz de Phase 4 — specs/spec-payload-vault.md — y la acción en Phase 5 de docs/WORKFLOW.md).
 
 ## Proposed Solution
 
@@ -181,13 +181,13 @@ Inventario real: **208 skills** (listado completo al final). Las 14 categorías 
 | Deep research ×4 | deep-research, deep-research-swarm, tooluniverse-literature-deep-research, research-lookup | conservar 1–2 (swarm es una variante de orquestación: evaluar coste de tokens contra presupuesto del criterio 4) |
 | Estadística | statistical-analysis, data-stats-analysis, statsmodels, statistical-power | statistical-analysis + statsmodels cubren el rango; revisar superposición con data-stats-analysis |
 | Brainstorm/ideas | brainstorming, scientific-brainstorming, hypothesis-generation, hypogenic, idea-refine, what-if-oracle | mantener scientific-brainstorming + hypothesis-generation; el resto, candidatas a retiro del payload |
-| Escrita | article-writing, scientific-writing, scientific-manuscript, doc-coauthoring | scientific-manuscript parece solaparse con scientific-writing; consolidar en Phase 4 |
+| Escrita | article-writing, scientific-writing, scientific-manuscript, doc-coauthoring | scientific-manuscript parece solaparse con scientific-writing; consolidar según matriz de Phase 4 (specs/spec-payload-vault.md), ejecutar en Phase 5 |
 
 ### Out-of-domain para el payload distribuible
 
 ≈120 skills se especializan en bioinformática/lab/física/química/clínico (scanpy, pydeseq2, qiime2-amplicon, neuropixels-analysis, diffdock, qiskit, matlab, geopandas/GIS, marketing-*, finance-*, legal-*, healthcare-*, etc.). **Recomendación:** convertirlas en un "skill pack" opcional (`tepochcalli pack install bio`) y dejar el vault base con las ~40 relevantes a las 14 categorías: menos contexto, menos descarga, instalación más liviana.
 
-### Gaps → acciones de instalación (para Phase 4 de WORKFLOW)
+### Gaps → acciones de instalación (decisión en la matriz de specs/spec-payload-vault.md; obra de Phase 5 de WORKFLOW)
 
 1. Skill de **cuadernos Jupyter** (crear/editar ejecutar .ipynb) — soporte directo de `/transform`.
 2. Skill de **R / graficación estadística en R** — pedida explícitamente en UH.md (#10).
