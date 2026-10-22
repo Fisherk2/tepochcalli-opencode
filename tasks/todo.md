@@ -53,23 +53,37 @@
 
 ## Sub-fase B — Camino Markdown completo
 
-- [ ] **T4 · Dominio de cita (puro): source_path, heading, char_start/char_end, doc_kind, model**
+- [x] **T4 · Dominio de cita (puro): source_path, heading, char_start/char_end, doc_kind, model** ✅ *hecho — `af3a7d1`*
   - Subagentes: `rag-pipeline-engineer`, `nlp-engineer` · Skills: `solid`, `clean-code`, `test-driven-development`, `clean-ddd-hexagonal`, `design-patterns`
   - AC: `source_path` POSIX relativo al vault con prefijo `00-Resources/`; `heading` = último heading padre; offsets de **carácter** verificables contra el texto extraído; `doc_kind` ∈ {md, markdown, txt, pdf}; `model` = embedder configurado; 100% cobertura del módulo
   - Verificar: `uv run pytest tests/phase1/test_citation.py --cov=tepochcalli_flow.citation --cov-fail-under=100`
   - Dep.: T3 · Tamaño: M
+  - ✅ **Verificado:** `citation.py` (205 líneas) con **0 imports** de `cocoindex`/`lancedb` (grep) — API solo con primitivos; **cobertura 100%** (92 statements, 0 perdidos); **34 tests nuevos → 45 en la suite**, sin regresiones; ruff limpio; literal del modelo en `config.py` **una sola vez**.
+  - 🔑 **Decisiones FROZEN heredables:**
+    * **`heading` es `None` (nunca `""`) sin padre → el esquema de LanceDB de T6 DEBE permitir null.**
+    * `heading_before(text, char_start)` — solo ATX `#`..`######`; **setext NO soportado** (limitación documentada); NO cuentan headings dentro de bloques cercados ni code spans inline ni `#` posteriores al offset; YAML frontmatter ignorado.
+    * `validate_offsets` lanza `CitationError`; `doc_kind_for` lanza `UnsupportedDocKindError` en extensión desconocida (**nunca** degrada a `txt`).
+    * `verify_slice_identity(text, char_start, char_end, chunk_text) -> bool` — assert barato para T5/T6 (identidad F1 verificada 51/51).
+    * `model_id(config)` importa `DEFAULT_EMBEDDING_MODEL` de `config.py`.
+  - ⚠️ **Desviación de plan registrada:** la segunda mitad del plan (revisión `nlp-engineer` sobre derivación de headings) **se pliega al gate CP-B**, que ya exige `code-reviewer` sobre el diff de la sub-fase — con 34 tests y cobertura 100% incluyendo los casos de fence/code-span, un pase aparte redundaría. CP-B debe scrutinizar explícitamente la derivación de `heading`.
+  - 📌 **Ruta de test corregida:** desde `obsidian-workspace/.tepochcalli/` los tests se referencian como `../../tests/phase1/` (repo-root-relative en las ACs no resuelven desde ahí).
 
 - [ ] **T5 · Fuentes y parseo Markdown/TXT: whitelist, exclusiones y chunks en memoria**
   - Subagentes: `data-engineer`, `rag-pipeline-engineer`, `test-engineer` · Skills: `test-driven-development`, `clean-code`, `solid`, `design-patterns`, `clean-ddd-hexagonal`
-  - AC: `localfs.walk_dir` recursivo con whitelist y exclusión de segmentos con punto y `.git/**`; >100MB / symlink roto / ilegible → `skipped` con motivo sin abortar; `RecursiveSplitter(1024/128)`; chunks con los 5 metadatos no nulos; fixture de anidamiento libre (2 indexados, 1 excluido)
-  - Verificar: `uv run pytest tests/phase1/test_parsers.py -v`
+  - AC: `localfs.walk_dir` recursivo con whitelist y exclusión de segmentos con punto y `.git/**`; >100MB / symlink roto / ilegible → `skipped` con motivo sin abortar; **`RecursiveSplitter(chunk_size=1536, chunk_overlap=192)` en BYTES** (*corregido por D11*); chunks con `source_path`, `char_start`, `char_end`, `doc_kind` **no nulos** y `heading` **presente (nullable, D13)**; fixture de anidamiento libre (2 indexados, 1 excluido)
+  - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_parsers.py -v` *(desde `.tepochcalli/`; NTFS: sin `python -m` no funciona)*
   - Dep.: T4 · Tamaño: M
+  - 📌 **Hallazgos heredados que T5 implementa (son SUYOS, no del conector):**
+    * **F3:** `included_patterns=["**/*.md"]` por sí solo **NO** excluye dirs-punto (globset de Rust: `*` casa segmentos con punto inicial → `.oculto/` quedaría incluido). Exige `excluded_patterns=["**/.*", "**/.git/**"]` **explícito**.
+    * **F5:** `localfs.walk_dir(path, *, live, recursive, path_matcher, rescan_interval)` **no tiene** ni límite de tamaño ni hook de errores; symlink roto se salta en silencio, chmod-000 solo cuenta 1 error. El ">100MB → `skipped` con motivo" **lo implementa T5** (custom `FilePathMatcher` con `stat()` o chequeo sobre `FileLike`).
+    * `citation.py` (T4) ya expone `heading_before`, `validate_offsets`, `verify_slice_identity`, `doc_kind_for`, `normalize_source_path`, `model_id` — reutilizar, no reimplementar.
 
 - [ ] **T6 · Embeddings y target LanceDB: escritura de la fila completa**
   - Subagentes: `rag-pipeline-engineer`, `nlp-engineer`, `data-engineer` · Skills: `source-driven-development`, `clean-ddd-hexagonal`, `design-patterns`, `test-driven-development`, `clean-code`
-  - AC: `SentenceTransformerEmbedder` en el lifespan con `ContextKey(detect_change=True)`, dims=384; esquema exacto `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}`; base `.tepochcalli/db/tepochcalli.lance` tabla `chunks`; **M2** 100% metadatos no nulos; índices ANN + FTS sobre `text`; **M3** 0 llamadas LLM (test que bloquea la red)
-  - Verificar: `uv run pytest tests/phase1/test_pipeline_integration.py -v` + inspección de la tabla
+  - AC: `SentenceTransformerEmbedder(model_name_or_path=..., device=...)` en el lifespan con `ContextKey(detect_change=True)`, dims=384; esquema exacto `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}` con **`heading` nullable (D13)**; base `.tepochcalli/db/tepochcalli.lance` tabla `chunks`; **M2** = `source_path`/`char_start`/`char_end`/`doc_kind` **no nulos** + `heading` presente en 100% de filas; índices ANN + FTS sobre `text`; **M3** 0 llamadas LLM (test que bloquea la red)
+  - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_pipeline_integration.py -v` + inspección de la tabla
   - Dep.: T5 · Tamaño: M
+  - 📌 **Herencias de T1/T4:** F2 purga automática exige el trío `mount_table_target` gestionado + `mount_each` (ruta de componente estable) + `IdGenerator.next_id(chunk.text)`; `heading` llega de `citation.heading_before` como `str | None`; `model` de `citation.model_id(config)`; embedder con `device` de `config.Config` (E1, default `cpu`); llama a `config.apply_model_cache_env()` **antes** de construir el embedder.
 
 ### ⛔ CP-B · Camino Markdown
 - [ ] Un `.md` produce filas completas en LanceDB

@@ -154,7 +154,7 @@ app = coco.App(coco.AppConfig(name="tepochcalli"), build_flow)  # run: `cocoinde
 * Base: `.tepochcalli/db/tepochcalli.lance`, tabla `chunks`.
 * Índice vectorial: ANN sobre 384 dims (IVF_PQ por default en LanceDB; para corpus <200k chunks el brute-force ya cumple <500ms — se configura ANN cuando el bench lo exija).
 * Índice FTS: sobre el campo `text` (tokenizador por defecto de LanceDB) para la parte léxica de la búsqueda híbrida; ideal para términos técnicos exactos.
-* Esquema por fila: `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}`.
+* Esquema por fila: `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}`. **Nulabilidad (D13):** `heading` es **nullable** — su valor es `null` cuando el documento no tiene heading padre (`.txt` plano, nota suelta) pero el campo **siempre está presente** (ADR-005: la cita es estructural, no opcional); `source_path`, `char_start`, `char_end` y `doc_kind` son **no nulos**.
 
 ### Semántica incremental Δ (criterio 2)
 
