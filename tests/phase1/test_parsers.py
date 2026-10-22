@@ -281,23 +281,6 @@ def test_walk_sources_skips_unreadable_files_without_aborting_f5(
     ]
 
 
-def test_walk_sources_skips_pdfs_until_the_docling_parser_lands_t7(
-    tmp_path: Path,
-) -> None:
-    """Los `.pdf` pasan la whitelist pero T5 no los parsea: skip con motivo `pdf_parser_pending`."""
-    recursos = tmp_path / citation.RESOURCES_DIR
-    recursos.mkdir(parents=True)
-    (recursos / "articulo.pdf").write_bytes(b"%PDF-1.4 fake")
-    (recursos / "notas.md").write_text("# Notas\n\nprosa.\n", encoding="utf-8")
-
-    items = source.walk_sources(tmp_path)
-
-    assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
-        ("00-Resources/articulo.pdf", source.SkipReason.PDF_PARSER_PENDING),
-    ]
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/notas.md"]
-
-
 def test_default_max_file_bytes_is_the_spec_threshold_of_100_mb() -> None:
     """El umbral por defecto es el de la spec: >100MB → skipped (§Fuentes, F5)."""
     assert source.DEFAULT_MAX_FILE_BYTES == 100 * 1024 * 1024
@@ -320,13 +303,8 @@ def test_extract_text_reads_markdown_and_txt_directly(tmp_path: Path) -> None:
     assert parsers.extract_text(txt) == "texto plano sin jerarquía\n"
 
 
-def test_extract_text_rejects_pdfs_until_t7(tmp_path: Path) -> None:
-    """La rama PDF no existe en T5: error tipado, nunca una lectura cruda del binario."""
-    pdf = tmp_path / "articulo.pdf"
-    pdf.write_bytes(b"%PDF-1.4 fake")
-
-    with pytest.raises(parsers.PdfParserPendingError, match="T7"):
-        parsers.extract_text(pdf)
+# T7 retiró `PdfParserPendingError` y el skip `pdf_parser_pending`: la rama PDF vive en
+# `test_pdf.py` (parseo Docling, skip oversized de un PDF y error en PDF corrupto).
 
 
 def test_extract_text_rejects_extensions_outside_the_whitelist(tmp_path: Path) -> None:

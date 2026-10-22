@@ -27,10 +27,10 @@ Sirve specs/spec-rag-engine.md §Fuentes:
   `00-Resources/` con motivo `symlink_escape`; los links que se quedan dentro
   se indexan con normalidad (documentado en docs/SECURITY.md).
 
-Decisión T5 (consistente en tests): los `.pdf` SÍ entran en la whitelist —el
-contrato de fuentes es de cuatro extensiones— pero el parser Docling llega en
-T7; hasta entonces un PDF que alcance el walk se emite como skip con motivo
-`pdf_parser_pending` y jamás llega a `parsers.extract_text`.
+Decisión T7 (reemplaza la de T5): los `.pdf` se parsean con Docling en
+`parsers.extract_text` — el walk ya NO los descarta, así que `classify_file`
+trata un PDF exactamente como cualquier archivo de la whitelist (whitelist de
+cuatro extensiones, umbral de tamaño incluido).
 
 Esta capa ES infraestructura (a diferencia de `citation`/`config`, dominio con
 frontera prohibida para el motor): importa `cocoindex` deliberadamente — el
@@ -83,9 +83,6 @@ class SkipReason(StrEnum):
     que funcionan, así que el contenido de fuera del recurso jamás debe llegar
     al índice ni a las respuestas de `search`.
     """
-
-    PDF_PARSER_PENDING = "pdf_parser_pending"
-    """En la whitelist, pero el parser Docling llega en T7 (decisión T5 del módulo)."""
 
 
 @dataclass(frozen=True)
@@ -189,9 +186,9 @@ def classify_file(
     """Aplica la regla F5 a un archivo y devuelve su entrada o su skip con motivo.
 
     Orden de motivos: objetivo fuera del recurso (frontera de confianza contra
-    symlinks que escapan) → PDF pendiente (T7) → ilegible → oversized. Cualquier
-    error de `stat()`/lectura se traduce en un `SkipReason` en vez de
-    propagarse (§Fuentes: «se registran como `skipped`, no fallan el delta»).
+    symlinks que escapan) → ilegible → oversized. Cualquier error de
+    `stat()`/lectura se traduce en un `SkipReason` en vez de propagarse
+    (§Fuentes: «se registran como `skipped`, no fallan el delta»).
     `size_bytes` permite reutilizar un tamaño ya conocido (p. ej. `FileLike.size()`
     en T6) sin volver a hacer `stat()`.
     """
@@ -206,13 +203,6 @@ def classify_file(
         )
     source_path = normalize_source_path(file_path.relative_to(resources_dir))
     kind = doc_kind_for(file_path)
-    if kind == "pdf":
-        return SkippedSource(
-            file_path,
-            source_path,
-            SkipReason.PDF_PARSER_PENDING,
-            "parser PDF (Docling) pendiente hasta T7 — spec-rag-engine §Ruta PDF",
-        )
     stat_result = _stat_or_skip(file_path, source_path)
     if isinstance(stat_result, SkippedSource):
         return stat_result
