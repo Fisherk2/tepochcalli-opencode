@@ -80,19 +80,23 @@
     * **Comportamiento del splitter medido:** corte **limpio** en fronteras de heading `##` (holgura 2 bytes, **sin overlap**) mientras la prosa sí se solapa hasta el presupuesto (78/116 B). Coherente con la intención del spec: el overlap protege el corte a media frase, no la frontera de sección. *No es un bug — no «arreglar».*
     * ⚠️ **Commit message desviado** del previsto en la tabla: era *"Indexa Markdown y TXT desde 00-Resources"* y T5 **no persiste**; decir "indexa" habría sido engañoso.
 
-- [ ] **T6 · Embeddings y target LanceDB: escritura de la fila completa**
+- [x] **T6 · Embeddings y target LanceDB: escritura de la fila completa** ✅ *hecho — `d74a8a5` + D14 `1724b0d`*
   - Subagentes: `rag-pipeline-engineer`, `nlp-engineer`, `data-engineer` · Skills: `source-driven-development`, `clean-ddd-hexagonal`, `design-patterns`, `test-driven-development`, `clean-code`
   - AC: `SentenceTransformerEmbedder(model_name_or_path=..., device=...)` en el lifespan con `ContextKey(detect_change=True)`, dims=384; esquema exacto `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}` con **`heading` nullable (D13)**; base `.tepochcalli/db/tepochcalli.lance` tabla `chunks`; **M2** = `source_path`/`char_start`/`char_end`/`doc_kind` **no nulos** + `heading` presente en 100% de filas; índices ANN + FTS sobre `text`; **M3** 0 llamadas LLM (test que bloquea la red)
   - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_pipeline_integration.py -v` + inspección de la tabla
   - Dep.: T5 · Tamaño: M
-  - 📌 **Herencias de T1/T4/T5:** F2 purga automática exige el trío `mount_table_target` gestionado + `mount_each` (ruta de componente estable) + `IdGenerator.next_id(chunk.text)`; `heading` llega de `citation.heading_before` como `str | None`; `model` de `citation.model_id(config)`; embedder con `device` de `config.Config` (E1, default `cpu`); llama a `config.apply_model_cache_env()` **antes** de construir el embedder; row schema en `models.py` (es el contrato que leerán T9 y Phase 2).
+  - ✅ **Verificado:** **100 tests** totales. Fila escrita con los 10 campos; dims resueltas por `Annotated[NDArray, EMBEDDER]` (sin literal `384`); índices `IvfPq` sobre `embedding` + `FTS` sobre `text`, ambos consultados; F2 trio completo; **M2** probado fila a fila re-sliceando desde disco (5/5); **M3** probado por dos vías y con **canario** (guard con dientes, `urlopen` bloqueado y registrado); D13 verificado en ambas direcciones (3 filas `heading=null` + 2 con ATX).
+  - 🔑 **D14 (hallazgo de mi verificación):** el estado del engine (LMDB) quedaba en `.tepochcalli/flow/cocoindex`, directorio que la spec declara **código fuente commiteable** → un usuario que `git init` su vault commitearía LMDB. Movido a **`.tepochcalli/db/cocoindex/`** (ya gitignored, ya hogar del dato derivado), con lo que el rollback de `spec-rag-engine` (*"borrar `db/` reconstruye todo"*) queda literalmente verdadero. Corregido el comentario contradictorio de `spec-vault-structure` §Layout; D14 en `WORKFLOW §8`.
 
-### ⛔ CP-B · Camino Markdown
-- [ ] Un `.md` produce filas completas en LanceDB
-- [ ] M2 (100% metadatos de cita no nulos)
-- [ ] M3 (0 llamadas LLM observables)
-- [ ] Test de arquitectura: el dominio no importa infra
-- [ ] `code-reviewer` aprueba el diff de la sub-fase
+### ✅ CP-B · Camino Markdown — **5/5 GREEN (sub-fase B completa)**
+- [x] Un `.md` produce filas completas en LanceDB ✅ *(T6, `d74a8a5` — 100 filas-probe y el fixture escribe 5/5)*
+- [x] **M2** — `source_path`/`char_start`/`char_end`/`doc_kind` no nulos + `heading` presente en 100% de filas *(D13; probado fila a fila re-sliceando desde disco, 5/5)*
+- [x] **M3** — 0 llamadas LLM observables ✅ *(dos vías: sin `litellm`/`openai`/`anthropic` en `sys.modules` + `socket.connect` bloqueado con **canario** que prueba que el guard muerde)*
+- [x] Test de arquitectura: el dominio no importa infra ✅ *(**trasladado de T9 a aquí** — corregido un defecto de secuencia del plan; test transitivo por `ast` con RED demostrado en las dos direcciones)*
+- [x] **`code-reviewer` aprueba el diff de la sub-fase** ✅ — *REQUEST CHANGES con 0 blockers → **`1724b0d` aplicó los 7 should-fix** y quedó en verde* (100 tests)
+- 📌 **Lo que aportó la revisión** (no duplicar el esfuerzo en C): decoder unificado en UTF-8 estricto, BOM ya no falsea el frontmatter, ids entre ficheros fijados, `__init__` en el cierre de arquitectura, `heading_before` ahora O(documento), frontera de symlinks, sección de symlinks en SECURITY.md.
+- 📌 **Defecto de plan detectado y corregido:** CP-B exigía el test de arquitectura pero el plan lo asignaba a T9 (sub-fase siguiente) — un gate no puede depender de una tarea posterior.
+- ▶️ **Desbloquea Sub-fase C: T7 (PDF), T8 (Δ), T9 (puerto de lectura) — paralelizables entre sí.**
 
 ---
 
@@ -101,13 +105,19 @@
 - [ ] **T7 · Ruta PDF con Docling (CPU) y exclusión por tamaño**
   - Subagentes: `data-engineer`, `rag-pipeline-engineer`, `performance-benchmarker` · Skills: `source-driven-development`, `performance-analysis`, `test-driven-development`, `clean-code`
   - AC: Docling en CPU con jerarquía de headings conservada; `doc_kind="pdf"`; offsets referidos al **markdown extraído** (documentado); **M5** costo real medido y reportado; PDF >100MB → `skipped` sin abortar el delta; fixture PDF real (1-2 páginas) con heading no nulo
-  - Verificar: `uv run pytest tests/phase1/test_pdf.py -v`; tiempo de parseo en el commit
+  - ➕ **AC añadido por la revisión de CP-B (hallazgo #5):** **retirar `SkipReason.PDF_PARSER_PENDING` de `source.classify_file`** — si T7 solo añade la rama Docling en `parsers.extract_text`, los PDFs seguirán saltándose en silencio con solo un warning. Hay que desactivar esa exclusión **y** testear que un PDF real ya no se salta.
+  - ➕ **AC añadido:** `parsers.extract_text` debe emitir **UTF-8 estricto con BOM incluido** (igual que `file.read_text(encoding="utf-8", errors="strict")` del camino de escritura) — docstring de `parsers.py` ya lo apunta como contrato para T7. Un decoder distinto rompería M2.
+  - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_pdf.py -v`; tiempo de parseo en el commit
   - Dep.: T6 · Tamaño: M
 
 - [ ] **T8 · Semántica incremental Δ, lock de un solo proceso y métricas**
   - Subagentes: `rag-pipeline-engineer`, `python-pro`, `test-engineer` · Skills: `test-driven-development`, `solid`, `clean-code`, `error-handling-patterns`, `observability-and-instrumentation`
   - AC: 2ª pasada sin cambios → `indexed=0`; modificado → solo sus chunks; borrado → filas purgadas (o reconciliación explícita documentada); refresh concurrente → `locked:true` **sin escribir**; métricas `{scanned, indexed, skipped, elapsed_ms, locked}` con reloj monotónico; retorno tipado sin `Any`, reutilizable tal cual por el MCP de Phase 2
-  - Verificar: `uv run pytest tests/phase1/test_delta.py -v`
+  - ➕ **AC añadidos por la revisión de CP-B (hallazgos #5) y por mi sonda:**
+    * **TOCTOU classify→read:** `classify_file` decide y `index_file` lee *después*; un borrado o `chmod` entre medias lanza dentro del componente memoizado. El "nunca aborta" de F5 vale solo en la fase de clasificación → T8 debe asegurar **aislamiento de error por fichero** (o usar el manejo de excepciones del engine) y testear la desaparición a mitad de pasada.
+    * **`scanned`/`skipped` subestiman:** (a) el conector se salta en silencio los **directorios ilegibles** (`except PermissionError: continue` en `localfs/_source.py`); (b) un fichero **no-UTF-8** hoy aterriza en un **log** (`component build failed`) y **no** en un `SkipReason` → **no contará en `skipped`**. *Verificado con sonda: el delta NO aborta (CocoIndex aísla el fallo) y el fichero sano sí se indexa.* T8 debe decidir cómo contabilizarlos para que `{scanned,indexed,skipped}` no mienta — es el contrato que leerá el MCP.
+    * **Idempotencia:** leerla del **data plane** (`process_file: unchanged=N, adds=0, deletes=0, reprocess=0`), no del total — los componentes de traversa reportan `reprocess=1` por diseño (E2).
+  - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_delta.py -v`
   - Dep.: T6 · Tamaño: M
 
 - [ ] **T9 · Puerto de lectura `ChunkReader` + adaptador LanceDB (fila queryable)**
