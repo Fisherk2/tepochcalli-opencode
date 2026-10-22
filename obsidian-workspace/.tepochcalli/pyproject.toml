@@ -56,6 +56,14 @@ ignore = ["D203", "D213", "D214"]
 
 [tool.pytest.ini_options]
 testpaths = ["../../tests/phase1"]
+# Suite de CORRECCION por defecto: los tests `slow` (mediciones de latencia)
+# quedan fuera. Es el filtro que docs/WORKFLOW.md §Phase 2/§Testing ya
+# prescribe para CI (`pytest -m "not slow"`); ver `tasks/todo.md` T11.
+# Para ejecutarlos: `uv run python -m pytest -m slow`.
+addopts = "-m 'not slow'"
+markers = [
+    "slow: medicion de latencia/bench — no pertenece a la suite de correccion",
+]
 
 [build-system]
 requires = ["setuptools>=68"]
