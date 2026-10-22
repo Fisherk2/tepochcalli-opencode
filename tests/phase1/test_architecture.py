@@ -1,13 +1,17 @@
-"""Test de arquitectura: el dominio del flow nunca depende de infraestructura (CP-B).
+"""Test de arquitectura: el dominio del flow nunca depende de infraestructura (CP-B, T9).
 
 Enuncia executablemente la regla hexagonal de ADR-005 («la dependencia apunta
-hacia dentro»): `tepochcalli_flow.citation` y `tepochcalli_flow.config` son
-código de dominio puro y su cierre transitivo de imports **nunca** puede alcanzar
+hacia dentro»): `tepochcalli_flow.citation`, `tepochcalli_flow.config` y
+`tepochcalli_flow.ports` son código de dominio puro y su cierre transitivo de
+imports **nunca** puede alcanzar
 la infraestructura del motor de indexación (`cocoindex`) ni del indexador
 vectorial (`lancedb`). El propio `tepochcalli_flow/__init__.py` también está bajo
 la regla —importar el paquete lo ejecuta—; el resto del paquete (`models`,
-`app`, `source`, `parsers`) ES infraestructura y sí puede importar el engine —
-este test no lo toca.
+`app`, `source`, `parsers`, `verify` y `adapters/`) ES infraestructura y sí puede importar el engine —
+este test no lo toca. T9 añade `ports` al conjunto protegido (el puerto de
+lectura que Phase 2 consume) y, en la dirección opuesta, afirma que el
+adaptador `adapters/lancedb_reader` SÍ alcanza `lancedb`: la frontera corre
+exactamente entre `ports.py` y `adapters/`, ni un módulo más allá.
 
 Garantías que ofrece, y cómo:
 
@@ -69,13 +73,17 @@ DOMAIN_MODULES: Final[tuple[str, ...]] = (
     PACKAGE,
     f"{PACKAGE}.citation",
     f"{PACKAGE}.config",
+    f"{PACKAGE}.ports",
 )
-"""Módulos de dominio bajo la regla: el `__init__` del paquete y los dos módulos puros.
+"""Módulos de dominio bajo la regla: el `__init__` del paquete y los módulos puros.
 
 Importar `tepochcalli_flow.citation` EJECUTA `tepochcalli_flow/__init__.py` —el paquete
 entero forma parte del cierre transitivo en runtime—, así que el `__init__` se analiza
-igual que cualquier módulo de dominio. El resto del paquete (`models`, `app`, `source`,
-`parsers`) ES infraestructura y sí puede importar el engine.
+igual que cualquier módulo de dominio. `ports.py` se añade en T9: es el PUERTO de lectura
+(ADR-005) y debe permanecer sin motor — si el engine entrara por él, Phase 2 perdería la
+garantía de que el contrato `search` sobrevive a un cambio de motor. El resto del paquete
+(`models`, `app`, `source`, `parsers`, `verify` y `adapters/`) ES infraestructura y sí
+puede importar el engine — este test no lo toca.
 """
 
 
@@ -221,3 +229,34 @@ def test_walker_follows_in_project_import_edges_transitively() -> None:
     """
     reached = {target for _chain, target in _walk_imports(f"{PACKAGE}.citation")}
     assert f"{PACKAGE}.config" in reached
+
+
+def test_ports_reaches_config_but_never_the_engine() -> None:
+    """`ports.py` sí resuelve su arista in-project (config) — sanidad de walker.
+
+    Análoga a la de citation→config: si la resolución de paths de `ports`
+    fallara, el test parametrizado sobre `ports` pasaría vacío. Además afirma
+    que el puerto no importa `adapters`: la dependencia apunta hacia dentro.
+    """
+    reached = {target for _chain, target in _walk_imports(f"{PACKAGE}.ports")}
+    assert f"{PACKAGE}.config" in reached
+    assert not any(target.startswith(f"{PACKAGE}.adapters") for target in reached)
+
+
+def test_lancedb_adapter_is_allowed_to_reach_lancedb() -> None:
+    """Dirección OPUESTA: `adapters/lancedb_reader` SÍ alcanza `lancedb` (infra).
+
+    Prueba el otro lado de la frontera de T9: si el walker no viera el import
+    del adaptador —p. ej. por una rotura en `_module_source`—, los tests
+    negativos sobre el dominio darían falsos positivos de seguridad. La
+    frontera exacta es ports.py (sin motor) ← adapters/ (con motor).
+    """
+    reached = {
+        target for _chain, target in _walk_imports(f"{PACKAGE}.adapters.lancedb_reader")
+    }
+    assert "lancedb" in reached, (
+        "el adaptador LanceDB debe importar lancedb: ES infraestructura (ADR-005)"
+    )
+    assert f"{PACKAGE}.ports" in reached, (
+        "el adaptador implementa el puerto: lo importa"
+    )
