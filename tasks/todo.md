@@ -68,22 +68,24 @@
   - ⚠️ **Desviación de plan registrada:** la segunda mitad del plan (revisión `nlp-engineer` sobre derivación de headings) **se pliega al gate CP-B**, que ya exige `code-reviewer` sobre el diff de la sub-fase — con 34 tests y cobertura 100% incluyendo los casos de fence/code-span, un pase aparte redundaría. CP-B debe scrutinizar explícitamente la derivación de `heading`.
   - 📌 **Ruta de test corregida:** desde `obsidian-workspace/.tepochcalli/` los tests se referencian como `../../tests/phase1/` (repo-root-relative en las ACs no resuelven desde ahí).
 
-- [ ] **T5 · Fuentes y parseo Markdown/TXT: whitelist, exclusiones y chunks en memoria**
+- [x] **T5 · Fuentes y parseo Markdown/TXT: whitelist, exclusiones y chunks en memoria** ✅ *hecho — `b7c8f09`*
   - Subagentes: `data-engineer`, `rag-pipeline-engineer`, `test-engineer` · Skills: `test-driven-development`, `clean-code`, `solid`, `design-patterns`, `clean-ddd-hexagonal`
   - AC: `localfs.walk_dir` recursivo con whitelist y exclusión de segmentos con punto y `.git/**`; >100MB / symlink roto / ilegible → `skipped` con motivo sin abortar; **`RecursiveSplitter(chunk_size=1536, chunk_overlap=192)` en BYTES** (*corregido por D11*); chunks con `source_path`, `char_start`, `char_end`, `doc_kind` **no nulos** y `heading` **presente (nullable, D13)**; fixture de anidamiento libre (2 indexados, 1 excluido)
   - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_parsers.py -v` *(desde `.tepochcalli/`; NTFS: sin `python -m` no funciona)*
   - Dep.: T4 · Tamaño: M
-  - 📌 **Hallazgos heredados que T5 implementa (son SUYOS, no del conector):**
-    * **F3:** `included_patterns=["**/*.md"]` por sí solo **NO** excluye dirs-punto (globset de Rust: `*` casa segmentos con punto inicial → `.oculto/` quedaría incluido). Exige `excluded_patterns=["**/.*", "**/.git/**"]` **explícito**.
-    * **F5:** `localfs.walk_dir(path, *, live, recursive, path_matcher, rescan_interval)` **no tiene** ni límite de tamaño ni hook de errores; symlink roto se salta en silencio, chmod-000 solo cuenta 1 error. El ">100MB → `skipped` con motivo" **lo implementa T5** (custom `FilePathMatcher` con `stat()` o chequeo sobre `FileLike`).
-    * `citation.py` (T4) ya expone `heading_before`, `validate_offsets`, `verify_slice_identity`, `doc_kind_for`, `normalize_source_path`, `model_id` — reutilizar, no reimplementar.
+  - ✅ **Verificado:** **65 passed** (45+20), ruff limpio, `EXCLUDED_PATTERNS=("**/.*","**/.git/**")` con su propio test, cita **no** duplicada (importada de `.citation`), frontera de dominio intacta, fixture con `.oculto/` y `blob.bin`.
+  - 📌 **Hallazgos y decisiones de T5:**
+    * `source.SkipReason(StrEnum)`: `oversized` (umbral **inyectable**, default 100MB — evita fixtures de 100MB), `broken_symlink`, `unreadable`, `pdf_parser_pending` (alcance T5: `.pdf` en whitelist pero se salta con motivo hasta T7).
+    * **F5 refino:** el chequeo va sobre la **ruta resuelta**, no en un `FilePathMatcher`, porque `walk_dir` descarta los symlinks rotos **antes** de que el matcher los vea — `walk_sources` combina el walk real con un barrido de dirents. Empírico, no supuesto.
+    * **Comportamiento del splitter medido:** corte **limpio** en fronteras de heading `##` (holgura 2 bytes, **sin overlap**) mientras la prosa sí se solapa hasta el presupuesto (78/116 B). Coherente con la intención del spec: el overlap protege el corte a media frase, no la frontera de sección. *No es un bug — no «arreglar».*
+    * ⚠️ **Commit message desviado** del previsto en la tabla: era *"Indexa Markdown y TXT desde 00-Resources"* y T5 **no persiste**; decir "indexa" habría sido engañoso.
 
 - [ ] **T6 · Embeddings y target LanceDB: escritura de la fila completa**
   - Subagentes: `rag-pipeline-engineer`, `nlp-engineer`, `data-engineer` · Skills: `source-driven-development`, `clean-ddd-hexagonal`, `design-patterns`, `test-driven-development`, `clean-code`
   - AC: `SentenceTransformerEmbedder(model_name_or_path=..., device=...)` en el lifespan con `ContextKey(detect_change=True)`, dims=384; esquema exacto `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}` con **`heading` nullable (D13)**; base `.tepochcalli/db/tepochcalli.lance` tabla `chunks`; **M2** = `source_path`/`char_start`/`char_end`/`doc_kind` **no nulos** + `heading` presente en 100% de filas; índices ANN + FTS sobre `text`; **M3** 0 llamadas LLM (test que bloquea la red)
   - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_pipeline_integration.py -v` + inspección de la tabla
   - Dep.: T5 · Tamaño: M
-  - 📌 **Herencias de T1/T4:** F2 purga automática exige el trío `mount_table_target` gestionado + `mount_each` (ruta de componente estable) + `IdGenerator.next_id(chunk.text)`; `heading` llega de `citation.heading_before` como `str | None`; `model` de `citation.model_id(config)`; embedder con `device` de `config.Config` (E1, default `cpu`); llama a `config.apply_model_cache_env()` **antes** de construir el embedder.
+  - 📌 **Herencias de T1/T4/T5:** F2 purga automática exige el trío `mount_table_target` gestionado + `mount_each` (ruta de componente estable) + `IdGenerator.next_id(chunk.text)`; `heading` llega de `citation.heading_before` como `str | None`; `model` de `citation.model_id(config)`; embedder con `device` de `config.Config` (E1, default `cpu`); llama a `config.apply_model_cache_env()` **antes** de construir el embedder; row schema en `models.py` (es el contrato que leerán T9 y Phase 2).
 
 ### ⛔ CP-B · Camino Markdown
 - [ ] Un `.md` produce filas completas en LanceDB
