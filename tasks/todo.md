@@ -33,19 +33,21 @@
     * **TRD §4 queda stale** — planifica `sentence-transformers >=3,<4` pero el lock fija **6.2.0**. Decisión pendiente del usuario en un cambio aparte (T2 no lo editó por alcance).
     * **docling pineado por rango** `>=2,<3` (advisory de la auditoría): el `uv.lock` es la única garantía de reproducibilidad.
 
-- [ ] **T3 · Config loader y resolución del cache de modelos (cierra la decisión `SBERT_HOME`)**
+- [x] **T3 · Config loader y resolución del cache de modelos (cierra la decisión `SBERT_HOME`)** ✅ *hecho — `ba0fad5`*
   - Subagentes: `python-pro`, `security-auditor` · Skills: `solid`, `clean-code`, `test-driven-development`, `security-and-hardening`
   - AC: `tomllib` con fallbacks a default (**MiniLM / 384d / `chunk_size=1536` / `overlap=192` bytes / `top_k=5`** — *corregido por D11*); `provider` ∈ {local, litellm}; **`device` default `"cpu"`** (E1, añadido por D11); `api_key_env` **nunca** en `repr`/logs; `SENTENCE_TRANSFORMERS_HOME` y `HF_HOME` → `<vault>/.tepochcalli/models`; `tepochcalli.toml.example` commiteado y **conforme a `spec-embeddings.md` §tepochcalli.toml** (que ya lleva 1536/192 y `device`)
   - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest tests/phase1/test_config.py -v` verde *(NTFS: sin `python -m` no funciona)*
   - Dep.: T2 · Tamaño: S
+  - ✅ **Verificado:** `load_config(vault_root) -> Config` con `tomllib` (stdlib, 0 deps nuevas); política **nunca lanza** (ausente→defaults, malformado/clave desconocida/tipo erróneo/provider inválido→warning+default); `config.py` **sin** `cocoindex`/`lancedb` (frontera que verifica T9); `apply_model_cache_env()` único punto que fija `SENTENCE_TRANSFORMERS_HOME`/`HF_HOME`; `api_key_env` guarda solo el **nombre** y un test con sentinela afirma que no aparece en `repr`/`str`/f-string/logs; **11 passed**, ruff limpio; `git check-ignore` en ambos sentidos (`.example` NO ignorado, real SÍ).
+  - 📌 **Nota de ubicación:** el `.example` va en la raíz de `.tepochcalli/`, **no** en `config/` — la regla T2 ignora el directorio entero y un `.example` ahí dentro sería engullido. Es el patrón de `.env.example`; en Phase 3 el wizard escribe el archivo real, que el usuario final probablemente no copie a mano.
 
-### ⛔ CP-A · Cimientos — *4/5 · NO desbloqueado (falta T3)*
+### ✅ CP-A · Cimientos — **5/5 GREEN (sub-fase A completa)**
 - [x] API v1 probada y spec corregida ✅ *(T1, `0978790`)*
 - [x] Revisión humana de la enmienda ✅ *(usuario: «Continua», 2026-10-21)*
 - [x] `uv sync` reproducible desde cero ✅ *(T2, `3716d99`)*
 - [x] Pines exactos + ruff limpio ✅ *(T2; auditoría CVE sin bloqueantes en `3f1b292`)*
-- [ ] ⏳ `tepochcalli.toml` real nunca commiteable → **T3** (única entrada pendiente)
-- ⚠️ **Gate:** T4 (Sub-fase B) NO arranca hasta que T3 cierre la última entrada de CP-A.
+- [x] `tepochcalli.toml` real nunca commiteable ✅ *(T3, `ba0fad5` — verificado en ambas direcciones)*
+- ▶️ **Desbloquea T4 · Dominio de cita** — inicio de la Sub-fase B.
 
 ---
 
