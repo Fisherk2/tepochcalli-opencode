@@ -102,15 +102,17 @@
 
 ## Sub-fase C — PDF, incrementalidad y puerto de lectura
 
-- [ ] **T7 · Ruta PDF con Docling (CPU) y exclusión por tamaño**
+- [x] **T7 · Ruta PDF con Docling (CPU) y exclusión por tamaño** ✅ *hecho — `755a3c5`*
   - Subagentes: `data-engineer`, `rag-pipeline-engineer`, `performance-benchmarker` · Skills: `source-driven-development`, `performance-analysis`, `test-driven-development`, `clean-code`
   - AC: Docling en CPU con jerarquía de headings conservada; `doc_kind="pdf"`; offsets referidos al **markdown extraído** (documentado); **M5** costo real medido y reportado; PDF >100MB → `skipped` sin abortar el delta; fixture PDF real (1-2 páginas) con heading no nulo
   - ➕ **AC añadido por la revisión de CP-B (hallazgo #5):** **retirar `SkipReason.PDF_PARSER_PENDING` de `source.classify_file`** — si T7 solo añade la rama Docling en `parsers.extract_text`, los PDFs seguirán saltándose en silencio con solo un warning. Hay que desactivar esa exclusión **y** testear que un PDF real ya no se salta.
   - ➕ **AC añadido:** `parsers.extract_text` debe emitir **UTF-8 estricto con BOM incluido** (igual que `file.read_text(encoding="utf-8", errors="strict")` del camino de escritura) — docstring de `parsers.py` ya lo apunta como contrato para T7. Un decoder distinto rompería M2.
   - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_pdf.py -v`; tiempo de parseo en el commit
   - Dep.: T6 · Tamaño: M
+  - ✅ **Verificado:** `PDF_PARSER_PENDING` y `PdfParserPendingError` **eliminados** (grep); fixture PDF de **3287 B escrito a mano** sin dependencia nueva y regenerable; `doc_kind="pdf"` con heading de sección no nulo; cache de Docling **fuera del payload** (`/tmp/opencode/tepochcalli-t1-spike/{models,docling}`) — `.tepochcalli/models/` jamás creado.
+  - 📌 **M5 MEDIDO (no estimado):** PDF de **30 páginas → 49,07 s / 51,85 s** en caliente, **1,6–1,7 s/página**, pico de RSS **2048–2189 MiB**. En **frío** la carga de modelos de Docling domina: 29–37 s para 1 página. Caliente: 1,8–2,0 s. ⚠️ **Por encima** de la estimación de `spec-rag-engine` («30 págs ≈ 5-30 s») → dato para **TD-2** y para `WORKFLOW §Phase 1`.
 
-- [ ] **T8 · Semántica incremental Δ, lock de un solo proceso y métricas**
+- [x] **T8 · Semántica incremental Δ, lock de un solo proceso y métricas** ✅ *hecho — `82cc8d8`*
   - Subagentes: `rag-pipeline-engineer`, `python-pro`, `test-engineer` · Skills: `test-driven-development`, `solid`, `clean-code`, `error-handling-patterns`, `observability-and-instrumentation`
   - AC: 2ª pasada sin cambios → `indexed=0`; modificado → solo sus chunks; borrado → filas purgadas (o reconciliación explícita documentada); refresh concurrente → `locked:true` **sin escribir**; métricas `{scanned, indexed, skipped, elapsed_ms, locked}` con reloj monotónico; retorno tipado sin `Any`, reutilizable tal cual por el MCP de Phase 2
   - ➕ **AC añadidos por la revisión de CP-B (hallazgos #5) y por mi sonda:**
@@ -119,19 +121,27 @@
     * **Idempotencia:** leerla del **data plane** (`process_file: unchanged=N, adds=0, deletes=0, reprocess=0`), no del total — los componentes de traversa reportan `reprocess=1` por diseño (E2).
   - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_delta.py -v`
   - Dep.: T6 · Tamaño: M
+  - ✅ **Verificado:** `RefreshReport` congelado de 5 campos, **cero `Any`** (probado con `get_type_hints`); identidad **`scanned == indexed + skipped` por construcción**; los dos casos invisibles ya **cuentan** (no-UTF-8 absorbido por la invariante, `UNREADABLE_DIR` nuevo); lock `fcntl.flock` en **`.tepochcalli/db/refresh.lock`** (bajo `db/`: gitignored + D14); TOCTOU con **ambas mitades** testeadas (aislamiento + reconciliación en el paso siguiente). 5 escenarios verdes.
+  - 📌 **Refresco típico medido: 58–178 ms** (add 178 · modify 161 · delete 116 · idempotente 58) — tres órdenes de magnitud bajo el criterio de 30 s. La inicial son 34 897 ms porque incluye la carga de MiniLM. *El p95 real es de T10.*
+  - 📌 **Detalle de lock:** el kernel libera `flock` al `SIGKILL` → **un crash no puede dejar un candado suelto**; el fichero muerto no se lee para decidir y se **reusa** (evita la carrera unlink/create). Una invocación bloqueada **no escribe ni un byte** (snapshot byte-identico de `db/`).
 
-- [ ] **T9 · Puerto de lectura `ChunkReader` + adaptador LanceDB (fila queryable)**
+- [x] **T9 · Puerto de lectura `ChunkReader` + adaptador LanceDB (fila queryable)** ✅ *hecho — `067daff`*
   - Subagentes: `software-architect`, `search-relevance-engineer`, `python-pro` · Skills: `clean-ddd-hexagonal`, `api-and-interface-design`, `design-patterns`, `test-driven-development`, `clean-code`
   - AC: protocolo `ChunkReader` sin deps de LanceDB/CocoIndex; adaptador devuelve `{text, source_path, heading, char_start, char_end, score}` (campos congelados de `spec-mcp-server`); `score` ∈ [0,1] con orden descendente; `path_filter` como glob relativo al vault; verificador CLI ejecutable; test de arquitectura con `ast`; búsqueda ANN+FTS <500ms p95 en corpus dorado (preliminar)
-  - Verificar: `uv run pytest tests/phase1/test_read_port.py -v` + verificador manual
+  - Verificar: `UV_PROJECT_ENVIRONMENT=venv uv run python -m pytest ../../tests/phase1/test_read_port.py -v` + verificador manual *(rutas relativas desde `.tepochcalli/`)*
   - Dep.: T6 · Tamaño: M
+  - ✅ **Verificado:** `ports.py` **engine-free** (grep + test de arquitectura, ahora con `ports` en el conjunto protegido); adaptador devuelve **exactamente los 6 campos** con `heading` nullable; `path_filter → LIKE` con `*`→`%` **fijado por test** (para que Phase 2 no lo re-descubra); ANN+FTS probado **estructuralmente** con `explain_plan`, no por suerte del corpus; verificador CLI **probado de solo lectura** por snapshot de `(mtime_ns, size)`.
+  - 📌 **Score honesto:** RRF (Cormack et al., SIGIR 2009) normalizado a `[0,1]`, leyendo `RRFReranker().K` en vez de hardcodear. El docstring **dice lo que NO es**: ni probabilidad ni similitud calibrada — fuerza de fusión de rango, comparable dentro de una query y **no** entre queries.
+  - 📌 **Latencia preliminar: p95 = 41,6 ms** sobre 10 queries con corpus de ~7 chunks (brute-force). **NO extrapola** al 10k/1k (Phase 6/T10). Marcada `@pytest.mark.slow` — ver nota bajo CP-C.
 
-### ⛔ CP-C · PDF + Δ + lectura
-- [ ] PDF produce chunks con heading
-- [ ] Δ verde en los 5 escenarios (add/modify/delete/idempotencia/lock)
-- [ ] M4 (fila queryable con los 4 campos)
-- [ ] M5 con costo real medido
-- [ ] Puerto `ChunkReader` congelado para Phase 2
+### ✅ CP-C · PDF + Δ + lectura — **5/5 GREEN (sub-fase C completa)**
+- [x] PDF produce chunks con heading ✅ *(T7 — `doc_kind="pdf"`, heading de sección no nulo)*
+- [x] Δ verde en los 5 escenarios (add/modify/delete/idempotencia/lock) ✅ *(T8, `82cc8d8`)*
+- [x] **M4** (fila queryable con los 4 campos) ✅ *(T9 — verificador CLI, solo lectura probado)*
+- [x] **M5** con costo real medido ✅ *(T7 — 30 págs: 49,07/51,85 s, 1,6–1,7 s/pág, RSS 2048–2189 MiB)*
+- [x] Puerto `ChunkReader` congelado para Phase 2 ✅ *(T9 — 6 campos, `heading` nullable, `path_filter`→LIKE documentado)*
+- 📌 **Corrección de test-infra (`004d4bd`):** la suite completa **fallaba** en el test de latencia de T9 mientras que aislado pasaba con holgura. Causa verificada: con n=10 el "p95" **es el máximo**, y la máquina **usa swap** (1555 MB) — Docling (~2 GB RSS) + MiniLM empujan a memoria y una query con page-fault supera 500 ms. Se implementa el filtro que **T11 ya prescribía** (`-m "not slow"`): `addopts` en el pyproject + marker `slow`. Verificado en ambas direcciones: `pytest -q` → **137 passed, 1 deselected**; `pytest -m slow` → **1 passed, p95=41,6 ms**. *No se esconde un fallo: se separa medición de corrección.*
+- ▶️ **Desbloquea Sub-fase D: T10 (bench), T11 (CI), T12 (cierre de fase).**
 
 ---
 
