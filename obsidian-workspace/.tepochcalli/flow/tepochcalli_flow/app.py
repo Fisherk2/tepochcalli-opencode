@@ -168,9 +168,11 @@ async def index_file(
     Memoizable por contenido: un archivo inmutable no se re-parsea ni se
     re-embebe (semántica Δ de spec-rag-engine §Semántica incremental). La ruta
     citada se normaliza con `citation.normalize_source_path` — nunca se
-    reconstruye a mano.
+    reconstruye a mano. La lectura es UTF-8 estricto (`errors="strict"`, BOM
+    incluido): el MISMO decodificador que `parsers.extract_text`, para que los
+    offsets F1 se midan sobre el mismo string en ambos caminos.
     """
-    text = await file.read_text()
+    text = await file.read_text(encoding="utf-8", errors="strict")
     file_path = Path(os.fspath(file.file_path))
     chunks = chunk_document(
         text,
@@ -206,9 +208,10 @@ async def build_flow() -> None:
 async def _indexable_items(resources_dir: Path) -> list[tuple[str, FileLike]]:
     """Walk real del conector + clasificación F5; devuelve SOLO indexables.
 
-    `source.classify_file` (T5) decide: PDF pendiente de T7, ilegibles,
-    oversized y rutas fuera de la whitelist nunca montan componente — se loguean
-    como descarte sin abortar el delta (§Fuentes).
+    `source.classify_file` (T5) decide: symlinks que escapan del recurso
+    (frontera de confianza), PDF pendiente de T7, ilegibles, oversized y rutas
+    fuera de la whitelist nunca montan componente — se loguean como descarte
+    sin abortar el delta (§Fuentes).
     """
     walker = localfs.walk_dir(
         resources_dir,

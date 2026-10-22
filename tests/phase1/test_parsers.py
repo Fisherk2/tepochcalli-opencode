@@ -28,6 +28,9 @@ from tepochcalli_flow import config as flow_config
 
 FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
 
+BOM = "\ufeff"
+"""BOM UTF-8 como carácter: la lectura estricta lo conserva (contrato F1, ver Finding 1/2)."""
+
 # --- walk: fixture dorada de T5 ------------------------------------------------
 
 
@@ -156,6 +159,100 @@ def test_walk_sources_reports_broken_symlinks_with_reason_without_aborting_f5(
     assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
 
 
+def test_walk_sources_rejects_symlinks_whose_target_escapes_the_resource(
+    tmp_path: Path,
+) -> None:
+    """Symlink cuyo objetivo resuelve FUERA de `00-Resources/` → `symlink_escape` (frontera).
+
+    Cubre los tres caminos que el conector sí entrega: archivo apuntando fuera,
+    cadena de dos links (el segundo fuera) y directorio apuntando fuera — en los
+    tres el contenido de fuera jamás debe alcanzar el índice. El conector emite
+    candidatos ya resueltos (`FilePath.__fspath__` devuelve el target), así que
+    la referencia del descarte es el propio target resuelto.
+    """
+    recursos = tmp_path / citation.RESOURCES_DIR
+    recursos.mkdir(parents=True)
+    (recursos / "sana.md").write_text("# Sana\n\nprosa.\n", encoding="utf-8")
+    fuera = tmp_path / "fuera.md"
+    fuera.write_text("# Fuera del recurso\n\nsecreto.\n", encoding="utf-8")
+    directorio_fuera = tmp_path / "fuera_dir"
+    directorio_fuera.mkdir()
+    (directorio_fuera / "oculta.md").write_text(
+        "# Oculta\n\nsecreto.\n", encoding="utf-8"
+    )
+    try:
+        (recursos / "secreto.md").symlink_to(fuera)
+        (recursos / "cadena.md").symlink_to(
+            recursos / "secreto.md"
+        )  # cadena de dos links
+        (recursos / "directorio").symlink_to(directorio_fuera, target_is_directory=True)
+    except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
+        pytest.skip(f"el filesystem no soporta symlinks: {exc}")
+
+    items = source.walk_sources(tmp_path)
+
+    assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
+        (fuera.as_posix(), source.SkipReason.SYMLINK_ESCAPE),
+        (fuera.as_posix(), source.SkipReason.SYMLINK_ESCAPE),
+        ((directorio_fuera / "oculta.md").as_posix(), source.SkipReason.SYMLINK_ESCAPE),
+    ]
+    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
+
+
+def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
+    tmp_path: Path,
+) -> None:
+    """`classify_file` con la ruta-del-link (forma no resuelta) también rechaza, con cita localizable."""
+    recursos = tmp_path / citation.RESOURCES_DIR
+    recursos.mkdir(parents=True)
+    fuera = tmp_path / "fuera.md"
+    fuera.write_text("# Fuera\n\nsecreto.\n", encoding="utf-8")
+    try:
+        (recursos / "secreto.md").symlink_to(fuera)
+    except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
+        pytest.skip(f"el filesystem no soporta symlinks: {exc}")
+
+    item = source.classify_file(
+        recursos,
+        recursos / "secreto.md",
+        max_file_bytes=source.DEFAULT_MAX_FILE_BYTES,
+    )
+
+    assert isinstance(item, source.SkippedSource)
+    assert item.reason == source.SkipReason.SYMLINK_ESCAPE
+    assert (
+        item.source_path == "00-Resources/secreto.md"
+    )  # la cita del LINK, localizable
+    assert item.detail  # el motivo lleva explicación, no solo el enum
+
+
+def test_walk_sources_still_indexes_symlinks_that_stay_inside_the_resource(
+    tmp_path: Path,
+) -> None:
+    """Un symlink cuyo objetivo vive DENTRO del recurso NO se descarta: su contenido se indexa.
+
+    El conector resuelve los symlinks al emitir candidatos, así que la cita de
+    un link interno es la de su objetivo: aquí se afirma que ningún
+    `symlink_escape` aparece y que el contenido acaba indexado.
+    """
+    recursos = tmp_path / citation.RESOURCES_DIR
+    recursos.mkdir(parents=True)
+    real = recursos / "real"
+    real.mkdir()
+    (real / "original.md").write_text("# Original\n\nprosa.\n", encoding="utf-8")
+    try:
+        (recursos / "enlace.md").symlink_to(real / "original.md")
+    except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
+        pytest.skip(f"el filesystem no soporta symlinks: {exc}")
+
+    items = source.walk_sources(tmp_path)
+
+    assert _skips(items) == []
+    assert {entry.source_path for entry in _entries(items)} == {
+        "00-Resources/real/original.md"
+    }
+
+
 def test_walk_sources_skips_unreadable_files_without_aborting_f5(
     tmp_path: Path,
 ) -> None:
@@ -239,6 +336,45 @@ def test_extract_text_rejects_extensions_outside_the_whitelist(tmp_path: Path) -
 
     with pytest.raises(citation.UnsupportedDocKindError, match="bin"):
         parsers.extract_text(binario)
+
+
+# --- BOM: contrato único de decodificación (F1) ---------------------------------
+
+
+def test_extract_text_keeps_the_utf8_bom_as_a_character(tmp_path: Path) -> None:
+    """UTF-8 estricto conserva el BOM: forma parte del string sobre el que miden los offsets F1.
+
+    Ancla del decodificador de la lectura directa: si cambia a `utf-8-sig` (lo
+    elimina) o a `errors="replace"` (insera U+FFFD), la ruta de escritura de T6
+    debe cambiar a la vez — la identidad F1 exige UN solo string por archivo.
+    """
+    con_bom = tmp_path / "con_bom.md"
+    con_bom.write_bytes(BOM.encode("utf-8") + "# Título\n\nprosa.\n".encode("utf-8"))
+
+    assert parsers.extract_text(con_bom) == BOM + "# Título\n\nprosa.\n"
+
+
+def test_extract_text_raises_on_bytes_that_are_not_utf8(tmp_path: Path) -> None:
+    """Bytes no UTF-8 → `UnicodeDecodeError`: el contrato es strict, nunca `replace` en silencio."""
+    latin = tmp_path / "latin.md"
+    latin.write_bytes(b"# T\xedtulo\n")  # latin-1: inválido en UTF-8 estricto
+
+    with pytest.raises(UnicodeDecodeError):
+        parsers.extract_text(latin)
+
+
+def test_heading_before_does_not_mis_cite_a_yaml_comment_hidden_behind_a_bom() -> None:
+    """BOM + frontmatter: el comentario `#` YAML NO se devuelve como heading (falsa cita)."""
+    text = BOM + "---\n# comentario YAML\ntitle: Nota\n---\n\nCuerpo.\n"
+
+    assert citation.heading_before(text, text.index("Cuerpo")) is None
+
+
+def test_heading_before_recovers_the_first_atx_heading_hidden_by_a_bom() -> None:
+    """BOM + `# Título` en la línea 0: el BOM no oculta el heading ATX inicial."""
+    text = BOM + "# Título con BOM\n\nprosa.\n"
+
+    assert citation.heading_before(text, text.index("prosa")) == "Título con BOM"
 
 
 # --- chunk_document -------------------------------------------------------------
@@ -355,3 +491,65 @@ def test_end_to_end_walk_extract_chunk_preserves_nesting_and_slices() -> None:
         "00-Resources/nota.md",
         "00-Resources/sub/carpeta/anidada.md",  # anidamiento libre preservado (D9.1)
     }
+
+
+# --- heading: cursor incremental ≡ barrido naive (F1, sin deriva semántica) -----
+
+_TORTURA_SEPARADORES = (
+    "---\n# comentario YAML\ntitle: Tortura\n---\n\n"
+    "# Título A\r\n\r\nProsa con `código\r\n# dentro del span\r\nfin`.\r\n\r\n"
+    "~~~\n# falso\n~~~~\n\n````python\n# en bloque\n````\n\n"
+    "Párrafo con \u2028 separador unicode.\nOtra línea con \x85 NEL.\n"
+    "Y un \rviejo salto de carro.\n\n## Cierre ##\n\nFinal.\n"
+)
+"""Documento de tortura SIN BOM (el BOM tiene sus tests dedicados arriba)."""
+
+
+def _naive_heading_before(text: str, char_start: int) -> str | None:
+    """Referencia congelada del barrido naive previo al cursor (espejo del algoritmo de T4)."""
+    heading: str | None = None
+    fence: str | None = None
+    in_frontmatter = False
+    open_backticks = 0
+    for index, line in enumerate(text[:char_start].splitlines()):
+        if in_frontmatter:
+            in_frontmatter = line.strip() != "---"
+            continue
+        if index == 0 and line.strip() == "---":
+            in_frontmatter = True
+            continue
+        if fence is not None:
+            if citation._closes_fence(line, fence):
+                fence = None
+            continue
+        opened_fence = citation._FENCE_OPEN.match(line)
+        if opened_fence is not None:
+            fence = opened_fence.group(1)
+            open_backticks = 0
+            continue
+        if (
+            open_backticks == 0
+            and (atx := citation._ATX_HEADING.match(line)) is not None
+        ):
+            heading = citation._clean_heading_title(atx.group(1))
+            continue
+        open_backticks = citation._update_code_span(line, open_backticks)
+    return heading
+
+
+def test_heading_scanner_cursor_matches_the_naive_scan_for_every_offset() -> None:
+    """Cursor incremental ≡ barrido naive, offset a offset (F1: cero deriva semántica).
+
+    Los tests de borde de `test_citation.py` pinan la semántica en casos puntuales;
+    este diferencial la afirma COMPLETA sobre separadores difíciles (CRLF partido
+    a media, carro suelto, separadores Unicode) usando UN solo cursor compartido
+    —el patrón de `chunk_document`— con consultas monótonas, una consulta
+    retrocedente (que reinicia) y una negativa (slicing de Python).
+    """
+    scanner = citation.HeadingScanner(_TORTURA_SEPARADORES)
+    offsets = [-3, -1, 0, *range(len(_TORTURA_SEPARADORES) + 1)]
+
+    for offset in offsets:
+        assert scanner.heading_before(offset) == _naive_heading_before(
+            _TORTURA_SEPARADORES, offset
+        ), f"divergencia cursor vs naive en offset {offset}"

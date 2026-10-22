@@ -20,6 +20,12 @@ Sirve specs/spec-rag-engine.md §Fuentes:
 * Para poder emitir `broken_symlink` con motivo, este módulo combina el walk
   real del conector (que aporta los candidatos según el globset) con un
   barrido ligero de symlinks que solo lee dirents, nunca contenidos.
+* **Frontera de confianza (decisión 2026-10-22):** el conector sigue los
+  symlinks que funcionan (archivo y directorio), así que un vault sincronizado
+  o manipulado podría contener `secreto.md -> ~/.ssh/id_rsa`. `classify_file`
+  rechaza cualquier symlink cuyo target RESUELTO (cadena completa) salga de
+  `00-Resources/` con motivo `symlink_escape`; los links que se quedan dentro
+  se indexan con normalidad (documentado en docs/SECURITY.md).
 
 Decisión T5 (consistente en tests): los `.pdf` SÍ entran en la whitelist —el
 contrato de fuentes es de cuatro extensiones— pero el parser Docling llega en
@@ -69,6 +75,14 @@ class SkipReason(StrEnum):
 
     UNREADABLE = "unreadable"
     """Sin permiso de lectura u otro error de E/S al acceder al archivo (F5)."""
+
+    SYMLINK_ESCAPE = "symlink_escape"
+    """Symlink (de archivo o directorio) cuyo target resuelto sale de `00-Resources/`.
+
+    Frontera de confianza (decisión 2026-10-22): el conector sigue los symlinks
+    que funcionan, así que el contenido de fuera del recurso jamás debe llegar
+    al índice ni a las respuestas de `search`.
+    """
 
     PDF_PARSER_PENDING = "pdf_parser_pending"
     """En la whitelist, pero el parser Docling llega en T7 (decisión T5 del módulo)."""
@@ -174,12 +188,22 @@ def classify_file(
 ) -> WalkItem:
     """Aplica la regla F5 a un archivo y devuelve su entrada o su skip con motivo.
 
-    Orden de motivos: PDF pendiente (T7) → ilegible → oversized. Cualquier
+    Orden de motivos: objetivo fuera del recurso (frontera de confianza contra
+    symlinks que escapan) → PDF pendiente (T7) → ilegible → oversized. Cualquier
     error de `stat()`/lectura se traduce en un `SkipReason` en vez de
     propagarse (§Fuentes: «se registran como `skipped`, no fallan el delta»).
     `size_bytes` permite reutilizar un tamaño ya conocido (p. ej. `FileLike.size()`
     en T6) sin volver a hacer `stat()`.
     """
+    escaped = _symlink_escape_target(file_path, resources_dir)
+    if escaped is not None:
+        return SkippedSource(
+            file_path,
+            _escape_reference(file_path, resources_dir),
+            SkipReason.SYMLINK_ESCAPE,
+            f"resuelve fuera de {RESOURCES_DIR}/ ({escaped}) — frontera de confianza: "
+            "el recurso no ingiere material de fuera",
+        )
     source_path = normalize_source_path(file_path.relative_to(resources_dir))
     kind = doc_kind_for(file_path)
     if kind == "pdf":
@@ -208,6 +232,31 @@ def classify_file(
             f"{observed_size} bytes superan el umbral de {max_file_bytes} bytes (F5)",
         )
     return SourceEntry(file_path, source_path, kind, observed_size)
+
+
+def _symlink_escape_target(file_path: Path, resources_dir: Path) -> Path | None:
+    """Target resuelto si escapa de `00-Resources/`, o `None` si vive dentro (frontera).
+
+    `Path.resolve()` sigue la cadena completa de symlinks —de archivo o de
+    directorio— y compara contra la raíz RESUELTA, de modo que un vault bajo un
+    path enlazado no produce falsos positivos (decisión 2026-10-22).
+    """
+    target = file_path.resolve()
+    return None if target.is_relative_to(resources_dir.resolve()) else target
+
+
+def _escape_reference(file_path: Path, resources_dir: Path) -> str:
+    """Referencia localizable de un symlink que escapa: la cita del LINK si cabe, si no el target.
+
+    El conector emite candidatos ya resueltos (`FilePath.__fspath__` resuelve
+    los symlinks), en cuyo caso no hay cita posible y el target absoluto es lo
+    único que localiza el descarte; una ruta-del-link pasada directamente a
+    `classify_file` sí produce su cita `00-Resources/...`.
+    """
+    try:
+        return normalize_source_path(file_path.relative_to(resources_dir))
+    except ValueError:
+        return file_path.resolve().as_posix()
 
 
 def _stat_or_skip(file_path: Path, source_path: str) -> os.stat_result | SkippedSource:

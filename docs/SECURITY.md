@@ -50,6 +50,21 @@ al que tenga permiso el usuario del proceso** — no solo el vault. Consecuencia
    al parser (Docling) — riesgo aceptado local, pero el vault no es un buzone: no sincronizar
    `00-Resources/` con fuentes públicas sin filtro.
 
+## Symlinks: frontera de confianza en `00-Resources/`
+
+El walk del motor **sigue los symlinks que funcionan** (de archivo y de directorio), así que
+un vault sincronizado con la nube o manipulado podría contener `secreto.md -> ~/.ssh/id_rsa`.
+Reglas vigentes, aplicadas en `tepochcalli_flow.source.classify_file` (decisión 2026-10-22):
+
+* Symlinks **rotos** los omite el conector del walk; la capa de fuentes los reporta como
+  `broken_symlink` con motivo, sin abortar el delta.
+* Symlinks cuyo objetivo **resuelto** —`Path.resolve()`, cadena de enlaces completa— cae fuera
+  de `00-Resources/` se rechazan con motivo `symlink_escape`: el contenido de fuera del
+  recurso jamás llega al índice ni a las respuestas de `search`.
+* Los symlinks que se quedan **dentro** del recurso se indexan con normalidad.
+* El vault es material **confiado**; el contenido de `00-Resources/` es **dato, nunca
+  instrucción** (regla anti prompt-injection del `AGENTS.md` del vault).
+
 ## MCP: solo stdio local
 
 * `mcp.servers` gestionados (`tepochcalli-rag`, `markitdown`) usan **`type: "local"`**

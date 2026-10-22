@@ -39,6 +39,12 @@ _FENCE_OPEN: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})")
 _FENCE_CLOSE: Final = re.compile(r"^ {0,3}(`{3,}|~{3,})[ \t]*$")
 _BACKTICK_RUN: Final = re.compile("`+")
 
+_BOM: Final = "\ufeff"
+"""BOM UTF-8 como carácter (la lectura estricta lo conserva): se ignora en la línea 0."""
+
+_LINE_SEPARATORS: Final = "\n\r\v\f\x1c\x1d\x1e\x85\u2028\u2029"
+"""Separadores de `str.splitlines()` (CPython): el mismo conjunto, sin derivar semántica."""
+
 _DOC_KIND_BY_SUFFIX: Final[dict[str, DocKind]] = {
     "md": "md",
     "markdown": "markdown",
@@ -86,47 +92,124 @@ def normalize_source_path(path: str | Path) -> str:
     return f"{RESOURCES_DIR}/" + "/".join(resolved)
 
 
-def heading_before(text: str, char_start: int) -> str | None:
-    """Extrae el último heading ATX que precede a `char_start` (F1, T4).
+class _HeadingState:
+    """Estado del escaneo de headings: frontmatter, fence, span y último título."""
 
-    Se escanean solo las líneas previas al offset: un `#` posterior a
-    `char_start` jamás afecta a la cita. Semántica explícita:
+    __slots__ = ("heading", "fence", "in_frontmatter", "open_backticks")
+
+    def __init__(self) -> None:
+        self.heading: str | None = None
+        self.fence: str | None = None
+        self.in_frontmatter = False
+        self.open_backticks = 0
+
+    def copy(self) -> _HeadingState:
+        """Copia independiente — la línea parcial de una consulta NO se persiste."""
+        clone = _HeadingState()
+        clone.heading = self.heading
+        clone.fence = self.fence
+        clone.in_frontmatter = self.in_frontmatter
+        clone.open_backticks = self.open_backticks
+        return clone
+
+    def fold(self, line: str, index: int) -> None:
+        """Pliega una línea sobre el estado, con la semántica del barrido naive (F1, T4).
+
+        `line` puede traer o no su separador final (a `str.splitlines()` le da
+        igual) y `index` es su posición documental —el índice que el barrido
+        naive obtenía con `enumerate`—, necesario para las reglas de la línea 0.
+        """
+        line = line.rstrip(_LINE_SEPARATORS)
+        if index == 0:
+            line = line.removeprefix(_BOM)
+        if self.in_frontmatter:
+            self.in_frontmatter = line.strip() != _FRONTMATTER_DELIMITER
+            return
+        if index == 0 and line.strip() == _FRONTMATTER_DELIMITER:
+            self.in_frontmatter = True
+            return
+        if self.fence is not None:
+            if _closes_fence(line, self.fence):
+                self.fence = None
+            return
+        opened_fence = _FENCE_OPEN.match(line)
+        if opened_fence is not None:
+            self.fence = opened_fence.group(1)
+            self.open_backticks = 0  # el bloque mató el párrafo: el span sin cerrar queda literal.
+            return
+        if self.open_backticks == 0 and (atx := _ATX_HEADING.match(line)) is not None:
+            self.heading = _clean_heading_title(atx.group(1))
+            return
+        self.open_backticks = _update_code_span(line, self.open_backticks)
+
+
+class HeadingScanner:
+    """Cursor incremental sobre las líneas de un documento para citar headings (F1, T4).
+
+    Semántica EXACTAMENTE equivalente al barrido naive del prefijo
+    (`text[:char_start].splitlines()`) —los tests de borde de T4 la pinan y un
+    test diferencial la afirma offset a offset sobre separadores difíciles—,
+    pero sin re-escanear el documento por chunk: `chunk_document` reparte UN
+    scanner entre los chunks de un archivo —que llegan en orden— y solo avanza
+    sobre líneas nuevas. Con `max_file_bytes = 100MB` (F5), re-escanear el
+    prefijo por chunk sería un auto-DoS contra el presupuesto Δ<30s.
+
+    Semántica del escaneo (idéntica al barrido naive, en este orden):
 
     * ATX `#`..`######` con título no vacío (CommonMark: hasta 3 espacios de
       sangría, espacio tras los hashes, secuencia de cierre `# Title #` fuera).
     * Los bloques cercados ``` / ~~~ (con info string incluido) no cuentan.
     * Los spans de código inline multi-línea (backticks) no cuentan.
     * El frontmatter YAML se salta: delimitadores `---` y comentarios `#` no
-      son headings.
+      son headings. El BOM (`\ufeff`) de la línea 0 se ignora antes de estas
+      reglas —sin esa limpieza un `\ufeff---` no abre el bloque y un comentario
+      YAML se citaría como heading—.
     * Setext (`===`/`---`) NO soportado — limitación documentada: solo ATX.
     * Sin heading previo → `None` (ni `""` ni el nombre del archivo): el esquema
       admite nulo aquí y ese nulo es el valor almacenado (spec-mcp-server.md).
+
+    Las consultas deben avanzar (los offsets de chunk son monótonos); una
+    consulta hacia atrás reinicia el cursor y responde como la función naive.
     """
-    heading: str | None = None
-    fence: str | None = None
-    in_frontmatter = False
-    open_backticks = 0
-    for index, line in enumerate(text[:char_start].splitlines()):
-        if in_frontmatter:
-            in_frontmatter = line.strip() != _FRONTMATTER_DELIMITER
-            continue
-        if index == 0 and line.strip() == _FRONTMATTER_DELIMITER:
-            in_frontmatter = True
-            continue
-        if fence is not None:
-            if _closes_fence(line, fence):
-                fence = None
-            continue
-        opened_fence = _FENCE_OPEN.match(line)
-        if opened_fence is not None:
-            fence = opened_fence.group(1)
-            open_backticks = 0  # el bloque mató el párrafo: el span sin cerrar queda literal.
-            continue
-        if open_backticks == 0 and (atx := _ATX_HEADING.match(line)) is not None:
-            heading = _clean_heading_title(atx.group(1))
-            continue
-        open_backticks = _update_code_span(line, open_backticks)
-    return heading
+
+    def __init__(self, text: str) -> None:
+        """Prepara el cursor sobre `text` sin plegar línea alguna."""
+        self._text = text
+        self._lines = text.splitlines(keepends=True)
+        self._state = _HeadingState()
+        self._next_line = 0
+        self._scanned = 0
+
+    def heading_before(self, char_start: int) -> str | None:
+        """Último heading ATX que precede a `char_start`, avanzando el cursor (F1, T4)."""
+        if char_start < self._scanned:
+            self._state = _HeadingState()
+            self._next_line = 0
+            self._scanned = 0
+        while self._next_line < len(self._lines):
+            line = self._lines[self._next_line]
+            if self._scanned + len(line) > char_start:
+                break
+            self._state.fold(line, index=self._next_line)
+            self._scanned += len(line)
+            self._next_line += 1
+        # La línea parcial que llega a `char_start` se pliega sobre una copia: si
+        # la consulta siguiente cae en la misma línea, la re-pliega completa.
+        pending = self._state.copy()
+        tail = self._text[self._scanned : char_start]
+        for index, line in enumerate(tail.splitlines(), start=self._next_line):
+            pending.fold(line, index=index)
+        return pending.heading
+
+
+def heading_before(text: str, char_start: int) -> str | None:
+    """Extrae el último heading ATX que precede a `char_start` (F1, T4).
+
+    Forma puntual: una sola consulta con cursor desechable. La semántica
+    completa vive en `HeadingScanner`, que `chunk_document` comparte entre los
+    chunks de un documento para no re-escanear el texto por chunk.
+    """
+    return HeadingScanner(text).heading_before(char_start)
 
 
 def validate_offsets(text: str, char_start: int, char_end: int) -> tuple[int, int]:

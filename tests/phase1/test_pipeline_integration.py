@@ -51,17 +51,24 @@ import pytest
 from cocoindex.connectors import lancedb
 from cocoindex.resources.schema import VectorSchema
 from tepochcalli_flow import app as flow_app
-from tepochcalli_flow import citation, models as flow_models
+from tepochcalli_flow import citation, models as flow_models, parsers as flow_parsers
 from tepochcalli_flow import config as flow_config
 
 FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
 
-# Contrato de fuentes del vault temporal: la fixture dorada (2 md) + un .txt
-# plano SIN headings que añade este test para probar el null de D13 de verdad.
+BOM = "\ufeff"
+"""BOM UTF-8 como carácter: la lectura estricta lo conserva en el string de ambos decoders."""
+
+# Contrato de fuentes del vault temporal: la fixture dorada (2 md) + un .txt plano SIN
+# headings (D13) + un .md con BOM (decodificador único, F1) + un .md duplicado byte a
+# byte de `anidada.md` (unicidad de ids entre archivos, T8) — los últimos dos creados
+# por este módulo, como `plano.txt`.
 EXPECTED_SOURCE_PATHS = {
     "00-Resources/nota.md",
     "00-Resources/sub/carpeta/anidada.md",
     "00-Resources/plano.txt",
+    "00-Resources/con_bom.md",
+    "00-Resources/duplicada.md",
 }
 
 PLAIN_TXT_CONTENT = (
@@ -70,6 +77,21 @@ PLAIN_TXT_CONTENT = (
     "cuyo campo `heading` exista en la fila con valor null —nunca una cadena "
     "vacía— según D13 en spec-rag-engine.md §Target LanceDB.\n"
 )
+
+CON_BOM_CONTENT = (
+    "# Nota con BOM\n\n"
+    "Este archivo de prueba comienza con un BOM UTF-8. El decodificador estricto lo "
+    "conserva como carácter, y los offsets F1 almacenados deben reproducir exactamente "
+    "`parsers.extract_text` sobre ESTE string, BOM incluido: si la ruta de escritura "
+    "usara otro decodificador —`utf-8-sig` lo elimina, `errors='replace'` insera "
+    "U+FFFD—, los offsets se desplazarían y la identidad se rompería.\n\n"
+    + "Relleno para que el primer corte caiga ANTES de la segunda sección: "
+    * 24
+    + "\n\n## Sección tras el BOM\n\n"
+    "Cierre breve: este chunk secundario aún cita el heading bajo el BOM.\n"
+)
+CON_BOM_BYTES = b"\xef\xbb\xbf" + CON_BOM_CONTENT.encode("utf-8")
+"""Archivo con BOM real (bytes): se escribe crudo para que el BOM llegue al disco."""
 
 # Cache estable de modelo fuera del repo (ver docstring del módulo).
 SPIKE_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
@@ -127,6 +149,18 @@ def indexed_run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedRun
         (vault / citation.RESOURCES_DIR / "plano.txt").write_text(
             PLAIN_TXT_CONTENT, encoding="utf-8"
         )
+        (vault / citation.RESOURCES_DIR / "con_bom.md").write_bytes(CON_BOM_BYTES)
+        # Duplicada byte a byte de la fixture anidada: los MISMOS chunks de texto en DOS
+        # archivos distintos —pin de T8 para la unicidad de ids entre archivos.
+        (vault / citation.RESOURCES_DIR / "duplicada.md").write_bytes(
+            (
+                FIXTURE_VAULT
+                / citation.RESOURCES_DIR
+                / "sub"
+                / "carpeta"
+                / "anidada.md"
+            ).read_bytes()
+        )
 
         model_cache = (
             SPIKE_MODEL_CACHE if SPIKE_MODEL_CACHE.is_dir() else FALLBACK_MODEL_CACHE
@@ -168,11 +202,57 @@ def test_update_writes_rows_for_exactly_the_indexable_files(
 ) -> None:
     """El update materializa filas SOLO para los indexables (`.oculto/` y `blob.bin` fuera)."""
     assert indexed_run.update_completed
-    assert len(indexed_run.rows) >= 5  # nota.md ≥3 + anidada.md ≥1 + plano.txt ≥1
+    assert (
+        len(indexed_run.rows) >= 5
+    )  # nota.md ≥3 + anidada.md ≥1 + plano.txt/BOM/duplicada ≥1
     assert {row["source_path"] for row in indexed_run.rows} == EXPECTED_SOURCE_PATHS
     ids = [row["id"] for row in indexed_run.rows]
     assert all(isinstance(value, int) for value in ids)
     assert len(ids) == len(set(ids))  # clave primaria: ids únicos en la tabla
+
+
+def test_duplicate_chunk_text_across_files_gets_unique_ids_t8(
+    indexed_run: IndexedRun,
+) -> None:
+    """T8: chunks byte-idénticos en dos archivos reciben ids distintos.
+
+    `duplicada.md` es un calco byte a byte de `anidada.md`, así que sus chunks
+    de texto se repiten EXACTOS en dos `source_path` distintos. El `IdGenerator`
+    de `index_file` (uno por componente de archivo) reparte ids propios; si una
+    refactorización llegara a colapsarlos (p. ej. un `generate_id` memoizado por
+    texto), este pin fallaría antes que el contrato de `search` de T8.
+    """
+    originales = [
+        row
+        for row in indexed_run.rows
+        if row["source_path"] == "00-Resources/sub/carpeta/anidada.md"
+    ]
+    duplicadas = [
+        row
+        for row in indexed_run.rows
+        if row["source_path"] == "00-Resources/duplicada.md"
+    ]
+    assert originales and duplicadas, (
+        "la fixture duplicada debe indexarse junto a su original"
+    )
+
+    comunes = {row["text"] for row in originales} & {row["text"] for row in duplicadas}
+    assert comunes, (
+        "los chunks de duplicada.md deben ser byte-idénticos a los de anidada.md"
+    )
+
+    # Entre archivos: el mismo texto NO colisiona en id.
+    for texto in comunes:
+        id_original = next(row["id"] for row in originales if row["text"] == texto)
+        id_duplicado = next(row["id"] for row in duplicadas if row["text"] == texto)
+        assert id_original != id_duplicado, (
+            f"colisión de id para chunk duplicado: {texto[:60]!r}"
+        )
+
+    # Por archivo (ordinal): cada archivo reparte ids propios sin repetir.
+    for grupo in (originales, duplicadas):
+        ids = [row["id"] for row in grupo]
+        assert len(ids) == len(set(ids))
 
 
 def test_every_row_carries_complete_non_null_citation_metadata_m2(
@@ -235,6 +315,44 @@ def test_slice_identity_holds_for_every_row_written_m2(indexed_run: IndexedRun) 
         ), f"identidad F1 rota en {source_path} [{char_start}, {char_end})"
         checked += 1
     assert checked == len(indexed_run.rows)
+
+
+def test_bom_file_offsets_reproduce_extract_text_exactly_m2(
+    indexed_run: IndexedRun,
+) -> None:
+    """Decodificador único + F1: en un archivo con BOM los offsets reproducen `extract_text`.
+
+    El documento de referencia lo lee `parsers.extract_text` (UTF-8 estricto, BOM
+    conservado como carácter) —el MISMO string que debe producir la ruta de
+    escritura `app.index_file`. Con `utf-8-sig` (BOM auto-detectado) o con
+    `errors="replace"` los offsets se desplazarían y la identidad de cada fila
+    de `con_bom.md` rompería aquí.
+    """
+    ruta = indexed_run.vault / citation.RESOURCES_DIR / "con_bom.md"
+    documento = flow_parsers.extract_text(ruta)
+    assert documento.startswith(BOM)  # contrato: el BOM viaja dentro del string
+
+    filas = [
+        row
+        for row in indexed_run.rows
+        if row["source_path"] == "00-Resources/con_bom.md"
+    ]
+    assert (
+        len(filas) >= 2
+    )  # >1536 bytes: varios chunks, al menos uno con char_start > 0
+    for row in filas:
+        char_start = row["char_start"]
+        char_end = row["char_end"]
+        chunk_text = row["text"]
+        assert isinstance(char_start, int)
+        assert isinstance(char_end, int)
+        assert isinstance(chunk_text, str)
+        assert citation.verify_slice_identity(
+            documento, char_start, char_end, chunk_text
+        ), f"identidad F1 rota en con_bom.md [{char_start}, {char_end})"
+    assert any(row["heading"] == "Nota con BOM" for row in filas), (
+        "el BOM no debe ocultar el heading ATX inicial para los chunks posteriores"
+    )
 
 
 def test_heading_is_stored_as_null_for_files_without_hierarchy_d13(

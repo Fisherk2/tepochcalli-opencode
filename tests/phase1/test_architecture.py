@@ -4,9 +4,10 @@ Enuncia executablemente la regla hexagonal de ADR-005 («la dependencia apunta
 hacia dentro»): `tepochcalli_flow.citation` y `tepochcalli_flow.config` son
 código de dominio puro y su cierre transitivo de imports **nunca** puede alcanzar
 la infraestructura del motor de indexación (`cocoindex`) ni del indexador
-vectorial (`lancedb`). El resto del paquete (`models`, `app`, `source`,
-`parsers`) ES infraestructura y sí puede importar el engine — este test no lo
-toca.
+vectorial (`lancedb`). El propio `tepochcalli_flow/__init__.py` también está bajo
+la regla —importar el paquete lo ejecuta—; el resto del paquete (`models`,
+`app`, `source`, `parsers`) ES infraestructura y sí puede importar el engine —
+este test no lo toca.
 
 Garantías que ofrece, y cómo:
 
@@ -18,7 +19,7 @@ Garantías que ofrece, y cómo:
   Un grep directo sobre un solo archivo NO detectaría esa cadena: la violación
   es transitive por diseño. `BANNED_INFRA_ROOTS` es una constante de módulo
   extensible (T9 podrá añadir, p. ej., `litellm` sin reestructurar nada).
-* **Positiva (allowlist de dominio).** El mismo cierre transitivo de los dos
+* **Positiva (allowlist de dominio).** El mismo cierre transitivo de los
   módulos de dominio debe importar ÚNICAMENTE stdlib
   (`sys.stdlib_module_names`) + módulos in-project (`tepochcalli_flow.*`).
   Decisión de allowlist documentada aquí: stdlib + in-project y nada más — así
@@ -27,6 +28,9 @@ Garantías que ofrece, y cómo:
 * **Sanidad del propio walker.** Comprueba que el recorrido sí resuelve aristas
   in-project reales (citation -> config), para que un fallo de resolución de
   paths no convierta los otros dos tests en vacíamente verdes.
+* **Límite declarado, no adversarial.** El walker solo ve `ast.Import` y
+  `ast.ImportFrom`: los imports dinámicos (`importlib.import_module("cocoindex")`,
+  `__import__(...)`) quedan FUERA del recorrido — este test no los detectaría.
 
 Fuentes de verdad: ADR-005 (hexagonal), ADR-002 (sin demonios/red), los
 docstrings de `citation.py` y `config.py` («código de dominio: NO importa
@@ -61,8 +65,18 @@ STDLIB_ROOTS: Final[frozenset[str]] = frozenset(sys.stdlib_module_names)
 PERMITTED_DOMAIN_ROOTS: Final[frozenset[str]] = STDLIB_ROOTS | {PACKAGE}
 """Allowlist del dominio: stdlib + in-project, y nada más (docstring del módulo)."""
 
-DOMAIN_MODULES: Final[tuple[str, ...]] = (f"{PACKAGE}.citation", f"{PACKAGE}.config")
-"""Módulos de dominio puro bajo la regla (los demás módulos del paquete son infra)."""
+DOMAIN_MODULES: Final[tuple[str, ...]] = (
+    PACKAGE,
+    f"{PACKAGE}.citation",
+    f"{PACKAGE}.config",
+)
+"""Módulos de dominio bajo la regla: el `__init__` del paquete y los dos módulos puros.
+
+Importar `tepochcalli_flow.citation` EJECUTA `tepochcalli_flow/__init__.py` —el paquete
+entero forma parte del cierre transitivo en runtime—, así que el `__init__` se analiza
+igual que cualquier módulo de dominio. El resto del paquete (`models`, `app`, `source`,
+`parsers`) ES infraestructura y sí puede importar el engine.
+"""
 
 
 # --- motor AST (sin importar los módulos analizados) ---------------------------
@@ -121,7 +135,9 @@ def _import_targets(tree: ast.Module, current_module: str) -> set[str]:
             base = _resolve_from(current_module, node)
             if base:
                 targets.add(base)
-            targets.update(f"{base}.{alias.name}" if base else alias.name for alias in node.names)
+            targets.update(
+                f"{base}.{alias.name}" if base else alias.name for alias in node.names
+            )
     return targets
 
 

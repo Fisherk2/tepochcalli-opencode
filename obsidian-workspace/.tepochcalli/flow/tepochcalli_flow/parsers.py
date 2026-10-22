@@ -5,6 +5,9 @@ Sirve specs/spec-rag-engine.md §Chunking y §Fuentes:
 * `extract_text` — lectura directa de `.md`/`.markdown`/`.txt`; la rama PDF
   (Docling, CPU) llega en T7 y aquí se rechaza con error tipado
   (`PdfParserPendingError`), nunca con una lectura cruda del binario.
+  **Contrato F1 con T7:** la rama Docling deberá emitir exactamente el mismo
+  string que esta lectura (UTF-8 estricto, BOM incluido) — mismo decodificador
+  que la ruta de escritura de T6 (`app.index_file`).
 * `chunk_document` — `RecursiveSplitter` con el presupuesto canónico
   **`chunk_size=1536`, `chunk_overlap=192` en BYTES** (F4/D11: el splitter
   mide bytes, no chars) y devuelve registros de chunk que arrastran la cita
@@ -28,8 +31,8 @@ from cocoindex.resources.chunk import Chunk
 from .citation import (
     CitationError,
     DocKind,
+    HeadingScanner,
     doc_kind_for,
-    heading_before,
     model_id,
     normalize_source_path,
     validate_offsets,
@@ -129,8 +132,10 @@ def chunk_document(
         chunk_overlap=chunking.overlap,
         language=_SPLITTER_LANGUAGE[kind],
     )
+    scanner = HeadingScanner(text)  # cursor compartido: los chunks llegan en orden
     return [
-        _to_document_chunk(text, chunk, canonical_path, kind, model_id(config)) for chunk in chunks
+        _to_document_chunk(text, chunk, canonical_path, kind, model_id(config), scanner)
+        for chunk in chunks
     ]
 
 
@@ -140,6 +145,7 @@ def _to_document_chunk(
     canonical_path: str,
     kind: DocKind,
     model: str,
+    scanner: HeadingScanner,
 ) -> DocumentChunk:
     """Deriva la cita de un `Chunk` del splitter reutilizando el dominio de T4 (F1)."""
     char_start, char_end = validate_offsets(text, chunk.start.char_offset, chunk.end.char_offset)
@@ -151,7 +157,7 @@ def _to_document_chunk(
     return DocumentChunk(
         source_path=canonical_path,
         doc_kind=kind,
-        heading=heading_before(text, char_start),
+        heading=scanner.heading_before(char_start),
         char_start=char_start,
         char_end=char_end,
         text=chunk.text,
