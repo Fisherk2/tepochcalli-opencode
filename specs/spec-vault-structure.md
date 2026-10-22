@@ -77,7 +77,7 @@ Nota de convención: el nombre canónico de la fuente indexable es `00-Resources
 
 ```text
 <vault>/.tepochcalli/         # runtime RAG — nombre engine-neutral, sobrevive a migraciones de motor
-├── flow/                      # definición del pipeline CocoIndex + estado del engine
+├── flow/                      # definición del pipeline CocoIndex + config del engine — código fuente (el estado derivado vive en db/cocoindex/, D14)
 ├── mcp/                       # fuente del servidor tepochcalli-rag (paquete tepochcalli_mcp)
 ├── db/                        # LanceDB embebido (tepochcalli.lance, tabla chunks) — ADR-002
 ├── models/                    # cache de modelos de embeddings (SENTENCE_TRANSFORMERS_HOME/HF_HOME)
