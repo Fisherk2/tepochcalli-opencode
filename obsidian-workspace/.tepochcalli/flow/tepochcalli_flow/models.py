@@ -1,4 +1,4 @@
-r"""Esquema de fila LanceDB `chunks`: contrato de 10 campos (Phase 1, T6).
+r"""Contratos tipados del flow: fila LanceDB `chunks` y reporte de refresh Δ (Phase 1, T6/T8).
 
 Sirve specs/spec-rag-engine.md §Target LanceDB + índices: la fila
 `{id, source_path, doc_kind, heading, char_start, char_end, text, embedding,
@@ -6,6 +6,12 @@ model, indexed_at}` que T9 (puerto de lectura) y Phase 2 (contrato `search`)
 congelan como lectura. Y §Embeddings: las dims del vector se resuelven desde el
 embedder vía `Annotated[NDArray, EMBEDDER]` — nunca desde un literal `384` —
 de modo que si cambia el modelo, el esquema sigue al embedder (ADR-006).
+
+T8 añade el segundo contrato del módulo: `RefreshReport`, el retorno tipado de
+`app.refresh_blocking()` que Phase 2 serializa **tal cual** en la tool
+`index_refresh` (spec-mcp-server §Tool `index_refresh`) — su contabilidad de
+`{scanned, indexed, skipped}` está documentada en la clase y NO puede mentir
+(hallazgo #5 de CP-B).
 
 **D13:** `heading` es nullable — su valor es `None` cuando el documento no
 tiene heading padre— mientras `source_path`, `char_start`, `char_end` y
@@ -78,3 +84,54 @@ class ChunkRow:
 
     indexed_at: str
     """Instante ISO-8601 UTC en que la fila se escribió (§Rollback / Monitoring)."""
+
+
+@dataclass(frozen=True)
+class RefreshReport:
+    """Reporte de un ciclo Δ de `index_refresh` (spec-mcp-server §Tool `index_refresh`).
+
+    Es el contrato que Phase 2 serializa tal cual (`dataclasses.asdict`), así
+    que su contabilidad no puede mentir — el hallazgo #5 de CP-B demostró que
+    dos casos se caían fuera de `skipped`. La identidad se sostiene POR
+    CONSTRUCCIÓN en cada pasada:
+
+        scanned == indexed + skipped
+
+    * `scanned`: entradas de ruta VISITADAS por la pasada: los candidatos que
+      el walk del conector entrega (indexables y los que `classify_file`
+      descarta con `SkipReason`) más las que el conector traga en silencio y
+      `source.unvisited_skips` recupera — symlink roto y directorio ilegible
+      (este último contado como UNA entrada: sus archivos internos son
+      inenumerables y no se inventan).
+    * `indexed`: archivos cuyos chunks se (re)escribieron en esta pasada —
+      data plane del componente `index_file` (`num_adds + num_reprocesses`),
+      nunca el total de la pasada: la traversa `build_flow` reporta
+      `reprocess=1` por diseño (E2), leerla mintiría sobre la idempotencia.
+      Los borrados NO cuentan: un archivo borrado no es una visita; su purga
+      se observa en las filas de LanceDB (F2).
+    * `skipped`: `scanned - indexed` — toda entrada visitada que no reescribió
+      el índice: excluida por clasificación, memoizada (`unchanged`), FALLIDA
+      (no-UTF-8 o TOCTOU classify→read, aisladas por el exception handler del
+      lifespan) o directorio ilegible. Los fallos quedan así CONTADOS en el
+      contrato en vez de perderse en un log.
+    * `elapsed_ms`: duración de la pasada medida con `time.monotonic()` —
+      inmune a ajustes del reloj de sistema (puede ser 0 en un refresh
+      bloqueado por candado, que no ejecuta update alguno).
+    * `locked`: `True` ⇔ otro proceso retenía el candado: NO se ejecutó
+      `update` y el reporte es cero en las tres cuentas (sin escrituras).
+    """
+
+    scanned: int
+    """Entradas de ruta visitadas por la pasada (indexables + descartes + silenciosas)."""
+
+    indexed: int
+    """Archivos cuyos chunks se (re)escribieron — data plane de `index_file`."""
+
+    skipped: int
+    """`scanned - indexed`: visitadas sin reescritura — excluidas, memoizadas o fallidas."""
+
+    elapsed_ms: int
+    """Duración de la pasada en milisegundos con reloj MONOTÓNICO (`time.monotonic`)."""
+
+    locked: bool
+    """`True` si otro proceso retenía el candado y la invocación NO ejecutó update."""

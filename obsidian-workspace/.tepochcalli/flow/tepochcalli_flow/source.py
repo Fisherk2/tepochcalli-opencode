@@ -20,6 +20,11 @@ Sirve specs/spec-rag-engine.md §Fuentes:
 * Para poder emitir `broken_symlink` con motivo, este módulo combina el walk
   real del conector (que aporta los candidatos según el globset) con un
   barrido ligero de symlinks que solo lee dirents, nunca contenidos.
+* **T8 (hallazgo #5 de CP-B):** `unvisited_skips` amplía ese barrido con los
+  **directorios ilegibles** que `localfs` descarta con `except
+  PermissionError: continue` —motivo nuevo `SkipReason.UNREADABLE_DIR`— para
+  que la métrica `scanned` del refresh no los subestime (spec-mcp-server
+  §`index_refresh`); `walk_sources` (T5) conserva su salida intacta.
 * **Frontera de confianza (decisión 2026-10-22):** el conector sigue los
   symlinks que funcionan (archivo y directorio), así que un vault sincronizado
   o manipulado podría contener `secreto.md -> ~/.ssh/id_rsa`. `classify_file`
@@ -82,6 +87,15 @@ class SkipReason(StrEnum):
     Frontera de confianza (decisión 2026-10-22): el conector sigue los symlinks
     que funcionan, así que el contenido de fuera del recurso jamás debe llegar
     al índice ni a las respuestas de `search`.
+    """
+
+    UNREADABLE_DIR = "unreadable_dir"
+    """Directorio que el conector se traga en silencio (`except PermissionError: continue`).
+
+    T8/hallazgo #5 de CP-B: `localfs.walk_dir` omite el directorio SIN entregar
+    ni sus archivos ni un motivo, lo que subestimaba `scanned`. Lo contamos como
+    UNA entrada de la pasada —sus archivos internos son inenumerables y no se
+    inventan— para que `{scanned, indexed, skipped}` no mienta (spec-mcp-server).
     """
 
 
@@ -174,6 +188,30 @@ def walk_sources(
     ]
     items.extend(_broken_symlink_skips(resources_dir, matcher))
     return sorted(items, key=lambda item: item.source_path)
+
+
+def unvisited_skips(
+    resources_dir: Path,
+    *,
+    path_matcher: FilePathMatcher | None = None,
+) -> list[SkippedSource]:
+    """Entradas que el walk del conector NUNCA entrega, recuperadas con motivo (T8).
+
+    El conector se traga dos casos en silencio —sin candidato y sin `SkipReason`—
+    y la métrica `scanned` del refresh los dejaría invisibles (hallazgo #5 de
+    CP-B): el **symlink roto** (ni `is_file()` lo sigue) y el **directorio
+    ilegible** (`except PermissionError: continue` en `localfs/_source.py`).
+    Este barrido ligero —solo dirents, nunca contenidos— los emite con su
+    motivo para que `app._indexable_items` los cuente en `scanned`/`skipped`.
+
+    `path_matcher` respeta la misma whitelist/exclusiones que el walk real
+    (default: `build_path_matcher()`): un symlink apuntando fuera de la
+    whitelist o un directorio-punto no son asunto de esta capa.
+    """
+    matcher = build_path_matcher() if path_matcher is None else path_matcher
+    skips = _broken_symlink_skips(resources_dir, matcher)
+    skips.extend(_unreadable_dir_skips(resources_dir, matcher))
+    return skips
 
 
 def classify_file(
@@ -302,4 +340,41 @@ def _broken_symlink_skips(resources_dir: Path, matcher: FilePathMatcher) -> list
                     "symlink roto: el objetivo no existe — el conector lo omite en silencio (F5)",
                 )
             )
+    return skips
+
+
+def _unreadable_dir_skips(resources_dir: Path, matcher: FilePathMatcher) -> list[SkippedSource]:
+    """Directorios que `localfs.walk_dir` descarta con `except PermissionError` (T8).
+
+    El conector hace `continue` SIN entregar el directorio ni sus archivos
+    (verificado en la fuente `connectors/localfs/_source.py`); este barrido
+    usa el `onerror` de `os.walk` para emitir cada uno como UNA entrada
+    `SkipReason.UNREADABLE_DIR`. Solo cuenta `PermissionError` —el único error
+    que el conector traga— para que una carrera `ENOENT` no se finja descarte.
+    """
+    skips: list[SkippedSource] = []
+
+    def _onerror(exc: OSError) -> None:
+        if not isinstance(exc, PermissionError) or not exc.filename:
+            return
+        dirpath = Path(exc.filename)
+        try:
+            relative = dirpath.relative_to(resources_dir)
+        except ValueError:
+            return
+        if not matcher.is_dir_included(relative):
+            return
+        skips.append(
+            SkippedSource(
+                dirpath,
+                normalize_source_path(relative),
+                SkipReason.UNREADABLE_DIR,
+                f"directorio ilegible ({exc.strerror or exc}) — el conector lo omite en "
+                "silencio; sus archivos no enumerables se representan con esta entrada (T8)",
+            )
+        )
+
+    for dirpath, dirnames, _filenames in os.walk(resources_dir, onerror=_onerror):
+        relative_dir = Path(dirpath).relative_to(resources_dir)
+        dirnames[:] = [name for name in dirnames if matcher.is_dir_included(relative_dir / name)]
     return skips
