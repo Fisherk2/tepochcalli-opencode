@@ -37,7 +37,7 @@ from typing import Final
 from sentence_transformers import SentenceTransformer
 
 from .adapters.lancedb_reader import LanceDBChunkReader
-from .config import DEFAULT_EMBEDDING_DEVICE, DEFAULT_EMBEDDING_MODEL, load_config
+from .config import load_config
 from .ports import CitedChunk
 
 DB_RELPATH: Final = Path(".tepochcalli/db/tepochcalli.lance")
@@ -94,10 +94,7 @@ def main(argv: list[str] | None = None) -> int:
     rows = asyncio.run(reader.count_rows())
     print(f"Vault:  {vault_root}")
     print(f"DB:     {db_uri} (solo lectura)")
-    print(
-        f"Modelo: {config.embedding.model or DEFAULT_EMBEDDING_MODEL} "
-        f"@ {config.embedding.device or DEFAULT_EMBEDDING_DEVICE}"
-    )
+    print(f"Modelo: {config.embedding.model} @ {config.embedding.device}")
     print(f"Filas en `chunks`: {rows}")
 
     results = asyncio.run(reader.search(args.query, args.top_k, args.path_filter))
