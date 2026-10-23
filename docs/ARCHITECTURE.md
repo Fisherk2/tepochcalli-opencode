@@ -109,14 +109,71 @@ sequenceDiagram
 | AGENTS.md del vault (MCP-first) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
 | `opencode.json` (`mcp.servers`) | Agente | `<vault>/opencode.json` | spec-markitdown §config |
-| `tepochcalli-rag` (search/index_refresh/add_source) | Comunicación | `.tepochcalli/mcp/` | spec-mcp-server, ADR-005 |
-| `markitdown-mcp` | Comunicación | venv del vault | spec-markitdown |
-| CocoIndex flow (localfs→chunk→embed→target) | Procesamiento | `.tepochcalli/flow/` | spec-rag-engine, ADR-001 |
+| `tepochcalli-rag` (search/index_refresh/add_source) | Comunicación | `.tepochcalli/mcp/` — **pendiente (Phase 2)** | spec-mcp-server, ADR-005 |
+| `markitdown-mcp` | Comunicación | venv del vault — pendiente (Phase 2) | spec-markitdown |
+| **Flow `tepochcalli_flow` (Phase 1, T2–T8):** `app.py` (entrada CocoIndex, lock de proceso + refresh con stats), `source.py` (walk de `00-Resources/` con skips tipados), `parsers.py` (md/txt + Docling + RecursiveSplitter 1536/192 bytes), `models.py` (cache de modelos) | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/` | spec-rag-engine, ADR-001 |
+| **Dominio puro (sin I/O):** `citation.py` (metadatos de cita por chunk, `heading` nullable), `config.py` (`tepochcalli.toml` con fallbacks a defaults) | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/` | spec-rag-engine §Target, D13 |
+| **Puerto `ChunkReader` (T9):** 6 campos congelados, engine-free — contrato de lectura para Phase 2 | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/ports.py` | spec-mcp-server, ADR-005 |
+| **Adaptador de lectura (T9):** `adapters/lancedb_reader.py` (ANN+FTS híbrido con fusión RRF) + `verify.py` (verificador CLI de solo lectura, M4) | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/adapters/`, `verify.py` | ADR-002, ADR-005 |
+| Estado del engine (LMDB) — D14 | Procesamiento | `.tepochcalli/db/cocoindex/` | D14, spec-vault-structure |
 | LanceDB (ANN+FTS) | Procesamiento | `.tepochcalli/db/` | ADR-002 |
 | Embeddings MiniLM multilingüe | Procesamiento | `.tepochcalli/models/` | ADR-006, spec-embeddings |
 | venv + uv bootstrap | Runtime | `.tepochcalli/venv/`, `bin/` | ADR-004 |
 | `tepochcalli.toml` | Config | `.tepochcalli/config/` (gitignored) | spec-embeddings |
+| **Suite Phase 1 (T2–T11):** `tests/phase1/` — 137 tests + `bench_delta.py` (M1, p95 sobre 20 ciclos) | Verificación | repo `tests/phase1/` | WORKFLOW §Phase 1, TRD §6.2 |
+| **CI Phase 1:** `phase1.yml` (ruff → suite → smoke Δ) | Verificación | `.github/workflows/phase1.yml` — **solo verificación local; nunca corrió en GitHub Actions (M6)** | T11, WORKFLOW §Phase 1 |
 | Wizard TUI Rust + cargo-dist | Distribución | repo `crates/` (Phase 3) + Releases | ADR-003, spec-installer-wizard |
+
+## Engine components (hexagonal view)
+
+Vista hexagonal del motor tal como quedó en Phase 1: dominio puro en el centro, `ports.py`
+como contrato de lectura, adapters de infraestructura alrededor. **Las flechas indican
+dirección de dependencia** (`importa` / `implementa`) — nunca al revés: el dominio no importa
+infraestructura y `ports.py` no importa ningún motor (test de arquitectura, `tests/phase1/test_architecture.py`).
+
+```mermaid
+graph TB
+    subgraph DOMAIN["Dominio — puro, sin I/O"]
+        CIT["citation.py<br/>metadatos de cita por chunk — heading, doc_kind, offsets"]
+        CFG["config.py<br/>tepochcalli.toml + defaults"]
+    end
+
+    subgraph PORT["Puerto — contrato de lectura sin motor (T9)"]
+        PRT["ports.py — ChunkReader / CitedChunk<br/>6 campos congelados, heading nullable"]
+    end
+
+    subgraph ADAPTERS["Adapters — infraestructura"]
+        SRC["source.py<br/>walk de 00-Resources con skips tipados"]
+        PAR["parsers.py<br/>md/txt + Docling + RecursiveSplitter 1536/192 bytes"]
+        APP["app.py<br/>flow CocoIndex — lock, refresh con stats"]
+        MDL["models.py<br/>ChunkRow, RefreshReport, embedder"]
+        LDR["adapters/lancedb_reader.py<br/>ANN+FTS híbrido con fusión RRF"]
+        VER["verify.py<br/>verificador CLI de solo lectura — M4"]
+    end
+
+    DB[("LanceDB<br/>.tepochcalli/db/")]
+    MCP2["tepochcalli-rag — MCP de Phase 2 (pendiente)"]
+
+    CIT --> CFG
+    PRT --> CFG
+    SRC --> CIT
+    PAR --> CIT
+    APP --> SRC
+    APP --> PAR
+    APP --> CIT
+    APP --> CFG
+    APP --> MDL
+    APP --> DB
+    MDL -.->|esquema de filas| DB
+    LDR -.->|implementa| PRT
+    LDR --> DB
+    VER -->|referencias del puerto| PRT
+    VER -->|usa el adaptador| LDR
+    MCP2 -.->|consumirá en Phase 2| PRT
+```
+
+* **Write path (indexación):** `app` orquesta `source` (walk) → `parsers` (extracto + chunking, cita derivada en `citation`) → embedder → LanceDB — sin pasar por el puerto.
+* **Read path (búsqueda citada):** el puerto `ChunkReader` lo implementa `lancedb_reader` y lo consumen `verify` (hoy) y `tepochcalli-rag` (Phase 2) — el único contrato que cruza capas (ADR-005).
 
 ## Decision Index
 

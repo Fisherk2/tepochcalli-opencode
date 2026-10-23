@@ -1,7 +1,7 @@
 # Spec: Estratégia de embeddings (modelo default, cache y proveedores)
 
-* **Status:** Proposed
-* **Date:** 2026-10-21
+* **Status:** Approved 2026-10-23 (FTR Phase 0→1, docs/WORKFLOW.md §4)
+* **Date:** 2026-10-23 (original: 2026-10-21)
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
 * **Traceability:** docs/UH.md (deuda cognitiva 6), ADR-006 (modelo default), ADR-007 (selección de provider en instalación, D7), ADR-008 (transparencia de hardware y swap atómico, D8), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-mcp-server.md (`rag_status`, códigos `E_*`)

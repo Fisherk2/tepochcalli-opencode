@@ -1,7 +1,7 @@
 # Spec: Motor RAG — flujo CocoIndex sobre `00-Resources/`
 
-* **Status:** Proposed
-* **Date:** 2026-10-21
+* **Status:** Approved 2026-10-23 (FTR Phase 0→1, docs/WORKFLOW.md §4)
+* **Date:** 2026-10-23 (original: 2026-10-21)
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
 * **Traceability:** docs/UH.md (capa RAG Engine), ADR-001 (motor), ADR-002 (almacén), ADR-006 (embeddings), docs/ARCHITECTURE.md, docs/WORKFLOW.md Phase 1
