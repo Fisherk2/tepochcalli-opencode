@@ -51,6 +51,17 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `db/`, `models/`, `venv/`, `bin/` (artefactos; config puede contener secretos).
 * Claves de servicios externos solo vía env var `{env:VAR}` en `opencode.json` o
   `tepochcalli.toml` local (gitignored).
+* **Plantillas y stubs de credenciales** (`.env.example`,
+  `obsidian-workspace/.tepochcalli/tepochcalli.toml.example`, `.env*`, `tepochcalli.toml` o
+  fragmentos de `opencode.json` con `{env:VAR}`): antes de crear o modificarlos, **avisar al
+  usuario y esperar su visto bueno** (es una puerta, no un aviso a posteriori); tras el cambio,
+  si el fichero quedó con huecos de credencial, **avisar al usuario de que él debe rellenarlos
+  en el fichero real gitignored** correspondiente — `.env` (raíz) o
+  `.tepochcalli/config/tepochcalli.toml` — para no generar errores en el flujo (p. ej.
+  `provider = "litellm"` en el toml sin `TEPOCHCALLI_EMBED_API_KEY` hace fallar la indexación
+  tarde, al ejecutar, no al configurer). El asistente NUNCA escribe credenciales reales: los
+  `.example` y plantillas se quedan con placeholders y los valores reales solo viven en los
+  ficheros gitignored (complementa, no contradice, la regla de no-commiteo de arriba).
 * **MarkItDown puede leer cualquier archivo del usuario del proceso** (`file:` URIs):
   ingerir solo material confiado; documentado en docs/SECURITY.md y spec-markitdown.
 * El MCP `tepochcalli-rag` es stdio local: prohibido exponerlo por red o añadir binding HTTP.
@@ -60,6 +71,9 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 ## Pre-Commit Checklist
 
 - [ ] Ningún cambio a `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/` salvo tarea que lo autorice.
+  <!-- markdownlint-disable MD004 -->
+- [ ] Si toqué `.env.example`, `obsidian-workspace/.tepochcalli/tepochcalli.toml.example` u otro fichero con huecos de credencial: apliqué la puerta de `## Security Rules` (aviso previo + visto bueno del usuario, y aviso posterior de rellenar el fichero real gitignored).
+  <!-- markdownlint-enable MD004 -->
 - [ ] Docs en español con términos exactos de D1-D6 (`tepochcalli-rag`, `.tepochcalli/`, `paraphrase-multilingual-MiniLM-L12-v2`, `cocoindex`, `markitdown-mcp`).
 - [ ] Si toqué un contrato (tools, config, layout): actualizo la spec correspondiente Y, si es decisión, escribo ADR.
 - [ ] Bloques mermaid válidos (sin paréntesis sin comillas en labels de nodo).
