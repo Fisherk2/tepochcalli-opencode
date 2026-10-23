@@ -26,9 +26,12 @@ from __future__ import annotations
 import logging
 import os
 import tomllib
-from dataclasses import Field, dataclass, field, fields, replace
+from dataclasses import dataclass, field, fields, replace
 from pathlib import Path
-from typing import Any, ClassVar, Final, Protocol
+from typing import TYPE_CHECKING, Final
+
+if TYPE_CHECKING:  # Solo tipado: los bounds PEP 695 son lazy y no se evalúan en runtime.
+    from _typeshed import DataclassInstance
 
 logger = logging.getLogger(__name__)
 
@@ -179,20 +182,7 @@ def _section(raw: dict[str, object], name: str, config_path: Path) -> dict[str, 
     return value
 
 
-class _DataclassSection(Protocol):
-    """Protocolo estructural de una sección de config (siempre un dataclass frozen).
-
-    `dataclasses.fields`/`dataclasses.replace` exigen `DataclassInstance` —el
-    protocolo interno de typeshed— y una `SectionT` sin cota no lo satisface
-    (`--strict` lo rechaza en el borde). Se declara aquí el ÚNICO miembro que
-    ese protocolo inspecciona, de modo que la cota del TypeVar de
-    `_merge_section` sea real sin relajar el chequeo ni introducir `cast`.
-    """
-
-    __dataclass_fields__: ClassVar[dict[str, Field[Any]]]
-
-
-def _merge_section[SectionT: _DataclassSection](
+def _merge_section[SectionT: DataclassInstance](
     section_name: str, defaults: SectionT, values: dict[str, object], config_path: Path
 ) -> SectionT:
     """Aplica las overrides válidas de una sección sobre sus defaults, warning por clave mala."""
