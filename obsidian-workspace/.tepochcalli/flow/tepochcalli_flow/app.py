@@ -46,10 +46,8 @@ https://cocoindex.io/docs/programming_guide/app/#lifespan-optional).
 from __future__ import annotations
 
 import asyncio
-import errno
 import logging
 import os
-import sys
 import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
@@ -66,16 +64,13 @@ from cocoindex.resources.id import IdGenerator
 from . import config as flow_config
 from . import source
 from .citation import RESOURCES_DIR, normalize_source_path
-from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME
+from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME  # noqa: F401  # re-export: tests y wiring del flow consumen los nombres vía app
 from .models import EMBEDDER, LANCE_DB, ChunkRow, RefreshReport
 from .parsers import DocumentChunk, chunk_document
+from .refresh_lock import acquire_refresh_lock as _acquire_refresh_lock
+from .refresh_lock import release_refresh_lock as _release_refresh_lock
 
 logger = logging.getLogger(__name__)
-
-if sys.platform == "win32":
-    import msvcrt
-else:
-    import fcntl
 
 VAULT_ROOT_ENV: Final = "TEPOCHCALLI_VAULT_ROOT"
 """Override de la raíz del vault (pruebas/vaults alternativos); default: la del payload."""
@@ -305,57 +300,6 @@ async def _indexable_items(resources_dir: Path) -> tuple[list[tuple[str, localfs
 
 app = coco.App(coco.AppConfig(name="tepochcalli"), build_flow)
 """Entrypoint v1: `app.update_blocking()` o `cocoindex update <archivo>` (sin `setup`)."""
-
-
-def _try_exclusive_lock(fd: int) -> None:
-    """Lock exclusivo NO bloqueante sobre `fd`; `OSError` de bloqueo = ya retenido."""
-    if sys.platform == "win32":
-        msvcrt.locking(fd, msvcrt.LK_NBLCK, 1)
-    else:
-        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
-
-
-def _release_os_lock(fd: int) -> None:
-    """Libera el lock del SO; la rama Windows exige volver a la posición 0."""
-    if sys.platform == "win32":
-        os.lseek(fd, 0, os.SEEK_SET)
-        msvcrt.locking(fd, msvcrt.LK_UNLCK, 1)
-    else:
-        fcntl.flock(fd, fcntl.LOCK_UN)
-
-
-def _acquire_refresh_lock(vault_root: Path) -> int | None:
-    """Devuelve el fd del candado de refresh retenido, o `None` si OTRO proceso lo retiene ya.
-
-    Semántica de stale (decisión en `LOCK_RELPATH`): el candado es el lock del
-    SO, no el archivo — un crash no puede dejarlo retenido (el kernel lo suelta
-    con el proceso) y el lock file residual se REUTILIZA sin leer su contenido.
-    El pid se escribe solo como diagnóstico, tras retener. Un error de bloqueo
-    distinto de «ya retenido» se propaga: un disco roto no es un refresh
-    concurrente.
-    """
-    path = vault_root / LOCK_RELPATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    fd = os.open(path, os.O_RDWR | os.O_CREAT, 0o644)
-    try:
-        _try_exclusive_lock(fd)
-    except OSError as exc:
-        os.close(fd)
-        if exc.errno in (errno.EACCES, errno.EAGAIN, errno.EWOULDBLOCK):
-            return None
-        raise
-    os.lseek(fd, 0, os.SEEK_SET)
-    os.ftruncate(fd, 0)
-    os.write(fd, f"{os.getpid()}\n".encode())
-    return fd
-
-
-def _release_refresh_lock(fd: int) -> None:
-    """Suelta el candado y cierra el fd; el lock file persiste a propósito."""
-    try:
-        _release_os_lock(fd)
-    finally:
-        os.close(fd)
 
 
 def _update_blocking_with_stats() -> tuple[_ScanTally, coco.UpdateStats]:
