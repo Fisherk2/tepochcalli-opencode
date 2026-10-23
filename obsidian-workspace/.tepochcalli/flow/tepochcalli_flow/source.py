@@ -312,8 +312,8 @@ def _stat_or_skip(file_path: Path, source_path: str) -> os.stat_result | Skipped
             file_path,
             source_path,
             SkipReason.UNREADABLE,
-            "el archivo desapareció durante el pase (FileNotFoundError; carrera "
-            "walk→classify) — el pase continúa sin él (F5)",
+            "desapareció durante el pase: ya no existe al hacer stat (el conector "
+            "lo entregó; carrera walk→classify, F5)",
         )
     except OSError as exc:
         return SkippedSource(
