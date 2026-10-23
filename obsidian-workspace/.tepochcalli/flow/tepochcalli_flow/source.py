@@ -288,15 +288,32 @@ def _escape_reference(file_path: Path, resources_dir: Path) -> str:
 
 
 def _stat_or_skip(file_path: Path, source_path: str) -> os.stat_result | SkippedSource:
-    """`stat()` defensivo: desaparecido → `broken_symlink`, error de E/S → `unreadable` (F5)."""
+    """`stat()` defensivo: desaparecido → `broken_symlink` o `unreadable`; E/S → `unreadable` (F5).
+
+    Distingue las dos causas de `FileNotFoundError`, que el log NO debe mezclar:
+    un **symlink** cuyo objetivo no existe es `BROKEN_SYMLINK` (el conector lo
+    traga en silencio, F5), mientras que un archivo **regular** que desapareció
+    entre el walk y el classify —carrera walk→classify— es `UNREADABLE` con un
+    detalle que dice que el archivo se fue. `UNREADABLE` cubre «sin permiso de
+    lectura u otro error de E/S», así que no hace falta un motivo nuevo; el
+    recuento `scanned == indexed + skipped` es idéntico en ambos casos.
+    """
     try:
         return file_path.stat()
     except FileNotFoundError:
+        if file_path.is_symlink():
+            return SkippedSource(
+                file_path,
+                source_path,
+                SkipReason.BROKEN_SYMLINK,
+                "symlink roto: el objetivo no existe — el conector lo omite en silencio (F5)",
+            )
         return SkippedSource(
             file_path,
             source_path,
-            SkipReason.BROKEN_SYMLINK,
-            "symlink roto: el objetivo no existe — el conector lo omite en silencio (F5)",
+            SkipReason.UNREADABLE,
+            "el archivo desapareció durante el pase (FileNotFoundError; carrera "
+            "walk→classify) — el pase continúa sin él (F5)",
         )
     except OSError as exc:
         return SkippedSource(
