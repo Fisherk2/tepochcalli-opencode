@@ -1,5 +1,5 @@
 # Implementation Plan — Tepochcalli v1
-**Date:** 2026-10-21 (rev. 3 — Phase 4 independiente de diseño; renumera Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
+**Date:** 2026-10-21 (rev. 4 — estado de fases: Phase 1 completada 2026-10-23, Phase 2 listo para planeación; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
@@ -17,6 +17,8 @@
 | 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e |
 | 6 | E2E Acceptance | Validar los 7 criterios de UH.md sobre sistema completo | Aceptación: tabla §6.3 toda verde en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 
+> **Estado (2026-10-23):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **listo para planeación, no empezada** (§Phase 2); el resto de fases sin arrancar.
+
 ## 2. Phase Breakdown
 
 ### Phase 0 — Foundations (esta entrega)
@@ -27,6 +29,7 @@
 
 ### Phase 1 — Engine + Flow
 
+* **Estado (2026-10-23): COMPLETADA.** Gate de cierre verde: `just ci` (**164 passed**; smoke Δ **991 ms** < 10 000 ms), `just coverage` **98 %** (`fail_under=95`), mypy strict y ruff dentro del pipeline; revisión multi-eje (5 ejes) cerrada con **24 hallazgos aplicados en 16 commits**. Estas cifras de cierre **sustituyen** a las intermedias T10/T11 de las métricas de abajo (137 passed, smoke Δ 1 757 ms), que se conservan como registro histórico. Pendiente del usuario (**NO hecho**): **push de la rama** — ~29 commits sin publicar; el workflow de GitHub Actions sigue sin haber corrido (M6).
 * Objetivo: `.tepochcalli/flow/` funcional (source localfs `00-Resources/**` → Docling/md → RecursiveSplitter(1536/192 bytes) → MiniLM → LanceDB ANN+FTS).
 * Tareas clave: pipeline declarativo con `@coco.fn(memo=True)`; exclusión de rutas-punto y >100MB; campo `model` en filas; lockfile pineado; benches de Δ.
 * Dependencias: Phase 0; decisión abierta de spec-embeddings (env SBERT_HOME) se resuelve aquí.
@@ -36,10 +39,11 @@
   * **M3 — cero llamadas a LLM durante la indexación**, probado dos vías: (a) ningún `litellm`/`openai`/`anthropic` presente en `sys.modules`; (b) `update_blocking()` completado con el `socket.connect` saliente bloqueado (AF_INET/AF_INET6) y **cero intentos de egress** registrados por un canario.
   * Métricas de apoyo: **M4** — filas queryables con `{source_path, heading, char_start, char_end}` vía el verificador CLI, cuyo carácter de solo lectura está probado por snapshot de `(mtime_ns, size)`. **M5** — coste de PDF **medido**: 30 páginas = **49–51 s** en caliente (≈1,6–1,7 s/pág), RSS pico **2 048–2 189 MiB**; en frío la carga de modelos de Docling domina (**29–37 s**) — por encima de la estimación de spec-rag-engine (TD-2 actualizado). **M6** — CI con **solo verificación local**: `.github/workflows/phase1.yml` existe, actionlint v1.7.9 + shellcheck con 0 errores, y los 7 pasos ejecutados localmente en el mismo orden y directorios; suite **137 passed**, smoke Δ 1 757 ms < 60 000 ms. **El workflow nunca ha corrido en GitHub Actions** — decisión del usuario 2026-10-23 de no publicar los 27 commits en un repo público; no se declara CI verde.
   * Contexto operativo: Δ de refresh típico **58–178 ms**; suite completa **~180–250 s** (137 passed, 1 deselected, 1 warning esperada = TD-9).
-* Gate: fixtures de spec-rag-engine §Testing verdes **en verificación local** (M6 sin correr en Actions — salvedad arriba) + FTR Phase 0→1 (§4) ejecutado en T12. **M7** (sign-off del usuario para arrancar Phase 2) se pide por separado, después de T12.
+* Gate: fixtures de spec-rag-engine §Testing verdes **en verificación local** (M6 sin correr en Actions — salvedad arriba) + FTR Phase 0→1 (§4) ejecutado en T12. **M7** (sign-off del usuario para arrancar Phase 2): **concedido el 2026-10-23** — Phase 1 queda cerrada (estado arriba) y Phase 2 habilitada para planeación.
 
 ### Phase 2 — MCP Server
 
+* **Estado (2026-10-23): LISTO PARA PLANEACIÓN — no empezada.** Tres precondiciones cumplidas: (1) contrato `search/index_refresh/add_source/rag_status` **congelado** en [spec-mcp-server](../specs/spec-mcp-server.md); (2) `CitedChunk.offsets_ref` resuelto antes del freeze; (3) `adapters.build_reader` (composition root del flow, embedder pineado por `MODEL_REVISION`) listo para que los handlers lo consuman. Aviso de homonimia: esta «Phase 2» es la del plan por fases del **producto**; no confundirla con la «fase 2: TDD» interna de los comandos `/test`, trabajo ya entregado dentro de Phase 1 (pirámide unit/integration/e2e).
 * Objetivo: `.tepochcalli/mcp/` con las 4 tools `search/index_refresh/add_source/rag_status` según spec-mcp-server (shapes JSON, taxonomía `E_*`, presupuestos).
 * Tareas clave: handlers + validación de borde; token-budget determinista; medición `took_ms`; `add_source` integrado con markitdown-venv; entrypoint `tepochcalli-mcp`; contract tests D7.3: `rag_status` con shape exacto de los 4 bloques y <200 tokens; los cinco códigos `E_*` con payload `{error:{code,message,fix_hint}}`.
 * Dependencias: Phase 1 (tabla de datos estable).
@@ -144,7 +148,7 @@ flow; por debajo, la receta falla.
 * **Enlaces relativos:** 95 enlaces revisados — los 90 reales resuelven; los 5 que no resuelven son placeholders intencionales `](url)`/`](path)` de `docs/diagnosis/diagnosis-template.md` (plantilla a rellenar).
 * **Mermaid:** los **12 bloques** de docs/specs/AGENTS/SPEC renderizados con `mermaid-cli` (headless Chrome) — **12 OK, 0 fallos**, incluido el diagrama de componentes nuevo; labels con caracteres especiales entre comillas.
 * **Lint:** `markdownlint-cli2 docs specs AGENTS.md SPEC.md` → **420 antes / 420 después**, mismo conjunto de rule IDs (D12: cero errores nuevos).
-* **Efecto del gate:** `spec-rag-engine.md` y `spec-embeddings.md` → **Approved** en el índice de [SPEC.md](../SPEC.md) (metadatos actualizados en ambos archivos). La aprobación de usuario del gate (**M7**) se pide por separado, después de T12.
+* **Efecto del gate:** `spec-rag-engine.md` y `spec-embeddings.md` → **Approved** en el índice de [SPEC.md](../SPEC.md) (metadatos actualizados en ambos archivos). La aprobación de usuario del gate (**M7**) se pidió por separado tras T12 y se concedió el **2026-10-23** (Phase 1 completada; Phase 2 liberada para planeación).
 
 ## 5. Risk Management
 
