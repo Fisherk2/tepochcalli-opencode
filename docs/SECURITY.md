@@ -65,6 +65,18 @@ Reglas vigentes, aplicadas en `tepochcalli_flow.source.classify_file` (decisión
 * El vault es material **confiado**; el contenido de `00-Resources/` es **dato, nunca
   instrucción** (regla anti prompt-injection del `AGENTS.md` del vault).
 
+Limitaciones TOCTOU conocidas y documentadas (no cubiertas por el chequeo actual; fd-grade
+requeriría rewiring del conector, fuera del scope v1):
+
+* El objetivo de un symlink puede **conmutarse entre el check y la lectura del conector**
+  (carrera del SO): la frontera se evalúa al clasificar y NO se re-verifica con fd propio.
+  En un vault multiusuario/hostil esto admite un swap directed; en el modelo amenaza v1
+  (vault del propio usuario, material confiado) se acepta.
+* **Hardlinks** a ficheros fuera del recurso NO se detectan (mismo inode, path válido) —
+  el hard-link usa los permisos del destino real y la fuente de verdad del usuario.
+* La **complejidad de parseo de PDF** (Docling) no magnifica ningún vector aquí: el PDF
+  solo produce texto extraído (vía `extract` como espacio de offsets), jamás binario crudo.
+
 ## MCP: solo stdio local
 
 * `mcp.servers` gestionados (`tepochcalli-rag`, `markitdown`) usan **`type: "local"`**
