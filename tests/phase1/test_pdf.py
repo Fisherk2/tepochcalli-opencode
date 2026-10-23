@@ -48,9 +48,7 @@ from tepochcalli_flow import citation, parsers, source
 # de este código ni del flow; se filtran AQUÍ (scope de este módulo) para
 # preservar la regla de la suite: exactamente UN warning (TD-9, FutureWarning).
 pytestmark = [
-    pytest.mark.filterwarnings(
-        "ignore:`force_full_page_ocr` is deprecated:DeprecationWarning"
-    ),
+    pytest.mark.filterwarnings("ignore:`force_full_page_ocr` is deprecated:DeprecationWarning"),
     pytest.mark.filterwarnings(
         "ignore:This field is deprecated. Use `generate_page_images=True`:DeprecationWarning"
     ),
@@ -63,9 +61,7 @@ FALLBACK_CACHE = Path("/tmp/opencode/tepochcalli-t7-models")
 DOCLING_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/docling")
 FALLBACK_DOCLING_CACHE = Path("/tmp/opencode/tepochcalli-t7-docling")
 
-os.environ.setdefault(
-    "HF_HOME", str(SPIKE_CACHE if SPIKE_CACHE.exists() else FALLBACK_CACHE)
-)
+os.environ.setdefault("HF_HOME", str(SPIKE_CACHE if SPIKE_CACHE.exists() else FALLBACK_CACHE))
 os.environ.setdefault(
     "DOCLING_CACHE_DIR",
     str(DOCLING_CACHE if DOCLING_CACHE.exists() else FALLBACK_DOCLING_CACHE),
@@ -111,9 +107,9 @@ def test_extract_text_converts_a_pdf_to_markdown_with_heading_hierarchy() -> Non
     assert citation.heading_before(markdown, markdown.index("Segundo apartado")) == (
         "Metodo de prueba"
     )
-    assert citation.heading_before(
-        markdown, markdown.index("Los chunks producidos")
-    ) == ("Resultados")
+    assert citation.heading_before(markdown, markdown.index("Los chunks producidos")) == (
+        "Resultados"
+    )
     assert "%PDF" not in markdown  # jamás el binario crudo
 
 
@@ -137,9 +133,7 @@ def test_extract_text_pdf_is_deterministic_and_strictly_unicode() -> None:
 # --- chunk_document: chunks citados de un PDF -----------------------------------
 
 
-def test_chunk_document_yields_pdf_chunks_with_non_null_heading_and_f1_identity() -> (
-    None
-):
+def test_chunk_document_yields_pdf_chunks_with_non_null_heading_and_f1_identity() -> None:
     """`doc_kind="pdf"`, `heading` de sección no nulo e identidad F1 sobre el MARKDOWN (AC).
 
     Los offsets `char_start`/`char_end` se miden sobre el markdown
@@ -209,9 +203,7 @@ def test_walk_extract_chunk_end_to_end_over_a_real_pdf(tmp_path: Path) -> None:
     assert chunks
     assert all(chunk.doc_kind == "pdf" for chunk in chunks)
     assert all(
-        citation.verify_slice_identity(
-            markdown, chunk.char_start, chunk.char_end, chunk.text
-        )
+        citation.verify_slice_identity(markdown, chunk.char_start, chunk.char_end, chunk.text)
         for chunk in chunks
     )
 

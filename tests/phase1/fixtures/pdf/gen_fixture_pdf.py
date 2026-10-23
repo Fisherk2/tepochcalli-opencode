@@ -90,6 +90,7 @@ def _build_content() -> str:
 
 
 def build_pdf() -> bytes:
+    """Genera el PDF de fixture en bytes, listo para escribir."""
     content = _build_content().encode("latin-1")
     objects = [
         b"<< /Type /Catalog /Pages 2 0 R >>",
@@ -98,11 +99,7 @@ def build_pdf() -> bytes:
         b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-        b"<< /Length "
-        + str(len(content)).encode()
-        + b" >>\nstream\n"
-        + content
-        + b"\nendstream",
+        b"<< /Length " + str(len(content)).encode() + b" >>\nstream\n" + content + b"\nendstream",
     ]
     out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = []
@@ -115,8 +112,7 @@ def build_pdf() -> bytes:
     for offset in offsets:
         out += f"{offset:010d} 00000 n \n".encode()
     out += (
-        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\n"
-        f"startxref\n{xref_offset}\n%%EOF\n"
+        f"trailer\n<< /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref_offset}\n%%EOF\n"
     ).encode()
     return bytes(out)
 

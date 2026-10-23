@@ -70,24 +70,19 @@ def test_walk_sources_excludes_non_whitelisted_extensions() -> None:
     assert all("blob" not in entry.source_path for entry in _entries(items))
 
 
-def test_include_patterns_alone_would_index_dot_paths_proving_excludes_are_mandatory_f3() -> (
-    None
-):
+def test_include_patterns_alone_would_index_dot_paths_proving_excludes_are_mandatory_f3() -> None:
     """Control F3: SOLO con include patterns el globset real sí casa `.oculto/ignorar.md`.
 
     Este test fallaría si `excluded_patterns=["**/.*", "**/.git/**"]` dejara de
     aplicarse: con el matcher de solo-inclusión el archivo oculto se indexa.
     """
-    include_only = PatternFilePathMatcher(
-        included_patterns=list(source.WHITELIST_PATTERNS)
-    )
+    include_only = PatternFilePathMatcher(included_patterns=list(source.WHITELIST_PATTERNS))
 
     with_excludes = source.walk_sources(FIXTURE_VAULT)
     without_excludes = source.walk_sources(FIXTURE_VAULT, path_matcher=include_only)
 
     assert all(
-        not entry.source_path.endswith(".oculto/ignorar.md")
-        for entry in _entries(with_excludes)
+        not entry.source_path.endswith(".oculto/ignorar.md") for entry in _entries(with_excludes)
     )
     assert any(
         entry.source_path == "00-Resources/.oculto/ignorar.md"
@@ -96,7 +91,10 @@ def test_include_patterns_alone_would_index_dot_paths_proving_excludes_are_manda
 
 
 def test_default_matcher_rejects_dot_paths_at_file_and_dir_level() -> None:
-    """El matcher por defecto rechaza en tiempo de globset `.oculto/`, `.git/` y `.oculto-secreto.md`."""
+    """El matcher por defecto rechaza `.oculto/`, `.git/` y `.oculto-secreto.md`.
+
+    La negación corre en tiempo de globset, a nivel de fichero y de directorio.
+    """
     matcher = source.build_path_matcher()
 
     assert not matcher.is_dir_included(Path(".oculto"))
@@ -177,14 +175,10 @@ def test_walk_sources_rejects_symlinks_whose_target_escapes_the_resource(
     fuera.write_text("# Fuera del recurso\n\nsecreto.\n", encoding="utf-8")
     directorio_fuera = tmp_path / "fuera_dir"
     directorio_fuera.mkdir()
-    (directorio_fuera / "oculta.md").write_text(
-        "# Oculta\n\nsecreto.\n", encoding="utf-8"
-    )
+    (directorio_fuera / "oculta.md").write_text("# Oculta\n\nsecreto.\n", encoding="utf-8")
     try:
         (recursos / "secreto.md").symlink_to(fuera)
-        (recursos / "cadena.md").symlink_to(
-            recursos / "secreto.md"
-        )  # cadena de dos links
+        (recursos / "cadena.md").symlink_to(recursos / "secreto.md")  # cadena de dos links
         (recursos / "directorio").symlink_to(directorio_fuera, target_is_directory=True)
     except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
         pytest.skip(f"el filesystem no soporta symlinks: {exc}")
@@ -202,7 +196,7 @@ def test_walk_sources_rejects_symlinks_whose_target_escapes_the_resource(
 def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
     tmp_path: Path,
 ) -> None:
-    """`classify_file` con la ruta-del-link (forma no resuelta) también rechaza, con cita localizable."""
+    """`classify_file` con la ruta-del-link (forma no resuelta) rechaza con cita localizable."""
     recursos = tmp_path / citation.RESOURCES_DIR
     recursos.mkdir(parents=True)
     fuera = tmp_path / "fuera.md"
@@ -220,9 +214,7 @@ def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
 
     assert isinstance(item, source.SkippedSource)
     assert item.reason == source.SkipReason.SYMLINK_ESCAPE
-    assert (
-        item.source_path == "00-Resources/secreto.md"
-    )  # la cita del LINK, localizable
+    assert item.source_path == "00-Resources/secreto.md"  # la cita del LINK, localizable
     assert item.detail  # el motivo lleva explicación, no solo el enum
 
 
@@ -248,9 +240,7 @@ def test_walk_sources_still_indexes_symlinks_that_stay_inside_the_resource(
     items = source.walk_sources(tmp_path)
 
     assert _skips(items) == []
-    assert {entry.source_path for entry in _entries(items)} == {
-        "00-Resources/real/original.md"
-    }
+    assert {entry.source_path for entry in _entries(items)} == {"00-Resources/real/original.md"}
 
 
 def test_walk_sources_skips_unreadable_files_without_aborting_f5(
@@ -276,9 +266,7 @@ def test_walk_sources_skips_unreadable_files_without_aborting_f5(
     assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
         ("00-Resources/prohibido.md", source.SkipReason.UNREADABLE),
     ]
-    assert [entry.source_path for entry in _entries(items)] == [
-        "00-Resources/legible.md"
-    ]
+    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/legible.md"]
 
 
 def test_default_max_file_bytes_is_the_spec_threshold_of_100_mb() -> None:
@@ -327,7 +315,7 @@ def test_extract_text_keeps_the_utf8_bom_as_a_character(tmp_path: Path) -> None:
     debe cambiar a la vez — la identidad F1 exige UN solo string por archivo.
     """
     con_bom = tmp_path / "con_bom.md"
-    con_bom.write_bytes(BOM.encode("utf-8") + "# Título\n\nprosa.\n".encode("utf-8"))
+    con_bom.write_bytes(BOM.encode() + "# Título\n\nprosa.\n".encode())
 
     assert parsers.extract_text(con_bom) == BOM + "# Título\n\nprosa.\n"
 
@@ -366,9 +354,7 @@ def test_chunk_document_respects_the_byte_budget_and_overlap_d11() -> None:
     PRESUPUESTO —ningún solape supera 192 bytes y alguno existe— y que los
     huecos entre chunks son únicamente separadores en blanco.
     """
-    text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(
-        encoding="utf-8"
-    )
+    text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(encoding="utf-8")
 
     chunks = parsers.chunk_document(text, "nota.md")
 
@@ -378,9 +364,7 @@ def test_chunk_document_respects_the_byte_budget_and_overlap_d11() -> None:
     overlaps: list[int] = []
     for previous, current in itertools.pairwise(chunks):
         if current.char_start <= previous.char_end:
-            overlaps.append(
-                len(text[current.char_start : previous.char_end].encode("utf-8"))
-            )
+            overlaps.append(len(text[current.char_start : previous.char_end].encode("utf-8")))
         else:
             gap = text[previous.char_end : current.char_start]
             assert gap.strip() == ""  # corte limpio en heading: solo cae el separador
@@ -390,9 +374,7 @@ def test_chunk_document_respects_the_byte_budget_and_overlap_d11() -> None:
 
 def test_every_chunk_carries_complete_non_null_citation_metadata() -> None:
     """`source_path`, `char_start`, `char_end`, `doc_kind` y `model` no nulos en todo chunk (AC)."""
-    text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(
-        encoding="utf-8"
-    )
+    text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(encoding="utf-8")
 
     chunks = parsers.chunk_document(text, "nota.md")
 
@@ -407,9 +389,7 @@ def test_every_chunk_carries_complete_non_null_citation_metadata() -> None:
 
 def test_heading_is_present_and_nullable_per_chunk_d13() -> None:
     """`heading` siempre presente: el último `##` previo en md; `None` en un .txt sin jerarquía."""
-    text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(
-        encoding="utf-8"
-    )
+    text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(encoding="utf-8")
     chunks = parsers.chunk_document(text, "nota.md")
     headings = [chunk.heading for chunk in chunks]
 
@@ -433,14 +413,15 @@ def test_chunk_document_returns_no_chunks_for_empty_text() -> None:
 
 
 def test_chunk_document_normalizes_source_path_before_citing() -> None:
-    """La ruta citada se normaliza con el dominio de T4: sin prefijo, sin `./`, anidamiento intacto."""
+    """La ruta citada se normaliza con el dominio de T4.
+
+    Sin prefijo, sin `./`, anidamiento intacto.
+    """
     text = "# Título\n\nprosa.\n"
 
     chunks = parsers.chunk_document(text, "./sub/archivo.markdown")
 
-    assert {chunk.source_path for chunk in chunks} == {
-        "00-Resources/sub/archivo.markdown"
-    }
+    assert {chunk.source_path for chunk in chunks} == {"00-Resources/sub/archivo.markdown"}
     assert {chunk.doc_kind for chunk in chunks} == {"markdown"}
 
 
@@ -460,9 +441,7 @@ def test_end_to_end_walk_extract_chunk_preserves_nesting_and_slices() -> None:
             total_chunks += 1
             assert citation.verify_slice_identity(
                 text, chunk.char_start, chunk.char_end, chunk.text
-            ), (
-                f"identidad F1 rota en {chunk.source_path} [{chunk.char_start}, {chunk.char_end})"
-            )
+            ), f"identidad F1 rota en {chunk.source_path} [{chunk.char_start}, {chunk.char_end})"
 
     assert total_chunks >= 4  # la nota raíz da varios chunks y la anidada al menos uno
     assert {entry.source_path for entry in entries} == {
@@ -505,10 +484,7 @@ def _naive_heading_before(text: str, char_start: int) -> str | None:
             fence = opened_fence.group(1)
             open_backticks = 0
             continue
-        if (
-            open_backticks == 0
-            and (atx := citation._ATX_HEADING.match(line)) is not None
-        ):
+        if open_backticks == 0 and (atx := citation._ATX_HEADING.match(line)) is not None:
             heading = citation._clean_heading_title(atx.group(1))
             continue
         open_backticks = citation._update_code_span(line, open_backticks)

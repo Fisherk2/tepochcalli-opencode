@@ -116,9 +116,7 @@ def indexed_vault(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedV
     """
     vault = tmp_path_factory.mktemp("vault-t9")
     shutil.copytree(FIXTURE_VAULT, vault, dirs_exist_ok=True)
-    (vault / citation.RESOURCES_DIR / "plano.txt").write_text(
-        PLAIN_TXT_CONTENT, encoding="utf-8"
-    )
+    (vault / citation.RESOURCES_DIR / "plano.txt").write_text(PLAIN_TXT_CONTENT, encoding="utf-8")
     (vault / citation.RESOURCES_DIR / "con_guion_bajo.md").write_text(
         UNDERSCORE_CONTENT, encoding="utf-8"
     )
@@ -246,20 +244,16 @@ def test_path_filter_glob_narrows_results_to_the_matching_subtree(
         "00-Resources/sub/carpeta/anidada.md",
     }
 
-    sub = _search(
-        reader, "indexación del flujo", top_k=10, path_filter="00-Resources/sub/*"
-    )
+    sub = _search(reader, "indexación del flujo", top_k=10, path_filter="00-Resources/sub/*")
     assert sub, "el glob 00-Resources/sub/* devolvió cero chunks"
     assert all(chunk.source_path.startswith("00-Resources/sub/") for chunk in sub)
 
-    md_only = _search(
-        reader, "indexación del flujo", top_k=10, path_filter="00-Resources/*.md"
-    )
+    md_only = _search(reader, "indexación del flujo", top_k=10, path_filter="00-Resources/*.md")
     assert md_only
     assert all(chunk.source_path.endswith(".md") for chunk in md_only)
-    assert "00-Resources/sub/carpeta/anidada.md" in {
-        chunk.source_path for chunk in md_only
-    }, "`*`≡`%` cruza `/`: los .md anidados también casan (semántica LIKE, §search)"
+    assert "00-Resources/sub/carpeta/anidada.md" in {chunk.source_path for chunk in md_only}, (
+        "`*`≡`%` cruza `/`: los .md anidados también casan (semántica LIKE, §search)"
+    )
     assert all(chunk.source_path != "00-Resources/plano.txt" for chunk in md_only)
 
 
@@ -285,9 +279,7 @@ def test_path_filter_exact_glob_with_literal_underscore_matches_only_it(
         path_filter="00-Resources/con?guion_bajo.md",
     )
     assert wildcarded
-    assert all(
-        chunk.source_path == "00-Resources/con_guion_bajo.md" for chunk in wildcarded
-    )
+    assert all(chunk.source_path == "00-Resources/con_guion_bajo.md" for chunk in wildcarded)
 
 
 def test_path_filter_to_like_predicate_pins_the_phase2_equivalence() -> None:
@@ -429,10 +421,7 @@ def test_verify_cli_counts_rows_and_prints_cited_chunks_read_only(
         check=False,
     )
     assert proc.returncode == 0, f"verificador falló:\n{proc.stdout}\n{proc.stderr}"
-    assert (
-        "Filas" in proc.stdout
-        and str(_expected_row_count(indexed_vault)) in proc.stdout
-    )
+    assert "Filas" in proc.stdout and str(_expected_row_count(indexed_vault)) in proc.stdout
     assert "00-Resources/" in proc.stdout  # source_path citado
     assert "score=" in proc.stdout
     assert "heading=" in proc.stdout

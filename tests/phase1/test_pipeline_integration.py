@@ -39,7 +39,7 @@ import os
 import shutil
 import socket
 import sys
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass, fields
 from datetime import datetime
 from pathlib import Path, PurePosixPath
@@ -49,10 +49,13 @@ import cocoindex as coco
 import numpy as np
 import pytest
 from cocoindex.connectors import lancedb
+from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
 from cocoindex.resources.schema import VectorSchema
 from tepochcalli_flow import app as flow_app
-from tepochcalli_flow import citation, models as flow_models, parsers as flow_parsers
+from tepochcalli_flow import citation
 from tepochcalli_flow import config as flow_config
+from tepochcalli_flow import models as flow_models
+from tepochcalli_flow import parsers as flow_parsers
 
 FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
 
@@ -153,18 +156,10 @@ def indexed_run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedRun
         # Duplicada byte a byte de la fixture anidada: los MISMOS chunks de texto en DOS
         # archivos distintos —pin de T8 para la unicidad de ids entre archivos.
         (vault / citation.RESOURCES_DIR / "duplicada.md").write_bytes(
-            (
-                FIXTURE_VAULT
-                / citation.RESOURCES_DIR
-                / "sub"
-                / "carpeta"
-                / "anidada.md"
-            ).read_bytes()
+            (FIXTURE_VAULT / citation.RESOURCES_DIR / "sub" / "carpeta" / "anidada.md").read_bytes()
         )
 
-        model_cache = (
-            SPIKE_MODEL_CACHE if SPIKE_MODEL_CACHE.is_dir() else FALLBACK_MODEL_CACHE
-        )
+        model_cache = SPIKE_MODEL_CACHE if SPIKE_MODEL_CACHE.is_dir() else FALLBACK_MODEL_CACHE
         model_cache.mkdir(parents=True, exist_ok=True)
         models_link = _link_model_cache(vault, model_cache)
 
@@ -202,9 +197,7 @@ def test_update_writes_rows_for_exactly_the_indexable_files(
 ) -> None:
     """El update materializa filas SOLO para los indexables (`.oculto/` y `blob.bin` fuera)."""
     assert indexed_run.update_completed
-    assert (
-        len(indexed_run.rows) >= 5
-    )  # nota.md ≥3 + anidada.md ≥1 + plano.txt/BOM/duplicada ≥1
+    assert len(indexed_run.rows) >= 5  # nota.md ≥3 + anidada.md ≥1 + plano.txt/BOM/duplicada ≥1
     assert {row["source_path"] for row in indexed_run.rows} == EXPECTED_SOURCE_PATHS
     ids = [row["id"] for row in indexed_run.rows]
     assert all(isinstance(value, int) for value in ids)
@@ -228,26 +221,18 @@ def test_duplicate_chunk_text_across_files_gets_unique_ids_t8(
         if row["source_path"] == "00-Resources/sub/carpeta/anidada.md"
     ]
     duplicadas = [
-        row
-        for row in indexed_run.rows
-        if row["source_path"] == "00-Resources/duplicada.md"
+        row for row in indexed_run.rows if row["source_path"] == "00-Resources/duplicada.md"
     ]
-    assert originales and duplicadas, (
-        "la fixture duplicada debe indexarse junto a su original"
-    )
+    assert originales and duplicadas, "la fixture duplicada debe indexarse junto a su original"
 
     comunes = {row["text"] for row in originales} & {row["text"] for row in duplicadas}
-    assert comunes, (
-        "los chunks de duplicada.md deben ser byte-idénticos a los de anidada.md"
-    )
+    assert comunes, "los chunks de duplicada.md deben ser byte-idénticos a los de anidada.md"
 
     # Entre archivos: el mismo texto NO colisiona en id.
     for texto in comunes:
         id_original = next(row["id"] for row in originales if row["text"] == texto)
         id_duplicado = next(row["id"] for row in duplicadas if row["text"] == texto)
-        assert id_original != id_duplicado, (
-            f"colisión de id para chunk duplicado: {texto[:60]!r}"
-        )
+        assert id_original != id_duplicado, f"colisión de id para chunk duplicado: {texto[:60]!r}"
 
     # Por archivo (ordinal): cada archivo reparte ids propios sin repetir.
     for grupo in (originales, duplicadas):
@@ -266,9 +251,7 @@ def test_every_row_carries_complete_non_null_citation_metadata_m2(
     assert indexed_run.rows
     for row in indexed_run.rows:
         for field_name in ("source_path", "char_start", "char_end", "doc_kind"):
-            assert row[field_name] is not None, (
-                f"{field_name} nulo en {row['source_path']}"
-            )
+            assert row[field_name] is not None, f"{field_name} nulo en {row['source_path']}"
         assert "heading" in row  # presente, aunque el valor pueda ser None (D13)
         assert row["heading"] is None or isinstance(row["heading"], str)
         assert isinstance(row["char_start"], int)
@@ -310,9 +293,9 @@ def test_slice_identity_holds_for_every_row_written_m2(indexed_run: IndexedRun) 
         assert isinstance(char_end, int)
         assert isinstance(chunk_text, str)
         document = texts_by_path[source_path]
-        assert citation.verify_slice_identity(
-            document, char_start, char_end, chunk_text
-        ), f"identidad F1 rota en {source_path} [{char_start}, {char_end})"
+        assert citation.verify_slice_identity(document, char_start, char_end, chunk_text), (
+            f"identidad F1 rota en {source_path} [{char_start}, {char_end})"
+        )
         checked += 1
     assert checked == len(indexed_run.rows)
 
@@ -332,14 +315,8 @@ def test_bom_file_offsets_reproduce_extract_text_exactly_m2(
     documento = flow_parsers.extract_text(ruta)
     assert documento.startswith(BOM)  # contrato: el BOM viaja dentro del string
 
-    filas = [
-        row
-        for row in indexed_run.rows
-        if row["source_path"] == "00-Resources/con_bom.md"
-    ]
-    assert (
-        len(filas) >= 2
-    )  # >1536 bytes: varios chunks, al menos uno con char_start > 0
+    filas = [row for row in indexed_run.rows if row["source_path"] == "00-Resources/con_bom.md"]
+    assert len(filas) >= 2  # >1536 bytes: varios chunks, al menos uno con char_start > 0
     for row in filas:
         char_start = row["char_start"]
         char_end = row["char_end"]
@@ -347,9 +324,9 @@ def test_bom_file_offsets_reproduce_extract_text_exactly_m2(
         assert isinstance(char_start, int)
         assert isinstance(char_end, int)
         assert isinstance(chunk_text, str)
-        assert citation.verify_slice_identity(
-            documento, char_start, char_end, chunk_text
-        ), f"identidad F1 rota en con_bom.md [{char_start}, {char_end})"
+        assert citation.verify_slice_identity(documento, char_start, char_end, chunk_text), (
+            f"identidad F1 rota en con_bom.md [{char_start}, {char_end})"
+        )
     assert any(row["heading"] == "Nota con BOM" for row in filas), (
         "el BOM no debe ocultar el heading ATX inicial para los chunks posteriores"
     )
@@ -359,16 +336,12 @@ def test_heading_is_stored_as_null_for_files_without_hierarchy_d13(
     indexed_run: IndexedRun,
 ) -> None:
     """D13: `plano.txt` (sin headings) escribe `heading=null`; `nota.md` escribe texto."""
-    plain_rows = [
-        row
-        for row in indexed_run.rows
-        if row["source_path"] == "00-Resources/plano.txt"
-    ]
+    plain_rows = [row for row in indexed_run.rows if row["source_path"] == "00-Resources/plano.txt"]
     assert plain_rows
     assert all(row["heading"] is None for row in plain_rows)
-    assert any(
-        isinstance(row["heading"], str) and row["heading"] for row in indexed_run.rows
-    ), "alguna fila con heading padre no nulo (nota.md tiene secciones ##)"
+    assert any(isinstance(row["heading"], str) and row["heading"] for row in indexed_run.rows), (
+        "alguna fila con heading padre no nulo (nota.md tiene secciones ##)"
+    )
 
 
 def test_model_matches_configured_embedder_and_vector_dimension_is_384_m2(
@@ -376,9 +349,7 @@ def test_model_matches_configured_embedder_and_vector_dimension_is_384_m2(
 ) -> None:
     """M2: `model` = id configurado (ADR-006) y todo vector mide 384 dims."""
     for row in indexed_run.rows:
-        assert (
-            row["model"] == citation.model_id() == flow_config.DEFAULT_EMBEDDING_MODEL
-        )
+        assert row["model"] == citation.model_id() == flow_config.DEFAULT_EMBEDDING_MODEL
         embedding = row["embedding"]
         assert len(embedding) == flow_config.DEFAULT_EMBEDDING_DIMS == 384
     assert indexed_run.rows[0]["indexed_at"] is not None
@@ -394,9 +365,7 @@ def test_update_completes_with_outbound_network_blocked_m3(
     indexed_run: IndexedRun,
 ) -> None:
     """M3(b): el update completa con AF_INET/AF_INET6 bloqueados y sin ni un intento."""
-    assert indexed_run.update_completed, (
-        "update_blocking() no completó con la red bloqueada"
-    )
+    assert indexed_run.update_completed, "update_blocking() no completó con la red bloqueada"
     assert indexed_run.blocked_attempts == [], (
         f"hubo {len(indexed_run.blocked_attempts)} intentos de salida a red: "
         f"{indexed_run.blocked_attempts[:5]}"
@@ -489,9 +458,7 @@ def test_apply_model_cache_env_runs_before_the_embedder_is_constructed() -> None
     lifespan — la única prueba directa disponible.
     """
     source = _lifespan_source()
-    assert source.index("apply_model_cache_env") < source.index(
-        "SentenceTransformerEmbedder"
-    )
+    assert source.index("apply_model_cache_env") < source.index("SentenceTransformerEmbedder")
 
 
 def test_model_cache_lands_outside_the_repo_never_in_the_payload(
@@ -503,9 +470,7 @@ def test_model_cache_lands_outside_the_repo_never_in_the_payload(
     assert models_link.resolve() == indexed_run.model_cache.resolve()
     assert os.environ["HF_HOME"] == str(models_link)
     assert os.environ["SENTENCE_TRANSFORMERS_HOME"] == str(models_link)
-    payload_models = (
-        Path(__file__).parents[2] / "obsidian-workspace" / ".tepochcalli" / "models"
-    )
+    payload_models = Path(__file__).parents[2] / "obsidian-workspace" / ".tepochcalli" / "models"
     assert not payload_models.exists()  # jamás se descargó el modelo en el payload
 
 
@@ -538,9 +503,7 @@ def test_litellm_provider_raises_a_typed_not_implemented_error(tmp_path: Path) -
     builder = _RecordingBuilder()
     lifespan = flow_app.provide_resources(builder)
     try:
-        with pytest.raises(
-            flow_app.EmbeddingProviderNotImplementedError, match="litellm"
-        ):
+        with pytest.raises(flow_app.EmbeddingProviderNotImplementedError, match="litellm"):
             asyncio.run(_advance_lifespan(lifespan))
     finally:
         if old_root is None:
@@ -583,9 +546,7 @@ def _outbound_blocked(attempts: list[object]) -> Iterator[None]:
     """
     real_connect = socket.socket.connect
 
-    def _guard(
-        self: socket.socket, address: object, *args: object, **kwargs: object
-    ) -> None:
+    def _guard(self: socket.socket, address: object, *args: object, **kwargs: object) -> None:
         if self.family in (socket.AF_INET, socket.AF_INET6):
             attempts.append(address)
             raise OSError("T6 M3: salida de red bloqueada durante la indexación")
@@ -636,7 +597,7 @@ async def _query_both_indexes(
 
 
 def _db_uri(vault: Path) -> Path:
-    """Base LanceDB del vault: `.tepochcalli/db/tepochcalli.lance` (§Target)."""
+    """Devuelve la base LanceDB del vault: `.tepochcalli/db/tepochcalli.lance` (§Target)."""
     return vault / ".tepochcalli" / "db" / "tepochcalli.lance"
 
 
@@ -650,7 +611,7 @@ class _RecordingBuilder:
         self.provided.append((key, value))
 
 
-async def _advance_lifespan(lifespan: Any) -> None:
+async def _advance_lifespan(lifespan: AsyncIterator[None]) -> None:
     """Ejecuta el primer paso (setup) del lifespan como haría el engine."""
     await lifespan.__anext__()
 
@@ -660,22 +621,22 @@ def _lifespan_source() -> str:
     return inspect.getsource(flow_app.provide_resources)
 
 
-def _embedder_from_default_env() -> Any:
+def _embedder_from_default_env() -> SentenceTransformerEmbedder:
     """Embedder real del Environment que corrió el update (E1).
 
     `default_env()` es async en cocoindex==1.0.25 y el environment ya vive en su
     loop de fondo (arrancado por el update): esperarlo es idempotente.
     """
 
-    async def _get_embedder() -> Any:
+    async def _get_embedder() -> SentenceTransformerEmbedder:
         environment = await coco.default_env()
         return environment.get_context(flow_app.EMBEDDER)
 
     return asyncio.run(_get_embedder())
 
 
-async def _schema_from_chunk_row() -> Any:
-    """Schema LanceDB de `ChunkRow` con un embedder sustituto (fuera del engine)."""
+async def _schema_from_chunk_row() -> lancedb.TableSchema[flow_models.ChunkRow]:
+    """Devuelve el schema LanceDB de `ChunkRow` con un embedder sustituto (fuera del engine)."""
 
     class _FixedProvider:
         async def __coco_vector_schema__(self) -> VectorSchema:

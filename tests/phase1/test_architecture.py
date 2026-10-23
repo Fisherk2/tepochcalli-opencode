@@ -7,7 +7,8 @@ imports **nunca** puede alcanzar
 la infraestructura del motor de indexación (`cocoindex`) ni del indexador
 vectorial (`lancedb`). El propio `tepochcalli_flow/__init__.py` también está bajo
 la regla —importar el paquete lo ejecuta—; el resto del paquete (`models`,
-`app`, `source`, `parsers`, `verify` y `adapters/`) ES infraestructura y sí puede importar el engine —
+`app`, `source`, `parsers`, `verify` y `adapters/`) ES infraestructura y sí puede
+importar el engine —
 este test no lo toca. T9 añade `ports` al conjunto protegido (el puerto de
 lectura que Phase 2 consume) y, en la dirección opuesta, afirma que el
 adaptador `adapters/lancedb_reader` SÍ alcanza `lancedb`: la frontera corre
@@ -143,9 +144,7 @@ def _import_targets(tree: ast.Module, current_module: str) -> set[str]:
             base = _resolve_from(current_module, node)
             if base:
                 targets.add(base)
-            targets.update(
-                f"{base}.{alias.name}" if base else alias.name for alias in node.names
-            )
+            targets.update(f"{base}.{alias.name}" if base else alias.name for alias in node.names)
     return targets
 
 
@@ -251,12 +250,8 @@ def test_lancedb_adapter_is_allowed_to_reach_lancedb() -> None:
     negativos sobre el dominio darían falsos positivos de seguridad. La
     frontera exacta es ports.py (sin motor) ← adapters/ (con motor).
     """
-    reached = {
-        target for _chain, target in _walk_imports(f"{PACKAGE}.adapters.lancedb_reader")
-    }
+    reached = {target for _chain, target in _walk_imports(f"{PACKAGE}.adapters.lancedb_reader")}
     assert "lancedb" in reached, (
         "el adaptador LanceDB debe importar lancedb: ES infraestructura (ADR-005)"
     )
-    assert f"{PACKAGE}.ports" in reached, (
-        "el adaptador implementa el puerto: lo importa"
-    )
+    assert f"{PACKAGE}.ports" in reached, "el adaptador implementa el puerto: lo importa"

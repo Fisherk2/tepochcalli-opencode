@@ -27,10 +27,7 @@ def test_source_path_adds_resources_prefix_preserving_free_nesting() -> None:
     assert citation.normalize_source_path("lit/pediatría/ruiz2024.md") == (
         "00-Resources/lit/pediatría/ruiz2024.md"
     )
-    assert (
-        citation.normalize_source_path(Path("a/b/c/d.txt"))
-        == "00-Resources/a/b/c/d.txt"
-    )
+    assert citation.normalize_source_path(Path("a/b/c/d.txt")) == "00-Resources/a/b/c/d.txt"
 
 
 def test_source_path_keeps_existing_prefix_unchanged() -> None:
@@ -50,20 +47,14 @@ def test_source_path_drops_dot_segments_without_escaping() -> None:
 
 
 def test_source_path_converts_backslashes_to_posix() -> None:
-    """Entrada con `\\` (Windows) → separadores POSIX hacia delante."""
+    r"""Entrada con `\` (Windows) → separadores POSIX hacia delante."""
     assert citation.normalize_source_path("lit\\a.md") == "00-Resources/lit/a.md"
-    assert (
-        citation.normalize_source_path("00-Resources\\lit\\a.md")
-        == "00-Resources/lit/a.md"
-    )
+    assert citation.normalize_source_path("00-Resources\\lit\\a.md") == "00-Resources/lit/a.md"
 
 
 def test_source_path_collapses_duplicate_separators() -> None:
     """Separadores repetidos no producen segmentos vacíos en la salida."""
-    assert (
-        citation.normalize_source_path("00-Resources//lit///a.md")
-        == "00-Resources/lit/a.md"
-    )
+    assert citation.normalize_source_path("00-Resources//lit///a.md") == "00-Resources/lit/a.md"
 
 
 def test_source_path_rejects_path_pointing_to_the_resource_root() -> None:
@@ -144,9 +135,7 @@ def test_heading_does_not_half_support_setext() -> None:
     setext_equal = "Título setext\n=============\n\nContenido.\n"
     setext_dash = "Título setext\n------------\n\nContenido.\n"
 
-    assert (
-        citation.heading_before(setext_equal, setext_equal.index("Contenido")) is None
-    )
+    assert citation.heading_before(setext_equal, setext_equal.index("Contenido")) is None
     assert citation.heading_before(setext_dash, setext_dash.index("Contenido")) is None
 
 
@@ -192,9 +181,7 @@ def test_verify_slice_identity_holds_for_real_chunk_text() -> None:
     char_start = text.index("fragmento")
     char_end = char_start + len("fragmento exacto del chunk.")
 
-    assert citation.verify_slice_identity(
-        text, char_start, char_end, "fragmento exacto del chunk."
-    )
+    assert citation.verify_slice_identity(text, char_start, char_end, "fragmento exacto del chunk.")
 
 
 def test_verify_slice_identity_is_false_on_mismatch() -> None:
@@ -231,9 +218,7 @@ def test_doc_kind_from_extension(filename: str, expected: citation.DocKind) -> N
 
 def test_doc_kind_raises_on_unknown_extension() -> None:
     """Extensión desconocida → `UnsupportedDocKindError`; nunca se asume `txt`."""
-    with pytest.raises(
-        citation.UnsupportedDocKindError, match="md, markdown, txt, pdf"
-    ):
+    with pytest.raises(citation.UnsupportedDocKindError, match="md, markdown, txt, pdf"):
         citation.doc_kind_for("pagina.html")
 
 

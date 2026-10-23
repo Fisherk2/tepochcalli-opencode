@@ -75,16 +75,10 @@ ALPHA_V2 = (
     "Más texto nuevo de alpha tras la modificación.\n"
 )
 BETA = "# Beta\n\nLa nota beta describe el walk filtrado y los skips tipados F5.\n"
-GAMMA = (
-    "# Gamma\n\nLa nota gamma nace en el paso add: solo sus chunks deben aparecer.\n"
-)
+GAMMA = "# Gamma\n\nLa nota gamma nace en el paso add: solo sus chunks deben aparecer.\n"
 SANO = "# Sano\n\nArchivo UTF-8 sano que sí se indexa junto al latin-1 en el mismo refresh.\n"
-EFIMERO_V1 = (
-    "# Efímero\n\nPrimera versión: se indexa y luego desaparece a mitad de pasada.\n"
-)
-EFIMERO_V2 = (
-    "# Efímero\n\nSegunda versión (mtime nuevo ⇒ re-ejecución) y después se borra.\n"
-)
+EFIMERO_V1 = "# Efímero\n\nPrimera versión: se indexa y luego desaparece a mitad de pasada.\n"
+EFIMERO_V2 = "# Efímero\n\nSegunda versión (mtime nuevo ⇒ re-ejecución) y después se borra.\n"
 LATIN1_BYTES = b"caf\xe9 latin-1: bytes invalidos UTF-8\n"
 """Latin-1 real: 0xe9 no es UTF-8 válido ⇒ `errors='strict'` lanza en index_file."""
 INTERNA = "# Interna\n\nVive tras un directorio ilegible; jamás debe indexarse.\n"
@@ -356,9 +350,7 @@ def journey(tmp_path_factory: pytest.TempPathFactory) -> Journey:
             lock_content_before=record["lock_content_before"],
             lock_content=record["lock_content"],
         )
-    assert tuple(steps) == JOURNEY_TAGS, (
-        f"el driver no emitió los pasos esperados: {tuple(steps)}"
-    )
+    assert tuple(steps) == JOURNEY_TAGS, f"el driver no emitió los pasos esperados: {tuple(steps)}"
     return Journey(vault=vault, steps=steps, stderr=proc.stderr)
 
 
@@ -395,9 +387,7 @@ def _sources(rows: list[dict[str, Any]]) -> set[str]:
 
 def _rows_of(steps: StepRecord, source_path: str) -> list[dict[str, Any]]:
     """Filas de un `source_path` concreto, ordenadas por id."""
-    return _sorted_rows(
-        [row for row in steps.rows if row["source_path"] == source_path]
-    )
+    return _sorted_rows([row for row in steps.rows if row["source_path"] == source_path])
 
 
 # --- 1-3: add / modify / delete -------------------------------------------------
@@ -544,24 +534,23 @@ def test_non_utf8_file_is_counted_isolated_and_never_indexed(
     assert "component build failed" in journey.stderr, (
         "el fallo por fichero debe ser visible (exception handler del lifespan)"
     )
-    assert "latin1.md" in journey.stderr, (
-        "el log del fallo debe localizar el fichero (no-UTF-8)"
-    )
+    assert "latin1.md" in journey.stderr, "el log del fallo debe localizar el fichero (no-UTF-8)"
 
 
 def test_unreadable_directory_and_broken_symlink_are_counted(
     journey: Journey,
 ) -> None:
-    """R7: el directorio ilegible (y el symlink roto) entran en la cuenta; sus
-    contenidos jamás se indexan — el directorio SE REPRESENTA con una entrada."""
+    """R7: el directorio ilegible (y el symlink roto) entran en la cuenta.
+
+    Sus contenidos jamás se indexan — el directorio SE REPRESENTA con una
+    entrada.
+    """
     report = journey.steps["unreadable"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (6, 0, 6)
     rows = journey.steps["unreadable"].rows
     assert "00-Resources/carpeta_prohibida/interna.md" not in _sources(rows)
     assert not any("roto" in source for source in _sources(rows))
-    assert journey.steps["nonutf8"].rows == rows, (
-        "un refresh sin escrituras no debe tocar filas"
-    )
+    assert journey.steps["nonutf8"].rows == rows, "un refresh sin escrituras no debe tocar filas"
 
 
 # --- 4 (CP-B #5): TOCTOU classify→read ------------------------------------------
@@ -570,28 +559,28 @@ def test_unreadable_directory_and_broken_symlink_are_counted(
 def test_file_vanishing_after_classification_does_not_abort_the_delta(
     journey: Journey,
 ) -> None:
-    """R9: efimero desaparece entre `classify_file` y `index_file.read` → el
-    delta COMPLETA (aislamiento del engine + exception handler), el fichero
-    cae en `skipped` y sus filas antiguas quedan hasta la reconciliación."""
+    """R9: efimero desaparece entre `classify_file` y `index_file.read`.
+
+    El delta COMPLETA (aislamiento del engine + exception handler), el fichero
+    cae en `skipped` y sus filas antiguas quedan hasta la reconciliación.
+    """
     report = journey.steps["vanish"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (7, 0, 7)
     efimero_add, vanish = journey.steps["efimero-add"], journey.steps["vanish"]
-    assert _rows_of(efimero_add, "00-Resources/efimero.md"), (
-        "el paso previo sí indexó efimero (v1)"
-    )
+    assert _rows_of(efimero_add, "00-Resources/efimero.md"), "el paso previo sí indexó efimero (v1)"
     assert _rows_of(vanish, "00-Resources/efimero.md") == _rows_of(
         efimero_add, "00-Resources/efimero.md"
     ), "el fallo de lectura no debe dejar escrituras parciales (dos fases)"
     for source_path in ("00-Resources/alpha.md", "00-Resources/sano.md"):
         assert _rows_of(efimero_add, source_path) == _rows_of(vanish, source_path)
-    assert "efimero.md" in journey.stderr, (
-        "el desvanecimiento debe ser visible en el log del fallo"
-    )
+    assert "efimero.md" in journey.stderr, "el desvanecimiento debe ser visible en el log del fallo"
 
 
 def test_vanished_file_is_purged_on_the_next_refresh(journey: Journey) -> None:
-    """R10: la pasada siguiente reconcilia — efimero sale del walk y sus filas
-    se purgan sin reescribir ninguna otra."""
+    """R10: la pasada siguiente reconcilia.
+
+    Efimero sale del walk y sus filas se purgan sin reescribir ninguna otra.
+    """
     report = journey.steps["reconcile"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (6, 0, 6)
     vanish, reconcile = journey.steps["vanish"], journey.steps["reconcile"]
@@ -608,8 +597,10 @@ def test_vanished_file_is_purged_on_the_next_refresh(journey: Journey) -> None:
 def test_stale_lock_file_from_a_crash_does_not_block_the_refresh(
     journey: Journey,
 ) -> None:
-    """R11: un lock file con el pid de un proceso MUERTO no retiene nada — el
-    candado es el flock, no la existencia del archivo; la pasada corre igual."""
+    """R11: un lock file con el pid de un proceso MUERTO no retiene nada.
+
+    El candado es el flock, no la existencia del archivo; la pasada corre igual.
+    """
     reconcile, stale = journey.steps["reconcile"], journey.steps["stale"]
     assert stale.lock_content_before == "999999\n", (
         "el paso debe partir de un lock file stale (crash simulado)"
@@ -655,9 +646,7 @@ def test_concurrent_refresh_returns_locked_and_writes_nothing(
     assert (report["scanned"], report["indexed"], report["skipped"]) == (0, 0, 0)
     assert report["locked"] is True
     assert report["elapsed_ms"] >= 0
-    assert set(report) == set(REPORT_FIELDS), (
-        "el reporte bloqueado lleva el contrato completo"
-    )
+    assert set(report) == set(REPORT_FIELDS), "el reporte bloqueado lleva el contrato completo"
     assert _tree_snapshot(vault / ".tepochcalli" / "db") == db_snapshot, (
         "la invocación bloqueada NO debe escribir ni un byte"
     )

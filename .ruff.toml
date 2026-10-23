@@ -1,0 +1,10 @@
+# Fuente unica de verdad de las reglas Python del repo: hereda line-length,
+# target-version y select/ignore de [tool.ruff] del flow (pyproject.toml).
+# Ruff resuelve la config mas cercana por archivo: flow/* -> .tepochcalli/,
+# tests/* -> este archivo, y `extend` garantiza las mismas reglas.
+extend = "obsidian-workspace/.tepochcalli/pyproject.toml"
+
+# Payload de terceros de obsidian-workspace/.opencode/ (agents/commands/skills).
+# Esta fuera del alcance del toolchain Python (docs/CODE_STYLE.md) y es
+# protegido por AGENTS.md ("se documenta, no se modifica"); no se lint-formatea.
+extend-exclude = ["obsidian-workspace/.opencode"]

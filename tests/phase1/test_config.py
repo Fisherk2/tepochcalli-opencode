@@ -16,7 +16,6 @@ import tomllib
 from pathlib import Path
 
 import pytest
-
 from tepochcalli_flow import config as flow_config
 
 CONFIG_RELPATH = Path(".tepochcalli/config/tepochcalli.toml")
@@ -36,9 +35,7 @@ def _write_config(vault_root: Path, content: str) -> Path:
     return path
 
 
-def _module_messages(
-    caplog: pytest.LogCaptureFixture, level: int = logging.WARNING
-) -> list[str]:
+def _module_messages(caplog: pytest.LogCaptureFixture, level: int = logging.WARNING) -> list[str]:
     """Mensajes emitidos por `tepochcalli_flow.config` en el nivel dado o superior."""
     return [
         record.getMessage()
@@ -47,9 +44,7 @@ def _module_messages(
     ]
 
 
-def test_defaults_when_no_config_file(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_defaults_when_no_config_file(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Sin archivo: defaults canónicos completos y silencio de warnings."""
     caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
 
@@ -94,9 +89,7 @@ def test_malformed_toml_warns_and_falls_back_to_defaults(
     assert any("malformado" in message for message in messages)
 
 
-def test_unknown_key_warns_and_is_ignored(
-    tmp_path: Path, caplog: pytest.LogCaptureFixture
-) -> None:
+def test_unknown_key_warns_and_is_ignored(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Clave fuera del contrato canónico (p.ej. typo): warning + default del campo."""
     caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
     _write_config(tmp_path, "[search]\ntopk = 9\n")
