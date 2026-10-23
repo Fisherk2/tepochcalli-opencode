@@ -60,8 +60,9 @@ from typing import Final, cast
 
 import lancedb
 from lancedb.rerankers import RRFReranker
+from sentence_transformers import SentenceTransformer
 
-from ..config import DEFAULT_TOP_K
+from ..config import DEFAULT_TOP_K, load_config
 from ..ports import CitedChunk
 
 TABLE_NAME: Final = "chunks"
@@ -98,6 +99,27 @@ def _close_connection(db: lancedb.AsyncConnection) -> None:
     esta línea; centralizarlo evita repetirlo en cada `finally` del adaptador.
     """
     db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
+
+
+DB_RELPATH: Final = Path(".tepochcalli/db/tepochcalli.lance")
+"""Base LanceDB del vault (`verify.DB_RELPATH`; layout.py lo unificará en P7)."""
+
+
+def build_reader(vault_root: Path) -> LanceDBChunkReader:
+    """Composition root del lector: config del vault + embedder + `LanceDBChunkReader`.
+
+    Monta el wiring que antes se repetía en cada entrypoint (`verify.main`):
+    carga la config del vault, apunta el cache de modelos a
+    `<vault>/.tepochcalli/models` y corta el `SentenceTransformer` local
+    configurado. shortcut: construye su propio embedder (la estrategia de
+    fase/errores E_* de Phase 2 reemplazará esta fábrica, ver spec-mcp-server).
+    """
+    config = load_config(vault_root)
+    config.apply_model_cache_env()
+    model = SentenceTransformer(config.embedding.model, device=config.embedding.device)
+    return LanceDBChunkReader(
+        vault_root / DB_RELPATH, embed=lambda text: model.encode(text).tolist()
+    )  # noqa: E501
 
 
 def _validated_args(query: str, top_k: int, path_filter: str | None) -> tuple[str, str | None]:

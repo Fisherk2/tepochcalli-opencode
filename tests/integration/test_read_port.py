@@ -467,6 +467,39 @@ def test_verify_cli_exits_nonzero_on_missing_vault(tmp_path: Path) -> None:
     assert "no existe" in proc.stderr.lower()
 
 
+def test_verify_cli_exits_3_on_broken_db(tmp_path: Path) -> None:
+    """DB presente pero tabla `chunks` ausente → exit 3 y mensaje accionable, sin traceback."""
+    cache = resolve_model_cache()
+    link_model_cache(tmp_path, cache)  # el CLI fija HF_HOME=<vault>/.tepochcalli/models
+    env = {**os.environ, **offline_env(cache)}
+    (tmp_path / ".tepochcalli" / "db" / "tepochcalli.lance").mkdir(parents=True)
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "tepochcalli_flow.verify", str(tmp_path)],
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=300,
+        check=False,
+    )
+    assert proc.returncode == 3, f"stderr:\n{proc.stderr}\nstdout:\n{proc.stdout}"
+    assert "Traceback" not in proc.stderr
+    assert "chunks" in proc.stderr
+
+
+def test_verify_cli_rejects_top_k_below_one(tmp_path: Path) -> None:
+    """`--top-k 0` → argparse error (exit 2 de argparse) con mensaje accionable."""
+    proc = subprocess.run(
+        [sys.executable, "-m", "tepochcalli_flow.verify", str(tmp_path), "--top-k", "0"],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    assert proc.returncode == 2
+    assert "--top-k" in proc.stderr
+
+
 # --- helpers ----------------------------------------------------------------------
 
 

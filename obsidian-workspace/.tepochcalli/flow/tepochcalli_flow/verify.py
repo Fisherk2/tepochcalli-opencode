@@ -19,11 +19,10 @@ Uso:
         [--top-k N] [--path-filter GLOB]
 
 El query vector lo produce el MISMO embedder configurado del vault
-(`tepochcalli.toml` → `[embedding]`; el cache de modelos se resuelve con
-`HF_HOME`/`SENTENCE_TRANSFORMERS_HOME` del entorno — en el vault real apunta
-a `<vault>/.tepochcalli/models` vía `apply_model_cache_env`, en pruebas al
-cache del spike T1). Sale con código 2 si la DB no existe (nunca la crea:
-si el path falta, el usuario aún no indexó).
+(`tepochcalli.toml` → `[embedding]`), montado por
+`adapters.lancedb_reader.build_reader`. Sale con código 2 si la DB no existe
+(nunca la crea: si el path falta, el usuario aún no indexó) y 3 si la DB
+existe pero la tabla/índice falla (indexación a medias o esquema roto).
 """
 
 from __future__ import annotations
@@ -34,9 +33,7 @@ import sys
 from pathlib import Path
 from typing import Final
 
-from sentence_transformers import SentenceTransformer
-
-from .adapters.lancedb_reader import LanceDBChunkReader
+from .adapters.lancedb_reader import build_reader
 from .config import load_config
 from .ports import CitedChunk
 
@@ -46,6 +43,10 @@ DB_RELPATH: Final = Path(".tepochcalli/db/tepochcalli.lance")
 EXIT_OK: Final = 0
 EXIT_NO_DB: Final = 2
 """Código de salida cuando el vault no tiene índice — sin traceback."""
+EXIT_DB_BROKEN: Final = 3
+"""Salida cuando la DB existe pero el índice/tabla falla (esquema roto, a medio
+indexar): distinta a 2 para diferenciar «aún no hay índice» de «hay índice pero
+no sirve». Mensaje accionable por stderr, sin traceback."""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -76,6 +77,8 @@ def main(argv: list[str] | None = None) -> int:
         help="Glob relativo al vault, p. ej. '00-Resources/sub/**/*.md' (opcional)",
     )
     args = parser.parse_args(argv)
+    if args.top_k < 1:
+        parser.error(f"--top-k debe ser >= 1, recibido: {args.top_k}")
 
     vault_root: Path = args.vault_root
     db_uri = vault_root / DB_RELPATH
@@ -87,17 +90,32 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_NO_DB
 
-    config = load_config(vault_root)
-    model = SentenceTransformer(config.embedding.model, device=config.embedding.device)
-    reader = LanceDBChunkReader(db_uri, embed=lambda text: model.encode(text).tolist())
+    reader = build_reader(vault_root)
+    config = load_config(vault_root)  # para el print: construir embedder es lo caro
 
-    rows = asyncio.run(reader.count_rows())
+    try:
+        rows = asyncio.run(reader.count_rows())
+    except Exception as exc:  # noqa: BLE001  # frontera CLI: lance/esquema/IO cuentan igual
+        print(
+            f"ERROR: la DB existe ({db_uri}) pero la tabla 'chunks' no se pudo leer — "
+            f"el índice está a medio indexar o el esquema cambió: {exc}\n"
+            "(borra .tepochcalli/db/ y reconstruye el índice con `app.update_blocking()`)",
+            file=sys.stderr,
+        )
+        return EXIT_DB_BROKEN
     print(f"Vault:  {vault_root}")
     print(f"DB:     {db_uri} (solo lectura)")
     print(f"Modelo: {config.embedding.model} @ {config.embedding.device}")
     print(f"Filas en `chunks`: {rows}")
 
-    results = asyncio.run(reader.search(args.query, args.top_k, args.path_filter))
+    try:
+        results = asyncio.run(reader.search(args.query, args.top_k, args.path_filter))
+    except Exception as exc:  # noqa: BLE001  # frontera CLI, misma política que count_rows
+        print(
+            f"ERROR: la búsqueda sobre 'chunks' falló (índice roto o esquema inesperado): {exc}",
+            file=sys.stderr,
+        )
+        return EXIT_DB_BROKEN
     print(f"\nConsulta: {args.query!r} (top_k={args.top_k}, path_filter={args.path_filter!r})")
     print(f"Chunks citados: {len(results)}")
     for position, chunk in enumerate(results, start=1):
