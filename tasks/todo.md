@@ -172,16 +172,18 @@
   - ✅ **Verificado:** lint **420 → 420**, mismo conjunto de 13 reglas, **cero errores nuevos**; ruff limpio en ambas raíces; **TD-1…TD-9 re-revisados + TD-10 nuevo** (`default_env_loop` interno de cocoindex, oráculo = `uv.lock` + suite delta de T8); ambas specs en **`Approved`** (2 líneas cada una, solo status/date); FTR ejecutado (D1-D9 sin contradicciones, **90 enlaces** resueltos, **12 bloques mermaid** renderizados con `mermaid-cli`, 12/12 OK); inventario + diagrama hexagonal verificado contra el grafo de imports real; protegidos intactos; nada pushueado.
   - 📌 **Dos escaladas honestas del subagente:** (1) M6 declarado como *verificación local*, sin afirmar que el CI esté verde; (2) staleness de FTR fuera de su alcance — `SPEC.md` decía «Phase 0-5» tras la renumeración D10 → **corregido a Phase 0-6** en el commit.
 
-### ⛔ CP-D · Gate Phase 1 → Phase 2 — *espera M7*
+### ✅ CP-D · Gate Phase 1 → Phase 2 — **9/9 GREEN · PHASE 1 CERRADA**
 - [x] **M1** (p95 < 30s) con cifra y máquina documentadas ✅ *(T10 — 5 385/5 466/5 952 ms)*
 - [x] **M2** — 100 % filas con cita no nula + `heading` presente *(nullable por D13)* ✅
 - [x] **M3** — 0 llamadas LLM observables ✅ *(dos vías + canario)*
 - [x] **M4** — fila queryable con los 4 campos ✅ *(verificador CLI, solo lectura probado)*
 - [x] **M5** — exclusión/costo de PDF documentado ✅ *(49–51 s / 30 págs, medido)*
-- [x] **M6** ⚠️ *parcial* — verificado **localmente** (actionlint 0 errores + 7 pasos + suite + smoke). **El workflow nunca corrió en Actions** — decisión del usuario de no publicar.
+- [x] **M6** ✅ *con salvedad registrada* — verificado **localmente** (actionlint 0 errores + 7 pasos + suite + smoke). **El workflow nunca corrió en Actions**; queda como deuda conocida hasta que se publique la rama. No se afirma que el CI esté verde.
 - [x] FTR Phase 0→1 con checklist D1-D9 ✅ *(ejecutado y registrado en `WORKFLOW §4`)*
 - [x] `SPEC.md` y `docs/TECH_DEBT.md` al día ✅ *(specs → Approved; TD-1…TD-10)*
-- [ ] **M7: aprobación explícita del usuario para arrancar Phase 2** — *se pide ahora*
+- [x] **M7: aprobación explícita del usuario** ✅ *(2026-10-23 — **aprobado con instrucción explícita de NO arrancar Phase 2**)*
+
+> **Estado final de Phase 1:** gate cerrado. **Phase 2 (`tepochcalli-rag`, las 4 tools) NO arranca** por decisión del usuario de 2026-10-23. Reabrir Phase 2 requiere instrucción nueva del usuario.
 
 ---
 
