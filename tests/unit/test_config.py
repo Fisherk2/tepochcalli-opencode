@@ -89,6 +89,35 @@ def test_malformed_toml_warns_and_falls_back_to_defaults(
     assert any("malformado" in message for message in messages)
 
 
+def test_non_utf8_toml_warns_and_falls_back_to_defaults(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Bytes no-UTF-8 en el toml: warning + defaults, nunca lanza (contrato T3)."""
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    path = tmp_path / CONFIG_RELPATH
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"\xff\xfe[embedding]")
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg == flow_config.load_config(tmp_path / "sin-archivo")
+    assert any("malformado" in message for message in _module_messages(caplog))
+
+
+def test_empty_model_string_falls_back_to_default(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`model = ""` se trata como ausente: no sobrevive al merge, va al default."""
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    _write_config(tmp_path, '[embedding]\nmodel = ""\ndevice = "cuda"\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.model == "paraphrase-multilingual-MiniLM-L12-v2"
+    assert cfg.embedding.device == "cuda"
+    assert _module_messages(caplog)
+
+
 def test_unknown_key_warns_and_is_ignored(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Clave fuera del contrato canónico (p.ej. typo): warning + default del campo."""
     caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")

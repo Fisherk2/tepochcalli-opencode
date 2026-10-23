@@ -144,6 +144,13 @@ def _read_toml(config_path: Path) -> dict[str, object]:
         raw: dict[str, object] = tomllib.loads(config_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
+    except UnicodeDecodeError as exc:
+        logger.warning(
+            "TOML malformado en %s (%s); se descartan las overrides y se usan los defaults",
+            config_path,
+            exc,
+        )
+        return {}
     except tomllib.TOMLDecodeError as exc:
         logger.warning(
             "TOML malformado en %s (%s); se descartan las overrides y se usan los defaults",
@@ -229,6 +236,13 @@ def _matches_type(value: object, expected: type) -> bool:
 def _resolve_embedding(values: dict[str, object], config_path: Path) -> EmbeddingConfig:
     """Mergea `[embedding]` y valida `provider` ∈ {local, litellm} (spec-embeddings.md)."""
     embedding = _merge_section("embedding", EmbeddingConfig(), values, config_path)
+    if not embedding.model:  # `model = ""` se trata como ausente (fallback al default)
+        logger.warning(
+            "model vacío en [embedding] de %s; se usa el default '%s'",
+            config_path,
+            DEFAULT_EMBEDDING_MODEL,
+        )
+        embedding = replace(embedding, model=DEFAULT_EMBEDDING_MODEL)
     if embedding.provider not in EMBEDDING_PROVIDERS:
         logger.warning(
             "provider inválido '%s' en [embedding] de %s; se usa el default '%s' (valores: %s)",
