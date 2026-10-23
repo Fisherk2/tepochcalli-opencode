@@ -45,8 +45,9 @@ Reproducibilidad (todos los knobs, fijos por defecto)
   spec-rag-engine §Semántica incremental).
 * Modelo: `paraphrase-multilingual-MiniLM-L12-v2` vía defaults de
   `tepochcalli_flow.config` (sin `tepochcalli.toml` ⇒ defaults), device cpu,
-  cache de modelo SYMLINK a `/tmp/opencode/tepochcalli-t1-spike/models`
-  (patrón T6/T9: HF_HOME al symlink dentro del vault temporal; el repo jamás).
+  cache de modelo SYMLINK al cache que resuelve `model_cache` (`HF_HOME`
+  externo > spike T1 si existe > `~/.cache/huggingface`; patrón T6/T9:
+  HF_HOME al symlink dentro del vault temporal; el repo jamás — T11).
 * Proceso: UN subproceso para las 21 pasadas (environment global de cocoindex,
   patrón T8); pasadas sucesivas EN EL MISMO proceso y vault funcionan (sonda T8).
 
@@ -61,6 +62,17 @@ Uso (host de referencia de fase 1; ver desviación del VM limpio TRD en el
 reporte):
     cd obsidian-workspace/.tepochcalli
     UV_PROJECT_ENVIRONMENT=venv uv run python ../../tests/phase1/bench_delta.py
+    UV_PROJECT_ENVIRONMENT=venv uv run python ../../tests/phase1/bench_delta.py --smoke
+
+Modo smoke (`--smoke`) — el ÚNICO gate de Δ que corre en CI
+----------------------------------------------------------
+`--smoke` ejecuta UNA sola corrida de Δ (reescribe 10 de los 50 ficheros ⇒
+re-parse + re-embed reales, no triviales) con umbral generoso de 60 000 ms y
+NO calcula percentil alguno: el p95 M1 de arriba es una medición LOCAL
+documentada (TRD §6) y jamás corre en CI (tasks/todo.md → T11 AC: «smoke Δ
+de 1 corrida con umbral generoso; el p95 no corre en CI»). Sin `--smoke`,
+el comportamiento por defecto es EXACTAMENTE el de T10 — 20 corridas, p95
+nearest-rank < 30 000 ms — así los números publicados siguen reproducibles.
 """
 
 from __future__ import annotations
@@ -81,6 +93,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from model_cache import link_model_cache, offline_env, resolve_model_cache
+
 SEED = 20261022
 """Semilla del corpus: con este entero el corpus y los cambios son idénticos."""
 
@@ -93,11 +107,23 @@ N_RUNS = 20
 BUDGET_MS = 30_000
 """Gate M1: p95 (nearest-rank, n=20) < 30 000 ms."""
 
-SPIKE_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
-"""Cache estable del spike T1 (~470 MB); symlink desde el vault temporal."""
+SMOKE_RUNS = 1
+"""Corridas del modo `--smoke` (gate de CI): UN solo Δ, sin percentil."""
+
+SMOKE_MODIFIED_FILES = 10
+"""Ficheros que reescribe la corrida smoke (de 50): un Δ real, no trivial."""
+
+SMOKE_BUDGET_MS = 60_000
+"""Umbral del smoke, deliberadamente generoso: solo caza regresiones groseras
+en el runner compartido de CI. El gate M1 real (p95 < 30 000 ms) sigue siendo
+una medición LOCAL documentada (TRD §6) y NO corre en CI (T11)."""
 
 BENCH_DIR = Path("/tmp/opencode/tepochcalli-t1-spike/bench")
-"""Donde viven los vaults temporales del bench (btrfs/NVMe, fuera del repo)."""
+"""Donde viven los vaults temporales del bench (btrfs/NVMe, fuera del repo).
+
+Directorio TEMPORAL — se crea con `mkdir -p` en cualquier host; no es un
+requisito de cache (el cache de modelo lo resuelve `model_cache`, T11).
+"""
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -137,10 +163,16 @@ def _corpus_text(i: int, rng: random.Random) -> str:
     return "\n".join(lines)
 
 
-def _driver(vault: Path) -> None:
-    """Corre en el subproceso: indexación inicial + 20 Δ, emite JSON por línea."""
+def _driver(vault: Path, smoke: bool) -> None:
+    """Corre en el subproceso: indexación inicial + los Δ, emite JSON por línea.
+
+    `smoke=True` hace UNA sola corrida reescribiendo `SMOKE_MODIFIED_FILES`
+    ficheros; el default es la rampa de 20 corridas de T10, idéntica byte a
+    byte (los números publicados siguen reproducibles).
+    """
     from tepochcalli_flow import app as flow_app
 
+    runs = SMOKE_RUNS if smoke else N_RUNS
     rng = random.Random(SEED)
     resources = vault / "00-Resources"
     resources.mkdir(parents=True, exist_ok=True)
@@ -198,8 +230,11 @@ def _driver(vault: Path) -> None:
 
     _emit({"kind": "start", "python": platform.python_version(), "pid": os.getpid()})
     _refresh("initial", N_FILES)
-    for i in range(N_RUNS):
-        k = 1 + (i * (N_FILES - 1)) // (N_RUNS - 1)  # rampa lineal determinista 1→50
+    for i in range(runs):
+        if smoke:
+            k = SMOKE_MODIFIED_FILES  # Δ real sobre 10 de los 50 ficheros
+        else:
+            k = 1 + (i * (N_FILES - 1)) // (N_RUNS - 1)  # rampa lineal determinista 1→50
         for j in range(k):  # los primeros k del orden canónico
             path = resources / names[j]
             base = path.read_text(encoding="utf-8")
@@ -254,14 +289,14 @@ def _host_block(vault: Path) -> dict[str, Any]:
     }
 
 
-def _parent(keep_vault: bool, out_path: Path | None) -> int:
+def _parent(keep_vault: bool, out_path: Path | None, smoke: bool) -> int:
+    runs = SMOKE_RUNS if smoke else N_RUNS
+    budget_ms = SMOKE_BUDGET_MS if smoke else BUDGET_MS
     BENCH_DIR.mkdir(parents=True, exist_ok=True)
     vault = Path(tempfile.mkdtemp(prefix="bench-delta-", dir=BENCH_DIR))
     try:
-        SPIKE_MODEL_CACHE.mkdir(parents=True, exist_ok=True)
-        models_link = vault / ".tepochcalli" / "models"
-        models_link.parent.mkdir(parents=True, exist_ok=True)
-        models_link.symlink_to(SPIKE_MODEL_CACHE, target_is_directory=True)
+        cache = resolve_model_cache()
+        models_link = link_model_cache(vault, cache)
 
         host = _host_block(vault)
         env = {
@@ -269,12 +304,15 @@ def _parent(keep_vault: bool, out_path: Path | None) -> int:
             "TEPOCHCALLI_VAULT_ROOT": str(vault),
             "HF_HOME": str(models_link),
             "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-            "HF_HUB_OFFLINE": "1",
+            # Sin red solo si el cache resuelto ya tiene el modelo (T11): en
+            # frío (runner limpio) el driver descarga UNA vez al cache de CI.
+            **offline_env(cache),
         }
         env.pop("COCOINDEX_DB", None)
         bench_start = datetime.now(UTC)
+        cmd = [sys.executable, str(Path(__file__).resolve()), "--driver", str(vault)]
         proc = subprocess.run(
-            [sys.executable, str(Path(__file__).resolve()), "--driver", str(vault)],
+            cmd + (["--smoke"] if smoke else []),
             env=env,
             capture_output=True,
             text=True,
@@ -296,14 +334,20 @@ def _parent(keep_vault: bool, out_path: Path | None) -> int:
                 refreshes.append(record)
             elif record["kind"] == "done":
                 done = record
-        if len(refreshes) != N_RUNS + 1:
-            raise SystemExit(f"esperaba {N_RUNS + 1} refreshes, llegaron {len(refreshes)}")
+        if len(refreshes) != runs + 1:
+            raise SystemExit(f"esperaba {runs + 1} refreshes, llegaron {len(refreshes)}")
 
         initial = refreshes[0]
         cycles = refreshes[1:]
         samples = [c["report"]["elapsed_ms"] for c in cycles]
         wall_samples = [c["wall_ms"] for c in cycles]
-        p95 = _nearest_rank_p(samples, 0.95)
+        if smoke:
+            # Sin percentil en modo smoke: el p95 es medición local (TRD §6).
+            verdict = "PASS" if samples[0] < budget_ms else "FAIL"
+            p95: int | None = None
+        else:
+            p95 = _nearest_rank_p(samples, 0.95)
+            verdict = "PASS" if p95 < budget_ms else "FAIL"
 
         mem_after = {}
         for line in Path("/proc/meminfo").read_text().splitlines():
@@ -317,13 +361,25 @@ def _parent(keep_vault: bool, out_path: Path | None) -> int:
             raise SystemExit(f"el payload fue contaminado: {payload_created}")
 
         result = {
-            "metric": "M1 Δ indexación p95 (nearest-rank, n=20) vs 30000 ms",
-            "verdict": "PASS" if p95 < BUDGET_MS else "FAIL",
-            "p95_ms": p95,
-            "budget_ms": BUDGET_MS,
-            "percentile_definition": (
-                "nearest-rank: sorted[ceil(0.95*n)-1]; con n=20 es el 19º valor "
-                "ordenado (segundo mayor) — un outlier aislado no lo determina"
+            "metric": (
+                f"smoke Δ CI: 1 corrida vs umbral generoso {budget_ms} ms (sin percentil)"
+                if smoke
+                else "M1 Δ indexación p95 (nearest-rank, n=20) vs 30000 ms"
+            ),
+            "verdict": verdict,
+            "budget_ms": budget_ms,
+            # `p95_ms`/`percentile_definition` solo en el modo T10: el p95
+            # jamás se calcula ni se reporta en la corrida de CI (T11 AC).
+            **(
+                {
+                    "p95_ms": p95,
+                    "percentile_definition": (
+                        "nearest-rank: sorted[ceil(0.95*n)-1]; con n=20 es el 19º valor "
+                        "ordenado (segundo mayor) — un outlier aislado no lo determina"
+                    ),
+                }
+                if not smoke
+                else {}
             ),
             "stats_ms": {
                 "min": min(samples),
@@ -353,7 +409,7 @@ def _parent(keep_vault: bool, out_path: Path | None) -> int:
             "bench_started_utc": bench_start.isoformat(),
             "seed": SEED,
             "n_files": N_FILES,
-            "n_runs": N_RUNS,
+            "n_runs": runs,
             "pdf_policy": (
                 "PDFs EXCLUIDOS del presupuesto Δ y del bench mismo (sin Docling). "
                 "Coste aparte según medición T7 (no re-meditido aquí): PDF 30 págs "
@@ -372,13 +428,21 @@ def _parent(keep_vault: bool, out_path: Path | None) -> int:
         out_path.parent.mkdir(parents=True, exist_ok=True)
         out_path.write_text(json.dumps(result, indent=2), encoding="utf-8")
 
-        print(f"=== bench Δ M1 — {result['verdict']} ===")
-        print(f"p95 (nearest-rank, n=20, 19º valor): {p95} ms < {BUDGET_MS} ms")
+        if smoke:
+            print(f"=== smoke Δ (1 corrida, umbral generoso) — {verdict} ===")
+            print(
+                f"Δ: {samples[0]} ms < {budget_ms} ms "
+                "(sin percentil: el p95 M1 es medición local, nunca CI)"
+            )
+        else:
+            print(f"=== bench Δ M1 — {verdict} ===")
+            print(f"p95 (nearest-rank, n=20, 19º valor): {p95} ms < {BUDGET_MS} ms")
         print(
             f"min/median/mean/max: {min(samples)}/"
             f"{sorted(samples)[len(samples) // 2]}/{result['stats_ms']['mean']}/{max(samples)} ms"
         )
-        print(f"20 samples (ms): {samples}")
+        if not smoke:
+            print(f"20 samples (ms): {samples}")
         print(
             f"initial cold index: {initial['report']['elapsed_ms']} ms "
             f"(scanned={initial['report']['scanned']}, indexed={initial['report']['indexed']})"
@@ -389,7 +453,7 @@ def _parent(keep_vault: bool, out_path: Path | None) -> int:
             f"end {result['swap_during_run_kb'].get('swap_free_kb_at_end')} KB)"
         )
         print(f"reporte JSON: {out_path}")
-        return 0 if result["verdict"] == "PASS" else 1
+        return 0 if verdict == "PASS" else 1
     finally:
         if keep_vault:
             print(f"vault temporal conservado en: {vault}")
@@ -403,11 +467,16 @@ def main() -> int:
     parser.add_argument("--driver", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--keep", action="store_true", help="conservar el vault temporal")
     parser.add_argument("--out", type=Path, default=None, help="ruta del JSON de resultado")
+    parser.add_argument(
+        "--smoke",
+        action="store_true",
+        help="gate de CI: 1 corrida de Δ con umbral generoso (60 s); NO calcula p95",
+    )
     args = parser.parse_args()
     if args.driver is not None:
-        _driver(args.driver)
+        _driver(args.driver, args.smoke)
         return 0
-    return _parent(args.keep, args.out)
+    return _parent(args.keep, args.out, args.smoke)
 
 
 if __name__ == "__main__":

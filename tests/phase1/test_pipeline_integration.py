@@ -17,9 +17,9 @@ Fuentes de verdad:
 Decisiones de test, documentadas a propósito:
 
 * **Cache de modelo FUERA del repo.** El MiniLM (~470MB) nunca debe aterrizar en
-  `obsidian-workspace/.tepochcalli/models/` (payload). El cache estable es el del
-  spike T1 `/tmp/opencode/tepochcalli-t1-spike/models` si existe (evita
-  re-descarga), o `/tmp/opencode/tepochcalli-t6-models` en su defecto. El vault
+  `obsidian-workspace/.tepochcalli/models/` (payload). El cache lo resuelve
+  `model_cache`: `HF_HOME` externo (CI) > spike T1 si ya existe >
+  `~/.cache/huggingface` — jamás una ruta `/tmp` obligatoria (T11). El vault
   temporal crea `.tepochcalli/models` como **symlink** a ese cache: la
   `apply_model_cache_env()` real del lifespan apunta —como en producción— al
   vault de prueba, pero el binario vive fuera del repo y persiste entre corridas.
@@ -51,6 +51,7 @@ import pytest
 from cocoindex.connectors import lancedb
 from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
 from cocoindex.resources.schema import VectorSchema
+from model_cache import link_model_cache, resolve_model_cache
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow import config as flow_config
@@ -95,10 +96,6 @@ CON_BOM_CONTENT = (
 )
 CON_BOM_BYTES = b"\xef\xbb\xbf" + CON_BOM_CONTENT.encode("utf-8")
 """Archivo con BOM real (bytes): se escribe crudo para que el BOM llegue al disco."""
-
-# Cache estable de modelo fuera del repo (ver docstring del módulo).
-SPIKE_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
-FALLBACK_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t6-models")
 
 CONTRACT_FIELDS = [
     "id",
@@ -159,9 +156,8 @@ def indexed_run(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedRun
             (FIXTURE_VAULT / citation.RESOURCES_DIR / "sub" / "carpeta" / "anidada.md").read_bytes()
         )
 
-        model_cache = SPIKE_MODEL_CACHE if SPIKE_MODEL_CACHE.is_dir() else FALLBACK_MODEL_CACHE
-        model_cache.mkdir(parents=True, exist_ok=True)
-        models_link = _link_model_cache(vault, model_cache)
+        model_cache = resolve_model_cache()
+        models_link = link_model_cache(vault, model_cache)
 
         monkeypatch.setenv("HF_HOME", str(models_link))
         monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", str(models_link))
@@ -514,14 +510,6 @@ def test_litellm_provider_raises_a_typed_not_implemented_error(tmp_path: Path) -
 
 
 # --- helpers ---------------------------------------------------------------------
-
-
-def _link_model_cache(vault: Path, model_cache: Path) -> Path:
-    """Symlink `<vault>/.tepochcalli/models` → cache estable fuera del repo."""
-    models_link = vault / ".tepochcalli" / "models"
-    models_link.parent.mkdir(parents=True, exist_ok=True)
-    models_link.symlink_to(model_cache, target_is_directory=True)
-    return models_link
 
 
 def _warm_model_cache() -> None:

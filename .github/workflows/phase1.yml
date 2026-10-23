@@ -1,0 +1,129 @@
+# CI de Phase 1 (T11) — quality gate de la suite Phase 1.
+#
+# Fuentes de verdad:
+# * tasks/todo.md → T11 AC — gates en orden: `uv sync --frozen` → ruff check →
+#   ruff format --check → `pytest -m "not slow"`; smoke Δ de 1 corrida con
+#   umbral generoso; el p95 (M1) NO corre en CI — es medición local (TRD §6).
+# * docs/WORKFLOW.md §Testing — `pytest -m "not slow"` es el filtro de CI
+#   (la suite de corrección separada de la de medición, commit 004d4bd).
+#
+# Decisiones, documentadas a propósito:
+# * SOLO Linux: la rama win32 del refresh lock (T8) no tiene cobertura de CI
+#   por diseño; una matriz que no podemos satisfacer no se declara.
+# * `UV_PROJECT_ENVIRONMENT=venv`: uv 0.12.9 ignora `[tool.uv] project-
+#   environment` (solo env var); exportarlo aquí hace que CI y local se
+#   comporten idéntico (en el runner sería no-op, pero se conserva a propósito).
+# * Cache de modelos por revisión pineada: clave derivada de uv.lock + id del
+#   modelo. Los binarios (~1.6 GB: MiniLM multilingual + modelos Docling) viven
+#   FUERA del repo (`~/.cache/huggingface`, `~/.cache/docling`) — resueltos por
+#   tests/phase1/model_cache.py con HF_HOME externo > spike T1 si existe >
+#   cache nativo HF. El payload `obsidian-workspace/.tepochcalli/{db,models,
+#   config,venv}` jamás se escribe ni se lee de este repo.
+# * Sin secrets: la suite solo necesita red en la PRIMERA corrida (descarga de
+#   modelos al cache), que actions/cache persiste para el resto.
+
+name: Phase 1
+
+on:
+  push:
+  pull_request:
+
+# Cancela corridas superseded del mismo ref. push y PR tienen refs distintas
+# (refs/heads/x vs refs/pull/N/merge), así que un PR puede correr ambas
+# superficies en paralelo — el gate muerde en las dos por diseño (T11 AC:
+# «push → verde; PR con lint roto → rojo»).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    # Frío real medible: sync de torch CPU + ~1.6 GB de modelos + suite;
+    # con cache caliente ~12 min. 40 min cubre el peor caso sin ser laxo.
+    timeout-minutes: 40
+    env:
+      # uv 0.12.9 ignora [tool.uv] project-environment: solo env var (arriba).
+      UV_PROJECT_ENVIRONMENT: venv
+    steps:
+      - uses: actions/checkout@v6
+
+      # setup-uv instala uv (versión pineada a la del spike T1) y cachea
+      # ~/.cache/uv con clave derivada de los lockfiles del repo (enable-cache,
+      # default en runners de GitHub). Uso canónico según el README oficial:
+      # https://github.com/astral-sh/setup-uv
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.9"
+
+      - name: Instala CPython 3.12 (gestionado por uv)
+        # Patrón documentado por setup-uv (FAQ «Do I still need setup-python»):
+        # https://github.com/astral-sh/setup-uv#do-i-still-need-actionssetup-python-alongside-setup-uv
+        run: uv python install 3.12
+
+      # Los tests resuelven el cache de modelo con la cadena HF_HOME externo >
+      # spike T1 si existe > cache nativo HF (tests/phase1/model_cache.py). En
+      # CI manda el HF_HOME externo fijado aquí. `~` NO se expande en `env:`
+      # (llega literal al proceso), por eso se exporta vía $GITHUB_ENV con
+      # $HOME resuelto por el shell.
+      - name: Fija los caches de modelo FUERA del repo
+        shell: bash # bash --noprofile --norc -eo pipefail: falla ruidosamente
+        run: |
+          set -euo pipefail
+          {
+            echo "HF_HOME=${HOME}/.cache/huggingface"
+            echo "SENTENCE_TRANSFORMERS_HOME=${HOME}/.cache/huggingface"
+            echo "DOCLING_CACHE_DIR=${HOME}/.cache/docling"
+          } >> "${GITHUB_ENV}"
+
+      # Cache de modelos por revisión pineada:
+      # * clave primaria = uv.lock (bump de lock ⇒ clave nueva) + id del modelo
+      #   (cambio de DEFAULT_EMBEDDING_MODEL ⇒ clave nueva; el id vive en el
+      #   flow, no en el lock, por eso se rotula también en la clave — si
+      #   cambia el embedder, rota el prefijo v1);
+      # * restore-keys reutiliza los blobs previos ante un bump de lock (son
+      #   content-addressed y no dependen del lock; evita re-descargar 1.6 GB
+      #   por tocar una dep).
+      # Ambas rutas por mandato T11: sentence-transformers escribe bajo
+      # HF_HOME (raíz hub v1) y Docling bajo HF_HOME/hub (medido: su
+      # DOCLING_CACHE_DIR queda hoy vacío — se cachea igual, cuesta 0).
+      - name: Cache de modelos (HF + Docling) por revisión pineada
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/docling
+          key: models-v1-${{ runner.os }}-paraphrase-multilingual-MiniLM-L12-v2-${{ hashFiles('obsidian-workspace/.tepochcalli/uv.lock') }}
+          restore-keys: |
+            models-v1-${{ runner.os }}-paraphrase-multilingual-MiniLM-L12-v2-
+
+      # --- Quality gates (orden del T11 AC; fail-fast: el primer fallo corta)
+
+      - name: uv sync --frozen (deps exactas de uv.lock)
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv sync --frozen
+
+      # Desde la RAÍZ del repo a propósito: ejercita el .ruff.toml unificado
+      # (extend → .tepochcalli/pyproject.toml) que la parte 1 de T11 dejó
+      # verde desde ambas carpetas. ruff 0.17.1 = versión pineada en el
+      # dev group de uv.lock.
+      - name: ruff check
+        run: uvx ruff@0.17.1 check .
+
+      - name: ruff format --check
+        run: uvx ruff@0.17.1 format --check .
+
+      - name: Suite de corrección (pytest -m "not slow")
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv run python -m pytest -m "not slow"
+
+      # Smoke Δ: UNA corrida con umbral generoso (60 s), sin percentil: el p95
+      # M1 (bench 20 corridas) es medición LOCAL documentada (TRD §6) y jamás
+      # corre en CI (T11 AC). Corre en vault temporal bajo /tmp; el propio
+      # bench aborta si el payload del repo se contaminara.
+      - name: Smoke Δ (1 corrida, umbral generoso; sin p95)
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv run python ../../tests/phase1/bench_delta.py --smoke

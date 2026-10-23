@@ -25,8 +25,11 @@ Decisiones de test, documentadas a propósito:
   por paso con su `RefreshReport`, sus filas SIN embedding y el snapshot de
   LanceDB; los tests afirman desde el padre.
 * **El cache de modelo FUERA del repo** (patrón T6/T9): symlink
-  `.tepochcalli/models` → `/tmp/opencode/tepochcalli-t1-spike/models`; el payload
-  `obsidian-workspace/.tepochcalli/{db,models}` jamás se crea.
+  `.tepochcalli/models` → el cache que resuelve `model_cache` (`HF_HOME`
+  externo > spike T1 si existe > `~/.cache/huggingface`); el payload
+  `obsidian-workspace/.tepochcalli/{db,models}` jamás se crea. La ruta del
+  spike NO es un requisito: en frío (runner limpio) el hijo descarga una vez
+  al cache externo, después corre con `HF_HUB_OFFLINE=1` (T11).
 * **Idempotencia leída del data plane**: `indexed=0` en la 2ª pasada procede del
   componente `index_file` (`num_adds + num_reprocesses`), nunca del total de la
   pasada — la traversa `build_flow` reporta `reprocess=1` por diseño (E2), así
@@ -50,12 +53,10 @@ from typing import Any, get_type_hints
 
 import pytest
 from cocoindex.connectors import lancedb
+from model_cache import link_model_cache, offline_env, resolve_model_cache
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow import models as flow_models
-
-SPIKE_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
-"""Cache estable del spike T1 (MiniLM multilingual ~470MB); nunca en el repo."""
 
 DB_RELPATH = Path(".tepochcalli/db/tepochcalli.lance")
 
@@ -296,15 +297,19 @@ class Journey:
     """stderr del driver: logs de aislamiento por fichero (`component build failed`)."""
 
 
-def _spawn(script: str, vault: Path) -> subprocess.CompletedProcess[str]:
-    """Ejecuta un script en subproceso con el vault y el cache de modelo enlazado."""
+def _spawn(script: str, vault: Path, cache: Path) -> subprocess.CompletedProcess[str]:
+    """Ejecuta un script en subproceso con el vault y el cache de modelo enlazado.
+
+    `HF_HUB_OFFLINE` solo se fuerza si `cache` ya tiene el modelo (offline_env):
+    en frío el hijo descarga UNA vez al cache resuelto, nunca al `/tmp` de nadie.
+    """
     models_link = vault / ".tepochcalli" / "models"
     env = {
         **os.environ,
         flow_app.VAULT_ROOT_ENV: str(vault),
         "HF_HOME": str(models_link),
         "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-        "HF_HUB_OFFLINE": "1",
+        **offline_env(cache),
     }
     env.pop("COCOINDEX_DB", None)
     return subprocess.run(
@@ -326,12 +331,10 @@ def journey(tmp_path_factory: pytest.TempPathFactory) -> Journey:
     (resources / "alpha.md").write_text(ALPHA_V1, encoding="utf-8")
     (resources / "beta.md").write_text(BETA, encoding="utf-8")
 
-    SPIKE_MODEL_CACHE.mkdir(parents=True, exist_ok=True)
-    models_link = vault / ".tepochcalli" / "models"
-    models_link.parent.mkdir(parents=True, exist_ok=True)
-    models_link.symlink_to(SPIKE_MODEL_CACHE, target_is_directory=True)
+    cache = resolve_model_cache()
+    link_model_cache(vault, cache)
 
-    proc = _spawn(JOURNEY_SCRIPT, vault)
+    proc = _spawn(JOURNEY_SCRIPT, vault, cache)
     assert proc.returncode == 0, (
         f"el driver del journey falló (rc={proc.returncode}):\n{proc.stdout}\n{proc.stderr}"
     )
@@ -637,7 +640,7 @@ def test_concurrent_refresh_returns_locked_and_writes_nothing(
     try:
         db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
         rows_before = _read_all_rows(vault)
-        proc = _spawn(LOCKED_SCRIPT, vault)
+        proc = _spawn(LOCKED_SCRIPT, vault, resolve_model_cache())
     finally:
         flow_app._release_refresh_lock(lock_fd)
 

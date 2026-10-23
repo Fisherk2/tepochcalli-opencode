@@ -23,8 +23,10 @@ Decisiones de test, documentadas a propósito:
   proceso reutiliza el environment de la primera y escribe en el vault
   equivocado (sonda empírica T9, confirmada). El fixture lanza el update en
   un `subprocess` con `TEPOCHCALLI_VAULT_ROOT` propio —aislamiento real— y
-  con la red off (`HF_HUB_OFFLINE=1`) sobre el cache de modelo del spike T1
-  (`/tmp/opencode/tepochcalli-t1-spike/models`, symlink dentro del vault).
+  con la red off cuando el cache resuelto ya contiene el modelo
+  (`model_cache.offline_env`: `HF_HOME` externo > spike T1 si existe >
+  `~/.cache/huggingface`, symlink dentro del vault; en frío se permite la
+  única descarga que CI persiste con `actions/cache`, T11).
 * **El lector solo LEE.** El test de verificador snapshot-ea
   `<vault>/.tepochcalli/db/` antes/después de la corrida del CLI y afirma
   byte a byte (mtime_ns + size) que nada cambió.
@@ -46,6 +48,7 @@ from pathlib import Path
 from typing import Any, get_type_hints
 
 import pytest
+from model_cache import link_model_cache, offline_env, resolve_model_cache
 from sentence_transformers import SentenceTransformer
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
@@ -57,9 +60,6 @@ from tepochcalli_flow.adapters.lancedb_reader import (
 from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
-
-SPIKE_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
-"""Cache estable del spike T1 (MiniLM multilingual ~470MB); nunca en el repo."""
 
 CONTRACT_FIELDS = ["text", "source_path", "heading", "char_start", "char_end", "score"]
 
@@ -112,7 +112,8 @@ def indexed_vault(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedV
     """Vault temporal con la fixture dorada + plano.txt + guion_bajo, indexado.
 
     El update corre en subproceso (ver docstring del módulo): environment de
-    cocoindex aislado, red off, modelo desde el cache del spike T1.
+    cocoindex aislado, modelo desde el cache que resuelve `model_cache`
+    (externo o spike) y red off cuando ese cache ya lo contiene.
     """
     vault = tmp_path_factory.mktemp("vault-t9")
     shutil.copytree(FIXTURE_VAULT, vault, dirs_exist_ok=True)
@@ -121,17 +122,15 @@ def indexed_vault(tmp_path_factory: pytest.TempPathFactory) -> Iterator[IndexedV
         UNDERSCORE_CONTENT, encoding="utf-8"
     )
 
-    SPIKE_MODEL_CACHE.mkdir(parents=True, exist_ok=True)
-    models_link = vault / ".tepochcalli" / "models"
-    models_link.parent.mkdir(parents=True, exist_ok=True)
-    models_link.symlink_to(SPIKE_MODEL_CACHE, target_is_directory=True)
+    cache = resolve_model_cache()
+    models_link = link_model_cache(vault, cache)
 
     env = {
         **os.environ,
         flow_app.VAULT_ROOT_ENV: str(vault),
         "HF_HOME": str(models_link),
         "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-        "HF_HUB_OFFLINE": "1",
+        **offline_env(cache),
     }
     env.pop("COCOINDEX_DB", None)
     proc = subprocess.run(
