@@ -239,8 +239,17 @@ def classify_file(
             f"resuelve fuera de {RESOURCES_DIR}/ ({escaped}) — frontera de confianza: "
             "el recurso no ingiere material de fuera",
         )
-    source_path = normalize_source_path(file_path.relative_to(resources_dir))
-    kind = doc_kind_for(file_path)
+    try:
+        source_path = normalize_source_path(file_path.relative_to(resources_dir))
+        kind = doc_kind_for(file_path)
+    except (OSError, ValueError) as exc:
+        # Carrera walk→classify: el archivo desapareció o mutó entre el walk y aquí.
+        return SkippedSource(
+            file_path,
+            str(file_path.name),
+            SkipReason.UNREADABLE,
+            f"cambió durante el pase: {exc}",
+        )
     stat_result = _stat_or_skip(file_path, source_path)
     if isinstance(stat_result, SkippedSource):
         return stat_result

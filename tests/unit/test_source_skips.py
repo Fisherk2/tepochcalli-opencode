@@ -62,6 +62,30 @@ def test_classify_file_reports_a_vanished_regular_file_as_unreadable_not_a_broke
     assert item.path == desaparecido
 
 
+# --- TOCTOU walk→classify: el archivo cambió durante el pase -------------------
+
+
+def test_classify_file_skips_unreadable_when_doc_kind_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Carrera walk→classify: si `doc_kind_for`/`normalize` lanza → skip, no aborta el pase."""
+    recursos = tmp_path / citation.RESOURCES_DIR
+    recursos.mkdir(parents=True)
+    nota = recursos / "nota.md"
+    nota.write_text("# Nota\n\nprosa.\n", encoding="utf-8")
+
+    def _race(file_path: Path) -> citation.DocKind:
+        raise ValueError("cambió durante el pase")
+
+    monkeypatch.setattr(source, "doc_kind_for", _race)
+
+    item = source.classify_file(recursos, nota, max_file_bytes=source.DEFAULT_MAX_FILE_BYTES)
+
+    assert isinstance(item, source.SkippedSource)
+    assert item.reason is source.SkipReason.UNREADABLE
+    assert "cambió durante el pase" in item.detail
+
+
 # --- T8: la regla de aceptación del `onerror` de os.walk -----------------------
 
 
