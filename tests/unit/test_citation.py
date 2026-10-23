@@ -146,6 +146,30 @@ def test_heading_strips_atx_closing_sequence() -> None:
     assert citation.heading_before(text, text.index("Contenido")) == "Título"
 
 
+def test_heading_ignores_a_hash_after_a_mismatched_backtick_run_inside_an_open_span() -> None:
+    """Span inline abierto: un run de backticks de OTRA longitud no lo cierra (CommonMark).
+
+    `_update_code_span` documenta que solo un run de la MISMA longitud cierra el
+    span. Aquí la primera línea abre un span con un backtick y dentro trae un
+    run de dos (`` `` ``) más un `#` —que tampoco cierra—, de modo que la
+    siguiente línea, que empieza por `#`, sigue DENTRO del span y no es un
+    heading: `heading_before` la ignora. Si cualquier backtick cerrara el
+    span, `# falso dentro del span` se citaría como heading padre.
+
+    El control positivo va en el mismo arco: con un run de la MISMA longitud
+    que cierra el span, un `#` posterior vuelve a citarse — el escáner no se
+    queda atascado.
+    """
+    text = "`a ``b`` # no-es-heading\n# falso dentro del span\nsigue el span\n`\n\nCuerpo real.\n"
+    mismo_run_cierra = "`a ``b`` c`\n\n# Real después\n\nCuerpo real.\n"
+
+    assert citation.heading_before(text, text.index("Cuerpo real")) is None
+    assert (
+        citation.heading_before(mismo_run_cierra, mismo_run_cierra.index("Cuerpo real"))
+        == "Real después"
+    )
+
+
 # --- offsets -------------------------------------------------------------------
 
 

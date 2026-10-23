@@ -183,6 +183,44 @@ def test_model_cache_env_resolves_under_vault(
     assert expected.is_dir()
 
 
+def test_unreadable_config_file_warns_and_falls_back_to_defaults(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Contrato del loader (nunca lanza): config ilegible → defaults + warning «No se pudo leer».
+
+    Un `tepochcalli.toml` que existe pero no se puede leer produce un `OSError`
+    distinto de `FileNotFoundError` (aquí un directorio con el nombre del
+    archivo ⇒ `IsADirectoryError`): el arranque del flow no se rompe, se
+    descartan TODAS las overrides y el motivo queda en el log para diagnóstico.
+    """
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    (tmp_path / CONFIG_RELPATH).mkdir(parents=True)  # read_text() → IsADirectoryError
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg == flow_config.load_config(tmp_path / "sin-archivo")
+    assert any("No se pudo leer" in message for message in _module_messages(caplog))
+
+
+def test_section_that_is_not_a_table_warns_and_is_ignored(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Contrato del loader: una sección que no es tabla TOML se ignora con warning.
+
+    `embedding = "local"` es TOML válido (clave de primer nivel con string),
+    pero no es la tabla `[embedding]` del contrato (spec-embeddings.md): se
+    descarta la sección entera y se usan los defaults del dataclass, sin
+    abortar el arranque ni arrastrar un tipo ajeno al merge.
+    """
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    _write_config(tmp_path, 'embedding = "local"\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding == flow_config.EmbeddingConfig()
+    assert any("no es una tabla TOML" in message for message in _module_messages(caplog))
+
+
 def test_example_file_matches_canonical_template() -> None:
     """El `.example` commiteado reproduce exactamente las claves de la spec (D11)."""
     raw = tomllib.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))

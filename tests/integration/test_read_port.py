@@ -333,6 +333,29 @@ def test_hybrid_query_exercises_both_ann_and_fts_indexes(
     assert "RRFReranker" in plan, f"sin fusión RRF:\n{plan}"
 
 
+def test_explain_plan_rejects_invalid_inputs_and_honours_the_path_filter(
+    reader: LanceDBChunkReader,
+) -> None:
+    """Diagnóstico T9 con el MISMO borde que `search`, y el prefiltro aplicado al plan.
+
+    `explain_plan` debe rechazar consulta vacía y `top_k < 1` igual que `search`
+    (ValueError en el borde del puerto, spec-mcp-server §search) y, con
+    `path_filter`, el plan debe incluir el predicado SQL congelado
+    (`source_path LIKE ...`): el filtro se aplica como PREFILTRO sobre ambas
+    piernas, no después de fusionar.
+    """
+    with pytest.raises(ValueError, match="consulta"):
+        asyncio.run(reader.explain_plan("   "))
+    with pytest.raises(ValueError, match="top_k"):
+        asyncio.run(reader.explain_plan("markdown", top_k=0))
+
+    plan = asyncio.run(reader.explain_plan("citas", top_k=3, path_filter="00-Resources/sub/*"))
+
+    assert "KNNVectorDistance" in plan
+    assert "source_path LIKE" in plan, plan
+    assert "00-Resources/sub/%" in plan, plan
+
+
 def test_lexical_and_semantic_queries_both_return_cited_hits(
     reader: LanceDBChunkReader,
 ) -> None:

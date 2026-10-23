@@ -428,6 +428,23 @@ def test_chunk_document_normalizes_source_path_before_citing() -> None:
 # --- camino vertical end-to-end (T5) -------------------------------------------
 
 
+def test_chunk_document_raises_instead_of_citing_a_chunk_whose_offsets_do_not_reproduce_its_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Contrato F1: un chunk cuya cita no se reproduce NUNCA se devuelve — se lanza.
+
+    Si el splitter produjera offsets incoherentes con su propio texto,
+    `chunk_document` debe propagar `CitationError` en vez de emitir un
+    `DocumentChunk` con cita rota: la fila de Phase 2 no puede citar un rango
+    que no reproduce `text[char_start:char_end]`. Se fuerza la comprobación a
+    False para aislar la política de la aritmética real del splitter.
+    """
+    monkeypatch.setattr(parsers, "verify_slice_identity", lambda *args, **kwargs: False)
+
+    with pytest.raises(citation.CitationError, match="identidad F1 rota"):
+        parsers.chunk_document("# Título\n\nprosa suficiente para un chunk.\n", "nota.md")
+
+
 def test_end_to_end_walk_extract_chunk_preserves_nesting_and_slices() -> None:
     """Walk → extract → chunk sobre la fixture: anidamiento conservado e identidad F1 por chunk."""
     items = source.walk_sources(FIXTURE_VAULT)
