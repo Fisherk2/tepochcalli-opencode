@@ -42,6 +42,7 @@ Decisiones de test, documentadas a propósito:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import inspect
 import json
 import os
@@ -53,7 +54,12 @@ from typing import Any, get_type_hints
 
 import pytest
 from cocoindex.connectors import lancedb
-from model_cache import link_model_cache, offline_env, resolve_model_cache
+
+try:
+    from model_cache import link_model_cache, offline_env, resolve_model_cache
+except ModuleNotFoundError:  # modo script (`--driver`): pytest no añadió tests/ al path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from model_cache import link_model_cache, offline_env, resolve_model_cache
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow import models as flow_models
@@ -119,137 +125,113 @@ REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
 
 RESOURCE_DIR_NAME = citation.RESOURCES_DIR
 
-JOURNEY_SCRIPT = """
-import asyncio, dataclasses, json, os, sys
-from pathlib import Path
-from cocoindex.connectors import lancedb
-from tepochcalli_flow import app as flow_app
 
-VAULT = Path(os.environ["TEPOCHCALLI_VAULT_ROOT"])
-RES = VAULT / "00-Resources"
-DB = VAULT / ".tepochcalli" / "db" / "tepochcalli.lance"
-LOCK = VAULT / flow_app.LOCK_RELPATH
+def _journey_driver() -> None:
+    """Driver del journey (modo `--driver`): 11 refreshes reales, un JSON por paso.
 
-ALPHA_V1 = (
-    "# Alpha\\n\\n"
-    "La nota alpha cubre citas con offsets de carácter exactos e identidad F1.\\n\\n"
-    "## Sección alpha\\n\\n"
-    "Segundo párrafo de alpha para el chunk bajo el heading padre.\\n"
-)
-ALPHA_V2 = (
-    "# Alpha\\n\\n"
-    "CONTENIDO REESCRITO: la segunda versión de alpha demuestra que solo SUS "
-    "chunks se rehacen.\\n\\n"
-    "## Sección alpha\\n\\n"
-    "Más texto nuevo de alpha tras la modificación.\\n"
-)
-BETA = "# Beta\\n\\nLa nota beta describe el walk filtrado y los skips tipados F5.\\n"
-GAMMA = "# Gamma\\n\\nLa nota gamma nace en el paso add: solo sus chunks deben aparecer.\\n"
-SANO = "# Sano\\n\\nArchivo UTF-8 sano que sí se indexa junto al latin-1 en el mismo refresh.\\n"
-EFIMERO_V1 = "# Efímero\\n\\nPrimera versión: se indexa y luego desaparece a mitad de pasada.\\n"
-EFIMERO_V2 = "# Efímero\\n\\nSegunda versión (mtime nuevo ⇒ re-ejecución) y después se borra.\\n"
-LATIN1_BYTES = b"caf\\xe9 latin-1: bytes invalidos UTF-8\\n"
-INTERNA = "# Interna\\n\\nVive tras un directorio ilegible; jamás debe indexarse.\\n"
+    El vault llega por `flow_app.VAULT_ROOT_ENV` (fijado por `_spawn`); el
+    cache de modelo ya viene enlazado y el `HF_HUB_OFFLINE` resuelto por el
+    padre. Parseo del stdout por el padre: UN objeto JSON por línea de paso
+    (misma convención de `bench_delta.py --driver`).
+    """
+    vault = Path(os.environ[flow_app.VAULT_ROOT_ENV])
+    resources_dir = vault / citation.RESOURCES_DIR
+    db_uri = vault / ".tepochcalli" / "db" / "tepochcalli.lance"
+    lock_path = vault / flow_app.LOCK_RELPATH
 
+    def read_rows() -> list[dict[str, Any]]:
+        async def go() -> list[dict[str, Any]]:
+            conn = await lancedb.connect_async(str(db_uri))
+            table = await conn.open_table("chunks")
+            return (await table.to_arrow()).to_pylist()
 
-def read_rows():
-    async def go():
-        conn = await lancedb.connect_async(str(DB))
-        table = await conn.open_table("chunks")
-        return (await table.to_arrow()).to_pylist()
-    rows = asyncio.run(go())
-    for row in rows:
-        row.pop("embedding", None)
-    return rows
+        rows = asyncio.run(go())
+        for row in rows:
+            row.pop("embedding", None)
+        return rows
 
+    def lance_snapshot() -> dict[str, list[int]]:
+        base = vault / ".tepochcalli" / "db" / "tepochcalli.lance"
+        return {
+            str(path.relative_to(base)): [path.stat().st_mtime_ns, path.stat().st_size]
+            for path in sorted(base.rglob("*"))
+            if path.is_file()
+        }
 
-def lance_snapshot():
-    base = VAULT / ".tepochcalli" / "db" / "tepochcalli.lance"
-    return {
-        str(path.relative_to(base)): [path.stat().st_mtime_ns, path.stat().st_size]
-        for path in sorted(base.rglob("*"))
-        if path.is_file()
-    }
+    def lock_content() -> str:
+        return lock_path.read_text(encoding="utf-8") if lock_path.exists() else ""
 
+    def step(tag: str) -> None:
+        lock_before = lock_content()
+        report = flow_app.refresh_blocking()
+        print(
+            json.dumps(
+                {
+                    "tag": tag,
+                    "report": dataclasses.asdict(report),
+                    "rows": read_rows(),
+                    "lance": lance_snapshot(),
+                    "lock_content_before": lock_before,
+                    "lock_content": lock_content(),
+                }
+            ),
+            flush=True,
+        )
 
-def lock_content():
-    return LOCK.read_text(encoding="utf-8") if LOCK.exists() else ""
+    step("initial")
 
+    (resources_dir / "gamma.md").write_text(GAMMA, encoding="utf-8")
+    step("add")
 
-def step(tag):
-    lock_before = lock_content()
-    report = flow_app.refresh_blocking()
-    print(
-        json.dumps(
-            {
-                "tag": tag,
-                "report": dataclasses.asdict(report),
-                "rows": read_rows(),
-                "lance": lance_snapshot(),
-                "lock_content_before": lock_before,
-                "lock_content": lock_content(),
-            }
-        ),
-        flush=True,
-    )
+    (resources_dir / "alpha.md").write_text(ALPHA_V2, encoding="utf-8")
+    step("modify")
 
+    (resources_dir / "beta.md").unlink()
+    step("delete")
 
-step("initial")
+    step("idempotent")
 
-(RES / "gamma.md").write_text(GAMMA, encoding="utf-8")
-step("add")
+    (resources_dir / "latin1.md").write_bytes(LATIN1_BYTES)
+    (resources_dir / "sano.md").write_text(SANO, encoding="utf-8")
+    step("nonutf8")
 
-(RES / "alpha.md").write_text(ALPHA_V2, encoding="utf-8")
-step("modify")
+    # Directorio ilegible (localfs hace `except PermissionError: continue`) y
+    # symlink roto (el conector ni siquiera lo entrega): ambos solo visibles para
+    # nuestra traversa sombra.
+    prohibida = resources_dir / "carpeta_prohibida"
+    prohibida.mkdir()
+    (prohibida / "interna.md").write_text(INTERNA, encoding="utf-8")
+    os.chmod(prohibida, 0o000)
+    (resources_dir / "roto.md").symlink_to(resources_dir / "no_existe.md")
+    step("unreadable")
 
-(RES / "beta.md").unlink()
-step("delete")
+    (resources_dir / "efimero.md").write_text(EFIMERO_V1, encoding="utf-8")
+    step("efimero-add")
 
-step("idempotent")
+    # TOCTOU classify→read: la clasificación decide (efimero V2 con mtime nuevo
+    # ⇒ re-ejecución forzada) y ENTonces el archivo desaparece antes de que
+    # index_file lo lea. El delta no debe abortar.
+    (resources_dir / "efimero.md").write_text(EFIMERO_V2, encoding="utf-8")
+    original_items = flow_app._indexable_items
 
-(RES / "latin1.md").write_bytes(LATIN1_BYTES)
-(RES / "sano.md").write_text(SANO, encoding="utf-8")
-step("nonutf8")
+    async def vanish_after_classify(resources_dir: Path) -> object:
+        items = await original_items(resources_dir)
+        (resources_dir / "efimero.md").unlink()
+        return items
 
-# Directorio ilegible (localfs hace `except PermissionError: continue`) y
-# symlink roto (el conector ni siquiera lo entrega): ambos solo visibles para
-# nuestra traversa sombra.
-prohibida = RES / "carpeta_prohibida"
-prohibida.mkdir()
-(prohibida / "interna.md").write_text(INTERNA, encoding="utf-8")
-os.chmod(prohibida, 0o000)
-(RES / "roto.md").symlink_to(RES / "no_existe.md")
-step("unreadable")
+    flow_app._indexable_items = vanish_after_classify
+    step("vanish")
+    flow_app._indexable_items = original_items
 
-(RES / "efimero.md").write_text(EFIMERO_V1, encoding="utf-8")
-step("efimero-add")
+    step("reconcile")
 
-# TOCTOU classify→read: la clasificación decide (efimero V2 con mtime nuevo
-# ⇒ re-ejecución forzada) y ENTonces el archivo desaparece antes de que
-# index_file lo lea. El delta no debe abortar.
-(RES / "efimero.md").write_text(EFIMERO_V2, encoding="utf-8")
-original_items = flow_app._indexable_items
+    # Lock retenido por un proceso YA MUERTO (crash simulado): el contenido del
+    # archivo no es el candado, así que esta pasada debe ejecutarse igualmente.
+    lock_path.write_text("999999\n", encoding="utf-8")
+    step("stale")
 
+    os.chmod(resources_dir / "carpeta_prohibida", 0o755)
 
-async def vanish_after_classify(resources_dir):
-    items = await original_items(resources_dir)
-    (resources_dir / "efimero.md").unlink()
-    return items
-
-
-flow_app._indexable_items = vanish_after_classify
-step("vanish")
-flow_app._indexable_items = original_items
-
-step("reconcile")
-
-# Lock retenido por un proceso YA MUERTO (crash simulado): el contenido del
-# archivo no es el candado, así que esta pasada debe ejecutarse igualmente.
-LOCK.write_text("999999\\n", encoding="utf-8")
-step("stale")
-
-os.chmod(RES / "carpeta_prohibida", 0o755)
-"""
 
 LOCKED_SCRIPT = """
 import dataclasses, json
@@ -296,8 +278,8 @@ class Journey:
     """stderr del driver: logs de aislamiento por fichero (`component build failed`)."""
 
 
-def _spawn(script: str, vault: Path, cache: Path) -> subprocess.CompletedProcess[str]:
-    """Ejecuta un script en subproceso con el vault y el cache de modelo enlazado.
+def _spawn(vault: Path, cache: Path) -> subprocess.CompletedProcess[str]:
+    """Ejecuta el driver de ESTE módulo en subproceso (`--driver`, patrón bench_delta).
 
     `HF_HUB_OFFLINE` solo se fuerza si `cache` ya tiene el modelo (offline_env):
     en frío el hijo descarga UNA vez al cache resuelto, nunca al `/tmp` de nadie.
@@ -312,7 +294,7 @@ def _spawn(script: str, vault: Path, cache: Path) -> subprocess.CompletedProcess
     }
     env.pop("COCOINDEX_DB", None)
     return subprocess.run(
-        [sys.executable, "-c", script],
+        [sys.executable, str(Path(__file__).resolve()), "--driver"],
         env=env,
         capture_output=True,
         text=True,
@@ -343,7 +325,7 @@ def journey(tmp_path_factory: pytest.TempPathFactory) -> Journey:
     cache = resolve_model_cache()
     link_model_cache(vault, cache)
 
-    proc = _spawn(JOURNEY_SCRIPT, vault, cache)
+    proc = _spawn(vault, cache)
     assert proc.returncode == 0, (
         f"el driver del journey falló (rc={proc.returncode}):\n{proc.stdout}\n{proc.stderr}"
     )
@@ -655,7 +637,14 @@ def test_concurrent_refresh_returns_locked_and_writes_nothing(
     try:
         db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
         rows_before = _read_all_rows(vault)
-        proc = _spawn(LOCKED_SCRIPT, vault, resolve_model_cache())
+        proc = subprocess.run(
+            [sys.executable, "-c", LOCKED_SCRIPT, str(vault)],
+            env={**os.environ, flow_app.VAULT_ROOT_ENV: str(vault)},
+            capture_output=True,
+            text=True,
+            timeout=600,
+            check=False,
+        )
     finally:
         flow_app._release_refresh_lock(lock_fd)
 
@@ -681,3 +670,27 @@ def test_payload_db_and_models_are_never_created() -> None:
     payload = Path(__file__).parents[2] / "obsidian-workspace" / ".tepochcalli"
     assert not (payload / "db").exists()
     assert not (payload / "models").exists()
+
+
+# --- entrypoint del driver (patrón bench_delta) ---------------------------------
+
+
+def main(argv: list[str] | None = None) -> int:
+    """Dispatch del modo script: SOLO `--driver` (el journey de refreshes)."""
+    import argparse
+
+    parser = argparse.ArgumentParser(prog=Path(__file__).name)
+    parser.add_argument(
+        "--driver",
+        action="store_true",
+        help="moda driver: corre el journey de 11 refreshes y emite un JSON por paso",
+    )
+    args = parser.parse_args(argv)
+    if args.driver:
+        _journey_driver()
+        return 0
+    parser.error("solo el modo --driver tiene soporte desde script")
+
+
+if __name__ == "__main__":
+    sys.exit(main())
