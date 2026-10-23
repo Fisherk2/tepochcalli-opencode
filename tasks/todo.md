@@ -165,19 +165,23 @@
   - 📌 **Hallazgo que arregló un test:** `_snapshot_cached` construía el slug `models--paraphrase-…` mientras el real es `models--sentence-transformers--paraphrase-…` (ST 6.x prefija el org) → `HF_HUB_OFFLINE=1` **nunca se fijaba** y la hermeticidad de **M3(b)** no se aplicaba en el camino de caché cálido. Corregido en `model_cache.py`, con sondas que cubren las 5 ramas.
   - 📌 **Pre-flight de máquina limpia:** con caches vacías y env externo la suite pasa (964 MB descargados); el env externo manda y **ningún path de `/tmp` es requisito incondicional**.
 
-- [ ] **T12 · Cierre de fase: FTR, métricas, deuda técnica y status de specs**
+- [x] **T12 · Cierre de fase: FTR, métricas, deuda técnica y status de specs** ✅ *hecho — `a05f1c1`*
   - Subagentes: `technical-writer`, `code-reviewer`, `security-auditor`, `minimal-change-engineer` · Skills: `documentation-and-adrs`, `code-review-and-quality`, `git-workflow-and-versioning`, `architecture-diagrams`, `security-and-hardening`
   - AC: `docs/WORKFLOW.md` §Phase 1 con M1/M2/M3 medidas + §8 Lessons learned; `docs/TECH_DEBT.md` re-revisado (TD-1..TD-9); `SPEC.md` con `spec-rag-engine` y `spec-embeddings` en `Approved`; FTR Phase 0→1 con checklist D1-D9 y mermaid válido; `docs/ARCHITECTURE.md` con inventory + diagrama de componentes; checklist pre-commit de `AGENTS.md` verificado (`.opencode/` intacto); `git status --short` sin `venv/db/models/bin/config`; **M7** aprobación explícita del usuario
   - Verificar: `markdownlint docs specs AGENTS.md SPEC.md` → **cero errores NUEVOS sobre la línea base de 420** *(AC corregido por el principio de D12)*; `git diff --stat main...HEAD` solo lo previsto
-  - ⚠️ **AC de lint redefinido por consistencia con D12:** el baseline real de `docs specs AGENTS.md SPEC.md` es **420 errores** (369 MD060 de estilo de tablas, 14 MD034, 13 MD033, 7 MD004, 6 MD022, …). «0 errores» era insatisfacible, igual que lo fue el de T1, y D12 ya fijó el principio: baseline + **cero errores nuevos**. Los 420 quedan como deuda pre-existente, no se arreglan en el cierre de fase.
-  - Dep.: T10, T11 · Tamaño: M
+  - ✅ **Verificado:** lint **420 → 420**, mismo conjunto de 13 reglas, **cero errores nuevos**; ruff limpio en ambas raíces; **TD-1…TD-9 re-revisados + TD-10 nuevo** (`default_env_loop` interno de cocoindex, oráculo = `uv.lock` + suite delta de T8); ambas specs en **`Approved`** (2 líneas cada una, solo status/date); FTR ejecutado (D1-D9 sin contradicciones, **90 enlaces** resueltos, **12 bloques mermaid** renderizados con `mermaid-cli`, 12/12 OK); inventario + diagrama hexagonal verificado contra el grafo de imports real; protegidos intactos; nada pushueado.
+  - 📌 **Dos escaladas honestas del subagente:** (1) M6 declarado como *verificación local*, sin afirmar que el CI esté verde; (2) staleness de FTR fuera de su alcance — `SPEC.md` decía «Phase 0-5» tras la renumeración D10 → **corregido a Phase 0-6** en el commit.
 
-### ⛔ CP-D · Gate Phase 1 → Phase 2 — *en curso*
-- [x] **M1** (p95 < 30s) con cifra y máquina documentadas ✅ *(T10 — 5 385/5 466/5 952 ms, host + swap documentados)*
-- [ ] **M6** (CI verde y **muerde**) ⚠️ *parcial — verificado localmente (actionlint + 7 pasos + suite + smoke), **el workflow nunca corrió en Actions**; falta publicar (decisión del usuario)*
-- [ ] FTR Phase 0→1 con checklist D1-D9 → **T12**
-- [ ] `SPEC.md` y `docs/TECH_DEBT.md` al día → **T12** *(TD-1..TD-9)*
-- [ ] **M7: aprobación explícita del usuario para arrancar Phase 2** — *se pedirá al cerrar T12*
+### ⛔ CP-D · Gate Phase 1 → Phase 2 — *espera M7*
+- [x] **M1** (p95 < 30s) con cifra y máquina documentadas ✅ *(T10 — 5 385/5 466/5 952 ms)*
+- [x] **M2** — 100 % filas con cita no nula + `heading` presente *(nullable por D13)* ✅
+- [x] **M3** — 0 llamadas LLM observables ✅ *(dos vías + canario)*
+- [x] **M4** — fila queryable con los 4 campos ✅ *(verificador CLI, solo lectura probado)*
+- [x] **M5** — exclusión/costo de PDF documentado ✅ *(49–51 s / 30 págs, medido)*
+- [x] **M6** ⚠️ *parcial* — verificado **localmente** (actionlint 0 errores + 7 pasos + suite + smoke). **El workflow nunca corrió en Actions** — decisión del usuario de no publicar.
+- [x] FTR Phase 0→1 con checklist D1-D9 ✅ *(ejecutado y registrado en `WORKFLOW §4`)*
+- [x] `SPEC.md` y `docs/TECH_DEBT.md` al día ✅ *(specs → Approved; TD-1…TD-10)*
+- [ ] **M7: aprobación explícita del usuario para arrancar Phase 2** — *se pide ahora*
 
 ---
 
