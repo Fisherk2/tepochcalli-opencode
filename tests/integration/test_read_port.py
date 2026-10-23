@@ -58,6 +58,7 @@ from tepochcalli_flow.adapters.lancedb_reader import (
     LanceDBChunkReader,
     path_filter_to_like_predicate,
 )
+from tepochcalli_flow.layout import DB_RELPATH
 from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 FIXTURE_VAULT = Path(__file__).parents[1] / "fixtures" / "vault_markdown"
@@ -87,8 +88,6 @@ UNDERSCORE_CONTENT = (
 )
 
 UPDATE_SCRIPT = "from tepochcalli_flow.app import app; app.update_blocking()"
-
-DB_RELPATH = Path(".tepochcalli/db/tepochcalli.lance")
 
 GOLDEN_QUERIES = [
     "whitelist de extensiones indexables",

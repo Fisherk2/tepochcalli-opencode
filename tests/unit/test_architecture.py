@@ -75,6 +75,7 @@ DOMAIN_MODULES: Final[tuple[str, ...]] = (
     f"{PACKAGE}.citation",
     f"{PACKAGE}.config",
     f"{PACKAGE}.ports",
+    f"{PACKAGE}.layout",
 )
 """Módulos de dominio bajo la regla: el `__init__` del paquete y los módulos puros.
 

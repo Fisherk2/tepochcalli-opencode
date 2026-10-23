@@ -35,10 +35,8 @@ from typing import Final
 
 from .adapters.lancedb_reader import build_reader
 from .config import load_config
+from .layout import DB_RELPATH
 from .ports import CitedChunk
-
-DB_RELPATH: Final = Path(".tepochcalli/db/tepochcalli.lance")
-"""Base LanceDB del vault (mismo relativo que `app.DB_RELPATH`; sin importar app)."""
 
 EXIT_OK: Final = 0
 EXIT_NO_DB: Final = 2

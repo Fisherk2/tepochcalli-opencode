@@ -67,10 +67,8 @@ from sentence_transformers import SentenceTransformer
 from .. import config as flow_config
 from ..citation import DocKind, offsets_ref_for
 from ..config import DEFAULT_TOP_K, load_config
+from ..layout import DB_RELPATH, TABLE_NAME
 from ..ports import CitedChunk
-
-TABLE_NAME: Final = "chunks"
-"""Tabla única del índice (spec-rag-engine §Target; `app.TABLE_NAME`, sin importar app)."""
 
 VECTOR_COLUMN: Final = "embedding"
 """Columna vectorial ANN (ChunkRow.embedding; dims resueltas por el embedder)."""
@@ -106,10 +104,6 @@ def _close_connection(db: lancedb.AsyncConnection) -> None:
     esta línea; centralizarlo evita repetirlo en cada `finally` del adaptador.
     """
     db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
-
-
-DB_RELPATH: Final = Path(".tepochcalli/db/tepochcalli.lance")
-"""Base LanceDB del vault (`verify.DB_RELPATH`; layout.py lo unificará en P7)."""
 
 
 def build_reader(vault_root: Path) -> LanceDBChunkReader:

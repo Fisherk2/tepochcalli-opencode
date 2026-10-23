@@ -66,6 +66,7 @@ from cocoindex.resources.id import IdGenerator
 from . import config as flow_config
 from . import source
 from .citation import RESOURCES_DIR, normalize_source_path
+from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME
 from .models import EMBEDDER, LANCE_DB, ChunkRow, RefreshReport
 from .parsers import DocumentChunk, chunk_document
 
@@ -78,40 +79,6 @@ else:
 
 VAULT_ROOT_ENV: Final = "TEPOCHCALLI_VAULT_ROOT"
 """Override de la raíz del vault (pruebas/vaults alternativos); default: la del payload."""
-
-TABLE_NAME: Final = "chunks"
-"""Tabla única del índice (spec-rag-engine §Target LanceDB + índices)."""
-
-DB_RELPATH: Final = Path(".tepochcalli/db/tepochcalli.lance")
-"""Base LanceDB embebida bajo el vault (ADR-002; §Target)."""
-
-ENGINE_STATE_RELPATH: Final = Path(".tepochcalli/db/cocoindex")
-"""Estado derivado del engine (D14): bajo `db/`, gitignored, junto a LanceDB.
-
-Co-localizado con `DB_RELPATH` para que un solo `rm -r .tepochcalli/db/` —la
-promesa de spec-rag-engine §Rollback— reconstruya LanceDB y el estado del
-engine a la vez; jamás en `flow/`, que es código fuente versionado
-(spec-vault-structure §gitignore).
-"""
-
-LOCK_RELPATH: Final = Path(".tepochcalli/db/refresh.lock")
-"""Lock file del refresh bajo `.tepochcalli/db/` — decisión deliberada T8 (T2, D14).
-
-* **Ubicación:** `db/` es el artefacto gitignored que el refresh PROTEGE
-  (LanceDB + estado del engine): candado junto a lo que muta, sin ensuciar
-  `git status` y limpiado por el mismo `rm -r .tepochcalli/db/` del rollback.
-* **El candado NO es el archivo: es el lock exclusivo del SO sobre él.** El
-  kernel lo libera aunque el proceso muera con SIGKILL, así que UN CRASH NO
-  PUEDE DEJAR UN CANDADO RETENIDO. Un lock file residual (p. ej. con el pid de
-  un proceso muerto) es inofensivo: no retiene lock alguno y la siguiente
-  pasada lo reutiliza — jamás se borra, porque el par `unlink`/`create`
-  introduce carreras entre adquirentes.
-* Segunda invocación concurrente ⇒ el lock falla ⇒ `RefreshReport(...,
-  locked=True)` SIN arrancar update: cierra el doble-write que ADR-002 §6
-  acepta como riesgo.
-* Rama POSIX (`fcntl.flock`) + rama Windows (`msvcrt.locking`, ADR-003); la
-  win32 no tiene cobertura en la CI de fase 1 (solo se prueba el flock real).
-"""
 
 FILE_PROCESSOR: Final = "index_file"
 """Nombre del componente por fichero: de SUS stats sale `indexed` (data plane).

@@ -57,8 +57,7 @@ from model_cache import link_model_cache, offline_env, resolve_model_cache
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow import models as flow_models
-
-DB_RELPATH = Path(".tepochcalli/db/tepochcalli.lance")
+from tepochcalli_flow.layout import DB_RELPATH
 
 # Contenidos del journey: ficheros cortos, SIEMPRE de UN chunk, para que el
 # número de filas por source_path sea 1 y las comparaciones sean exactas.

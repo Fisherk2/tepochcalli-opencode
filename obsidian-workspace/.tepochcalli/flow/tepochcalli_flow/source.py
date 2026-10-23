@@ -276,13 +276,13 @@ def _symlink_escape_target(file_path: Path, resolved_dir: Path) -> Path | None:
 
     `Path.resolve()` sigue la cadena completa de symlinks —de archivo o de
     directorio— y compara contra la raíz RESUELTA (pasada ya resuelta: el
-    llamador la solicita UNA vez por fichero, no aquí dentro), de modo que un
-    vault bajo un path enlazado no produce falsos positivos (decisión
-    2026-10-22). El cheap-path `is_symlink` se consulta primero: un archivo
-    regular se resuelve a sí mismo y jamás puede escapar.
+    llamador la resuelve UNA vez por fichero, no aquí), de modo que un vault
+    bajo un path enlazado no produce falsos positivos (decisión 2026-10-22).
+    shortcut: SIN early-return is_symlink — el conector emite candidatos YA
+    RESUELTOS (links fuera del recurso llegan como rutas regulares externas) y
+    un resolve() de la raíz del fichero es el único chequeo honesto; la raíz
+    `resources_dir` sí está pre-resuelta (un resolve menos por fichero).
     """
-    if not file_path.is_symlink():
-        return None
     target = file_path.resolve()
     return None if target.is_relative_to(resolved_dir) else target
 
