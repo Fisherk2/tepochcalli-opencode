@@ -230,7 +230,7 @@ def classify_file(
     `size_bytes` permite reutilizar un tamaño ya conocido (p. ej. `FileLike.size()`
     en T6) sin volver a hacer `stat()`.
     """
-    escaped = _symlink_escape_target(file_path, resources_dir)
+    escaped = _symlink_escape_target(file_path, resources_dir.resolve())
     if escaped is not None:
         return SkippedSource(
             file_path,
@@ -271,15 +271,20 @@ def classify_file(
     return SourceEntry(file_path, source_path, kind, observed_size)
 
 
-def _symlink_escape_target(file_path: Path, resources_dir: Path) -> Path | None:
+def _symlink_escape_target(file_path: Path, resolved_dir: Path) -> Path | None:
     """Target resuelto si escapa de `00-Resources/`, o `None` si vive dentro (frontera).
 
     `Path.resolve()` sigue la cadena completa de symlinks —de archivo o de
-    directorio— y compara contra la raíz RESUELTA, de modo que un vault bajo un
-    path enlazado no produce falsos positivos (decisión 2026-10-22).
+    directorio— y compara contra la raíz RESUELTA (pasada ya resuelta: el
+    llamador la solicita UNA vez por fichero, no aquí dentro), de modo que un
+    vault bajo un path enlazado no produce falsos positivos (decisión
+    2026-10-22). El cheap-path `is_symlink` se consulta primero: un archivo
+    regular se resuelve a sí mismo y jamás puede escapar.
     """
+    if not file_path.is_symlink():
+        return None
     target = file_path.resolve()
-    return None if target.is_relative_to(resources_dir.resolve()) else target
+    return None if target.is_relative_to(resolved_dir) else target
 
 
 def _escape_reference(file_path: Path, resources_dir: Path) -> str:

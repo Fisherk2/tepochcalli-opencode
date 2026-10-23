@@ -239,6 +239,14 @@ async def index_file(
     """
     text = await file.read_text(encoding="utf-8", errors="strict")
     file_path = Path(os.fspath(file.file_path))
+    # Re-chequeo TOCTOU classify→read: el archivo pudo crecer (o conmutarse) tras
+    # el classifier; superarlo aquí falla el componente de ESTE fichero (aislado,
+    # el pase continúa) en vez de indexar >100MB.
+    if (size := os.stat(file_path).st_size) > source.DEFAULT_MAX_FILE_BYTES:
+        raise ValueError(
+            f"{file_path}: creció a {size} bytes tras el classify "
+            f"(> {source.DEFAULT_MAX_FILE_BYTES}); cambió durante el pase"
+        )
     chunks = chunk_document(
         text,
         normalize_source_path(file_path.relative_to(resources_dir)),
