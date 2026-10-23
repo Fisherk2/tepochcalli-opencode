@@ -100,7 +100,8 @@ quality: lint fmt-check typecheck test
 # Espejo local del gate de CI: sync → lint → fmt-check → typecheck → test → smoke.
 ci: sync lint fmt-check typecheck test bench-smoke
 
-# DESTRUCTIVO: borra caches locales; no toca fuentes ni el venv.
+# DESTRUCTIVO: borra caches locales y cualquier `.venv` accidental (creado por un
+# `uv` invocado a mano sin UV_PROJECT_ENVIRONMENT); no toca fuentes ni `venv/`.
 clean:
-    rm -r -f .pytest_cache .ruff_cache .mypy_cache
+    rm -r -f .pytest_cache .ruff_cache .mypy_cache {{flow_dir}}/.venv
     find . -name .git -prune -o -type d -name __pycache__ -prune -exec rm -r -f {} +
