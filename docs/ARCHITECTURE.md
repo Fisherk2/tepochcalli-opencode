@@ -120,7 +120,7 @@ sequenceDiagram
 | Embeddings MiniLM multilingüe | Procesamiento | `.tepochcalli/models/` | ADR-006, spec-embeddings |
 | venv + uv bootstrap | Runtime | `.tepochcalli/venv/`, `bin/` | ADR-004 |
 | `tepochcalli.toml` | Config | `.tepochcalli/config/` (gitignored) | spec-embeddings |
-| **Suite Phase 1 (T2–T11):** `tests/phase1/` — 137 tests + `bench_delta.py` (M1, p95 sobre 20 ciclos) | Verificación | repo `tests/phase1/` | WORKFLOW §Phase 1, TRD §6.2 |
+| **Suite Phase 1 (T2–T11):** `tests/unit/` + `tests/integration/` — 137 tests; `bench_delta.py` en `tests/benchmarks/` (M1, p95 sobre 20 ciclos) | Verificación | repo `tests/{unit,integration,benchmarks}/` | WORKFLOW §Phase 1, TRD §6.2 |
 | **CI Phase 1:** `phase1.yml` (ruff → suite → smoke Δ) | Verificación | `.github/workflows/phase1.yml` — **solo verificación local; nunca corrió en GitHub Actions (M6)** | T11, WORKFLOW §Phase 1 |
 | Wizard TUI Rust + cargo-dist | Distribución | repo `crates/` (Phase 3) + Releases | ADR-003, spec-installer-wizard |
 
@@ -129,7 +129,7 @@ sequenceDiagram
 Vista hexagonal del motor tal como quedó en Phase 1: dominio puro en el centro, `ports.py`
 como contrato de lectura, adapters de infraestructura alrededor. **Las flechas indican
 dirección de dependencia** (`importa` / `implementa`) — nunca al revés: el dominio no importa
-infraestructura y `ports.py` no importa ningún motor (test de arquitectura, `tests/phase1/test_architecture.py`).
+infraestructura y `ports.py` no importa ningún motor (test de arquitectura, `tests/unit/test_architecture.py`).
 
 ```mermaid
 graph TB

@@ -16,7 +16,7 @@
 # * Cache de modelos por revisión pineada: clave derivada de uv.lock + id del
 #   modelo. Los binarios (~1.6 GB: MiniLM multilingual + modelos Docling) viven
 #   FUERA del repo (`~/.cache/huggingface`, `~/.cache/docling`) — resueltos por
-#   tests/phase1/model_cache.py con HF_HOME externo > spike T1 si existe >
+#   tests/model_cache.py con HF_HOME externo > spike T1 si existe >
 #   cache nativo HF. El payload `obsidian-workspace/.tepochcalli/{db,models,
 #   config,venv}` jamás se escribe ni se lee de este repo.
 # * Sin secrets: la suite solo necesita red en la PRIMERA corrida (descarga de
@@ -65,7 +65,7 @@ jobs:
         run: uv python install 3.12
 
       # Los tests resuelven el cache de modelo con la cadena HF_HOME externo >
-      # spike T1 si existe > cache nativo HF (tests/phase1/model_cache.py). En
+      # spike T1 si existe > cache nativo HF (tests/model_cache.py). En
       # CI manda el HF_HOME externo fijado aquí. `~` NO se expande en `env:`
       # (llega literal al proceso), por eso se exporta vía $GITHUB_ENV con
       # $HOME resuelto por el shell.
@@ -126,4 +126,4 @@ jobs:
       # bench aborta si el payload del repo se contaminara.
       - name: Smoke Δ (1 corrida, umbral generoso; sin p95)
         working-directory: obsidian-workspace/.tepochcalli
-        run: uv run python ../../tests/phase1/bench_delta.py --smoke
+        run: uv run python ../../tests/benchmarks/bench_delta.py --smoke

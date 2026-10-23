@@ -59,7 +59,7 @@ from tepochcalli_flow.adapters.lancedb_reader import (
 )
 from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
-FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
+FIXTURE_VAULT = Path(__file__).parents[1] / "fixtures" / "vault_markdown"
 
 CONTRACT_FIELDS = ["text", "source_path", "heading", "char_start", "char_end", "score"]
 

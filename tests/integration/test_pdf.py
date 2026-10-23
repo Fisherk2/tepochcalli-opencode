@@ -67,7 +67,7 @@ os.environ.setdefault(
     str(DOCLING_CACHE if DOCLING_CACHE.exists() else FALLBACK_DOCLING_CACHE),
 )
 
-FIXTURE_PDF = Path(__file__).parent / "fixtures" / "pdf" / "articulo_t7.pdf"
+FIXTURE_PDF = Path(__file__).parents[1] / "fixtures" / "pdf" / "articulo_t7.pdf"
 """PDF real de 1 página escrito a mano (sin dependencias de autoría).
 
 Título 20pt + secciones 14pt en Helvetica-Bold: el layout model de Docling

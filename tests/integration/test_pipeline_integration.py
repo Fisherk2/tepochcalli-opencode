@@ -58,7 +58,7 @@ from tepochcalli_flow import config as flow_config
 from tepochcalli_flow import models as flow_models
 from tepochcalli_flow import parsers as flow_parsers
 
-FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
+FIXTURE_VAULT = Path(__file__).parents[1] / "fixtures" / "vault_markdown"
 
 BOM = "\ufeff"
 """BOM UTF-8 como carácter: la lectura estricta lo conserva en el string de ambos decoders."""

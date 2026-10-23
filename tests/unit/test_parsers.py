@@ -26,7 +26,7 @@ from cocoindex.resources.file import PatternFilePathMatcher
 from tepochcalli_flow import citation, parsers, source
 from tepochcalli_flow import config as flow_config
 
-FIXTURE_VAULT = Path(__file__).parent / "fixtures" / "vault_markdown"
+FIXTURE_VAULT = Path(__file__).parents[1] / "fixtures" / "vault_markdown"
 
 BOM = "\ufeff"
 """BOM UTF-8 como carácter: la lectura estricta lo conserva (contrato F1, ver Finding 1/2)."""

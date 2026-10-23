@@ -54,15 +54,15 @@ Reproducibilidad (todos los knobs, fijos por defecto)
 Garantías de idempotencia (nunca ensucia el repo)
 --------------------------------------------------
 * Vault bajo `/tmp/opencode/tepochcalli-t1-spike/bench/` (tmp-dir temporal,
-  borrado al final salvo `--keep`); `tests/phase1/fixtures/` intacto.
+  borrado al final salvo `--keep`); `tests/fixtures/` intacto.
 * `obsidian-workspace/.tepochcalli/{db,models}` (payload) NO se crea: el padre
   lo verifica al terminar y aborta si existieran.
 
 Uso (host de referencia de fase 1; ver desviación del VM limpio TRD en el
 reporte):
     cd obsidian-workspace/.tepochcalli
-    UV_PROJECT_ENVIRONMENT=venv uv run python ../../tests/phase1/bench_delta.py
-    UV_PROJECT_ENVIRONMENT=venv uv run python ../../tests/phase1/bench_delta.py --smoke
+    UV_PROJECT_ENVIRONMENT=venv uv run python ../../tests/benchmarks/bench_delta.py
+    UV_PROJECT_ENVIRONMENT=venv uv run python ../../tests/benchmarks/bench_delta.py --smoke
 
 Modo smoke (`--smoke`) — el ÚNICO gate de Δ que corre en CI
 ----------------------------------------------------------
@@ -93,7 +93,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from model_cache import link_model_cache, offline_env, resolve_model_cache
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from model_cache import link_model_cache, offline_env, resolve_model_cache  # noqa: E402
 
 SEED = 20261022
 """Semilla del corpus: con este entero el corpus y los cambios son idénticos."""

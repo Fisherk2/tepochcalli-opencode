@@ -203,3 +203,21 @@
 | 10 | T10 | `test: Mide el bench de delta p95 y documenta el resultado` | `Co-Authored-By: Moctezuma <dev@fisherk2.com>` |
 | 11 | T11 | `ci: Anade el workflow de Phase 1 con unit e integracion smoke` | `Co-Authored-By: Moctezuma <dev@fisherk2.com>` |
 | 12 | T12 | `docs: Cierra la Phase 1 con metricas, deuda revisada y gate` | `Co-Authored-By: Moctezuma <dev@fisherk2.com>` |
+
+---
+
+## Layout de tests (2026-10-23)
+
+Posterior al cierre de Phase 1, la suite se reorganicó en pirámide sin cambiar su
+comportamiento (137 passed → 137 passed). **Las referencias a `tests/phase1/` en el
+cuerpo histórico de este fichero y de `tasks/plan.md` son históricas y se conservan
+tal cual**; el layout vigente es:
+
+- `tests/unit/` — lógica pura (sin `models/` ni `db/`, sin red): `test_architecture.py`,
+  `test_citation.py`, `test_config.py`, `test_package.py`, `test_parsers.py`.
+- `tests/integration/` — cruza fronteras reales (LanceDB, Docling) sin red:
+  `test_delta.py`, `test_pdf.py`, `test_pipeline_integration.py`, `test_read_port.py`.
+- `tests/benchmarks/` — `bench_delta.py` (script de medición, no suite de corrección).
+- `tests/e2e/` — reservado para smoke tests de payload instalado (vacío hoy).
+- `tests/fixtures/` — fixtures compartidos; `tests/model_cache.py` — helper común;
+  `tests/conftest.py` — bootstrap de `sys.path` para el helper.
