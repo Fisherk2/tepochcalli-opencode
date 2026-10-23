@@ -160,6 +160,10 @@ def walk_sources(
 ) -> list[WalkItem]:
     """Recorre `<vault_root>/00-Resources/` recursivo y clasifica cada archivo (§Fuentes).
 
+    Wrapper fino sobre `scan_items` —el MISMO ensamblado (conector + classify +
+    silenciosas) que consume el componente por fichero del engine—, para que
+    verificador y engine no diverjan en qué archivos existen (P7, P26).
+
     Devuelve UNA lista con ambas caras del pase —entradas indexables y
     descartes con `SkipReason`— ordenada por `source_path` (pase
     determinista, idempotente entre ejecuciones). Un archivo problemático
@@ -170,24 +174,40 @@ def walk_sources(
     reproducir el control F3 con un matcher de solo-inclusión. La raíz
     ausente lanza `FileNotFoundError`: un vault sin `00-Resources/` es una
     instalación rota y el fallo debe ser ruidoso.
-
-    Nota (T5): conduce el `DirWalker` de cocoindex con `asyncio.run`; el flow
-    de T6 consumirá `build_path_matcher` + `classify_file` dentro de su propio
-    loop, sin re-ejecutar este walk.
     """
     resources_dir = vault_root / RESOURCES_DIR
     if not resources_dir.is_dir():
         raise FileNotFoundError(
             f"No existe el recurso indexable {resources_dir} — se exigía {RESOURCES_DIR}/"
         )
+    items, _scanned = asyncio.run(
+        scan_items(resources_dir, max_file_bytes=max_file_bytes, path_matcher=path_matcher)
+    )
+    return sorted(items, key=lambda item: item.source_path)
+
+
+async def scan_items(
+    resources_dir: Path,
+    *,
+    max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
+    path_matcher: FilePathMatcher | None = None,
+) -> tuple[list[WalkItem], int]:
+    """Core del pase: candidatos del conector + clasificación + entradas silenciosas (T8/P7).
+
+    Devuelve `(items, scanned)`: entradas indexables y descartes con motivo
+    (incluidas las que el conector TRAGA EN SILENCIO — symlink roto, directorio
+    ilegible—), más el total visitado para la identidad
+    `scanned == indexed + skipped` del RefreshReport (hallazgo #5 de CP-B).
+    """
     matcher = build_path_matcher() if path_matcher is None else path_matcher
-    candidates = asyncio.run(_connector_candidates(resources_dir, matcher))
-    items = [
+    candidates = await _connector_candidates(resources_dir, matcher)
+    items: list[WalkItem] = [
         classify_file(resources_dir, candidate, max_file_bytes=max_file_bytes)
         for candidate in candidates
     ]
-    items.extend(_broken_symlink_skips(resources_dir, matcher))
-    return sorted(items, key=lambda item: item.source_path)
+    silent = unvisited_skips(resources_dir, path_matcher=matcher)
+    items.extend(silent)
+    return items, len(candidates) + len(silent)
 
 
 def unvisited_skips(
