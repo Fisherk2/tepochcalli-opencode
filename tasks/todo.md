@@ -225,3 +225,12 @@ tal cual**; el layout vigente es:
 `mypy --strict` añadido como gate (0 errores): superficie tipada `flow/` en v1, configurado en
 `obsidian-workspace/.tepochcalli/pyproject.toml` (`[tool.mypy]`) y ejecutado en CI entre
 `ruff format --check` y `pytest`.
+
+## Cierre de cobertura (2026-10-23)
+
+Auditoría de cobertura sobre `flow/` y cierre de huecos: **147 passed** (10 tests nuevos),
+cobertura real **98 %** con subprocesos instrumentados (`just coverage`, gate `fail_under = 95`).
+Corregido F1: un archivo **regular** desaparecido en la carrera walk→classify ya no se reporta
+como `broken_symlink` sino `unreadable` — mismo recuento, log honesto, sin cambiar el contrato de
+`SkipReason`. Lo no cubierto es win32 (ADR-003), una rama `COCOINDEX_DB` y una línea declarada
+inalcanzable.

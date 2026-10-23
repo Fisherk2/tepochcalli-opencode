@@ -91,6 +91,19 @@ markers = [
     "slow: medicion de latencia/bench — no pertenece a la suite de correccion",
 ]
 
+# Cobertura REAL: `parallel` + sitecustomize hacen que los subprocesos
+# (refresh, CLI de verify) escriban su propio `.coverage.<host>.<pid>`, que
+# `coverage combine` une. Sin esto el informe miente: mide solo el padre.
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["tepochcalli_flow"]
+
+[tool.coverage.report]
+show_missing = true
+# Gate: por debajo de 95 % la receta falla. Es el umbral acordado con el usuario.
+fail_under = 95
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

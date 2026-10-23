@@ -72,6 +72,16 @@ test-slow:
 test-file name:
     cd {{flow_dir}} && uv run python -m pytest -k "{{name}}"
 
+# Cobertura real con subprocesos (refresh/verify corren en hijos): gate >=95 %.
+coverage:
+    cd {{flow_dir}} && uv run python -m coverage erase
+    cd {{flow_dir}} && \
+        PYTHONPATH=../../tests/support/covhook \
+        COVERAGE_PROCESS_START=pyproject.toml \
+        uv run python -m pytest -m "not slow" -q
+    cd {{flow_dir}} && uv run python -m coverage combine
+    cd {{flow_dir}} && uv run python -m coverage report -m
+
 # Benchmark Δ completo con p95: medición local, nunca en CI.
 bench:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_delta.py
