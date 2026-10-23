@@ -44,6 +44,15 @@ DEFAULT_MAX_CHUNK_SIZE: Final = 1536
 DEFAULT_CHUNK_OVERLAP: Final = 192
 DEFAULT_TOP_K: Final = 5
 
+MODEL_REVISION: Final = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+"""SHA del commit del modelo HF default (`paraphrase-multilingual-MiniLM-L12-v2`,
+obtenido del API de HuggingFace 2026-10-23). Todos los `SentenceTransformer(...)`
+del flow pasan `revision=MODEL_REVISION` para que el binario que reproduce los
+embeddings sea idéntico entre corridas/frost (spec-embeddings §provenance).
+shortcut: el `SentenceTransformerEmbedder` de cocoindex no acepta revision (firma
+inspect 2026-10-23); la ruta de ESCRITURA queda sin pin de revisión — el upgrade
+es añadir `revision` a esa clase upstream y propagarlo aquí."""
+
 EMBEDDING_PROVIDERS: Final = ("local", "litellm")
 _KNOWN_SECTIONS: Final = ("embedding", "chunking", "search")
 

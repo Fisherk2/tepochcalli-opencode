@@ -236,7 +236,7 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 ## Security Considerations
 
 * API keys: solo `tepochcalli.toml` (gitignored) o variable de entorno; nunca en opencode.json commiteado — substitution `{env:VAR}` (docs/SECURITY.md).
-* La descarga del default es de HuggingFace (org `sentence-transformers`): el pin de la revisión del modelo queda documentado en SECURITY §provenance.
+* La descarga del default es de HuggingFace (org `sentence-transformers`): el pin de la revisión del modelo queda documentado en SECURITY §provenance — concreta: `tepochcalli_flow.config.MODEL_REVISION` = `e8f8c211226b894fcb81acc59f3b34ba3efd5f42` (2026-10-23), usada por toda construcción `SentenceTransformer` del flow (ruta de lectura; la de escritura queda `SentenceTransformerEmbedder` de cocoindex, que aún no expone `revision`).
 
 ## Rollback / Monitoring
 

@@ -65,6 +65,7 @@ from lancedb.rerankers import RRFReranker
 from sentence_transformers import SentenceTransformer
 
 from ..citation import DocKind, offsets_ref_for
+from .. import config as flow_config
 from ..config import DEFAULT_TOP_K, load_config
 from ..ports import CitedChunk
 
@@ -117,12 +118,17 @@ def build_reader(vault_root: Path) -> LanceDBChunkReader:
     Monta el wiring que antes se repetía en cada entrypoint (`verify.main`):
     carga la config del vault, apunta el cache de modelos a
     `<vault>/.tepochcalli/models` y corta el `SentenceTransformer` local
-    configurado. shortcut: construye su propio embedder (la estrategia de
+    configurado, pineado a la revisión del docstring de `config.MODEL_REVISION`.
+    shortcut: construye su propio embedder (la estrategia de
     fase/errores E_* de Phase 2 reemplazará esta fábrica, ver spec-mcp-server).
     """
     config = load_config(vault_root)
     config.apply_model_cache_env()
-    model = SentenceTransformer(config.embedding.model, device=config.embedding.device)
+    model = SentenceTransformer(
+        config.embedding.model,
+        device=config.embedding.device,
+        revision=flow_config.MODEL_REVISION,
+    )
     return LanceDBChunkReader(
         vault_root / DB_RELPATH, embed=lambda text: model.encode(text).tolist()
     )  # noqa: E501
