@@ -38,6 +38,7 @@ explicit = true
 
 [dependency-groups]
 dev = [
+    "mypy==1.20.2",
     "pytest",
     "pytest-cov",
     "ruff",
@@ -53,6 +54,27 @@ line-length = 100
 select = ["E", "W", "F", "I", "ANN", "B", "D", "N", "UP"]
 # Conflicting pydocstyle pairs: keep D211 over D203, D212 over D213/D214.
 ignore = ["D203", "D213", "D214"]
+
+# Type checker del flow. `strict` es el CONTRATO (docs/CODE_STYLE.md): no se
+# relaja con `disallow_*_defs = false` ni con overrides por módulo. El gate es
+# `uv run python -m mypy flow` desde `.tepochcalli/` (local y CI de fase 1;
+# forma `python -m` para no depender del bit exec del entrypoint en NTFS).
+[tool.mypy]
+python_version = "3.12"
+# Solo `flow/`: es la superficie TIPADA del producto (el paquete que se empaqueta
+# y consume el server MCP). Los tests viven fuera de este proyecto uv y no están
+# en el gate de tipos de v1.
+files = ["flow"]
+strict = true
+# cocoindex, lancedb, docling y torch se publican sin stubs utilizables: sin
+# esto, `--strict` reportaría cada import de terceros como error no accionable.
+# Los bordes que sí quedan sin tipos se acotan con `cast`/`type: ignore` puntuales
+# (nunca un override de módulo completo).
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+show_error_codes = true
+pretty = true
 
 [tool.pytest.ini_options]
 testpaths = [

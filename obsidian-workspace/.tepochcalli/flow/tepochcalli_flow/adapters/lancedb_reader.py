@@ -56,7 +56,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
-from typing import Final
+from typing import Final, cast
 
 import lancedb
 from lancedb.rerankers import RRFReranker
@@ -87,6 +87,17 @@ RRF_MAX_SCORE: Final[float] = 2.0 / (RRF_K + 1)
 
 _EscapeChars: Final = {"%": "\\%", "_": "\\_"}
 r"""Literales LIKE que deben escaparse en el patrón (`\` ya se normalizó a `/`)."""
+
+
+def _close_connection(db: lancedb.AsyncConnection) -> None:
+    """Cierra la conexión del lector — punto ÚNICO donde se cruza esa frontera sin tipos.
+
+    `lancedb==0.40.0` publica `py.typed`, pero `AsyncConnection.close` no declara
+    ni parámetros ni retorno, así que `--strict` la ve como llamada sin tipar
+    (`no-untyped-call`). El `type: ignore` está acotado a ese código de error y a
+    esta línea; centralizarlo evita repetirlo en cada `finally` del adaptador.
+    """
+    db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
 
 
 class LanceDBChunkReader:
@@ -152,7 +163,7 @@ class LanceDBChunkReader:
                 search = search.where(predicate)
             rows = await search.to_list()
         finally:
-            db.close()
+            _close_connection(db)
         return _to_cited_chunks(rows)
 
     async def count_rows(self) -> int:
@@ -162,7 +173,7 @@ class LanceDBChunkReader:
             table = await db.open_table(self._table_name)
             return await table.count_rows()
         finally:
-            db.close()
+            _close_connection(db)
 
     async def explain_plan(
         self,
@@ -196,9 +207,11 @@ class LanceDBChunkReader:
             )
             if predicate is not None:
                 search = search.where(predicate)
-            return await search.explain_plan()
+            # `AsyncQuery.explain_plan` no declara retorno en lancedb 0.40.0 (py.typed
+            # pero sin anotación) ⇒ Any; el contrato del puerto lo fija en `str`.
+            return cast(str, await search.explain_plan())
         finally:
-            db.close()
+            _close_connection(db)
 
 
 def path_filter_to_like_predicate(path_filter: str) -> str:
@@ -251,9 +264,16 @@ def _to_cited_chunks(rows: list[dict[str, object]]) -> list[CitedChunk]:
             text=str(row["text"]),
             source_path=str(row["source_path"]),
             heading=None if row["heading"] is None else str(row["heading"]),
-            char_start=int(row["char_start"]),
-            char_end=int(row["char_end"]),
-            score=min(1.0, max(0.0, float(row["_relevance_score"]) / RRF_MAX_SCORE)),
+            # `row` es `dict[str, object]` (fila Arrow ya deserializada): los cast
+            # son aserciones del esquema —BIGINT las dos primeras, DOUBLE la
+            # última—, no conversiones; el `int()`/`float()` de runtime sigue
+            # intacto (normaliza p. ej. `numpy.int64` a `int`).
+            char_start=int(cast(int, row["char_start"])),
+            char_end=int(cast(int, row["char_end"])),
+            score=min(
+                1.0,
+                max(0.0, float(cast("float | int", row["_relevance_score"])) / RRF_MAX_SCORE),
+            ),
         )
         for row in rows
     ]

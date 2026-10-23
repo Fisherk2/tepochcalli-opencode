@@ -7,10 +7,19 @@
 
 | Área | Toolchain | Comandos |
 |---|---|---|
-| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format), mypy vía ruff, pytest | `uv run ruff check --fix .` · `uv run ruff format .` · `uv run pytest` |
+| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `uv run ruff check --fix .` · `uv run ruff format .` · `uv run python -m mypy flow` · `uv run python -m pytest` |
 | Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | `cargo fmt --all` · `cargo clippy --all-targets -- -D warnings` · `cargo test` |
 | Docs | markdownlint (reglas desactivadas: líneas largas en MD) | `markdownlint docs specs AGENTS.md SPEC.md` |
 | Commits | Conventional Commits manuales (hook a decisión en Phase 1) | ver §Commits |
+
+Los comandos Python se ejecutan desde `obsidian-workspace/.tepochcalli/` (es el proyecto uv). El
+gate de tipos es **real y estricto**: `mypy` con `strict = true` fijado en `[tool.mypy]` de su
+`pyproject.toml` — sin `[[tool.mypy.overrides]]` para el código propio ni flags de relajación, y en
+CI entre `ruff format --check` y `pytest` (`.github/workflows/phase1.yml`). Superficie tipada en
+**v1: solo `flow/`** (`files = ["flow"]`); `mcp/` se suma al gate cuando Phase 2 cree el paquete, y
+los tests viven fuera de este proyecto uv (no se tipan en v1). Los bordes de terceros sin
+anotaciones útiles se acotan con `cast` o `# type: ignore[código]` puntual y comentado — nunca con
+un override de módulo completo.
 
 ## Convenciones Python (flow + MCP)
 

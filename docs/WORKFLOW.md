@@ -117,6 +117,10 @@
 | 5 | smoke e2e + permission fixtures + methodology e2e (D9) | payload instalado desde el blueprint Approved | golden vault consulta citada OK; bandejas/frontmatters D9.2 assertados; coherencia blueprint vs archivos generados |
 | 6 | suite TRD §6 + manual | criterios 1-7 | toda la tabla verde |
 
+Gate de tipos de Phase 1: `uv run python -m mypy flow` desde `obsidian-workspace/.tepochcalli/`, en modo
+`strict`; corre en CI entre `ruff format --check` y `pytest` y su superficie tipada es `flow/` en
+v1 ([CODE_STYLE.md](CODE_STYLE.md) §Herramientas y comandos).
+
 ## 4. Formal Technical Reviews (FTRs)
 
 | Gate | Artefacto | Checklist | Participantes |

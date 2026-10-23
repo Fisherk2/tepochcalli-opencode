@@ -61,7 +61,6 @@ import cocoindex as coco
 from cocoindex._internal.environment import default_env_loop
 from cocoindex.connectors import lancedb, localfs
 from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
-from cocoindex.resources.file import FileLike
 from cocoindex.resources.id import IdGenerator
 
 from . import config as flow_config
@@ -224,7 +223,7 @@ async def write_chunk(
 
 @coco.fn(memo=True)
 async def index_file(
-    file: FileLike,
+    file: localfs.File,
     table: lancedb.TableTarget[ChunkRow],
     config: flow_config.Config,
     resources_dir: Path,
@@ -290,7 +289,7 @@ async def build_flow() -> _ScanTally:
     return _ScanTally(scanned=scanned)
 
 
-async def _indexable_items(resources_dir: Path) -> tuple[list[tuple[str, FileLike]], int]:
+async def _indexable_items(resources_dir: Path) -> tuple[list[tuple[str, localfs.File]], int]:
     """Walk real del conector + clasificación F5; SOLO indexables + total visitado (T8).
 
     `source.classify_file` (T5) decide: symlinks que escapan del recurso
@@ -309,7 +308,7 @@ async def _indexable_items(resources_dir: Path) -> tuple[list[tuple[str, FileLik
         recursive=True,
         path_matcher=source.build_path_matcher(),
     )
-    items: list[tuple[str, FileLike]] = []
+    items: list[tuple[str, localfs.File]] = []
     scanned = 0
     async for key, file in walker.items():
         scanned += 1

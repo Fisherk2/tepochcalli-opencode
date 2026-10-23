@@ -221,3 +221,7 @@ tal cual**; el layout vigente es:
 - `tests/e2e/` — reservado para smoke tests de payload instalado (vacío hoy).
 - `tests/fixtures/` — fixtures compartidos; `tests/model_cache.py` — helper común;
   `tests/conftest.py` — bootstrap de `sys.path` para el helper.
+
+`mypy --strict` añadido como gate (0 errores): superficie tipada `flow/` en v1, configurado en
+`obsidian-workspace/.tepochcalli/pyproject.toml` (`[tool.mypy]`) y ejecutado en CI entre
+`ruff format --check` y `pytest`.

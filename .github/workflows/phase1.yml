@@ -2,8 +2,9 @@
 #
 # Fuentes de verdad:
 # * tasks/todo.md → T11 AC — gates en orden: `uv sync --frozen` → ruff check →
-#   ruff format --check → `pytest -m "not slow"`; smoke Δ de 1 corrida con
-#   umbral generoso; el p95 (M1) NO corre en CI — es medición local (TRD §6).
+#   ruff format --check → mypy (strict, `flow/`) → `pytest -m "not slow"`; smoke
+#   Δ de 1 corrida con umbral generoso; el p95 (M1) NO corre en CI — es medición
+#   local (TRD §6).
 # * docs/WORKFLOW.md §Testing — `pytest -m "not slow"` es el filtro de CI
 #   (la suite de corrección separada de la de medición, commit 004d4bd).
 #
@@ -115,6 +116,19 @@ jobs:
 
       - name: ruff format --check
         run: uvx ruff@0.17.1 format --check .
+
+      # Checker de tipos en modo `strict` (fijado en [tool.mypy], no como flag):
+      # el contrato es cero errores con cero relajaciones. Tipa SOLO `flow/`
+      # (`files` en pyproject.toml): es la superficie tipada del producto v1, los
+      # tests viven fuera de este proyecto uv y no están en el gate.
+      #
+      # `python -m mypy` a propósito: en el checkout NTFS local el entrypoint
+      # venv/bin/mypy pierde el bit exec y `uv run mypy` caería en un mypy
+      # GLOBAL con otro Python (7 errores fantasma). `python -m` resuelve
+      # siempre el mypy del venv; en el runner la salida es idéntica.
+      - name: mypy (strict, flow)
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv run python -m mypy flow
 
       - name: Suite de corrección (pytest -m "not slow")
         working-directory: obsidian-workspace/.tepochcalli

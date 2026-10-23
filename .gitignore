@@ -105,6 +105,7 @@ build/
 # Python - Testing and Coverage
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .coverage
 htmlcov/
 coverage.xml

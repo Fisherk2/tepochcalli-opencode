@@ -4,7 +4,7 @@ Sirve specs/spec-rag-engine.md §Target LanceDB + índices: la fila
 `{id, source_path, doc_kind, heading, char_start, char_end, text, embedding,
 model, indexed_at}` que T9 (puerto de lectura) y Phase 2 (contrato `search`)
 congelan como lectura. Y §Embeddings: las dims del vector se resuelven desde el
-embedder vía `Annotated[NDArray, EMBEDDER]` — nunca desde un literal `384` —
+embedder vía `Annotated[NDArray[Any], EMBEDDER]` — nunca desde un literal `384` —
 de modo que si cambia el modelo, el esquema sigue al embedder (ADR-006).
 
 T8 añade el segundo contrato del módulo: `RefreshReport`, el retorno tipado de
@@ -37,7 +37,7 @@ Notas de mapeo (fuente instalada `cocoindex==1.0.25`, `connectors/lancedb/_targe
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Annotated
+from typing import Annotated, Any
 
 import cocoindex as coco
 from cocoindex.connectors.lancedb import LanceAsyncConnection
@@ -76,8 +76,15 @@ class ChunkRow:
     text: str
     """Contenido exacto del chunk, idéntico al rango que citan sus offsets (F1)."""
 
-    embedding: Annotated[NDArray, EMBEDDER]
-    """Vector 384-d normalizado (F6); dims y modelo resueltos desde el embedder."""
+    embedding: Annotated[NDArray[Any], EMBEDDER]
+    """Vector 384-d normalizado (F6); dims y modelo resueltos desde el embedder.
+
+    El dtype se deja como `Any` a propósito: lo resuelve el `VectorSchema` del
+    embedder del contexto (`EMBEDDER`), que es quien fija dims y precisión
+    (ADR-006). Un literal aquí (p. ej. `np.float32`) no aporta nada al schema y
+    mentiría si cambia el embedder; `NDArray[Any]` sí es lo único que mypy
+    acepta — el alias de numpy exige argumento de tipo.
+    """
 
     model: str
     """Embedder que vectorizó el chunk — detección de índice mixto (ADR-006)."""
