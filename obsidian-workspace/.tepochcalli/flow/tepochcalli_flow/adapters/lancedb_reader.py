@@ -100,6 +100,37 @@ def _close_connection(db: lancedb.AsyncConnection) -> None:
     db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
 
 
+def _validated_args(query: str, top_k: int, path_filter: str | None) -> tuple[str, str | None]:
+    """Valida el borde común de `search`/`explain_plan`: texto y glob a predicado."""
+    text = query.strip()
+    if not text:
+        raise ValueError("query vacía: se exige una consulta no vacía (§search)")
+    if top_k < 1:
+        raise ValueError(f"top_k debe ser >= 1, recibido: {top_k}")
+    predicate = path_filter_to_like_predicate(path_filter) if path_filter else None
+    return text, predicate
+
+
+def _prepared_search(
+    table: lancedb.table.AsyncTable,
+    query_vector: list[float],
+    text: str,
+    top_k: int,
+    predicate: str | None,
+) -> lancedb.query.AsyncHybridQuery:
+    """Construye la búsqueda híbrida ANN+FTS con el prefiltro `.where()` condicional."""
+    search = (
+        table.query()
+        .nearest_to(query_vector)
+        .nearest_to_text(text, columns=[FTS_COLUMN])
+        .column(VECTOR_COLUMN)
+        .limit(top_k)
+    )
+    if predicate is not None:
+        search = search.where(predicate)
+    return search
+
+
 class LanceDBChunkReader:
     """`ChunkReader` sobre la tabla `chunks` de una base LanceDB embebida.
 
@@ -141,26 +172,13 @@ class LanceDBChunkReader:
         esquema roto (tabla sin índices) propaga la excepción de LanceDB sin
         envolver: es un error de indexación, no de contrato.
         """
-        text = query.strip()
-        if not text:
-            raise ValueError("query vacía: se exige una consulta no vacía (§search)")
-        if top_k < 1:
-            raise ValueError(f"top_k debe ser >= 1, recibido: {top_k}")
-        predicate = path_filter_to_like_predicate(path_filter) if path_filter else None
+        text, predicate = _validated_args(query, top_k, path_filter)
 
         query_vector = self._embed(text)
         db = await lancedb.connect_async(self._db_uri)
         try:
             table = await db.open_table(self._table_name)
-            search = (
-                table.query()
-                .nearest_to(query_vector)
-                .nearest_to_text(text, columns=[FTS_COLUMN])
-                .column(VECTOR_COLUMN)
-                .limit(top_k)
-            )
-            if predicate is not None:
-                search = search.where(predicate)
+            search = _prepared_search(table, query_vector, text, top_k, predicate)
             rows = await search.to_list()
         finally:
             _close_connection(db)
@@ -187,26 +205,13 @@ class LanceDBChunkReader:
         índice ANN (`KNNVectorDistance`), el índice FTS (`_score`) y la fusión
         RRF (`RRFReranker`).
         """
-        text = query.strip()
-        if not text:
-            raise ValueError("query vacía: se exige una consulta no vacía (§search)")
-        if top_k < 1:
-            raise ValueError(f"top_k debe ser >= 1, recibido: {top_k}")
-        predicate = path_filter_to_like_predicate(path_filter) if path_filter else None
+        text, predicate = _validated_args(query, top_k, path_filter)
 
         query_vector = self._embed(text)
         db = await lancedb.connect_async(self._db_uri)
         try:
             table = await db.open_table(self._table_name)
-            search = (
-                table.query()
-                .nearest_to(query_vector)
-                .nearest_to_text(text, columns=[FTS_COLUMN])
-                .column(VECTOR_COLUMN)
-                .limit(top_k)
-            )
-            if predicate is not None:
-                search = search.where(predicate)
+            search = _prepared_search(table, query_vector, text, top_k, predicate)
             # `AsyncQuery.explain_plan` no declara retorno en lancedb 0.40.0 (py.typed
             # pero sin anotación) ⇒ Any; el contrato del puerto lo fija en `str`.
             return cast(str, await search.explain_plan())
