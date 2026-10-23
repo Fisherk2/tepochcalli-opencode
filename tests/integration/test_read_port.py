@@ -333,6 +333,10 @@ def test_path_filter_to_like_predicate_pins_the_phase2_equivalence() -> None:
     assert path_filter_to_like_predicate("00-Resources/o'brien.md") == (
         "source_path LIKE '00-Resources/o''brien.md' ESCAPE '\\'"
     )
+    # Multibyte del glob se conserva tal cual en el patrón (UTF-8 en LIKE).
+    assert path_filter_to_like_predicate("00-Resources/lit/ñ-日-o'brien.md") == (
+        "source_path LIKE '00-Resources/lit/ñ-日-o''brien.md' ESCAPE '\\'"
+    )
 
 
 def test_invalid_inputs_are_rejected_at_the_boundary(

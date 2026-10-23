@@ -36,6 +36,7 @@ from __future__ import annotations
 
 import os
 import shutil
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -61,11 +62,29 @@ FALLBACK_CACHE = Path("/tmp/opencode/tepochcalli-t7-models")
 DOCLING_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/docling")
 FALLBACK_DOCLING_CACHE = Path("/tmp/opencode/tepochcalli-t7-docling")
 
-os.environ.setdefault("HF_HOME", str(SPIKE_CACHE if SPIKE_CACHE.exists() else FALLBACK_CACHE))
-os.environ.setdefault(
-    "DOCLING_CACHE_DIR",
-    str(DOCLING_CACHE if DOCLING_CACHE.exists() else FALLBACK_DOCLING_CACHE),
-)
+
+@pytest.fixture(autouse=True)
+def _stable_model_caches() -> Iterator[None]:
+    """Manda `HF_HOME`/`DOCLING_CACHE_DIR` al cache estable si nadie externo lo fija.
+
+    Fixturerizado (no a nivel de import): los `setdefault` a nivel de módulo
+    ALTERABAN el entorno global para la SUITE ENTERA tan pronto este módulo
+    se importara, sin restauración. Guarda y restaura el entorno por test;
+    sigue respetando un `HF_HOME` externo (semántica del `setdefault`).
+    """
+    prev: dict[str, str | None] = {k: os.environ.get(k) for k in ("HF_HOME", "DOCLING_CACHE_DIR")}
+    os.environ.setdefault("HF_HOME", str(SPIKE_CACHE if SPIKE_CACHE.exists() else FALLBACK_CACHE))
+    os.environ.setdefault(
+        "DOCLING_CACHE_DIR",
+        str(DOCLING_CACHE if DOCLING_CACHE.exists() else FALLBACK_DOCLING_CACHE),
+    )
+    yield
+    for key, value in prev.items():
+        if value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = value
+
 
 FIXTURE_PDF = Path(__file__).parents[1] / "fixtures" / "pdf" / "articulo_t7.pdf"
 """PDF real de 1 página escrito a mano (sin dependencias de autoría).

@@ -64,8 +64,8 @@ import lancedb
 from lancedb.rerankers import RRFReranker
 from sentence_transformers import SentenceTransformer
 
-from ..citation import DocKind, offsets_ref_for
 from .. import config as flow_config
+from ..citation import DocKind, offsets_ref_for
 from ..config import DEFAULT_TOP_K, load_config
 from ..ports import CitedChunk
 

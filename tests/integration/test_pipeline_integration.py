@@ -452,6 +452,11 @@ def test_apply_model_cache_env_runs_before_the_embedder_is_constructed() -> None
     El orden no es observable en runtime (el embedder carga el modelo de forma
     perezosa, dentro de `embed()`), así que se afirma sobre el orden fuente del
     lifespan — la única prueba directa disponible.
+
+    Limitación conocida (como su hermana de `test_elapsed_ms`): inspecciona
+    TEXTO fuente — una refactorización equivalente pero de otro estilo (p. ej.
+    extraer el orden a otro módulo) rompería este assert aunque el runtime
+    siga bien; si eso pasa se reescribe la prueba, no el orden del AC.
     """
     source = _lifespan_source()
     assert source.index("apply_model_cache_env") < source.index("SentenceTransformerEmbedder")

@@ -324,7 +324,17 @@ def _spawn(script: str, vault: Path, cache: Path) -> subprocess.CompletedProcess
 
 @pytest.fixture(scope="module")
 def journey(tmp_path_factory: pytest.TempPathFactory) -> Journey:
-    """Vault temporal recorrido por 11 refreshes reales en un subproceso (T8)."""
+    """Vault temporal recorrido por 11 refreshes real (T8)."""
+    # Probe de permisos (mismo patrón que test_parsers): el journey simula un
+    # directorio con chmod 0o000; si el filesystem no enforce (NTFS/fuseblk),
+    # la contabilidad exacta de los pasos no es reproducible → módulo entero skip.
+    probe = tmp_path_factory.mktemp("permisos-probe")
+    probe.chmod(0o000)
+    if os.access(probe, os.R_OK):
+        probe.chmod(0o755)
+        pytest.skip("el filesystem no enforce permisos de lectura (NTFS/fuseblk)")
+    probe.chmod(0o755)
+
     vault = tmp_path_factory.mktemp("vault-t8")
     resources = vault / RESOURCE_DIR_NAME
     resources.mkdir()
@@ -496,7 +506,13 @@ def test_refresh_report_is_a_frozen_typed_contract_without_any() -> None:
 
 
 def test_elapsed_ms_is_computed_with_a_monotonic_clock() -> None:
-    """`elapsed_ms` sale de `time.monotonic()` — inmune a ajustes de reloj."""
+    """`elapsed_ms` sale de `time.monotonic()` — inmune a ajustes de reloj.
+
+    Limitación (como su hermana de test_pipeline_integration): inspecciona
+    TEXTO fuente, no semántica — una forma equivalente de leer el reloj
+    monotónico (p. ej. `time.monotonic_ns()`) rompería el assert siendo
+    correcta. Si eso pasa se actualiza la prueba, no se relaja el contrato.
+    """
     source = inspect.getsource(flow_app.refresh_blocking)
     assert "time.monotonic" in source
     assert "time.time(" not in source
