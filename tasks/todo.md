@@ -147,30 +147,37 @@
 
 ## Sub-fase D — Medición, CI y cierre
 
-- [ ] **T10 · Bench Δ<30s p95 (20 corridas) + reporte del costo de PDF**
+- [x] **T10 · Bench Δ<30s p95 (20 corridas) + reporte del costo de PDF** ✅ *hecho — `876f209`*
   - Subagentes: `performance-benchmarker`, `data-engineer` · Skills: `performance-analysis`, `performance-optimization`, `observability-and-instrumentation`, `documentation-and-adrs`
   - AC: script reproducible con corpus de 50 md/txt y 20 corridas; **M1** p95 < 30.000 ms con host documentado; PDFs grandes excluidos y reportados aparte; cifra **medida** en `docs/WORKFLOW.md`; bench idempotente sobre vault temporal
   - Verificar: el número publicado es idéntico al del output del script
   - Dep.: T8 · Tamaño: S
+  - ✅ **Verificado — M1 PASS con margen 5×:** p95 = **5 385 / 5 466 / 5 952 ms** en 3 corridas (gate 30 000 ms), variación ≤10 %. Percentil **nearest-rank** declarado: con n=20 es el **19º valor ordenado** (segundo mayor) — *la lección de n=10, donde colapsaba al máximo*. Host observado: i7-8750H 6C/12T, 15,8 GiB, **swap 7 913 MB sin presión durante las corridas** (muestreo 250 ms), vault en btrfs/NVMe. Desviación declarada: host de desarrollo, no la VM de referencia de TRD.
+  - 📌 **Honestidad del bench:** la indexación **inicial fría** varió mucho más (34 227 / 33 358 / **70 694 ms**) — queda fuera del presupuesto por protocolo, pero se publica. PDFs **excluidos** y citados de T7 (no re-meditidos, para no mezclar cifras).
 
-- [ ] **T11 · CI de Phase 1 (ruff + unit/integration smoke)**
+- [x] **T11 · CI de Phase 1 (ruff + unit/integration smoke)** ✅ *hecho — `a426250` + `0a16e18`*
   - Subagentes: `devops-engineer`, `python-pro` · Skills: `ci-cd-and-automation`, `source-driven-development`, `clean-code`
   - AC: `.github/workflows/phase1.yml` en PR y push (`uv sync --frozen` → ruff check → ruff format --check → `pytest -m "not slow"`); caché HF por revisión pineada; smoke Δ de 1 corrida con umbral generoso (el p95 **no** corre en CI); el workflow no toca `db/models/config/venv` del repo
   - Verificar: push → workflow verde; PR con lint roto → workflow rojo (el gate **muerde**)
   - Dep.: T6, T10 · Tamaño: S
+  - ✅ **Verificado LOCALMENTE:** actionlint **v1.7.9** + shellcheck **0 errores**; los 7 pasos ejecutados en el mismo orden y directorio que declara el workflow; suite **137 passed**; smoke Δ **1 757 ms < 60 000 ms** sin percentil; clave de caché derivada del hash de `uv.lock` + id del modelo (bump ⇒ clave nueva, con `restore-keys` content-addressed).
+  - ⚠️ **M6 NO se cierra del todo — decisión del usuario 2026-10-23: no publicar todavía.** El AC exige «push → workflow verde», y eso requiere publicar 27 commits en un repo **público**. Queda verificado localmente con la salvedad explícita; el workflow **nunca ha corrido en GitHub Actions**.
+  - 📌 **Hallazgo que arregló un test:** `_snapshot_cached` construía el slug `models--paraphrase-…` mientras el real es `models--sentence-transformers--paraphrase-…` (ST 6.x prefija el org) → `HF_HUB_OFFLINE=1` **nunca se fijaba** y la hermeticidad de **M3(b)** no se aplicaba en el camino de caché cálido. Corregido en `model_cache.py`, con sondas que cubren las 5 ramas.
+  - 📌 **Pre-flight de máquina limpia:** con caches vacías y env externo la suite pasa (964 MB descargados); el env externo manda y **ningún path de `/tmp` es requisito incondicional**.
 
 - [ ] **T12 · Cierre de fase: FTR, métricas, deuda técnica y status de specs**
   - Subagentes: `technical-writer`, `code-reviewer`, `security-auditor`, `minimal-change-engineer` · Skills: `documentation-and-adrs`, `code-review-and-quality`, `git-workflow-and-versioning`, `architecture-diagrams`, `security-and-hardening`
-  - AC: `docs/WORKFLOW.md` §Phase 1 con M1/M2/M3 medidas + §8 Lessons learned; `docs/TECH_DEBT.md` re-revisado (TD-1..TD-4); `SPEC.md` con `spec-rag-engine` y `spec-embeddings` en `Approved`; FTR Phase 0→1 con checklist D1-D9 y mermaid válido; `docs/ARCHITECTURE.md` con inventory + diagrama de componentes; checklist pre-commit de `AGENTS.md` verificado (`.opencode/` intacto); `git status --short` sin `venv/db/models/bin/config`; **M7** aprobación explícita del usuario
-  - Verificar: `markdownlint docs specs AGENTS.md SPEC.md` → 0 errores; `git diff --stat main...HEAD` solo lo previsto
+  - AC: `docs/WORKFLOW.md` §Phase 1 con M1/M2/M3 medidas + §8 Lessons learned; `docs/TECH_DEBT.md` re-revisado (TD-1..TD-9); `SPEC.md` con `spec-rag-engine` y `spec-embeddings` en `Approved`; FTR Phase 0→1 con checklist D1-D9 y mermaid válido; `docs/ARCHITECTURE.md` con inventory + diagrama de componentes; checklist pre-commit de `AGENTS.md` verificado (`.opencode/` intacto); `git status --short` sin `venv/db/models/bin/config`; **M7** aprobación explícita del usuario
+  - Verificar: `markdownlint docs specs AGENTS.md SPEC.md` → **cero errores NUEVOS sobre la línea base de 420** *(AC corregido por el principio de D12)*; `git diff --stat main...HEAD` solo lo previsto
+  - ⚠️ **AC de lint redefinido por consistencia con D12:** el baseline real de `docs specs AGENTS.md SPEC.md` es **420 errores** (369 MD060 de estilo de tablas, 14 MD034, 13 MD033, 7 MD004, 6 MD022, …). «0 errores» era insatisfacible, igual que lo fue el de T1, y D12 ya fijó el principio: baseline + **cero errores nuevos**. Los 420 quedan como deuda pre-existente, no se arreglan en el cierre de fase.
   - Dep.: T10, T11 · Tamaño: M
 
-### ⛔ CP-D · Gate Phase 1 → Phase 2
-- [ ] M1 (p95 < 30s) con cifra y máquina documentadas
-- [ ] M6 (CI verde y **muerde**)
-- [ ] FTR Phase 0→1 con checklist D1-D9
-- [ ] `SPEC.md` y `docs/TECH_DEBT.md` al día
-- [ ] **M7: aprobación explícita del usuario para arrancar Phase 2**
+### ⛔ CP-D · Gate Phase 1 → Phase 2 — *en curso*
+- [x] **M1** (p95 < 30s) con cifra y máquina documentadas ✅ *(T10 — 5 385/5 466/5 952 ms, host + swap documentados)*
+- [ ] **M6** (CI verde y **muerde**) ⚠️ *parcial — verificado localmente (actionlint + 7 pasos + suite + smoke), **el workflow nunca corrió en Actions**; falta publicar (decisión del usuario)*
+- [ ] FTR Phase 0→1 con checklist D1-D9 → **T12**
+- [ ] `SPEC.md` y `docs/TECH_DEBT.md` al día → **T12** *(TD-1..TD-9)*
+- [ ] **M7: aprobación explícita del usuario para arrancar Phase 2** — *se pedirá al cerrar T12*
 
 ---
 
