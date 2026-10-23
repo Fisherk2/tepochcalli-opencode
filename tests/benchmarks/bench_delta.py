@@ -115,10 +115,12 @@ SMOKE_RUNS = 1
 SMOKE_MODIFIED_FILES = 10
 """Ficheros que reescribe la corrida smoke (de 50): un Δ real, no trivial."""
 
-SMOKE_BUDGET_MS = 60_000
-"""Umbral del smoke, deliberadamente generoso: solo caza regresiones groseras
-en el runner compartido de CI. El gate M1 real (p95 < 30 000 ms) sigue siendo
-una medición LOCAL documentada (TRD §6) y NO corre en CI (T11)."""
+SMOKE_BUDGET_MS = 10_000
+"""Umbral del smoke, delimitado a un margen ~8x sobre la medición local (1261 ms
+por pasada Δ de fyi: margen razonable en el runner CI compartido): caza
+regresiones de un orden de magnitud sin dejar pasar el gate con 60 s de
+holgura, que ya no moriría regresiones. El gate M1 real (p95 < 30 000 ms)
+sigue siendo una medición LOCAL documentada (TRD §6) y NO corre en CI (T11)."""
 
 BENCH_DIR = Path("/tmp/opencode/tepochcalli-t1-spike/bench")
 """Donde viven los vaults temporales del bench (btrfs/NVMe, fuera del repo).
