@@ -60,6 +60,13 @@ class CitedChunk:
     score: float
     """Relevancia híbrida normalizada a [0,1], orden descendente (§search)."""
 
+    offsets_ref: str = "source"
+    """Espacio de coordenadas de los offsets (decisión T7, congelada): `"source"`
+    cuando el slice del archivo ORIGINAL reproduce `text` (md/markdown/txt) y
+    `"extract"` cuando citan el markdown que Docling extrajo del PDF (el
+    binario jamás es el espacio de cita). Campo ADITIVO (Hyrum, §search):
+    extensiones futuras del contrato solo agregan campos, nunca retiran."""
+
 
 @runtime_checkable
 class ChunkReader(Protocol):

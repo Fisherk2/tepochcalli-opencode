@@ -173,6 +173,33 @@ def test_heading_ignores_a_hash_after_a_mismatched_backtick_run_inside_an_open_s
 # --- offsets -------------------------------------------------------------------
 
 
+@pytest.mark.parametrize(
+    ("doc_kind", "expected"),
+    [("md", "source"), ("markdown", "source"), ("txt", "source"), ("pdf", "extract")],
+)
+def test_offsets_ref_for_pins_the_t7_coordinate_space(
+    doc_kind: citation.DocKind, expected: str
+) -> None:
+    """Decisión T7 congelada: `source` para md/markdown/txt, `extract` para pdf."""
+    assert citation.offsets_ref_for(doc_kind) == expected
+
+
+def test_citation_offsets_are_character_level_for_multibyte_text() -> None:
+    """Los offsets F1 son CHAR-level (Python): multibyte no desplaza el slice.
+
+    `'😀 ñ 日'` —3 caracteres— mide offsets por CARÁCTER, nunca por byte de
+    UTF-8 (que daría 10). El slice por char reproduce el chunk exacto.
+    """
+    text = "\U0001f600 ñ 日fragmento multibyte"
+    char_start = text.index("fragmento")
+    char_end = char_start + len("fragmento multibyte")
+
+    assert citation.verify_slice_identity(text, char_start, char_end, "fragmento multibyte")
+    assert text[char_start:char_end] == "fragmento multibyte"
+    # La longitud del índice de bytes no puede ser el offset: char-level explícito.
+    assert char_start != len(text.encode("utf-8"))
+
+
 def test_validate_offsets_returns_the_exact_slice_bounds() -> None:
     """Límites válidos se devuelven tal cual: `0 <= start < end <= len(text)`."""
     text = "hola mundo"

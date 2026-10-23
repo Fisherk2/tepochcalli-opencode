@@ -124,11 +124,12 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _print_chunk(position: int, chunk: CitedChunk) -> None:
-    """Imprime un chunk citado con los seis campos congelados de §search."""
+    """Imprime un chunk citado con los siete campos congelados de §search."""
     print(f"\n[{position}] score={chunk.score:.4f}")
     print(f"    source_path={chunk.source_path}")
     print(f"    heading={chunk.heading!r}")
     print(f"    [char_start={chunk.char_start}, char_end={chunk.char_end}]")
+    print(f"    offsets_ref={chunk.offsets_ref}")
     print(f"    text={chunk.text!r}")
 
 

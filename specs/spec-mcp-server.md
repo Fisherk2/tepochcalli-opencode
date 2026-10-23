@@ -59,6 +59,7 @@ Contrato: `search(query: str, top_k: int = 5, path_filter: str | None = None)`
 
 * `path_filter`: glob relativo a la raíz del vault; se aplica como pre-filtro en la query LanceDB (`WHERE source_path LIKE …` traducido de `*`→`%`).
 * `score`: similitud normalizada [0,1] del híbrido ANN+FTS; orden descendente garantizado.
+* Campo aditivo (T7, 2026-10-23): `offsets_ref: "source" | "extract"` — `source` si el slice del archivo original reproduce `text` (md/markdown/txt), `extract` si los offsets citan el markdown extraído por Docling (`pdf`; el binario jamás es el espacio de cita).
 * Campos congelados por contrato (Hyrum, ADR-005): extensiones futuras solo aditivas/opcionales.
 
 ### Tool `index_refresh`

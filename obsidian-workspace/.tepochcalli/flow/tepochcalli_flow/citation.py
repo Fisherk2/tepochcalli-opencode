@@ -52,6 +52,25 @@ _DOC_KIND_BY_SUFFIX: Final[dict[str, DocKind]] = {
     "pdf": "pdf",
 }
 
+OFFSETS_REF_SOURCE: Final = "source"
+"""`offsets_ref` de un doc ingestado texto-a-texto: los offsets F1 citan el
+archivo ORIGINAL (md/markdown/txt) — identidad de slice directa (decisión T7)."""
+
+OFFSETS_REF_EXTRACT: Final = "extract"
+"""`offsets_ref` de un PDF: los offsets citan el markdown EXTRAÍDO por Docling,
+no el binario (el binario no es texto; decisión T7, spec-rag-engine §Ruta PDF)."""
+
+
+def offsets_ref_for(doc_kind: DocKind) -> str:
+    """Espacio de coordenadas de los offsets F1 según `doc_kind` (decisión T7, congelada).
+
+    `"source"` para {md, markdown, txt} —el slice del archivo reproduce `text`
+    byte a byte— y `"extract"` para `pdf`, cuyo espacio de offsets es el
+    markdown que Docling exporta (el binario del PDF jamás se lee como texto).
+    La decisión T7 queda congelada aquí y en `ports.CitedChunk.offsets_ref`.
+    """
+    return OFFSETS_REF_EXTRACT if doc_kind == "pdf" else OFFSETS_REF_SOURCE
+
 
 class CitationError(ValueError):
     """Error de dominio de la cita: offsets o path inválidos (criterio 5, T4)."""

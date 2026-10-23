@@ -53,6 +53,7 @@ from sentence_transformers import SentenceTransformer
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow import config as flow_config
+from tepochcalli_flow.adapters import lancedb_reader
 from tepochcalli_flow.adapters.lancedb_reader import (
     LanceDBChunkReader,
     path_filter_to_like_predicate,
@@ -61,7 +62,15 @@ from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 FIXTURE_VAULT = Path(__file__).parents[1] / "fixtures" / "vault_markdown"
 
-CONTRACT_FIELDS = ["text", "source_path", "heading", "char_start", "char_end", "score"]
+CONTRACT_FIELDS = [
+    "text",
+    "source_path",
+    "heading",
+    "char_start",
+    "char_end",
+    "score",
+    "offsets_ref",
+]
 
 PLAIN_TXT_CONTENT = (
     "Texto plano de prueba sin jerarquía de headings.\n\n"
@@ -185,6 +194,26 @@ def test_chunk_result_heading_is_nullable_and_the_rest_required() -> None:
 def test_lancedb_adapter_satisfies_the_port() -> None:
     """El adaptador LanceDB implementa el protocolo `ChunkReader` (structural)."""
     assert isinstance(LanceDBChunkReader.__new__(LanceDBChunkReader), ChunkReader)
+
+
+def test_cited_chunk_row_mapping_pins_offsets_ref_from_doc_kind() -> None:
+    """`offsets_ref` se deriva de `doc_kind` persistido en la fila: pdf→extract, md→source."""
+    base = dict(
+        text="t",
+        source_path="00-Resources/a.md",
+        heading=None,
+        char_start=0,
+        char_end=1,
+        _relevance_score=1.0,
+    )
+    rows: list[dict[str, Any]] = [
+        {**base, "doc_kind": "md"},
+        {**base, "doc_kind": "pdf", "source_path": "00-Resources/articulo.pdf"},
+    ]
+
+    chunks = lancedb_reader._to_cited_chunks(rows)
+
+    assert [chunk.offsets_ref for chunk in chunks] == ["source", "extract"]
 
 
 def test_search_returns_the_frozen_shape_with_nullable_heading(
@@ -318,6 +347,10 @@ def test_invalid_inputs_are_rejected_at_the_boundary(
         _search(reader, "markdown", path_filter="/absoluto/*.md")
     with pytest.raises(ValueError, match=r"\.\."):
         _search(reader, "markdown", path_filter="00-Resources/../secreto/*.md")
+    with pytest.raises(ValueError, match=r"\.\."):  # backslash normalizado → escape igual
+        _search(reader, "markdown", path_filter="00-Resources\\..\\secreto\\*.md")
+    with pytest.raises(ValueError, match="presupuesto"):  # query cap (frontera 10k)
+        _search(reader, "x" * 10_001)
 
 
 # --- híbrido ANN + FTS ----------------------------------------------------------

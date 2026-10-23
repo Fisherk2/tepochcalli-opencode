@@ -54,7 +54,9 @@ constructor ni `search` escriben disco alguno (verificador T9 lo snapshot-ea).
 
 from __future__ import annotations
 
-from collections.abc import Callable
+import asyncio
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from pathlib import Path, PurePosixPath
 from typing import Final, cast
 
@@ -62,6 +64,7 @@ import lancedb
 from lancedb.rerankers import RRFReranker
 from sentence_transformers import SentenceTransformer
 
+from ..citation import DocKind, offsets_ref_for
 from ..config import DEFAULT_TOP_K, load_config
 from ..ports import CitedChunk
 
@@ -88,6 +91,9 @@ RRF_MAX_SCORE: Final[float] = 2.0 / (RRF_K + 1)
 
 _EscapeChars: Final = {"%": "\\%", "_": "\\_"}
 r"""Literales LIKE que deben escaparse en el patrón (`\` ya se normalizó a `/`)."""
+
+QUERY_MAX_CHARS: Final = 10_000
+"""Tope de caracteres de `query` (frontera del contrato; presupuesto §search)."""
 
 
 def _close_connection(db: lancedb.AsyncConnection) -> None:
@@ -127,6 +133,11 @@ def _validated_args(query: str, top_k: int, path_filter: str | None) -> tuple[st
     text = query.strip()
     if not text:
         raise ValueError("query vacía: se exige una consulta no vacía (§search)")
+    if len(text) > QUERY_MAX_CHARS:
+        raise ValueError(
+            f"query de {len(text)} caracteres supera el presupuesto de "
+            f"{QUERY_MAX_CHARS} (§search); recórtala a lo esencial de la cita"
+        )
     if top_k < 1:
         raise ValueError(f"top_k debe ser >= 1, recibido: {top_k}")
     predicate = path_filter_to_like_predicate(path_filter) if path_filter else None
@@ -179,6 +190,15 @@ class LanceDBChunkReader:
         self._embed = embed
         self._table_name = table_name
 
+    @asynccontextmanager
+    async def _open_table(self) -> AsyncIterator[lancedb.table.AsyncTable]:
+        """Abre la conexión, entrega la tabla `chunks` y la cierra SIEMPRE (ver módulo)."""
+        db = await lancedb.connect_async(self._db_uri)
+        try:
+            yield await db.open_table(self._table_name)
+        finally:
+            _close_connection(db)
+
     async def search(
         self,
         query: str,
@@ -189,31 +209,27 @@ class LanceDBChunkReader:
 
         Ejecuta la búsqueda híbrida ANN+FTS con prefiltro `path_filter` (glob
         relativo al vault) y devuelve la forma congelada `CitedChunk` — los
-        seis campos SIEMPRE presentes, `heading` nullable (D13). `ValueError`
-        en el borde para consulta vacía, `top_k < 1` o glob inválido; un
-        esquema roto (tabla sin índices) propaga la excepción de LanceDB sin
-        envolver: es un error de indexación, no de contrato.
+        siete campos SIEMPRE presentes, `heading` nullable (D13), `offsets_ref`
+        citando si los offsets son del archivo fuente o del markdown extraído
+        (T7). `ValueError` en el borde para consulta vacía, `top_k < 1`,
+        query sobredimensionada o glob inválido; un esquema roto (tabla sin
+        índices) propaga la excepción de LanceDB sin envolver: es un error de
+        indexación, no de contrato.
         """
         text, predicate = _validated_args(query, top_k, path_filter)
 
-        query_vector = self._embed(text)
-        db = await lancedb.connect_async(self._db_uri)
-        try:
-            table = await db.open_table(self._table_name)
+        # `self._embed` es CPU pesado: fuera del loop, a un thread (saturar el
+        # event loop detendría el engine embebido de la misma corrida).
+        query_vector = await asyncio.to_thread(self._embed, text)
+        async with self._open_table() as table:
             search = _prepared_search(table, query_vector, text, top_k, predicate)
             rows = await search.to_list()
-        finally:
-            _close_connection(db)
         return _to_cited_chunks(rows)
 
     async def count_rows(self) -> int:
         """Filas de la tabla `chunks` — diagnóstico para el verificador (M4)."""
-        db = await lancedb.connect_async(self._db_uri)
-        try:
-            table = await db.open_table(self._table_name)
+        async with self._open_table() as table:
             return await table.count_rows()
-        finally:
-            _close_connection(db)
 
     async def explain_plan(
         self,
@@ -229,16 +245,12 @@ class LanceDBChunkReader:
         """
         text, predicate = _validated_args(query, top_k, path_filter)
 
-        query_vector = self._embed(text)
-        db = await lancedb.connect_async(self._db_uri)
-        try:
-            table = await db.open_table(self._table_name)
+        query_vector = await asyncio.to_thread(self._embed, text)
+        async with self._open_table() as table:
             search = _prepared_search(table, query_vector, text, top_k, predicate)
             # `AsyncQuery.explain_plan` no declara retorno en lancedb 0.40.0 (py.typed
             # pero sin anotación) ⇒ Any; el contrato del puerto lo fija en `str`.
             return cast(str, await search.explain_plan())
-        finally:
-            _close_connection(db)
 
 
 def path_filter_to_like_predicate(path_filter: str) -> str:
@@ -253,8 +265,10 @@ def path_filter_to_like_predicate(path_filter: str) -> str:
     * `?` → `_` (un solo carácter, también cruza `/`);
     * los literales `%` y `_` del glob se escapan con `\` (un `_` de nombre
       propio —p. ej. `con_guion_bajo.md`— no debe casar cualquier carácter);
-    * `\` del glob se normaliza a `/` ANTES de traducir, igual que
-      `citation.normalize_source_path` (rutas POSIX, D9.1);
+    * `\` del glob se normaliza a `/` ANTES de traducir, UNA vez al inicio —
+      los checks (`..`, absoluto) corren sobre la versión NORMALIZADA:
+      `sub\..\x` es `sub/../x` y se rechaza igual (igual que
+      `citation.normalize_source_path`, rutas POSIX, D9.1);
     * `'` se duplica (`''`): el predicado es una cadena SQL, nunca inyección.
 
     El glob es RELATIVO a la raíz del vault —como el `source_path` almacenado,
@@ -262,17 +276,18 @@ def path_filter_to_like_predicate(path_filter: str) -> str:
     LANZA `ValueError` (frontera de confianza; el calling Phase 2 no puede
     colar un filtro que escape del vault).
     """
-    if path_filter.startswith("/"):
+    normalized = path_filter.replace("\\", "/")
+    if normalized.startswith("/"):
         raise ValueError(
             f"path_filter debe ser un glob relativo al vault, no absoluto: {path_filter!r}"
         )
-    if ".." in PurePosixPath(path_filter).parts:
+    if ".." in PurePosixPath(normalized).parts:
         raise ValueError(
             f"path_filter no puede contener segmentos '..' (escape del vault): {path_filter!r}"
         )
     pattern = "".join(
         "%" if char == "*" else "_" if char == "?" else _EscapeChars.get(char, char)
-        for char in path_filter.replace("\\", "/")
+        for char in normalized
     )
     return f"source_path LIKE '{pattern.replace(chr(39), chr(39) * 2)}' ESCAPE '\\'"
 
@@ -301,6 +316,7 @@ def _to_cited_chunks(rows: list[dict[str, object]]) -> list[CitedChunk]:
                 1.0,
                 max(0.0, float(cast("float | int", row["_relevance_score"])) / RRF_MAX_SCORE),
             ),
+            offsets_ref=offsets_ref_for(cast(DocKind, str(row["doc_kind"]))),
         )
         for row in rows
     ]
