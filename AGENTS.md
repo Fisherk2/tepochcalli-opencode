@@ -40,10 +40,9 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * Convención completa: [docs/CODE_STYLE.md](docs/CODE_STYLE.md). Resumen obligatorio:
 * Python (flow + MCP): ruff, type hints estrictos en funciones públicas, módulos bajo
   `.tepochcalli/flow/` y `.tepochcalli/mcp/`; nada de lógica de negocio en `opencode.json`.
-* Gate mypy strict sobre `flow/`: `uv run python -m mypy flow` desde
-  `obsidian-workspace/.tepochcalli/`.
-* El portero de comandos es el Justfile (raíz): lanzar comandos vía recetas `just` —
-  `just ci` es el gate completo (sync → lint → fmt-check → typecheck → test → bench-smoke).
+* El portero de comandos es el Justfile (raíz): **lanzar comandos vía recetas `just`, nunca
+  crudos** — `just typecheck` es el gate mypy strict sobre `flow/`, `just quality` el gate
+  táctico, y `just ci` el gate completo (sync → lint → fmt-check → typecheck → test → bench-smoke).
 * Rust (wizard): `cargo fmt` + `cargo clippy -D warnings`; fases del instalador como
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).
 * Nomenclatura: specs `specs/spec-<kebab>.md`; ADRs `specs/adr/adr-NNN-<kebab>.md`; commits
@@ -80,7 +79,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   <!-- markdownlint-enable MD004 -->
 - [ ] Docs en español con términos exactos de D1-D6 (`tepochcalli-rag`, `.tepochcalli/`, `paraphrase-multilingual-MiniLM-L12-v2`, `cocoindex`, `markitdown-mcp`).
 - [ ] Si toqué un contrato (tools, config, layout): actualizo la spec correspondiente Y, si es decisión, escribo ADR.
-- [ ] Gate táctico verde: `just lint && just fmt-check && cd obsidian-workspace/.tepochcalli && uv run python -m mypy flow` (o `just ci` completo antes de integrar).
+- [ ] Gate táctico verde: `just quality` (o `just ci` completo antes de integrar).
 - [ ] Bloques mermaid válidos (sin paréntesis sin comillas en labels de nodo).
 - [ ] `git status --short` muestra solo mis archivos intencionados; nada de `venv/db/models`.
 - [ ] Commit atómico Conventional Commits ≤72 cols con trailer `Co-Authored-By`.

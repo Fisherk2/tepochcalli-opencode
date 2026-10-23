@@ -5,15 +5,18 @@
 
 ## Herramientas y comandos
 
-| Área | Toolchain | Comandos |
+| Área | Toolchain | Comandos (recetas del Justfile raíz) |
 |---|---|---|
-| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `uv run ruff check --fix .` · `uv run ruff format .` · `uv run python -m mypy flow` · `uv run python -m pytest` |
-| Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | `cargo fmt --all` · `cargo clippy --all-targets -- -D warnings` · `cargo test` |
-| Docs | markdownlint (reglas desactivadas: líneas largas en MD) | `markdownlint docs specs AGENTS.md SPEC.md` |
+| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `just lint-fix` · `just fmt` · `just typecheck` · `just test` |
+| Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | comandos crudos de cargo (sin receta hasta Phase 3, cuando el crate exista — ver §Convenciones Rust) |
+| Docs | markdownlint (reglas desactivadas: líneas largas en MD) | `just md-lint` |
 | Commits | Conventional Commits manuales (hook a decisión en Phase 1) | ver §Commits |
 
-Los comandos Python se ejecutan desde `obsidian-workspace/.tepochcalli/` (es el proyecto uv). El
-gate de tipos es **real y estricto**: `mypy` con `strict = true` fijado en `[tool.mypy]` de su
+Python se ejecuta SIEMPRE vía recetas de `just`: el Justfile exporta `UV_PROJECT_ENVIRONMENT=venv`
+(quirk uv 0.12.9: sin esa var, uv crea un `.venv` paralelo con deriva impredecible). Un `uv` crudo
+a mano fuera de la receta es la fuente de entornos dobles. El
+gate de tipos es **real y estricto**: `just typecheck` corre `mypy` con `strict = true` fijado en
+`[tool.mypy]` de su
 `pyproject.toml` — sin `[[tool.mypy.overrides]]` para el código propio ni flags de relajación, y en
 CI entre `ruff format --check` y `pytest` (`.github/workflows/phase1.yml`). Superficie tipada en
 **v1: solo `flow/`** (`files = ["flow"]`); `mcp/` se suma al gate cuando Phase 2 cree el paquete, y
