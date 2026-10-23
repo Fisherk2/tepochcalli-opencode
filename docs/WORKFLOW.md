@@ -126,7 +126,7 @@ v1 ([CODE_STYLE.md](CODE_STYLE.md) §Herramientas y comandos).
 `just coverage` es la ÚNICA cifra honesta: instrumenta también los subprocesos (`refresh` y el CLI
 `verify`), vía `sitecustomize` + `[tool.coverage.run] parallel`. `pytest --cov` a secas sub-mide
 (`verify.py` 0 %, `app.py` 74 % → real medido: `verify.py` 98 %, `app.py` 93 %,
-total 90 %). Gate: `fail_under = 95` en el pyproject del
+total 98 %). Gate: `fail_under = 95` en el pyproject del
 flow; por debajo, la receta falla.
 
 ## 4. Formal Technical Reviews (FTRs)
