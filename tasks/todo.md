@@ -6,8 +6,8 @@
 
 **Rama:** `feat/workspace-obsidian` · **Fuente:** [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 2
 **Rama de código:** `obsidian-workspace/.tepochcalli/mcp/` · **Rama de tests:** `tests/`
-**Historial:** el plan de Phase 1 está en [tasks/phase1-plan.md](phase1-plan.md) y
-[tasks/phase1-todo.md](phase1-todo.md).
+**Historial:** este fichero sustituye al TODO de Phase 1, que se conserva íntegro en el
+historial de git (`git show c4f7db3:tasks/todo.md`).
 
 ---
 

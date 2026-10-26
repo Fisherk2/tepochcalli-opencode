@@ -11,8 +11,8 @@
 > añadir las entradas `mcp.servers.tepochcalli-rag` y `mcp.servers.markitdown` a
 > `obsidian-workspace/opencode.json` (config del payload). `obsidian-workspace/.opencode/`
 > (agents/commands/skills) sigue **VEDADO** — eso es Phase 4-5.
-> **Historial:** el plan de Phase 1 se archivó en [tasks/phase1-plan.md](phase1-plan.md) y
-> [tasks/phase1-todo.md](phase1-todo.md) (`git mv`; el original queda en el historial de git).
+> **Historial:** este fichero sustituye al plan de Phase 1, que se conserva íntegro en el
+> historial de git (`git show c4f7db3:tasks/plan.md`).
 
 ## 1. Objetivo y criterio de éxito
 
@@ -609,4 +609,4 @@ margen restante  = ≥400 tokens para la pregunta y la respuesta del agente (cot
 * ADR-005 (ports/adapters) · ADR-007 (provider + `rag_status` + `E_*`) · ADR-008 (swap atómico)
 * MCP Python SDK v2.3.0 — https://github.com/modelcontextprotocol/python-sdk
   (`FastMCP`→`MCPServer`, `mcp.server.mcpserver.*`, `CallToolResult` explícito)
-* [tasks/phase1-plan.md](phase1-plan.md) · [tasks/phase1-todo.md](phase1-todo.md) — plan de Phase 1
+* Plan de Phase 1 — historial de git (`git show c4f7db3:tasks/plan.md`)
