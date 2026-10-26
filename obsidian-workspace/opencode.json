@@ -117,6 +117,14 @@
       }
     }
   },
+  "plugin": [
+    "opencode-rpc@2.0.0",
+    "opencode-skills-collection@latest",
+    "opencode-skills-tui@latest",
+    "opencode-cockpit@latest",
+    "@hacky.software/opencode-todo-supervisor@latest",
+    "opencode-parser@latest"
+  ],
   "permissions": [
     {
       "action": "subagent",
