@@ -32,6 +32,24 @@ logger = logging.getLogger(__name__)
 INDEX_STALE_MODEL_ALIAS: Final = "INDEX_STALE_MODEL"
 """Alias legado de `E_MODEL_MISMATCH`, viaja en `details.legacy_code` (spec §Códigos)."""
 
+FIX_NO_EMBEDDER: Final = "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`"
+"""Solución exacta de spec §rag_status para `E_NO_EMBEDDER` — única fuente de verdad.
+
+La usan el payload `errors.no_embedder()` Y `health.fix_hint` de la tool
+`rag_status` (T4): los textos de `fix_hint` se escriben UNA vez (D7.3 obliga
+al agente a reportar este texto, no un error crudo).
+"""
+
+FIX_MODEL_MISMATCH: Final = (
+    "Reconstruye el índice con el modelo configurado: "
+    "`tepochcalli reindex --confirm` (spec-embeddings §swap)"
+)
+"""Solución de `E_MODEL_MISMATCH` (comando literal de spec §INDEX_STALE_MODEL).
+
+Misma dualidad que `FIX_NO_EMBEDDER`: payload de error Y `health.fix_hint` de
+`rag_status` (T4) — un solo texto para ambas superficies.
+"""
+
 
 def validation_error(message: str, details: object = None) -> dict[str, object]:
     """`VALIDATION_ERROR` legado — argumentos inválidos en el borde MCP (plan §5)."""
@@ -63,10 +81,7 @@ def model_mismatch(index_models: set[str], expected: str) -> dict[str, object]:
                 f"El índice fue construido con [{listed}] y la config actual usa "
                 f"{expected!r}; no se cruzan dims de modelos distintos."
             ),
-            "fix_hint": (
-                "Reconstruye el índice con el modelo configurado: "
-                "`tepochcalli reindex --confirm` (spec-embeddings §swap)"
-            ),
+            "fix_hint": FIX_MODEL_MISMATCH,
             "details": {"legacy_code": INDEX_STALE_MODEL_ALIAS},
         }
     }
@@ -95,7 +110,7 @@ def no_embedder() -> dict[str, object]:
         "error": {
             "code": "E_NO_EMBEDDER",
             "message": "No hay embedder configurado (modo `none`): no puedo incrustar ni indexar.",
-            "fix_hint": "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`",
+            "fix_hint": FIX_NO_EMBEDDER,
         }
     }
 

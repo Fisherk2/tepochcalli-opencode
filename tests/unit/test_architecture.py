@@ -135,12 +135,17 @@ MCP_PURE_DOMAIN_MODULES: Final[tuple[str, ...]] = (
 MCP_TOOL_MODULES: Final[tuple[str, ...]] = (
     f"{MCP_PACKAGE}.tools",
     f"{MCP_PACKAGE}.tools.search",
+    f"{MCP_PACKAGE}.tools.index_refresh",
+    f"{MCP_PACKAGE}.tools.rag_status",
 )
-"""Handlers T2: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
+"""Handlers T2-T4: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
 
 Sin allowlist de terceros aquí a propósito: el empaquetado en `CallToolResult`
 es frontera del SDK y vive en `tools/__init__.py`; lo que NO puede entrar es
 el motor (`cocoindex`/`lancedb`) ni los conversores (`markitdown`/`litellm`).
+T4 añade `tools.rag_status` y REPARA el hueco de T3: `tools.index_refresh`
+existía pero no estaba en la parametrización (la sanity de abajo es la que
+impide que un módulo ausente pase vacío).
 """
 
 MCP_COMPOSITION_ROOT: Final = f"{MCP_PACKAGE}.server"
@@ -331,16 +336,31 @@ def test_lancedb_adapter_is_allowed_to_reach_lancedb() -> None:
 
 
 def test_walker_covers_the_second_package_transitively() -> None:
-    """Sanidad T2: el walker resuelve aristas de `tepochcalli_mcp` (anti-falso-verde).
+    """Sanidad T2/T4: el walker resuelve aristas de `tepochcalli_mcp` (anti-falso-verde).
 
     `tools.search` debe alcanzar `budget` y el puerto `tepochcalli_flow.ports`
     por aristas reales; sin esta ancla, los tests parametrizados sobre el
     segundo paquete pasarían vacíos si `_PACKAGE_DIRS` dejara de resolver.
+    T4 extiende la sanidad a los tools añadidos después: cada `tools.*` nuevo
+    tiene que resolver sus propias aristas in-project — si el módulo no existe
+    (o su path no resuelve), el recorrido sale VACÍO y este test FALLA en vez
+    de dejar pasar la parametrización sin analizar nada.
     """
     reached = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.search")}
     assert f"{MCP_PACKAGE}.budget" in reached
     assert f"{MCP_PACKAGE}.paths" in reached
     assert f"{PACKAGE}.ports" in reached
+
+    reached_refresh = {
+        target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.index_refresh")
+    }
+    assert f"{MCP_PACKAGE}.errors" in reached_refresh, "index_refresh (T3) usa la guarda de errors"
+
+    reached_status = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.rag_status")}
+    assert f"{MCP_PACKAGE}.embedder" in reached_status, (
+        "rag_status (T4) consume el mapeo mode/dims/provider de embedder"
+    )
+    assert f"{PACKAGE}.config" in reached_status
 
 
 def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:

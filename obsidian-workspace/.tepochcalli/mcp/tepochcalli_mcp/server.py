@@ -51,19 +51,22 @@ forma exacta de §5 — T5 y T4 respectivamente.
 from __future__ import annotations
 
 import logging
+import tomllib
+from collections.abc import Awaitable
 from dataclasses import asdict
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
 from tepochcalli_flow import citation
-from tepochcalli_flow.config import Config, load_config
+from tepochcalli_flow.config import CONFIG_RELPATH, Config, load_config
 from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
 from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 import tepochcalli_mcp.tools
 from tepochcalli_mcp import __version__, budget
 from tepochcalli_mcp.tools import index_refresh as index_refresh_handler
+from tepochcalli_mcp.tools import rag_status as rag_status_handler
 from tepochcalli_mcp.tools import search as search_handler
 
 logger = logging.getLogger("tepochcalli_mcp")
@@ -94,28 +97,64 @@ class _VaultSearchBackend:
     async def index_models(self) -> set[str]:
         """Conjunto de `model` de las filas: vacío ⇒ índice inexistente (`INDEX_EMPTY`).
 
-        Comprueba la existencia de la DB ANTES de conectar — `connect_async`
-        crearía el directorio, rompiendo la solo-lectura. `open_table` sobre una
-        tabla ausente LANZA `ValueError` (sonda empírica T2 contra
-        `lancedb==0.40.0`): se traduce en conjunto vacío, que el handler vuelve
-        `INDEX_EMPTY` — la guía `index_refresh()` también reconstruye una DB
-        ilegible, que es el otro caso que verify.py trata como «a medio indexar».
+        Misma costura `_select` que usa `rag_status` (T4): la consulta NO se
+        reimplementa — un solo punto con el borde de solo lectura documentado
+        allí (DB ausente sin conectar; tabla ilegible ⇒ `ValueError` de
+        lancedb ⇒ sin filas).
+        """
+        rows = await self._select(["model"])
+        return {str(row["model"]) for row in rows}
+
+    async def index_meta(self) -> rag_status_handler.IndexMeta:
+        """DTO de estado del índice para `rag_status` (T4) — derivado, sin estado nuevo.
+
+        UNA proyección de 2 columnas (`model` + `indexed_at`); de ahí salen
+        `rows`, `models` y `last_refresh = max(indexed_at)` (ISO-8601 UTC con
+        offset fijo ⇒ orden lexicográfico = cronológico). `db_size_bytes` =
+        walk de TODO `<vault>/.tepochcalli/db/` — la spec dice `db/`, no solo
+        el `.lance`. shortcut: con ~100k filas reconsiderar el scan de
+        `indexed_at` (plan §9 riesgo «rag_status leyendo el índice completo»);
+        la proyección ya es de 2 columnas cortas y el AC es ≤10k notas.
+        """
+        rows = await self._select(["model", "indexed_at"])
+        # `.tepochcalli/db/` ENTERO (spec §rag_status dice `db/`, no solo `.lance`).
+        db_root = self._vault_root / DB_RELPATH.parent
+        size = (
+            sum(path.stat().st_size for path in db_root.rglob("*") if path.is_file())
+            if db_root.is_dir()
+            else 0
+        )
+        return rag_status_handler.IndexMeta(
+            rows=len(rows),
+            models={str(row["model"]) for row in rows},
+            last_refresh=max((str(row["indexed_at"]) for row in rows), default=None),
+            db_size_bytes=size,
+        )
+
+    async def _select(self, columns: list[str]) -> list[dict[str, object]]:
+        """Proyección de columnas de `chunks` — costura compartida search/rag_status (T2/T4).
+
+        Solo lectura con el MISMO borde ya probado en T2: DB ausente ⇒ sin
+        filas y SIN conectar (`connect_async` crearía el directorio); tabla
+        ausente/ilegible ⇒ `ValueError` de `lancedb==0.40.0` (sonda T2) ⇒ sin
+        filas. `rag_status` distingue «índice inexistente» por `rows == 0` y
+        `models == ∅`, sin necesidad del motivo exacto.
         """
         import lancedb  # composition root: el único sitio con el motor (decisión T2)
 
         db_uri = self._vault_root / DB_RELPATH
         if not db_uri.exists():
-            return set()
+            return []
         try:
             db = await lancedb.connect_async(str(db_uri))
             try:
                 table = await db.open_table(TABLE_NAME)
-                rows = await table.query().select(["model"]).to_list()
+                rows: list[dict[str, object]] = await table.query().select(columns).to_list()
             finally:
                 db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
         except ValueError:
-            return set()  # tabla `chunks` ausente o DB ilegible: índice no consultable
-        return {str(row["model"]) for row in rows}
+            return []
+        return rows
 
     async def cited_chunks(
         self, query: str, top_k: int, path_filter: str | None
@@ -193,6 +232,41 @@ def _index_exists() -> bool:
     return (_vault_root() / DB_RELPATH).exists()
 
 
+def _vault_config() -> Config:
+    """Seam T4: `load_config` del vault — invoked DENTRO del handler bajo la guarda (G1).
+
+    `load_config` nunca lanza (archivo ausente = defaults canónicos; malformado
+    = warning + defaults), así que lo único observable es la config resuelta.
+    """
+    return load_config(_vault_root())
+
+
+def _meta_seam() -> Awaitable[rag_status_handler.IndexMeta]:
+    """Seam T4: `IndexMeta` derivado — construye el backend perezoso BAJO la guarda."""
+    return _backend().index_meta()
+
+
+def _config_valid() -> bool:
+    """Seam T4: validez del toml — SEMÁNTICA DECIDIDA y declarada en la tool (T4).
+
+    `false` SOLO si `tepochcalli.toml` existe y no se pudo leer/parsear
+    (malformado TOML o ilegible); AUSENTE ⇒ `true` — el fichero es opcional y
+    los defaults canónicos son una config válida. «Existe» por sí solo no
+    significa nada: el campo mide PARSEO, no existencia (`load_config` no
+    puede señalárnoslo: nunca lanza). El parsing DUPLICADO aquí es
+    deliberado: es la única forma de obtener la señal sin tocar el loader
+    vedado de `flow/config.py`.
+    """
+    toml_path = _vault_root() / CONFIG_RELPATH
+    try:
+        tomllib.loads(toml_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return True
+    except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError):
+        return False
+    return True
+
+
 @server.tool()
 async def search(
     query: str, top_k: int = budget.TOP_K_DEFAULT, path_filter: str | None = None
@@ -243,28 +317,31 @@ def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
 
 
 @server.tool()
-def rag_status() -> CallToolResult:
-    """Diagnostica embedder, índice, config y salud del RAG (barato, D7.3).
+async def rag_status() -> CallToolResult:
+    """Diagnostica embedder, índice, config y salud del RAG — barato, D7.3 (ADR-007).
 
-    Cuatro bloques fijos `{embedder, index, config, health}`; ante cualquier
-    `E_*` el agente debe llamar esta tool y reportar el `fix_hint`
-    (spec-mcp-server §rag_status, ADR-007). Placeholder de la forma exacta de
-    §5 hasta T4.
+    Cuatro bloques fijos `{embedder, index, config, health}` (extensiones solo
+    aditivas, Hyrum/ADR-005). Semánticas que el agente DEBE conocer (T4):
+
+    * `last_refresh` = última indexación EFECTIVA — `max(indexed_at)` de las
+      filas, derivado sin estado propio; `null` si el índice está vacío.
+    * `config.valid` = el `tepochcalli.toml` se pudo leer y parsear; `false`
+      SOLO si existe y está malformado — ausente ⇒ `true` (fichero opcional,
+      defaults canónicos; no es un chequeo de existencia).
+    * `mode`: `local` (peso en `.tepochcalli/models/`), `api` (LiteLLM:
+      `provider` nombra el proveedor —hoy la clave `litellm` que la config
+      puede expresar—, `model` su id) o `none` (T6/D15).
+    * `health.reason` usa EXCLUSIVAMENTE la taxonomía `E_*` (o `null` en
+      `ok`); ante cualquier `E_*`, llama esta tool y reporta el `fix_hint`
+      exacto al usuario —nunca el error crudo— (regla del vault,
+      specs/spec-agent-workflow.md).
+
+    Coste <200 tokens por construcción (spec-mcp-server §Presupuesto): es la
+    llamada que D7.3 exige ante cualquier error SIN penalizar la conversación.
     """
-    return tepochcalli_mcp.tools.json_result(
-        {
-            "embedder": {"mode": "none", "model": None, "dims": None, "provider": None},
-            "index": {
-                "rows": 0,
-                "model_matches_config": True,
-                "last_refresh": None,
-                "db_size_bytes": 0,
-            },
-            "config": {"path": ".tepochcalli/config/tepochcalli.toml", "valid": True},
-            "health": {
-                "state": "degraded",
-                "reason": "E_NO_EMBEDDER",
-                "fix_hint": "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`",
-            },
-        },
+    payload = await rag_status_handler.rag_status(
+        config_factory=_vault_config,
+        index_meta=_meta_seam,
+        config_valid=_config_valid,
     )
+    return tepochcalli_mcp.tools.json_result(payload)

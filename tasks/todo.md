@@ -44,7 +44,7 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: test de integración (crea → modifica → borra → idempotencia) + prueba del candado (dos refresh concurrentes ⇒ uno `locked: true`)
   - Dep.: T1 · Tamaño: S
 
-- [ ] **T4 · `rag_status`: el diagnóstico que el agente puede llamar sin coste**
+- [x] **T4 · `rag_status`: el diagnóstico que el agente puede llamar sin coste**
   - Subagentes: `mcp-developer` (lead), `api-tester` · Skills: `api-and-interface-design`, `test-driven-development`, `observability-and-instrumentation`, `clean-code`
   - AC: exactamente **4 bloques** (`embedder{mode,model,dims,provider}`, `index{rows,model_matches_config,last_refresh,db_size_bytes}`, `config{path,valid}`, `health{state,reason,fix_hint}`); `state ∈ {ok,degraded}`; `reason` solo de la taxonomía `E_*`; `fix_hint` = la solución exacta; `mode ∈ {local,api,none}`; `model_matches_config` = conjunto de `model` de las filas == config (si no ⇒ `degraded` + `E_MODEL_MISMATCH`); `last_refresh` = `max(indexed_at)` **derivado, sin estado nuevo** (o `null`); `db_size_bytes` = tamaño de `.tepochcalli/db/`; `config.path` **relativa** (nunca absoluta); modo `none` ⇒ `degraded` + `E_NO_EMBEDDER` + fix_hint de `tepochcalli config embedder`; **<200 tokens**
   - Verificar: test de integración con 3 estados (sano / sin embedder / modelo distinto) + assert de tokens <200
