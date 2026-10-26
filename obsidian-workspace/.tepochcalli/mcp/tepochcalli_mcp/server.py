@@ -30,21 +30,28 @@ memoria:
 * Los tipos `CallToolResult`/`TextContent` se importan de `mcp.types`
   (reexporta la distribución hermana `mcp_types==2.3.0`).
 
-**Composition root (patrón T1, cerrado en T2):** este es el ÚNICO módulo del
-paquete que conoce el SDK, el flow con motor (`lancedb`, `cocoindex`) y la
+**Composition root (patrón T1, cerrado en T2/T3):** este es el ÚNICO módulo
+del paquete que conoce el SDK, el flow con motor (`lancedb`, `cocoindex`) y la
 config del vault — el test de arquitectura extendido lo exime de la regla de
 dominio y afirma que `server` SÍ alcanza `lancedb`, igual que `adapters/` en
-Phase 1. El wiring de `search` (T2): `resolve_vault_root` → `load_config` →
-`_VaultSearchBackend` (lector `LanceDBChunkReader` + embedder de `embedder.py`,
-perezosos para que `tools/list` y el arranque stdio no carguen torch ni el
-modelo) → inyectado al handler `tools/search.py`, que solo ve el puerto.
-Los otros 3 handlers siguen con el placeholder de la forma exacta de §5 hasta
-T3/T4/T5.
+Phase 1. El wiring de `search` (T2/G1): `_vault_root` → `load_config` →
+`_VaultSearchBackend` (lector `LanceDBChunkReader` + embedder de
+`embedder.py`, perezosos para que `tools/list` y el arranque stdio no carguen
+torch ni el modelo) → inyectado al handler `tools/search.py` como FACTORY
+(`backend_factory`), para que el arranque quede BAJO `@errors.internal_guard`
+— si el backend se construye aquí, antes de llamar, un fallo escapa al SDK con
+texto libre (G1). El wiring de `index_refresh` (T3): tres seams perezosos —
+`_refresh_once` (`refresh_blocking()` + `dataclasses.asdict`, la única zona
+que serializa el `RefreshReport`), `_embedder_available` (costura `E_NO_EMBEDDER`
+de `embedder.is_available`) y `_index_exists` — que el handler invoca bajo la
+MISMA guarda. `add_source` y `rag_status` siguen con el placeholder de la
+forma exacta de §5 — T5 y T4 respectivamente.
 """
 
 from __future__ import annotations
 
 import logging
+from dataclasses import asdict
 from pathlib import Path
 
 from mcp.server.mcpserver import MCPServer
@@ -56,6 +63,7 @@ from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 import tepochcalli_mcp.tools
 from tepochcalli_mcp import __version__, budget
+from tepochcalli_mcp.tools import index_refresh as index_refresh_handler
 from tepochcalli_mcp.tools import search as search_handler
 
 logger = logging.getLogger("tepochcalli_mcp")
@@ -129,20 +137,60 @@ class _VaultSearchBackend:
 _backend_instance: _VaultSearchBackend | None = None
 
 
+def _vault_root() -> Path:
+    """Raíz del vault con la MISMA regla que el flow (`resolve_vault_root`).
+
+    Env `TEPOCHCALLI_VAULT_ROOT` o la del payload; T9 traducirá aquí
+    `TEPOCHCALLI_ROOT` (el nombre del contrato MCP) a ese env. Import perezoso
+    de `tepochcalli_flow.app` — arrastra `cocoindex` y no debe frenar el
+    arranque stdio ni `tools/list`.
+    """
+    from tepochcalli_flow.app import resolve_vault_root
+
+    return resolve_vault_root()
+
+
 def _backend() -> _VaultSearchBackend:
     """Backend del vault, perezoso y cacheado por proceso (una sola carga de modelo).
 
-    Resuelve la raíz del vault con la MISMA regla que el flow
-    (`resolve_vault_root`: env `TEPOCHCALLI_VAULT_ROOT` o la del payload); T9
-    traducirá aquí `TEPOCHCALLI_ROOT` (el nombre del contrato MCP) a ese env.
+    Se pasa al handler como FACTORY —no construida fuera—: el handler lo
+    invoca bajo `@errors.internal_guard` (G1), de modo que resolver vault y
+    config también queda cubierto por `INTERNAL` canónico.
     """
     global _backend_instance
     if _backend_instance is None:
-        from tepochcalli_flow.app import resolve_vault_root
-
-        vault_root = resolve_vault_root()
+        vault_root = _vault_root()
         _backend_instance = _VaultSearchBackend(vault_root, load_config(vault_root))
     return _backend_instance
+
+
+def _refresh_once() -> dict[str, object]:
+    """Seam T3: ciclo Δ de Phase 1 + `dataclasses.asdict` — único punto que serializa.
+
+    `refresh_blocking()` es síncrono y bloqueante: el handler lo corre con
+    `asyncio.to_thread`; el candado vive DENTRO (un refresh bloqueado devuelve
+    tres ceros con `locked: true` sin ejecutar update). `asdict` copia los
+    campos EN SU ORDEN — el handler devuelve ese dict tal cual, sin recalcular.
+    """
+    from tepochcalli_flow.app import refresh_blocking
+
+    return asdict(refresh_blocking())
+
+
+def _embedder_available() -> bool:
+    """Seam T3: costura `E_NO_EMBEDDER` vía `embedder.is_available` (torch perezoso).
+
+    T6 sustituirá el cuerpo por la lectura real de `provider` (D15) sin tocar
+    el handler — la dependencia ya apunta a la costura.
+    """
+    from tepochcalli_mcp.embedder import is_available
+
+    return is_available(load_config(_vault_root()))
+
+
+def _index_exists() -> bool:
+    """Seam T3: ¿existe la DB tras el refresh? Solo el path, sin conexión."""
+    return (_vault_root() / DB_RELPATH).exists()
 
 
 @server.tool()
@@ -156,27 +204,24 @@ async def search(
     (spec-mcp-server §search). `top_k` por omisión 5, tope efectivo 8;
     `path_filter` es un glob RELATIVO al vault (`..` o absoluto → error).
     """
-    payload = await search_handler.search(query, top_k, path_filter, backend=_backend())
+    payload = await search_handler.search(query, top_k, path_filter, backend_factory=_backend)
     return tepochcalli_mcp.tools.json_result(payload)
 
 
 @server.tool()
-def index_refresh() -> CallToolResult:
+async def index_refresh() -> CallToolResult:
     """Actualiza el índice de forma delta y reporta el ciclo (criterio 2).
 
-    Devuelve `{scanned, indexed, skipped, elapsed_ms, locked}`; idempotente:
-    una segunda llamada sin cambios reporta `indexed: 0` (spec-mcp-server).
-    Placeholder de la forma exacta de §5 hasta T3.
+    Devuelve `{scanned, indexed, skipped, elapsed_ms, locked}` serializado TAL
+    CUAL desde `RefreshReport` (Phase 1); idempotente: una segunda llamada sin
+    cambios reporta `indexed: 0` (spec-mcp-server §Tool `index_refresh`).
     """
-    return tepochcalli_mcp.tools.json_result(
-        {
-            "scanned": 0,
-            "indexed": 0,
-            "skipped": 0,
-            "elapsed_ms": 0,
-            "locked": False,
-        },
+    payload = await index_refresh_handler.index_refresh(
+        refresh=_refresh_once,
+        embedder_available=_embedder_available,
+        index_exists=_index_exists,
     )
+    return tepochcalli_mcp.tools.json_result(payload)
 
 
 @server.tool()

@@ -9,28 +9,30 @@ Flujo del handler, en orden de precedencia:
 
 1. valida args en el borde — `top_k` ∈ [1,20] (`budget`) y glob relativo
    (`paths`) → `VALIDATION_ERROR` SIN tocar el índice;
-2. estado del índice — vacío → `INDEX_EMPTY`; modelo de las filas ≠ config →
+2. **arranque del backend** — la FACTORY inyectada (`_backend()` del composition
+   root: resolver vault + config) se invoca AQUÍ, bajo la guarda (G1);
+3. estado del índice — vacío → `INDEX_EMPTY`; modelo de las filas ≠ config →
    `E_MODEL_MISMATCH` (alias legado, SIN cruzar dims) — ambos ANTES de buscar;
-3. búsqueda por el puerto `ChunkReader` (el ADAPTADOR valida query y VECTORIZA
+4. búsqueda por el puerto `ChunkReader` (el ADAPTADOR valida query y VECTORIZA
    la query: `took_ms` incluye el embed por construcción);
-4. presupuesto — corte determinista al techo 1600 (`truncated`), y `took_ms`
+5. presupuesto — corte determinista al techo 1600 (`truncated`), y `took_ms`
    se cierra al terminar de ensamblar el payload, justo antes de serializar.
 
 `ValueError` del borde (adaptador o dominio) → `VALIDATION_ERROR`; cualquier
-otro fallo → `INTERNAL` con el traceback en el log stderr, nunca al cliente.
+otro fallo —estado, arranque o búsqueda— lo captura
+`@errors.internal_guard` (G1): `INTERNAL` canónico con el traceback en el log
+stderr, nunca texto libre al cliente.
 """
 
 from __future__ import annotations
 
-import logging
 import time
+from collections.abc import Callable
 from typing import Protocol
 
 from tepochcalli_flow.ports import CitedChunk
 
 from tepochcalli_mcp import budget, errors, paths
-
-logger = logging.getLogger(__name__)
 
 
 class SearchBackend(Protocol):
@@ -60,23 +62,34 @@ class SearchBackend(Protocol):
         ...
 
 
+@errors.internal_guard
 async def search(
     query: str,
     top_k: int = budget.TOP_K_DEFAULT,
     path_filter: str | None = None,
     *,
-    backend: SearchBackend,
+    backend_factory: Callable[[], SearchBackend],
 ) -> dict[str, object]:
     """`{query, took_ms, truncated, results}` — la forma congelada de §search (plan §5).
 
     Cada resultado trae los 7 campos en su orden congelado; los errores usan la
     taxonomía de `errors` (payloads con clave `error` → el empaquetador marca
     `is_error` en el `CallToolResult`).
+
+    `backend_factory` en vez de la instancia (decisión G1): el arranque del
+    backend —`resolve_vault_root()` + `load_config()` en `server._backend()`—
+    ocurre DENTRO del handler, bajo `@errors.internal_guard`. Si el composition
+    root construye el backend antes de llamar, un fallo ahí escapa al SDK con
+    texto libre; con la factory no hay ese punto ciego.
     """
     started = time.perf_counter()
     try:
         effective_top_k = budget.effective_top_k(top_k)
         paths.validate_path_filter(path_filter)
+    except ValueError as exc:
+        return errors.validation_error(str(exc))
+    backend = backend_factory()  # arranque BAJO la guarda: un fallo ⇒ INTERNAL (G1)
+    try:
         index_models = await backend.index_models()
     except ValueError as exc:
         return errors.validation_error(str(exc))
@@ -88,9 +101,8 @@ async def search(
         chunks = await backend.cited_chunks(query, effective_top_k, path_filter)
     except ValueError as exc:
         return errors.validation_error(str(exc))
-    except Exception:
-        logger.exception("search: fallo inesperado del backend (query=%r)", query)
-        return errors.internal()
+    # Cualquier otra excepción (estado, arranque o búsqueda) la captura el
+    # decorador: INTERNAL canónico + traceback al log (G1). Sin doble mecanismo.
     kept, truncated = budget.apply_budget(chunks)
     results: list[dict[str, object]] = [
         {

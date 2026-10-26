@@ -53,6 +53,7 @@ from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
 from tepochcalli_flow.ports import CitedChunk
 from tepochcalli_mcp import budget
 from tepochcalli_mcp.server import _VaultSearchBackend
+from tepochcalli_mcp.tools import json_result
 from tepochcalli_mcp.tools import search as search_handler
 from tepochcalli_mcp.tools.search import SearchBackend
 
@@ -243,8 +244,14 @@ def _search(
     top_k: int = 5,
     path_filter: str | None = None,
 ) -> dict[str, object]:
-    """Corre el handler en su propio loop (cada test, aislado)."""
-    return asyncio.run(search_handler.search(query, top_k, path_filter, backend=backend))
+    """Corre el handler en su propio loop (cada test, aislado).
+
+    El backend va como FACTORY (decisión G1): el handler invoca el arranque
+    dentro de su guarda; aquí la factory es solo `lambda: backend`.
+    """
+    return asyncio.run(
+        search_handler.search(query, top_k, path_filter, backend_factory=lambda: backend)
+    )
 
 
 def _cited_chunk(index: int, *, chars: int = 20, score: float | None = None) -> CitedChunk:
@@ -285,11 +292,13 @@ class _FakeBackend:
         index_models: set[str] | None = None,
         expected_model: str = DEFAULT_EMBEDDING_MODEL,
         error: Exception | None = None,
+        models_error: Exception | None = None,
     ) -> None:
         self._chunks = list(chunks)
         self._models = {DEFAULT_EMBEDDING_MODEL} if index_models is None else index_models
         self._expected = expected_model
         self._error = error
+        self._models_error = models_error
         self.received_top_k: int | None = None
         """El `top_k` que el handler entregó al lector — pin del efectivo."""
 
@@ -298,6 +307,8 @@ class _FakeBackend:
         return self._expected
 
     async def index_models(self) -> set[str]:
+        if self._models_error is not None:
+            raise self._models_error  # G1: fallo NO-ValueError en la fase de estado
         return self._models
 
     async def cited_chunks(
@@ -551,6 +562,49 @@ def test_unexpected_backend_failure_maps_to_internal() -> None:
     error = payload["error"]
     assert error["code"] == "INTERNAL"
     assert "traceback falso" not in error["message"]
+
+
+# --- G1: la guarda compartida cubre estado Y arranque ------------------------------
+
+
+def test_g1_unexpected_error_in_index_state_phase_is_canonical_internal() -> None:
+    """G1: un fallo ≠ `ValueError` en la fase de ESTADO del índice → `INTERNAL` canónico.
+
+    Antes de G1 esa excepción escapaba al SDK, que respondía con texto libre
+    (spec-mcp-server §Manejo de errores: «payload JSON canónico, nunca texto
+    libre»). El payload pasa además por el empaquetador real: `is_error = true`
+    y el detalle jamás viaja al cliente.
+    """
+    fake = _FakeBackend(models_error=RuntimeError("tabla chunks sin columna model"))
+
+    payload = _search(fake, "métricas")
+
+    result = json_result(payload)
+    assert result.is_error is True
+    error = json.loads(result.content[0].text)["error"]
+    assert list(error) == ["code", "message", "details"]
+    assert error["code"] == "INTERNAL"
+    assert "columna model" not in error["message"], "el detalle vive en el log, no al cliente"
+
+
+def test_g1_backend_startup_failure_is_canonical_internal() -> None:
+    """G1: el ARRANQUE del backend (`_backend()` en server) corre BAJO la guarda.
+
+    El handler recibe una FACTORY, no la instancia: resolver la raíz del vault
+    y cargar la config ocurre dentro del handler ya protegido — un fallo ahí
+    también responde `INTERNAL` canónico, nunca texto libre del SDK.
+    """
+
+    def _boom() -> SearchBackend:
+        raise RuntimeError("resolve_vault_root ilegible")
+
+    payload = asyncio.run(search_handler.search("pregunta", backend_factory=_boom))
+
+    result = json_result(payload)
+    assert result.is_error is True
+    error = json.loads(result.content[0].text)["error"]
+    assert error["code"] == "INTERNAL"
+    assert "ilegible" not in error["message"]
 
 
 def test_error_payloads_are_json_canonical_in_the_wire_form() -> None:

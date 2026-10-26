@@ -6,21 +6,28 @@ serializa en `content[0].text` (spec-mcp-server §Manejo de errores: «nunca
 texto libre»). Dos dialectos congelados:
 
 * **Legado** `{error:{code,message,details}}` — `VALIDATION_ERROR`,
-  `INDEX_EMPTY`, `INTERNAL` (T3/T5 añadirán `ENGINE_LOCKED` y
+  `INDEX_EMPTY`, `INTERNAL` (T5 añadirá `ENGINE_LOCKED` y
   `SOURCE_UNREACHABLE` con esta misma forma).
 * **`E_*`** `{error:{code,message,fix_hint}}` (D7.3/ADR-007) —
   `E_MODEL_MISMATCH` lleva además `details.legacy_code = "INDEX_STALE_MODEL"`,
   el alias heredado que viaja en el payload (spec-mcp-server §Códigos de error
-  estructurados). T6 añadirá los cuatro `E_*` restantes.
+  estructurados); `E_NO_EMBEDDER` (T3) es el segundo de la serie. T6 añadirá
+  los tres `E_*` restantes.
 
 El orden de claves es parte del contrato (Hyrum, ADR-005): los constructores
 lo fijan y los contract tests lo pinan. El traceback de un fallo inesperado
-vive en el LOG del server (stderr), jamás en el payload al cliente.
+vive en el LOG del server (stderr), jamás en el payload al cliente —
+`internal_guard` es quien lo garantiza (G1).
 """
 
 from __future__ import annotations
 
+import functools
+import logging
+from collections.abc import Awaitable, Callable
 from typing import Final
+
+logger = logging.getLogger(__name__)
 
 INDEX_STALE_MODEL_ALIAS: Final = "INDEX_STALE_MODEL"
 """Alias legado de `E_MODEL_MISMATCH`, viaja en `details.legacy_code` (spec §Códigos)."""
@@ -74,3 +81,47 @@ def internal() -> dict[str, object]:
             "details": None,
         }
     }
+
+
+def no_embedder() -> dict[str, object]:
+    """Devuelve `E_NO_EMBEDDER` (D7.3): sin modelo local ni API configurada (modo `none`).
+
+    Segundo `E_*` de la serie, con la solución exacta de
+    spec-mcp-server §rag_status en el `fix_hint` (la regla del vault obliga al
+    agente a reportarla, no el error crudo). Sin `details`: solo
+    `E_MODEL_MISMATCH` lleva el alias legado.
+    """
+    return {
+        "error": {
+            "code": "E_NO_EMBEDDER",
+            "message": "No hay embedder configurado (modo `none`): no puedo incrustar ni indexar.",
+            "fix_hint": "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`",
+        }
+    }
+
+
+def internal_guard[**P](
+    handler: Callable[P, Awaitable[dict[str, object]]],
+) -> Callable[P, Awaitable[dict[str, object]]]:
+    """Guarda compartida G1: envuelve un handler COMPLETO → fallo ⇒ `INTERNAL` canónico.
+
+    El patrón ÚNICO de los tools del server (aplicado en `search` — fase de
+    estado Y arranque de seams— e `index_refresh` desde T3; T4 y T5 lo usan en
+    vez de reimplementarlo): captura `Exception` —nunca `BaseException`, para
+    que Ctrl-C siga escapando—, manda el traceback al LOG vía
+    `logger.exception` (stderr; stdout es solo JSON-RPC) y devuelve
+    `errors.internal()`: el cliente recibe JSON parseable con `is_error = true`,
+    jamás texto libre ni stack traces (spec-mcp-server §Manejo de errores).
+    Los `ValueError` de validación NO llegan aquí: los handlers los capturan
+    ANTES y responden `VALIDATION_ERROR` con su mensaje accionable.
+    """
+
+    @functools.wraps(handler)
+    async def guarded(*args: P.args, **kwargs: P.kwargs) -> dict[str, object]:
+        try:
+            return await handler(*args, **kwargs)
+        except Exception:
+            logger.exception("internal_guard: fallo inesperado en %s", handler.__qualname__)
+            return internal()
+
+    return guarded

@@ -83,6 +83,21 @@ def test_internal_never_leaks_stack_traces() -> None:
     assert error["details"] is None
 
 
+def test_no_embedder_uses_the_e_dialect_shape_with_exact_fix_hint() -> None:
+    """`E_NO_EMBEDDER` (T3) → dialecto `E_*` `{code,message,fix_hint}`, SIN `details`.
+
+    El `fix_hint` es el texto exacto de spec-mcp-server §rag_status para el
+    estado `degraded` (D7.3): la solución accionable, no un error crudo.
+    """
+    payload = errors.no_embedder()
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "fix_hint"]
+    assert error["code"] == "E_NO_EMBEDDER"
+    assert isinstance(error["message"], str) and error["message"]
+    assert error["fix_hint"] == ("Ejecuta `tepochcalli config embedder` y luego `index_refresh()`")
+
+
 def test_payloads_are_json_serializable_without_ascii_escaping() -> None:
     """Todo payload sobrevive a `json.dumps(ensure_ascii=False)` (el medio del contrato)."""
     for payload in (

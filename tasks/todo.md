@@ -38,7 +38,7 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: test de integración contra vault fixture real (100 chunks) + test de arquitectura extendido a `tepochcalli_mcp` + `just quality`
   - Dep.: T1 · Tamaño: M
 
-- [ ] **T3 · `index_refresh`: el ciclo Δ con su reporte honesto**
+- [x] **T3 · `index_refresh`: el ciclo Δ con su reporte honesto**
   - Subagentes: `mcp-developer` (lead), `python-pro` · Skills: `test-driven-development`, `solid`, `error-handling-patterns`, `clean-code`
   - AC: `{scanned, indexed, skipped, elapsed_ms, locked}` serializado **tal cual** desde `RefreshReport`; `locked: true` ⇒ sin update y las tres cuentas a cero; `E_NO_EMBEDDER` (mode `none`) **precede** a `INDEX_EMPTY`; `indexed` del data plane (nunca `stats.total`); `skipped = scanned - indexed`; `elapsed_ms` monótono; idempotencia ⇒ `indexed: 0`
   - Verificar: test de integración (crea → modifica → borra → idempotencia) + prueba del candado (dos refresh concurrentes ⇒ uno `locked: true`)
@@ -168,21 +168,21 @@ Verificado contra `mcp==2.3.0` instalado y `setuptools 84.2.1`. Difiere del plan
 | H6 | Un handler anotado `-> CallToolResult` pasa **sin validación** por `convert_result` **y anula el `outputSchema`** (salida *unstructured*) | **T8:** `output_schema`/`structured_content` serán `None` **también en éxito**; el shape vive en `content[0].text` (JSON canónico). El test de T1 ya fija `output_schema is None` |
 | H7 | El transporte stdio **reclama fd 1** y desvía a stderr cualquier salida espuria de bibliotecas (`mcp/server/stdio.py`) | Refuerza la regla; el test manda secuencia JSON-RPC cruda por stdin y parsea **cada** línea de stdout |
 
-## Gotera detectada en T2 — se cierra en T3 (no perderla)
+## Gotera detectada en T2 — CERRADA EN T3 ✅ (2026-10-26)
 
-**G1 · `INTERNAL` no cubre todo el camino.** `tools/search.py` solo captura
-`ValueError` en la fase de estado del índice, y el arranque del backend
-(`_backend()` dentro de `server.search`) queda **fuera de cualquier guarda**.
-Una DB corrupta, una tabla sin columna `model` o una `tepochcalli.toml`
-ilegible escapan al SDK, que responde con **texto libre** — prohibido por
-`spec-mcp-server` §Manejo de errores («nunca texto libre»; `INTERNAL` es
-«traceback al log, **nunca** al cliente»).
+**G1 · `INTERNAL` no cubría todo el camino.** Cerrada con el patrón compartido
+**`errors.internal_guard`** (decorador `async` con `ParamSpec` en `errors.py`,
+dominio puro): envuelve el handler COMPLETO —arranque de seams incluido—,
+captura `Exception` (nunca `BaseException`, para que Ctrl-C escape), manda el
+traceback a `logger.exception` (stderr) y devuelve `INTERNAL` canónico. T4 y T5
+lo aplican con `@errors.internal_guard` en vez de reimplementarlo.
 
-*Cierre:* en **T3**, como paso 1, con **un patrón compartido** (guarda
-`except Exception → errors.internal()` + `logger.exception` a stderr) que
-envuelva el handler completo y que T4/T5 reutilicen en vez de reimplementar,
-más el test que afirma que un fallo inesperado en *esa* fase emite JSON
-canónico. T8 luego lo verifica en el contract test de las 4 tools.
+**Lección del rework (no olvidar):** el primer test de concurrencia del candado
+era *timing-based* y **falló en el gate independiente** (`(2,0,2)/(2,0,2)`: los
+dos refresh no se solaparon). Reescrito con **opción B** — el padre retiene el
+`flock` antes de lanzar las dos sesiones y lo suelta después de recibir ambas
+respuestas, de modo que el solapamiento lo garantiza el **kernel**, no el reloj.
+**Regla para T4-T10: ninguna aserción de la suite puede depender del tiempo.**
 
 ## Decisiones ya tomadas (2026-10-26, usuario)
 

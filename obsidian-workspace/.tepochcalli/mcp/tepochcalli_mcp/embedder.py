@@ -34,3 +34,22 @@ def build_embedder(config: Config) -> Callable[[str], list[float]]:
         revision=MODEL_REVISION,
     )
     return lambda text: model.encode(text).tolist()
+
+
+def is_available(config: Config) -> bool:
+    """Indica si `config` tiene embedder utilizable — costura `E_NO_EMBEDDER` (T3).
+
+    Devuelve SIEMPRE True hoy, y no es un placeholder: el loader de Phase 1
+    (`tepochcalli_flow.config`, fichero VEDADO hasta T6) solo acepta
+    `provider = "local"|"litellm"` — el tercer valor `none` (D15, ADR-007) aún
+    NO es expresable en un config real, así que ningún config puede estar sin
+    embedder. **T6 cierra esta costura** leyendo aquí
+    `config.embedding.provider`; mientras tanto, la precedencia
+    `E_NO_EMBEDDER > INDEX_EMPTY` del contrato ya está implementada en
+    `tools/index_refresh.py` y probada con el seam FAKE (unit test), sin tocar
+    `flow/` ni inventar ramas muertas.
+
+    `config` queda en la firma desde ya: es el dato que T6 leerá — la costura
+    de dependencia (DIP) existe HOY, solo cambia su implementación.
+    """
+    return True

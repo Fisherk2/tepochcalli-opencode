@@ -1,0 +1,336 @@
+"""T3: `index_refresh` end-to-end — ciclo Δ por stdio, candado y cero red (plan §6).
+
+Fuentes de verdad:
+
+* tasks/plan.md §6 T3 AC — `asdict(RefreshReport)` tal cual con el orden exacto;
+  `locked:true` ⇒ tres ceros sin update; idempotencia (`indexed: 0`); canario
+  cero red / cero LLM; `just quality` con Phase 1 intacta.
+* specs/spec-mcp-server.md §Tool `index_refresh`.
+* `tests/integration/test_delta.py` (Phase 1) — la secuencia
+  crea→modifica→borra→idempotencia y las cuentas exactas que aquí se repiten
+  a través de la TOOL (2 ficheros md: (2,2,0) → (3,1,2) → (3,1,2) →
+  (2,0,2) → (2,0,2)).
+
+Decisiones de test, documentadas:
+
+* **Server como SUBPROCESO por stdio** con `TEPOCHCALLI_VAULT_ROOT` propio
+  (mismo patrón que `test_mcp_server._running_server`): el environment global
+  de cocoindex no admite dos vaults en el mismo proceso (sonda T9), y así la
+  tool se ejercita COMO LA VE EL HARNESS.
+* **Canario de cero red = `tests/support/nonet/sitecustomize.py`** inyectado
+  por `PYTHONPATH` en el hijo: cualquier `connect` AF_INET/AF_INET6 LANZA
+  `OSError` ⇒ el refresh respondería `INTERNAL` y todo test de éxito fallaría
+  (auto-exigente). Una llamada LLM por API ES una conexión saliente, así que
+  UN guard cubre «cero red y cero LLM» (patrón M3(b) de Phase 1). El modelo
+  se calienta ANTES (subproceso con red permitida: en frío descarga una vez;
+  después `HF_HUB_OFFLINE=1` + canario).
+* **Dos pruebas de candado, qué hace cada una** (reparto del AC de T3):
+  1. `test_retained_lock…` DETERMINISTA (un hijo) — **el ancla del AC**: el
+     padre retiene el flock mientras el server hijo intenta el refresh;
+     asserta `locked:true`, tres ceros y snapshot byte a byte de `db/` SIN
+     escrituras (mecánica idéntica al test de candado de Phase 1, ejercitando
+     la tool). La prohibición de doble escritura y el `locked:true` viven AQUÍ
+     y no pueden parpadear.
+  2. `test_two_concurrent_refreshes_both_yield_locked…` — DOS sesiones stdio
+     simultáneas (`asyncio.gather`) contra el candado RETENIDO POR EL PADRE:
+     ambas deben responder `locked:true` con ceros y sin escribir. La
+     superposición la garantiza el `flock` del kernel, no el reloj.
+     **Historia (rework tras el gate del lead):** la versión original exigía
+     «exactamente UNO locked» entre dos hijos RACING — eso presupone que sus
+     updates se solapan en el tiempo, cosa que ni el contrato ni el scheduler
+     garantizan; en el gate independiente falló con `(2,0,2)/(2,0,2)` (sin
+     solapamiento: ambos unlocked). Ninguna aserción de esta suite depende ya
+     del reloj: la raca de reloj se retiró, la vista CONCURRENTE se conserva
+     con el candado del padre como garantía determinista.
+* El `journey` (5 pasos en UNA sesión) mantiene el server vivo entre llamadas
+  — la carga del modelo se amortiza y los mtime/Δ los ve el hijo, no el padre.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import os
+import subprocess
+import sys
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from pathlib import Path
+
+import pytest
+from mcp import ClientSession, StdioServerParameters
+from mcp.client.stdio import stdio_client
+from model_cache import link_model_cache, offline_env, resolve_model_cache
+from tepochcalli_flow import app as flow_app
+from tepochcalli_flow import citation
+from tepochcalli_flow.config import MODEL_REVISION
+
+NONET_DIR = Path(__file__).parents[1] / "support" / "nonet"
+"""Directorio con el `sitecustomize.py` canario (cero red) — va al PYTHONPATH del hijo."""
+
+REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
+"""Orden exacto de `asdict(RefreshReport)` — contrato §Tool `index_refresh`."""
+
+ALPHA = (
+    "# Alpha — notas iniciales\n\n"
+    "Primer fichero del vault T3: dos párrafos de prosa para que el segmentador "
+    "produzca chunks con cita completa y el ciclo delta tenga algo que indexar.\n\n"
+    "## Sección beta\n\n"
+    "Segundo párrafo de alpha con métricas, cohorte y seguimiento de referencia.\n"
+)
+ALPHA_V2 = (
+    "# Alpha — versión modificada\n\n"
+    "Reescrito por el paso `modify` del journey T3: el delta debe reescribir SOLO "
+    "los chunks de alpha y contar exactamente un archivo indexado.\n"
+)
+BETA = (
+    "# Beta — segunda nota\n\n"
+    "Fichero estable del vault T3: no se toca en ningún paso, así que siempre "
+    "aparece como skipped una vez indexado.\n"
+)
+GAMMA = (
+    "# Gamma — nota añadida\n\n"
+    "Creado en el paso `add` y borrado en el paso `delete`: un archivo que entra "
+    "y sale del índice dentro del mismo journey.\n"
+)
+
+WARM_SCRIPT = (
+    "from sentence_transformers import SentenceTransformer\n"
+    "from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL, MODEL_REVISION\n"
+    f"SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device='cpu', revision={MODEL_REVISION!r})\n"
+    "print('warm ok')\n"
+)
+"""Calienta el cache del modelo UNA vez (en frío: la única descarga permitida)."""
+
+
+@asynccontextmanager
+async def _running_server(env: dict[str, str]) -> AsyncIterator[ClientSession]:
+    """Server `python -m tepochcalli_mcp` por stdio con `env` dado (patrón T1)."""
+    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+            yield session
+
+
+def _server_env(vault: Path, model_cache: Path) -> dict[str, str]:
+    """Env del hijo: vault propio, modelo cacheado OFFLINE y canario `nonet`."""
+    pythonpath = [str(NONET_DIR)]
+    if existing := os.environ.get("PYTHONPATH"):
+        pythonpath.append(existing)
+    return {
+        **os.environ,
+        flow_app.VAULT_ROOT_ENV: str(vault),
+        "HF_HOME": str(model_cache),
+        "SENTENCE_TRANSFORMERS_HOME": str(model_cache),
+        "HF_HUB_OFFLINE": "1",  # el warm ya lo dejó en cache: tras esto, cero descargas
+        "PYTHONPATH": os.pathsep.join(pythonpath),
+    }
+
+
+async def _call_refresh(session: ClientSession) -> dict[str, object]:
+    """`index_refresh` por stdio: payload parseado con el orden exacto del contrato."""
+    result = await session.call_tool("index_refresh", {})
+    assert not result.is_error, f"index_refresh falló (¿red? ¿guard?): {result.content[0].text}"
+    report = json.loads(result.content[0].text)
+    assert list(report) == REPORT_FIELDS, list(report)
+    return report
+
+
+def _counts(report: dict[str, object]) -> tuple[int, int, int]:
+    """Devuelve `(scanned, indexed, skipped)` — la tripleta exacta de Phase 1."""
+    return (report["scanned"], report["indexed"], report["skipped"])  # type: ignore[return-value]
+
+
+def _assert_contract(report: dict[str, object]) -> None:
+    """Orden exacto, tipos y la identidad `scanned == indexed + skipped` (Phase 1)."""
+    assert list(report) == REPORT_FIELDS, list(report)
+    scanned, indexed, skipped = _counts(report)
+    assert isinstance(scanned, int) and isinstance(indexed, int) and isinstance(skipped, int)
+    assert scanned == indexed + skipped, report
+    assert isinstance(report["locked"], bool)
+    assert isinstance(report["elapsed_ms"], int) and report["elapsed_ms"] >= 0
+
+
+def _tree_snapshot(root: Path) -> dict[str, tuple[int, int | None]]:
+    """`(mtime_ns, size)` por ruta relativa — detecta cualquier escritura."""
+    if not root.exists():
+        return {}
+    return {
+        str(path.relative_to(root)): (
+            path.stat().st_mtime_ns,
+            path.stat().st_size if path.is_file() else None,
+        )
+        for path in sorted(root.rglob("*"))
+    }
+
+
+@pytest.fixture(scope="module")
+def refresh_vault(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
+    """Vault T3 de 2 ficheros md con el modelo calentado, SIN indexar.
+
+    El primer refresh del journey lo hace la TOOL, como en producción.
+    """
+    vault = tmp_path_factory.mktemp("vault-t3")
+    resources = vault / citation.RESOURCES_DIR
+    resources.mkdir(parents=True)
+    (resources / "alpha.md").write_text(ALPHA, encoding="utf-8")
+    (resources / "beta.md").write_text(BETA, encoding="utf-8")
+
+    cache = resolve_model_cache()
+    models_link = link_model_cache(vault, cache)
+
+    warm_env = {
+        **os.environ,
+        "HF_HOME": str(models_link),
+        "SENTENCE_TRANSFORMERS_HOME": str(models_link),
+        **offline_env(cache),
+    }
+    proc = subprocess.run(
+        [sys.executable, "-c", WARM_SCRIPT],
+        env=warm_env,
+        capture_output=True,
+        text=True,
+        timeout=600,
+        check=False,
+    )
+    assert proc.returncode == 0, f"calentamiento del modelo falló:\n{proc.stderr}"
+    return vault, models_link
+
+
+# --- journey: crea → modifica → borra → idempotencia (5 pasos, 1 sesión) -----------
+
+
+def test_journey_creates_modifies_deletes_and_stays_idempotent(
+    refresh_vault: tuple[Path, Path],
+) -> None:
+    """Secuencia completa a través de la tool con las cuentas exactas de Phase 1."""
+    vault, models_link = refresh_vault
+    resources = vault / citation.RESOURCES_DIR
+    env = _server_env(vault, models_link)
+
+    async def journey() -> list[dict[str, object]]:
+        reports: list[dict[str, object]] = []
+        async with _running_server(env) as session:
+            reports.append(await _call_refresh(session))  # initial: indexa los 2 ficheros
+            (resources / "gamma.md").write_text(GAMMA, encoding="utf-8")
+            reports.append(await _call_refresh(session))  # add
+            (resources / "alpha.md").write_text(ALPHA_V2, encoding="utf-8")
+            reports.append(await _call_refresh(session))  # modify
+            (resources / "gamma.md").unlink()
+            reports.append(await _call_refresh(session))  # delete
+            reports.append(await _call_refresh(session))  # idempotent
+        return reports
+
+    initial, added, modified, deleted, idempotent = asyncio.run(journey())
+
+    for report in (initial, added, modified, deleted, idempotent):
+        _assert_contract(report)
+        assert report["locked"] is False
+
+    assert _counts(initial) == (2, 2, 0), "el primer refresh de la tool indexa los 2 md"
+    assert _counts(added) == (3, 1, 2), "add: SOLO gamma se (re)escribe"
+    assert _counts(modified) == (3, 1, 2), "modify: SOLO alpha se reescribe"
+    assert _counts(deleted) == (2, 0, 2), "borrados NO cuentan (RefreshReport §doc)"
+    assert idempotent["indexed"] == 0, "2ª pasada sin cambios: indexed 0 (idempotencia)"
+    assert idempotent["scanned"] == idempotent["skipped"]
+
+
+# --- candado 1/2: retención DETERMINISTA en el padre ---------------------------------
+
+
+def test_retained_lock_returns_zeros_and_writes_nothing(
+    refresh_vault: tuple[Path, Path],
+) -> None:
+    """DETERMINISTA: el padre retiene el flock ⇒ la tool responde `locked:true`.
+
+    Cubre el AC «locked ⇒ sin update y tres ceros» SIN depender de carreras:
+    snapshot byte a byte de `.tepochcalli/db/` antes/después demuestra que el
+    refresh bloqueado no escribió nada (misma mecánica que el test de candado
+    de Phase 1, ahora ejercitando `index_refresh` por stdio).
+    """
+    vault, models_link = refresh_vault
+    lock_fd = flow_app._acquire_refresh_lock(vault)
+    assert lock_fd is not None, "nadie retenía el candado: el acquire debe triunfar"
+    try:
+        db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
+        env = _server_env(vault, models_link)
+
+        async def locked_call() -> dict[str, object]:
+            async with _running_server(env) as session:
+                return await _call_refresh(session)
+
+        report = asyncio.run(locked_call())
+    finally:
+        flow_app._release_refresh_lock(lock_fd)
+
+    _assert_contract(report)
+    assert report["locked"] is True
+    assert _counts(report) == (0, 0, 0), "refresh bloqueado: cero en las tres cuentas"
+    assert _tree_snapshot(vault / ".tepochcalli" / "db") == db_snapshot, (
+        "el refresh bloqueado NO debe escribir ni un byte en db/"
+    )
+
+
+# --- candado 2/2: concurrencia SIN reloj (determinista) -------------------------------------
+
+
+def test_two_concurrent_refreshes_both_yield_locked_and_write_nothing(
+    refresh_vault: tuple[Path, Path],
+) -> None:
+    """Vista CONCURRENTE determinista: DOS sesiones a la vez contra el candado retenido.
+
+    El padre retiene el `flock` (`flow_app._acquire_refresh_lock`) ANTES de
+    lanzar las dos sesiones y solo lo suelta tras recibir ambas respuestas:
+    que los hijos se superpongan o no en el tiempo deja de importar — el
+    kernel garantiza que NINGUNO puede adquirir, así que siempre, en cualquier
+    máquina, las dos respuestas son `locked:true` con tres ceros y `db/` queda
+    byte a byte intacto. Cero aserciones condicionadas al solapamiento.
+
+    **Por qué no «exactamente uno locked»** (rework tras el gate): esa forma
+    era una carrera de reloj — exige que los updates de los dos hijos se
+    solapen; con un vault totalmente memoizado el segundo entró cuando el
+    primero ya había soltado el candado (`(2,0,2)/(2,0,2)`, 1 failed en la
+    corrida independiente). Un flake en la suite de corrección es peor que un
+    test que no existe.
+
+    **Reparto del AC de T3:** la prohibición de doble escritura y el
+    `locked:true ⇒ tres ceros` los carga `test_retained_lock_returns_zeros_and_
+    writes_nothing` (el ancla determinista, sin concurrencia); ESTE test añade
+    la vista de DOS sesiones stdio simultáneas sobre el mismo vault/candado —
+    aislamiento entre sesiones, contrato completo en ambas respuestas y cero
+    escrituras mientras alguien retiene. El journey carga cuentas e
+    idempotencia.
+    """
+    vault, models_link = refresh_vault
+    lock_fd = flow_app._acquire_refresh_lock(vault)
+    assert lock_fd is not None, "nadie retenía el candado: el acquire debe triunfar"
+    try:
+        db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
+        env = _server_env(vault, models_link)
+
+        async def both() -> list[dict[str, object]]:
+            async with _running_server(env) as first, _running_server(env) as second:
+                return list(await asyncio.gather(_call_refresh(first), _call_refresh(second)))
+
+        first_report, second_report = asyncio.run(both())
+    finally:
+        flow_app._release_refresh_lock(lock_fd)
+
+    for report in (first_report, second_report):
+        _assert_contract(report)
+        assert report["locked"] is True, "el flock del padre es kernel: nadie puede adquirir"
+        assert _counts(report) == (0, 0, 0), "refresh bloqueado: cero en las tres cuentas"
+    assert _tree_snapshot(vault / ".tepochcalli" / "db") == db_snapshot, (
+        "ninguna de las dos sesiones escribió en db/ mientras el padre retenía"
+    )
+
+
+# --- higiene del payload -------------------------------------------------------------------------
+
+
+def test_payload_db_and_models_are_never_created_by_the_tool() -> None:
+    """Ningún refresh de este módulo materializa `db/` ni `models/` en el payload."""
+    payload = Path(__file__).parents[2] / "obsidian-workspace" / ".tepochcalli"
+    assert not (payload / "db").exists()
+    assert not (payload / "models").exists()

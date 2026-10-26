@@ -29,9 +29,12 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+import pytest
 import tepochcalli_mcp
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
+from model_cache import link_model_cache, offline_env, resolve_model_cache
+from tepochcalli_flow import citation
 
 # Las 4 tools congeladas del contrato (spec-mcp-server §API / plan §5), con
 # las claves de su input schema y las requeridas — el orden de las
@@ -188,15 +191,27 @@ def test_stdout_carries_only_jsonrpc_frames() -> None:
     assert {1, 2} <= ids, f"faltan respuestas para initialize/tools/list: {ids}"
 
 
-def test_each_tool_returns_placeholder_with_exact_contract_shape(tmp_path: Path) -> None:
-    """Cada tool responde la forma EXACTA de §5 (claves y orden); `search` ya es real (T2).
+def test_each_tool_returns_placeholder_with_exact_contract_shape(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cada tool responde la forma EXACTA de §5 (claves y orden); dos ya son reales.
 
-    `search` se invoca contra un vault temporal SIN `.tepochcalli/db/`: el
-    camino real responde `INDEX_EMPTY` canónico (`is_error = true`, JSON en
-    `content[0].text`). La forma de ÉXITO de `search` la pin
-    `tests/integration/test_mcp_search.py` sobre un vault indexado; las otras
-    3 tools siguen con el placeholder congelado hasta T3/T4/T5.
+    `search` (T2) e `index_refresh` (T3) se invocan contra un vault temporal
+    REAL pero vacío: `search` responde `INDEX_EMPTY` canónico (`is_error=true`,
+    JSON en `content[0].text`) y `index_refresh` ejecuta el ciclo Δ de Phase 1
+    —con `00-Resources/` presente y el modelo en cache (symlink + offline,
+    patrón de fixtures)— y devuelve el reporte honesto `(0,0,0)`. El refresh
+    materializa el embedder por CONSTRUCCIÓN (dims del esquema, aun sin
+    ficheros), por eso el test fija el cache antes de arrancar el server.
+    La forma de ÉXITO de `search` la pin `test_mcp_search.py` sobre un vault
+    indexado y la del journey completo `test_mcp_refresh.py`; `add_source` y
+    `rag_status` siguen con el placeholder congelado hasta T5/T4.
     """
+    (tmp_path / citation.RESOURCES_DIR).mkdir()
+    cache = resolve_model_cache()
+    link_model_cache(tmp_path, cache)
+    for key, value in offline_env(cache).items():
+        monkeypatch.setenv(key, value)
 
     async def go() -> dict[str, list[str]]:
         payloads: dict[str, list[str]] = {}
@@ -208,8 +223,11 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(tmp_path: Path)
             payloads["search"] = list(search)
 
             result = await session.call_tool("index_refresh", {})
-            assert not result.is_error
+            assert not result.is_error, result.content[0].text
             refresh = json.loads(result.content[0].text)
+            # Vault sin indexables: el ciclo Δ es honesto — cero cuentas, sin candado.
+            assert (refresh["scanned"], refresh["indexed"], refresh["skipped"]) == (0, 0, 0)
+            assert refresh["locked"] is False
             payloads["index_refresh"] = list(refresh)
 
             result = await session.call_tool("add_source", {"uri": "https://example.org/paper"})
