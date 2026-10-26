@@ -32,7 +32,7 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
 
 ## Sub-fase B — Los cuatro caminos
 
-- [ ] **T2 · `search`: de la pregunta a los chunks citados**
+- [x] **T2 · `search`: de la pregunta a los chunks citados**
   - Subagentes: `mcp-developer` (lead), `rag-pipeline-engineer`, `search-relevance-engineer` · Skills: `test-driven-development`, `clean-ddd-hexagonal`, `design-patterns`, `api-and-interface-design`, `clean-code`, `performance-analysis`
   - AC: `{query, took_ms, truncated, results:[{text, source_path, heading, char_start, char_end, score, offsets_ref}]}` — **7 campos siempre**, `heading` nullable (D13), `score` ∈ [0,1] descendente; consume el puerto `ChunkReader` de Phase 1 (el server **no** importa `cocoindex`/`lancedb`); `took_ms` desde la entrada del handler hasta serializar; `top_k` por omisión 5, fuera de [1,20] → `VALIDATION_ERROR`, efectivo `min(solicitado, 8)`; `path_filter` absoluto o con `..` → `VALIDATION_ERROR`; presupuesto `len(text)//4 + 25` con techo **1600** y `truncated: true` al cortar; índice inexistente → `INDEX_EMPTY`; modelo del índice ≠ config → `E_MODEL_MISMATCH` (+ `details.legacy_code`) **sin** cruzar dims; **cero** red y **cero** LLM
   - Verificar: test de integración contra vault fixture real (100 chunks) + test de arquitectura extendido a `tepochcalli_mcp` + `just quality`
@@ -167,6 +167,22 @@ Verificado contra `mcp==2.3.0` instalado y `setuptools 84.2.1`. Difiere del plan
 | H5 | Los tipos se importan de `mcp.types`, que reexporta la dist. hermana `mcp_types==2.3.0` | `from mcp.types import CallToolResult, TextContent` — la forma usada en `server.py` |
 | H6 | Un handler anotado `-> CallToolResult` pasa **sin validación** por `convert_result` **y anula el `outputSchema`** (salida *unstructured*) | **T8:** `output_schema`/`structured_content` serán `None` **también en éxito**; el shape vive en `content[0].text` (JSON canónico). El test de T1 ya fija `output_schema is None` |
 | H7 | El transporte stdio **reclama fd 1** y desvía a stderr cualquier salida espuria de bibliotecas (`mcp/server/stdio.py`) | Refuerza la regla; el test manda secuencia JSON-RPC cruda por stdin y parsea **cada** línea de stdout |
+
+## Gotera detectada en T2 — se cierra en T3 (no perderla)
+
+**G1 · `INTERNAL` no cubre todo el camino.** `tools/search.py` solo captura
+`ValueError` en la fase de estado del índice, y el arranque del backend
+(`_backend()` dentro de `server.search`) queda **fuera de cualquier guarda**.
+Una DB corrupta, una tabla sin columna `model` o una `tepochcalli.toml`
+ilegible escapan al SDK, que responde con **texto libre** — prohibido por
+`spec-mcp-server` §Manejo de errores («nunca texto libre»; `INTERNAL` es
+«traceback al log, **nunca** al cliente»).
+
+*Cierre:* en **T3**, como paso 1, con **un patrón compartido** (guarda
+`except Exception → errors.internal()` + `logger.exception` a stderr) que
+envuelva el handler completo y que T4/T5 reutilicen en vez de reimplementar,
+más el test que afirma que un fallo inesperado en *esa* fase emite JSON
+canónico. T8 luego lo verifica en el contract test de las 4 tools.
 
 ## Decisiones ya tomadas (2026-10-26, usuario)
 

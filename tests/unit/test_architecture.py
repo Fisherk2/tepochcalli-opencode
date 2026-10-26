@@ -1,4 +1,6 @@
-"""Test de arquitectura: el dominio del flow nunca depende de infraestructura (CP-B, T9).
+"""Test de arquitectura: el dominio del flow y del server nunca dependen de infraestructura.
+
+CP-B, T9 (Phase 1) + extensión T2 al paquete `tepochcalli_mcp`.
 
 Enuncia executablemente la regla hexagonal de ADR-005 («la dependencia apunta
 hacia dentro»): `tepochcalli_flow.citation`, `tepochcalli_flow.config` y
@@ -14,32 +16,50 @@ lectura que Phase 2 consume) y, en la dirección opuesta, afirma que el
 adaptador `adapters/lancedb_reader` SÍ alcanza `lancedb`: la frontera corre
 exactamente entre `ports.py` y `adapters/`, ni un módulo más allá.
 
+**Extensión T2 al paquete `tepochcalli_mcp`** (decisión registrada aquí, como
+Phase 1 registró la suya): el AC de T2 «el server no importa `cocoindex` ni
+`lancedb`» es inalcanzable al pie de la letra — algo tiene que construir el
+lector. La frontera se dibuja como en Phase 1:
+
+* **Protegidos (banned roots + allowlist):** `tepochcalli_mcp` (`__init__`),
+  `errors`, `budget`, `paths` (dominio puro: ni `mcp` SDK ni engines) y
+  `tools`/`tools.search` (handlers: sin `cocoindex`/`lancedb`/`markitdown`/
+  `litellm` — el SDK `mcp.types` SÍ está permitido en `tools/__init__.py`,
+  que es donde el resultado se empaqueta en `CallToolResult`).
+* **Exento (composition root):** `tepochcalli_mcp.server`, análogo a Phase 1
+  donde `app`/`adapters/` son infraestructura: es el ÚNICO módulo del server
+  que puede importar el SDK, el flow con motor y `lancedb` — el test positivo
+  de abajo afirma que `server` SÍ alcanza `lancedb`, exactamente igual que el
+  `adapters` del flow.
+
 Garantías que ofrece, y cómo:
 
 * **Negativa (banned roots).** Un recorrido BFS sobre los imports resueltos con
   `ast` (sin ejecutar ni importar los módulos analizados) sigue solo las aristas
-  «in-project» (`tepochcalli_flow.*`, incluidas relativas `from .x import ...`)
-  y falla naming la cadena exacta del alias, p. ej.
+  «in-project» (`tepochcalli_flow.*` y `tepochcalli_mcp.*`, incluidas relativas
+  `from .x import ...`) y falla naming la cadena exacta del alias, p. ej.
   `tepochcalli_flow.citation -> tepochcalli_flow.models -> cocoindex`.
   Un grep directo sobre un solo archivo NO detectaría esa cadena: la violación
   es transitive por diseño. `BANNED_INFRA_ROOTS` es una constante de módulo
-  extensible (T9 podrá añadir, p. ej., `litellm` sin reestructurar nada).
+  extensible (T9 pudo añadir `litellm` sin reestructurar nada).
 * **Positiva (allowlist de dominio).** El mismo cierre transitivo de los
   módulos de dominio debe importar ÚNICAMENTE stdlib
-  (`sys.stdlib_module_names`) + módulos in-project (`tepochcalli_flow.*`).
+  (`sys.stdlib_module_names`) + módulos in-project (`tepochcalli_flow.*` /
+  `tepochcalli_mcp.*`).
   Decisión de allowlist documentada aquí: stdlib + in-project y nada más — así
   un contribuidor futuro no puede colar numpy (ni ningún tercero) en el dominio
   ni siquiera vía un helper in-project.
 * **Sanidad del propio walker.** Comprueba que el recorrido sí resuelve aristas
-  in-project reales (citation -> config), para que un fallo de resolución de
-  paths no convierta los otros dos tests en vacíamente verdes.
+  in-project reales (citation -> config; tools.search -> budget), para que un
+  fallo de resolución de paths no convierta los otros tests en vacíamente verdes.
 * **Límite declarado, no adversarial.** El walker solo ve `ast.Import` y
   `ast.ImportFrom`: los imports dinámicos (`importlib.import_module("cocoindex")`,
   `__import__(...)`) quedan FUERA del recorrido — este test no los detectaría.
 
 Fuentes de verdad: ADR-005 (hexagonal), ADR-002 (sin demonios/red), los
 docstrings de `citation.py` y `config.py` («código de dominio: NO importa
-cocoindex ni lancedb») y tasks/todo.md → gate CP-B.
+cocoindex ni lancedb») y tasks/todo.md → gate CP-B (T2 cierra la extensión al
+server).
 """
 
 from __future__ import annotations
@@ -52,23 +72,39 @@ from typing import Final
 
 import pytest
 import tepochcalli_flow
+import tepochcalli_mcp
 
 # --- constantes de la regla ----------------------------------------------------
 
 PACKAGE: Final = "tepochcalli_flow"
 """Raíz del paquete in-project cuyo cierre transitivo se analiza."""
 
-_PACKAGE_DIR: Final = Path(tepochcalli_flow.__file__).resolve().parent
-"""Directorio del paquete instalado (resuelto, no hardcodeado)."""
+MCP_PACKAGE: Final = "tepochcalli_mcp"
+"""Segundo paquete in-project: el server MCP (extensión T2)."""
 
-BANNED_INFRA_ROOTS: Final[frozenset[str]] = frozenset({"cocoindex", "lancedb"})
-"""Raíces de import prohibidas para el dominio (ADR-005). Extensible por T9."""
+_PACKAGE_DIRS: Final[dict[str, Path]] = {
+    PACKAGE: Path(tepochcalli_flow.__file__).resolve().parent,
+    MCP_PACKAGE: Path(tepochcalli_mcp.__file__).resolve().parent,
+}
+"""Directorios de ambos paquetes instalados (resueltos, no hardcodeados)."""
+
+BANNED_INFRA_ROOTS: Final[frozenset[str]] = frozenset(
+    {"cocoindex", "lancedb", "markitdown", "litellm"}
+)
+"""Raíces de import prohibidas para el dominio (ADR-005; T2 añade markitdown/litellm)."""
 
 STDLIB_ROOTS: Final[frozenset[str]] = frozenset(sys.stdlib_module_names)
 """Raíces permitidas por ser stdlib de CPython 3.12 (incluye `tomllib`, `__future__`)."""
 
 PERMITTED_DOMAIN_ROOTS: Final[frozenset[str]] = STDLIB_ROOTS | {PACKAGE}
-"""Allowlist del dominio: stdlib + in-project, y nada más (docstring del módulo)."""
+"""Allowlist del dominio del flow: stdlib + in-project, y nada más (docstring del módulo)."""
+
+MCP_PERMITTED_DOMAIN_ROOTS: Final[frozenset[str]] = STDLIB_ROOTS | {PACKAGE, MCP_PACKAGE}
+"""Allowlist del dominio puro del server: stdlib + los dos paquetes in-project.
+
+`errors`/`budget`/`paths` pueden importar `tepochcalli_flow.ports`/`citation`
+—el puerto congelado ES su contrato— pero ni el SDK `mcp` ni engines (docstring).
+"""
 
 DOMAIN_MODULES: Final[tuple[str, ...]] = (
     PACKAGE,
@@ -88,20 +124,44 @@ garantía de que el contrato `search` sobrevive a un cambio de motor. El resto d
 puede importar el engine — este test no lo toca.
 """
 
+MCP_PURE_DOMAIN_MODULES: Final[tuple[str, ...]] = (
+    MCP_PACKAGE,
+    f"{MCP_PACKAGE}.errors",
+    f"{MCP_PACKAGE}.budget",
+    f"{MCP_PACKAGE}.paths",
+)
+"""Dominio puro del server T2: banned roots + allowlist estricta (docstring)."""
+
+MCP_TOOL_MODULES: Final[tuple[str, ...]] = (
+    f"{MCP_PACKAGE}.tools",
+    f"{MCP_PACKAGE}.tools.search",
+)
+"""Handlers T2: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
+
+Sin allowlist de terceros aquí a propósito: el empaquetado en `CallToolResult`
+es frontera del SDK y vive en `tools/__init__.py`; lo que NO puede entrar es
+el motor (`cocoindex`/`lancedb`) ni los conversores (`markitdown`/`litellm`).
+"""
+
+MCP_COMPOSITION_ROOT: Final = f"{MCP_PACKAGE}.server"
+"""Composition root del server: EXENTO de la regla (análogo a `app`/`adapters`)."""
+
 
 # --- motor AST (sin importar los módulos analizados) ---------------------------
 
 
 def _module_source(dotted: str) -> Path | None:
-    """Resuelve un nombre punteado in-project a su archivo fuente, o None.
+    """Resuelve un nombre punteado in-project (cualquiera de los dos paquetes) a fuente.
 
-    `tepochcalli_flow.citation` -> `<pkg>/citation.py`; el propio paquete ->
-    `<pkg>/__init__.py`; cualquier otro root (tercero, stdlib) -> None: el
-    recorrido nunca intenta recursar dentro de paquetes ajenos.
+    `tepochcalli_flow.citation` -> `<flow>/citation.py`; `tepochcalli_mcp.tools`
+    -> `<mcp>/tools/__init__.py`; el propio paquete -> su `__init__.py`; cualquier
+    otro root (tercero, stdlib) -> None: el recorrido nunca intenta recursar
+    dentro de paquetes ajenos.
     """
-    if dotted != PACKAGE and not dotted.startswith(f"{PACKAGE}."):
+    package_dir = _PACKAGE_DIRS.get(dotted.split(".")[0])
+    if package_dir is None:
         return None
-    base = _PACKAGE_DIR.joinpath(*dotted.split(".")[1:])
+    base = package_dir.joinpath(*dotted.split(".")[1:])
     module_py = base.with_suffix(".py")
     if module_py.is_file():
         return module_py
@@ -172,7 +232,7 @@ def _walk_imports(start: str) -> list[tuple[list[str], str]]:
             continue
         tree = ast.parse(source.read_text(encoding="utf-8"), filename=str(source))
         for target in sorted(_import_targets(tree, module)):
-            if target.split(".")[0] == PACKAGE:
+            if target.split(".")[0] in _PACKAGE_DIRS:
                 child = _module_source(target)
                 if child is not None:
                     queue.append([*chain, target])
@@ -188,12 +248,14 @@ def _describe(chain: list[str], target: str) -> str:
 # --- tests ---------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("module", DOMAIN_MODULES)
+@pytest.mark.parametrize("module", DOMAIN_MODULES + MCP_PURE_DOMAIN_MODULES + MCP_TOOL_MODULES)
 def test_domain_modules_never_reach_banned_infrastructure(module: str) -> None:
     """Ningún import alcanzable desde un módulo de dominio tiene raíz prohibida.
 
     Transitive por construcción: si `citation` importara un helper in-project
     que importa `cocoindex`, el BFS lo alcanzaría y reportaría la cadena entera.
+    Extiende en T2 al dominio y a los handlers de `tepochcalli_mcp`; el
+    composition root (`server.py`) queda FUERA por decisión documentada.
     """
     for chain, target in _walk_imports(module):
         root = target.split(".")[0]
@@ -204,19 +266,29 @@ def test_domain_modules_never_reach_banned_infrastructure(module: str) -> None:
         )
 
 
-@pytest.mark.parametrize("module", DOMAIN_MODULES)
-def test_domain_transitive_imports_stay_stdlib_and_in_project(module: str) -> None:
-    """El cierre transitivo del dominio solo importa stdlib + `tepochcalli_flow.*`.
+@pytest.mark.parametrize(
+    ("module", "permitted"),
+    [
+        *((module, PERMITTED_DOMAIN_ROOTS) for module in DOMAIN_MODULES),
+        *((module, MCP_PERMITTED_DOMAIN_ROOTS) for module in MCP_PURE_DOMAIN_MODULES),
+    ],
+)
+def test_domain_transitive_imports_stay_stdlib_and_in_project(
+    module: str, permitted: frozenset[str]
+) -> None:
+    """El cierre transitivo del dominio solo importa stdlib + paquetes in-project.
 
     Allowlist cerrada (decisión documentada en el docstring del módulo): además
     de las raíces prohibidas explícitas, ningún tercero — p. ej. numpy — puede
-    entrar al dominio ni siquiera a través de un módulo in-project.
+    entrar al dominio ni siquiera a través de un módulo in-project. Para el
+    dominio puro del server la allowlist añade `tepochcalli_flow.*` (el puerto
+    congelado es SU contrato) pero sigue sin admitir el SDK `mcp`.
     """
     for chain, target in _walk_imports(module):
         root = target.split(".")[0]
-        assert root in PERMITTED_DOMAIN_ROOTS, (
+        assert root in permitted, (
             f"El módulo de dominio {module} importa un tercero no permitido: "
-            f"{_describe(chain, target)} (allowlist: stdlib + {PACKAGE})"
+            f"{_describe(chain, target)} (allowlist: {', '.join(sorted(permitted))})"
         )
 
 
@@ -256,3 +328,31 @@ def test_lancedb_adapter_is_allowed_to_reach_lancedb() -> None:
         "el adaptador LanceDB debe importar lancedb: ES infraestructura (ADR-005)"
     )
     assert f"{PACKAGE}.ports" in reached, "el adaptador implementa el puerto: lo importa"
+
+
+def test_walker_covers_the_second_package_transitively() -> None:
+    """Sanidad T2: el walker resuelve aristas de `tepochcalli_mcp` (anti-falso-verde).
+
+    `tools.search` debe alcanzar `budget` y el puerto `tepochcalli_flow.ports`
+    por aristas reales; sin esta ancla, los tests parametrizados sobre el
+    segundo paquete pasarían vacíos si `_PACKAGE_DIRS` dejara de resolver.
+    """
+    reached = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.search")}
+    assert f"{MCP_PACKAGE}.budget" in reached
+    assert f"{MCP_PACKAGE}.paths" in reached
+    assert f"{PACKAGE}.ports" in reached
+
+
+def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
+    """Dirección OPUESTA T2: `server.py` SÍ alcanza `lancedb` (composition root exento).
+
+    Mismo papel que `test_lancedb_adapter_is_allowed_to_reach_lancedb` en Phase 1:
+    prueba el otro lado de la frontera del server — si el walker no viera el
+    import del composition root, los tests negativos sobre `errors`/`budget`/
+    `paths`/`tools` darían falsos positivos. La frontera exacta es
+    `tools/`+dominio (sin motor) ← `server.py` (con motor y SDK).
+    """
+    reached = {target for _chain, target in _walk_imports(MCP_COMPOSITION_ROOT)}
+    assert "lancedb" in reached, "el composition root construye el lector: importa lancedb"
+    assert f"{MCP_PACKAGE}.tools.search" in reached, "registra el handler de search: lo importa"
+    assert f"{PACKAGE}.config" in reached, "carga la config del vault: lo importa"

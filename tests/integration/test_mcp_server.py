@@ -1,24 +1,30 @@
 """Contrato T1 del server MCP `tepochcalli-rag`: stdio, tools/list y placeholders.
 
+Actualizado en T2: `search` ya no es placeholder.
+
 Spike de anclaje fail-fast (tasks/plan.md §3, T1): valida contra el SDK
 cliente REAL (mcp==2.3.0) que el proceso `python -m tepochcalli_mcp`
 1) arranca por stdio y responde `initialize`,
 2) declara exactamente las 4 tools del contrato congelado con sus
    input schemas,
 3) emite SOLO JSON-RPC en stdout (nunca texto libre), y
-4) responde cada tool con el placeholder de la forma EXACTA de
-   tasks/plan.md §5 «Contrato de datos» (sin lógica todavía).
+4) responde cada tool con la forma EXACTA de tasks/plan.md §5.
 
-T8 añadirá después `tests/e2e/test_mcp_contract.py`; este fichero solo ancla
-el esqueleto de T1.
+**T2:** `search` dejó de ser placeholder — implementa el camino real y contra
+un vault SIN índice responde `INDEX_EMPTY` (canónico, no vacío); su shape de
+éxito vive en `tests/integration/test_mcp_search.py`. Las otras 3 tools
+siguen con el placeholder congelado hasta T3/T4/T5. T8 añadirá después
+`tests/e2e/test_mcp_contract.py`; este fichero sigue anclando el esqueleto.
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import os
 import subprocess
 import sys
+import threading
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -66,9 +72,15 @@ def test_mcp_sdk_resolves_to_site_packages_without_shadowing() -> None:
 
 
 @asynccontextmanager
-async def _running_server() -> AsyncIterator[ClientSession]:
-    """Levanta `python -m tepochcalli_mcp` por stdio y devuelve una sesión cliente."""
-    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"])
+async def _running_server(vault_root: Path | None = None) -> AsyncIterator[ClientSession]:
+    """Levanta `python -m tepochcalli_mcp` por stdio y devuelve una sesión cliente.
+
+    `vault_root` fija `TEPOCHCALLI_VAULT_ROOT` en el proceso hijo: T2 lo usa
+    para que `search` responda `INDEX_EMPTY` de forma DETERMINISTA (un vault
+    temporal sin `.tepochcalli/db/`), sin depender del índice local del repo.
+    """
+    env = None if vault_root is None else {**os.environ, "TEPOCHCALLI_VAULT_ROOT": str(vault_root)}
+    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
     async with stdio_client(params) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
@@ -116,8 +128,15 @@ def test_stdout_carries_only_jsonrpc_frames() -> None:
     """Cada línea de stdout del proceso parsea como JSON-RPC (AC T1: logs a stderr).
 
     Secuencia cruda por stdin (sin el cliente del SDK, que oculta el
-    transporte): `initialize` + `notifications/initialized` + `tools/list`,
-    y stdin cerrado para que el server termine.
+    transporte): `initialize` + `notifications/initialized` + `tools/list`.
+    **stdin se mantiene ABIERTO hasta leer las dos respuestas** y solo entonces
+    se cierra para que el server termine: cerrarlo de inmediato tras escribir
+    raza con el flush de la segunda respuesta — el transporte stdio del SDK
+    cancela su `stdout_writer` al salir del task group al recibir EOF
+    (`mcp/server/stdio.py`) y la respuesta de `tools/list` se pierde. Sonda T2:
+    con escritura+cierre atómicos el test parpadea 1 de cada 3 corridas; un
+    cliente real mantiene stdio abierto mientras espera respuestas. Un watchdog
+    de 60 s mata el proceso para que `readline` no pueda colgarse.
     """
     requests = [
         {
@@ -133,35 +152,59 @@ def test_stdout_carries_only_jsonrpc_frames() -> None:
         {"jsonrpc": "2.0", "method": "notifications/initialized"},
         {"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
     ]
-    proc = subprocess.run(
+    proc = subprocess.Popen(
         [sys.executable, "-m", "tepochcalli_mcp"],
-        input="\n".join(json.dumps(r) for r in requests) + "\n",
-        capture_output=True,
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
         text=True,
-        timeout=60,
+        bufsize=1,
     )
-    assert proc.returncode == 0, proc.stderr
-    lines = [line for line in proc.stdout.splitlines() if line.strip()]
-    assert lines, "el server no emitió nada por stdout"
-    for line in lines:
-        frame = json.loads(line)
+    watchdog = threading.Timer(60.0, proc.kill)
+    watchdog.start()
+    frames: list[dict[str, object]] = []
+    try:
+        assert proc.stdin is not None and proc.stdout is not None
+        proc.stdin.write("\n".join(json.dumps(r) for r in requests) + "\n")
+        proc.stdin.flush()
+        while len(frames) < 2:
+            line = proc.stdout.readline()
+            if not line:
+                break
+            if line.strip():
+                frames.append(json.loads(line))
+        proc.stdin.close()
+        proc.wait(timeout=30)
+    finally:
+        watchdog.cancel()
+        if proc.poll() is None:
+            proc.kill()
+            proc.wait()
+    assert proc.returncode == 0, proc.stderr.read() if proc.stderr else ""
+    assert frames, "el server no emitió nada por stdout"
+    for frame in frames:
         assert frame["jsonrpc"] == "2.0", frame
-    ids = {frame.get("id") for frame in (json.loads(line) for line in lines)}
+    ids = {frame.get("id") for frame in frames}
     assert {1, 2} <= ids, f"faltan respuestas para initialize/tools/list: {ids}"
 
 
-def test_each_tool_returns_placeholder_with_exact_contract_shape() -> None:
-    """Cada tool responde YA el placeholder con la forma EXACTA de §5 (claves y orden)."""
+def test_each_tool_returns_placeholder_with_exact_contract_shape(tmp_path: Path) -> None:
+    """Cada tool responde la forma EXACTA de §5 (claves y orden); `search` ya es real (T2).
+
+    `search` se invoca contra un vault temporal SIN `.tepochcalli/db/`: el
+    camino real responde `INDEX_EMPTY` canónico (`is_error = true`, JSON en
+    `content[0].text`). La forma de ÉXITO de `search` la pin
+    `tests/integration/test_mcp_search.py` sobre un vault indexado; las otras
+    3 tools siguen con el placeholder congelado hasta T3/T4/T5.
+    """
 
     async def go() -> dict[str, list[str]]:
         payloads: dict[str, list[str]] = {}
-        async with _running_server() as session:
+        async with _running_server(tmp_path) as session:
             result = await session.call_tool("search", {"query": "pregunta de prueba"})
-            assert not result.is_error
+            assert result.is_error
             search = json.loads(result.content[0].text)
-            assert search["query"] == "pregunta de prueba"
-            assert search["truncated"] is False
-            assert search["results"] == []
+            assert search["error"]["code"] == "INDEX_EMPTY"
             payloads["search"] = list(search)
 
             result = await session.call_tool("index_refresh", {})
@@ -194,7 +237,7 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape() -> None:
 
     shapes = asyncio.run(go())
     # Orden exacto de claves por tool (tasks/plan.md §5 «Contrato de datos»).
-    assert shapes["search"] == ["query", "took_ms", "truncated", "results"]
+    assert shapes["search"] == ["error"]  # T2 real: INDEX_EMPTY sobre vault sin índice
     assert shapes["index_refresh"] == ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
     assert shapes["add_source"] == ["ok", "written_to", "indexed"]
     assert shapes["rag_status"] == ["embedder", "index", "config", "health"]
