@@ -47,14 +47,17 @@ fmt:
 fmt-check:
     {{ruff}} format --check .
 
-# mypy estricto sobre flow (misma forma que CI: `python -m`, ver abajo).
+# mypy estricto sobre flow + mcp (misma forma que CI: `python -m`, ver abajo).
+# Sin argumentos: mypy usa `files = ["flow", "mcp"]` del pyproject — la
+# superficie tipada que docs/CODE_STYLE.md anuncia desde la creación del
+# paquete `tepochcalli_mcp` (Phase 2 T1).
 #
 # `python -m mypy` y no `mypy` a proposito: en este montaje NTFS el entrypoint
 # venv/bin/mypy pierde el bit exec y `uv run mypy` cae en un mypy GLOBAL con
 # otro Python, que no ve los tipos de terceros del venv (7 errores fantasma).
 # `python -m` resuelve siempre el mypy del venv; en CI el resultado es identico.
 typecheck:
-    cd {{flow_dir}} && uv run python -m mypy flow
+    cd {{flow_dir}} && uv run python -m mypy
 
 # Suite de corrección: pytest -m "not slow" (el mismo filtro que usa CI).
 test:

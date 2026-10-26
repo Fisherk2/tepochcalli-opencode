@@ -13,19 +13,19 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
 
 ## Sub-fase A — Anclaje
 
-- [ ] **T1 · Spike del SDK MCP v2, layout del paquete `mcp/` y esqueleto que anuncia las 4 tools**
+- [x] **T1 · Spike del SDK MCP v2, layout del paquete `mcp/` y esqueleto que anuncia las 4 tools**
   - Subagentes: `mcp-builder` (lead), `python-pro`, `dependency-manager` · Skills: `source-driven-development`, `api-and-interface-design`, `dependency-audit`, `clean-code`, `spec-driven-development`
   - AC: `mcp==2.3.0` + `markitdown-mcp==0.0.1a8` + `litellm>=1.106,<2` pineados; `uv.lock` regenerado; `uv sync --frozen` reproducible; **suite Phase 1 verde**; `packages` con los **dos** paquetes + `package-dir` mapeando `tepochcalli_mcp` → `mcp/`; `[project.scripts] tepochcalli-mcp`; mypy `files = ["flow","mcp"]`; ambos paquetes importables; layout `mcp/tepochcalli_mcp/{__init__,__main__,server}.py`; el server arranca por **stdio** y `tools/list` devuelve las **4 tools** con sus schemas; cada handler devuelve el placeholder con la **forma exacta** de §5 del plan; **stdout solo JSON-RPC** (logs a stderr); `mcp/` versionado (`git check-ignore` en ambos sentidos)
   - Verificar: `uv run python -m tepochcalli_mcp` + cliente del SDK → `tools/list` con 4 tools; `just ci` verde
   - 📌 **Hallazgos del spike a documentar** (el *omen mayor* del plan §3): `FastMCP`→`MCPServer`; `mcp.server.fastmcp.*`→`mcp.server.mcpserver.*` (el import viejo lanza `ModuleNotFoundError`); transporte en `run()`; **`ToolError` NO sirve** (mete texto libre y `structured_content=None`) ⇒ los handlers construyen `CallToolResult` **explícitamente** con `content[0].text` = JSON canónico e `is_error=True` en el fallo
   - Dep.: — · Tamaño: M
 
-### ✅ CP-A · Anclaje — **5/5**
-- [ ] El servidor arranca por stdio y `tools/list` devuelve las **4 tools** con sus schemas
-- [ ] `uv sync --frozen` reproducible; **suite de Phase 1 verde** (el lock no se rompió)
-- [ ] Ambos paquetes importables desde el editable install
-- [ ] `git check-ignore` en ambos sentidos para `mcp/`
-- [ ] stdout del proceso contiene **solo** JSON-RPC
+### ✅ CP-A · Anclaje — **5/5** ✅ (2026-10-26)
+- [x] El servidor arranca por stdio y `tools/list` devuelve las **4 tools** con sus schemas
+- [x] `uv sync --frozen` reproducible; **suite de Phase 1 verde** (el lock no se rompió)
+- [x] Ambos paquetes importables desde el editable install
+- [x] `git check-ignore` en ambos sentidos para `mcp/`
+- [x] stdout del proceso contiene **solo** JSON-RPC
 - ▶️ **Desbloquea T2, T3 y T5.**
 
 ---
@@ -153,6 +153,20 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
 >
 > T1 existe por eso: si la v2 difiere en algo más, el resto del plan se reescribe con el dato
 > real en vez de con una suposición.
+
+## Hallazgos del spike T1 (2026-10-26) — datos reales, no supuestos
+
+Verificado contra `mcp==2.3.0` instalado y `setuptools 84.2.1`. Difiere del plan en seis puntos:
+
+| # | Dato real | Consecuencia |
+|---|---|---|
+| H1 | **El `package-dir` del plan era incoherente con su layout.** `build_py.get_package_dir()` devuelve *verbatim* la clave exacta: `{"tepochcalli_mcp": "mcp"}` pondría los ficheros en `mcp/__init__.py`, contradiciendo §5 (`mcp/tepochcalli_mcp/…`) | Corregido en `pyproject.toml`: `package-dir = {"" = "flow", "tepochcalli_mcp" = "mcp/tepochcalli_mcp"}`; se conserva el **layout** del plan. El AC medible (ambos importables) es lo que se graduó |
+| H2 | El editable **dejó** de ser un `.pth` de ruta plana: con dos raízes setuptools instala un **MetaPathFinder** (`__editable___tepochcalli_flow_0_1_0_finder`) que mapea nombre→ruta exacta | El riesgo de shadowing del SDK `mcp` queda descartado **por construcción**; el test anti-shadowing lo sigue vigilando |
+| H3 | `mcp/server/fastmcp.py` **existe** como shim, pero solo lanza `ModuleNotFoundError` con mensaje de migración (no tiene API) | Confirma el omen: `mcp.server.fastmcp.*` sigue prohibido |
+| H4 | `ToolError` ahora vive en `mcp.server.mcpserver.exceptions` (no en `mcp.types`) | Irrelevante: no se usa |
+| H5 | Los tipos se importan de `mcp.types`, que reexporta la dist. hermana `mcp_types==2.3.0` | `from mcp.types import CallToolResult, TextContent` — la forma usada en `server.py` |
+| H6 | Un handler anotado `-> CallToolResult` pasa **sin validación** por `convert_result` **y anula el `outputSchema`** (salida *unstructured*) | **T8:** `output_schema`/`structured_content` serán `None` **también en éxito**; el shape vive en `content[0].text` (JSON canónico). El test de T1 ya fija `output_schema is None` |
+| H7 | El transporte stdio **reclama fd 1** y desvía a stderr cualquier salida espuria de bibliotecas (`mcp/server/stdio.py`) | Refuerza la regla; el test manda secuencia JSON-RPC cruda por stdin y parsea **cada** línea de stdout |
 
 ## Decisiones ya tomadas (2026-10-26, usuario)
 

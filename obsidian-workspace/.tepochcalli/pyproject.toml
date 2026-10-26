@@ -22,7 +22,28 @@ dependencies = [
     # torch ABI -> `operator torchvision::nms does not exist` under +cpu; the
     # CPU index ships the matching +cpu build.
     "torchvision==0.29.1",
+    # SDK MCP oficial v2 — spike T1 (2026-10-26, plan §3 «omen mayor»): en la v2
+    # `FastMCP` se renombró a `MCPServer` (`mcp.server.fastmcp.*` ->
+    # `mcp.server.mcpserver.*`; el import viejo lanza ModuleNotFoundError), el
+    # transporte se configura en `run()` y `ToolError` mete texto libre (no
+    # sirve para nuestro contrato) -> los handlers construyen `CallToolResult`
+    # explícito. Pin exacto: la API es reciente y volátil (plan §9).
+    "mcp==2.3.0",
+    # markitdown-mcp: conversor soporte (spec-markitdown; D18 acepta +142 MB —
+    # el extra [all] arrastra PDF/audio/YouTube, fuera de alcance v1). Pin
+    # exacto: la API 0.x es inestable (plan §9 «La API de markitdown cambia»).
+    "markitdown-mcp==0.0.1a8",
+    # LiteLLM: proveedor de embeddings por API (D-a: lectura+escritura en
+    # Phase 2; ADR-007 menú D7.2). Pin superior <2 porque la serie 2.x rompería
+    # el contrato `litellm.embedding` que T6 ancla (plan §9 riesgo de lock).
+    "litellm>=1.106,<2",
 ]
+
+[project.scripts]
+# Forma real de invocación: `python -m tepochcalli_mcp` (D17: el bit de
+# ejecución se pierde en NTFS/fuseblk). El console script existe porque el AC
+# de T1 lo exige; `opencode.json` NO lo usa.
+tepochcalli-mcp = "tepochcalli_mcp.__main__:main"
 
 # Only torch/torchvision may resolve from this index; everything else stays on
 # PyPI. Source: https://docs.astral.sh/uv/guides/integration/pytorch/
@@ -55,16 +76,16 @@ select = ["E", "W", "F", "I", "ANN", "B", "D", "N", "UP"]
 # Conflicting pydocstyle pairs: keep D211 over D203, D212 over D213/D214.
 ignore = ["D203", "D213", "D214"]
 
-# Type checker del flow. `strict` es el CONTRATO (docs/CODE_STYLE.md): no se
-# relaja con `disallow_*_defs = false` ni con overrides por módulo. El gate es
-# `uv run python -m mypy flow` desde `.tepochcalli/` (local y CI de fase 1;
-# forma `python -m` para no depender del bit exec del entrypoint en NTFS).
+# Type checker del server + flow. `strict` es el CONTRATO (docs/CODE_STYLE.md):
+# no se relaja con `disallow_*_defs = false` ni con overrides por módulo. El
+# gate es `uv run python -m mypy` SIN argumentos (lee `files` de este
+# bloque) desde `.tepochcalli/` — local vía `just typecheck` y en CI; forma
+# `python -m` para no depender del bit exec del entrypoint en NTFS.
+# La superficie tipada pasa a `flow` + `mcp` con la creación del paquete
+# `tepochcalli_mcp` (Phase 2 T1; lo anunciaba docs/CODE_STYLE.md).
 [tool.mypy]
 python_version = "3.12"
-# Solo `flow/`: es la superficie TIPADA del producto (el paquete que se empaqueta
-# y consume el server MCP). Los tests viven fuera de este proyecto uv y no están
-# en el gate de tipos de v1.
-files = ["flow"]
+files = ["flow", "mcp"]
 strict = true
 # cocoindex, lancedb, docling y torch se publican sin stubs utilizables: sin
 # esto, `--strict` reportaría cada import de terceros como error no accionable.
@@ -108,8 +129,17 @@ fail_under = 95
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
+# Empaquetado de DOS paquetes en un solo pyproject (D-c, plan §2). Layout en
+# disco: `flow/tepochcalli_flow/` (Phase 1) + `mcp/tepochcalli_mcp/` (Phase 2).
+#
+# Corrección empírica del plan (spike T1, setuptools 84.2.1):
+# `build_py.get_package_dir()` devuelve VERBATIM el valor de la clave exacta
+# del paquete, así que el `package-dir` del plan (`"tepochcalli_mcp": "mcp"`)
+# habría puesto los ficheros del paquete en `mcp/__init__.py`, contradiciendo
+# el layout §5 del plan (`mcp/tepochcalli_mcp/…`). Solo uno de los dos podía
+# ser cierto: se conserva el LAYOUT del plan y se mapa el paquete a su
+# directorio literal `mcp/tepochcalli_mcp`. La raíz `""` sigue siendo `flow`
+# para que `tepochcalli_flow[.adapters]` resuelva igual que en Phase 1.
 [tool.setuptools]
-package-dir = {"" = "flow"}
-
-[tool.setuptools.packages.find]
-where = ["flow"]
+packages = ["tepochcalli_flow", "tepochcalli_flow.adapters", "tepochcalli_mcp"]
+package-dir = {"" = "flow", "tepochcalli_mcp" = "mcp/tepochcalli_mcp"}
