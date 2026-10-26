@@ -1,521 +1,612 @@
-# Plan de implementación — Phase 1: Engine + Flow
+# Plan de implementación — Phase 2: MCP Server `tepochcalli-rag`
 
 > **Rama de trabajo:** `feat/workspace-obsidian` (creada por el usuario).
-> **Fuente de verdad:** [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 1 · [specs/spec-rag-engine.md](../specs/spec-rag-engine.md) · [specs/spec-embeddings.md](../specs/spec-embeddings.md) · ADR-001/002/004/006.
-> **Alcance de este plan:** SOLO Phase 1. No toca el servidor MCP (Phase 2), ni el wizard (Phase 3), ni el payload de agents/commands/skills (Phase 4-5).
-> **Autorización requerida:** escribir en `obsidian-workspace/` (AGENTS.md, checklist de pre-commit). Este plan es esa autorización.
+> **Fuente de verdad:** [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 2 ·
+> [specs/spec-mcp-server.md](../specs/spec-mcp-server.md) ·
+> [specs/spec-markitdown.md](../specs/spec-markitdown.md) ·
+> [specs/spec-embeddings.md](../specs/spec-embeddings.md) · ADR-005 · ADR-007 · ADR-008.
+> **Alcance de este plan:** SOLO Phase 2 (server MCP). No toca el wizard (Phase 3), ni el
+> payload de agents/commands/skills (Phase 4-5), ni `docs/UH.md`.
+> **Autorización de escritura:** crear `obsidian-workspace/.tepochcalli/mcp/` (código nuevo) y
+> añadir las entradas `mcp.servers.tepochcalli-rag` y `mcp.servers.markitdown` a
+> `obsidian-workspace/opencode.json` (config del payload). `obsidian-workspace/.opencode/`
+> (agents/commands/skills) sigue **VEDADO** — eso es Phase 4-5.
+> **Historial:** el plan de Phase 1 se archivó en [tasks/phase1-plan.md](phase1-plan.md) y
+> [tasks/phase1-todo.md](phase1-todo.md) (`git mv`; el original queda en el historial de git).
 
 ## 1. Objetivo y criterio de éxito
 
-**Objetivo:** que `.tepochcalli/flow/` sea un motor de indexación real y verificable:
-`00-Resources/**` (localfs) → parseo (Markdown/txt/Docling-PDF) → `RecursiveSplitter(1024/128)` →
-embeddings MiniLM multilingüe (384d) → tabla `chunks` en LanceDB embebido, con **metadatos de cita
-completos** (`source_path`, `heading`, `char_start`, `char_end`, `doc_kind`, `model`), semántica
-**incremental Δ** real, y un **puerto de lectura** que Phase 2 heredará sin volver a tocar el motor.
+**Objetivo:** que `.tepochcalli/mcp/` sea un servidor MCP stdio **real** con las 4 tools del
+contrato congelado, hablando con el flow de Phase 1 **sin tocar su motor**, y que OpenCode V2
+lo pueda invocar desde el `opencode.json` real del workspace.
 
-**El gate de Phase 1 (WORKFLOW §2) se cumple cuando:**
+**El gate de Phase 2 (WORKFLOW §2) se cumple cuando:**
 
 | # | Métrica de cierre | Verificada en |
 |---|---|---|
-| M1 | Δ < 30s (p95, 20 corridas, corpus muestra) | T10 |
-| M2 | 100% de filas con metadatos de cita no nulos | T6 |
-| M3 | 0 llamadas LLM observables en indexación | T6 |
-| M4 | Fila de LanceDB queryable con `{source_path, heading, char_start, char_end}` | T9 |
-| M5 | Bench de exclusión de PDF documentado (costo real medido) | T7, T10 |
-| M6 | Fixtures de `spec-rag-engine` §Testing verdes en CI | T11 |
-| M7 | Gate Phase 1 → Phase 2 aprobado por el usuario | T12 |
+| M1 | OpenCode lista las 4 tools desde el `opencode.json` real del workspace | T9 |
+| M2 | `search` < 500 ms p95 en fixture 100× (criterio 3 de UH.md) | T2, T7 |
+| M3 | Payload de `search` ≤ 1600 tokens con fixtures adversos (criterio 4) | T7 |
+| M4 | Taxonomía `E_*` completa (5 códigos) + precedencia `INDEX_EMPTY` | T6, T8 |
+| M5 | `rag_status` con shape exacto de 4 bloques y < 200 tokens | T4, T8 |
+| M6 | Instalación degradada (salida 5 de D7.1) → `search` = `E_NO_EMBEDDER` + `rag_status` = `degraded` con `fix_hint` | T6, T8 |
+| M7 | e2e «pregunta → tool-call → JSON citado» **grabado como fixture** | T8 |
+| M8 | FTR Phase 2→3 con el usuario + docs al día + `just ci` verde | T10 |
 
-## 2. Decisiones tomadas en la entrevista (2026-10-21)
+> **Aviso de homonimia (heredado de WORKFLOW §Phase 2):** esta «Phase 2» es la del plan por
+> fases del **producto**; no es la «fase 2: TDD» interna de los comandos `/test`, ya entregada
+> dentro de Phase 1.
+
+## 2. Decisiones tomadas en la entrevista (2026-10-26)
 
 | # | Decisión | Valor | Consecuencia en el plan |
 |---|---|---|---|
-| D-a | Ubicación del código | `obsidian-workspace/.tepochcalli/` · tests en `<repo>/tests/phase1/` | El payload queda instalable tal cual por el wizard (Phase 3) sin paso de copia; los tests no viajan al vault del usuario |
-| D-b | Spec con API obsoleta | Enmendar + registrar en `docs/WORKFLOW.md` §8 | T1 corrige `specs/spec-rag-engine.md` §Proposed Solution; NO es cambio de decisión → NO requiere ADR |
-| D-c | Docling / PDF | Entra desde el inicio | T7 implementa la ruta PDF; el PDF grande queda FUERA del presupuesto Δ (TD-2) y se mide |
-| D-d | CI y bench | CI = unit+integration smoke; bench p95 de 20 corridas = local documentado | T11 (CI) y T10 (bench local) |
+| D-a | Alcance del proveedor de embeddings | **LiteLLM completo en Phase 2** (lectura + escritura) | T6 implementa `provider = "litellm"` en ambos caminos; los 5 códigos `E_*` son **reales**, no simulados; el menú del wizard (Phase 3, salidas 2-4) queda testeable de extremo a extremo |
+| D-b | Integración de markitdown en `add_source` | **Biblioteca markitdown en proceso** (mismo venv, mismo conversor que el MCP `markitdown`) | T5 no lanza subproceso ni habla MCP; `markitdown-mcp` se instala igual (lo exige spec-vault-structure §Layout y `--offline`) ⇒ **coste cero adicional** |
+| D-c | Empaquetado de `tepochcalli_mcp` | **Un solo `pyproject.toml`, dos paquetes** (`package-dir` mapeando `tepochcalli_mcp` → `mcp/`) | `uv.lock`, venv, Justfile y CI intactos; mypy pasa a `files = ["flow", "mcp"]` (lo que CODE_STYLE ya anuncia) |
+| D-d | Autorización de escritura | **`mcp/` + registro en `obsidian-workspace/opencode.json`** | T9 añade las dos entradas `mcp.servers.*`; `.opencode/` del vault sigue vedado |
+
+### Decisiones derivadas (con suoletad de registro)
+
+| # | Decisión | Razón | Dónde se registra |
+|---|---|---|---|
+| **D15** | `provider = "none"` es el 3.er valor válido de `[embedding].provider` | `rag_status` degradado y `E_NO_EMBEDDER` lo exigen (ADR-007 salida 5), pero el loader solo acepta `local|litellm`. Un config **ausente** sigue por defecto `local` (comportamiento de Phase 1 intacto) | Enmienda a `spec-embeddings.md` §`tepochcalli.toml` + `docs/WORKFLOW.md` §8 (**sin ADR**: es corrección de hechos — ADR-007 ya decidió el estado «none») |
+| **D16** | `add_source` **rechaza** `file:` fuera de la raíz del vault | Conflicto entre specs: `spec-mcp-server` §Security lo permite («salvo `file:` explícito») y `spec-markitdown` §Testing lo exige rechazado. Se aplica la **versión estricta**: el riesgo de markitdown leyendo rutas arbitrarias es justo lo que avisa `docs/SECURITY.md`, y la tool la invoca un agente | `docs/WORKFLOW.md` §8 (ratificado por el usuario 2026-10-26) + nota en `docs/SECURITY.md` |
+| **D17** | El servidor se invoca como `python -m tepochcalli_mcp`, no como console script | Lección (f) de Phase 1: en NTFS/fuseblk el bit de ejecución se pierde y `venv/bin/tepochcalli-mcp` no arranca | `obsidian-workspace/opencode.json` + `docs/WORKFLOW.md` §8 |
+| **D18** | `markitdown-mcp` se instala **tal cual** (`markitdown[all]`, +142 MB, 49 paquetes) | Lo exige el layout congelado (`spec-vault-structure` §Layout) y `--offline` (`spec-markitdown`). Lo que pesa de más (PDF, audio, YouTube, Azure AI) está fuera de alcance v1: el PDF lo cubre Docling | Coste registrado en `docs/TECH_DEBT.md` (TD-12) |
 
 ## 3. Omen mayor detectado (fail-fast en T1)
 
-> **La spec congelada manda una API que ya no existe.**
-> `specs/spec-rag-engine.md` §Proposed Solution usa la API **pre-1.0** de CocoIndex
-> (`@coco.component`, `from cocoindex.processing import chunking`, `chunking.recursive_splitter`,
-> y el paso `cocoindex setup`). PyPI sirve hoy **cocoindex 1.0.25** con la **API v1**:
-> `coco.App`, `coco.mount_each`, `coco.map`, `coco.lifespan`, `coco.ContextKey`,
-> `cocoindex.connectors.localfs.walk_dir`, `cocoindex.ops.text.RecursiveSplitter`,
-> `cocoindex.ops.sentence_transformers.SentenceTransformerEmbedder`,
-> `cocoindex.resources.{file,chunk,id}`, `cocoindex.connectors.lancedb.mount_table_target`.
-> En v1 **no existe** el paso `setup`: se ejecuta `cocoindex update` o `app.update_blocking()`.
+> **El SDK oficial de MCP para Python renombró su API justo en la v2, y el camino "fácil" de
+> reportar errores NO sirve para nuestro contrato.**
 
-La *decisión* (ADR-001: motor = CocoIndex) **no cambia**; lo que caduca es el ejemplo ilustrativo.
-Por eso T1 existe y va primero: si la API real difiere en algo más (offsets de chunk, purga de
-filas, `declare_row`), el resto del plan se reescribe con el dato real en vez de con una suposición.
+Verificado contra la fuente de `mcp==2.3.0` (PyPI, 2026-10-26):
+
+1. **`FastMCP` → `MCPServer`**, y el módulo se movió: `mcp.server.fastmcp.*` →
+   `mcp.server.mcpserver.*`. Importar `mcp.server.fastmcp` **levanta `ModuleNotFoundError`**.
+   El transporte se configura ahora en `run()` (`MCPServer(..., port=…)` es `TypeError`).
+2. **`ToolError` no puede llevar nuestro payload.** `ToolError` mete **texto libre** en
+   `content` y deja `structured_content = None`. El contrato congelado exige
+   `content[0].text` = **JSON canónico** con `{error:{code,message,fix_hint}}` — *nunca texto
+   libre* (`spec-mcp-server` §Manejo de errores). Por eso los handlers **no** lanzan
+   `ToolError`: construyen el `CallToolResult` **explícitamente** (`content=[TextContent(text=json)]`,
+   `is_error=True` en el fallo) — la forma que la v2 documenta para el servidor de bajo nivel.
+3. **stdout es el canal JSON-RPC.** Cualquier `print` al `stdout` corrompe el protocolo ⇒
+   **todo log a `stderr`** (la spec ya lo pide: «log local rotativo en flujo stderr»).
+
+Por eso **T1 va primero y es un spike**: si la v2 difiere en algo más (forma del
+`CallToolResult`, `output_schema`, nombres de los tipos), el resto del plan se reescribe con el
+dato real en vez de con una suposición.
+
+**Segundo omen (menor, aislado):** `markitdown[all]` engorda el venv del vault en **+142 MB y
++49 paquetes** (medido con `uv pip install --dry-run` contra PyPI, CPython 3.12). Es el precio
+de D18; el venv ya lleva torch/Docling (~2 GB), así que es marginal en el conjunto.
 
 ## 4. Grafo de dependencias
 
 ```mermaid
 graph TB
-    T1["T1 · Spike API v1 + enmendar spec"] --> T2["T2 · pyproject pineado + uv.lock + venv 3.12"]
-    T2 --> T3["T3 · config loader + cache de modelos"]
-    T3 --> T4["T4 · Dominio de cita (puro)"]
-    T4 --> T5["T5 · Fuentes + parseo md/txt"]
-    T5 --> T6["T6 · Embeddings + target LanceDB"]
-    T6 --> T7["T7 · Ruta PDF (Docling CPU)"]
-    T6 --> T8["T8 · Delta incremental + lock + metricas"]
-    T6 --> T9["T9 · Puerto de lectura ChunkReader"]
-    T8 --> T10["T10 · Bench Delta p95 (20 corridas)"]
-    T6 --> T11["T11 · CI phase1"]
-    T10 --> T12["T12 · Cierre de fase + FTR + gate"]
-    T11 --> T12
-    T9 --> T12
+    T1["T1 · Anclaje: SDK MCP v2, layout mcp/, deps, esqueleto stdio"] --> T2["T2 · search: pregunta a chunks citados"]
+    T1 --> T3["T3 · index_refresh: ciclo Δ con su reporte"]
+    T1 --> T5["T5 · add_source: convertir, escribir, reindexar"]
+    T2 --> T4["T4 · rag_status: los 4 bloques de diagnóstico"]
+    T3 --> T4
+    T3 --> T5
+    T2 --> T6["T6 · Dialecto E_* y proveedor none/litellm"]
+    T3 --> T6
+    T2 --> T7["T7 · Gates medidos: 1600 tokens y 500 ms"]
+    T6 --> T7
+    T2 --> T8["T8 · Contract tests D7.3 y e2e golden"]
+    T3 --> T8
+    T4 --> T8
+    T5 --> T8
+    T6 --> T8
+    T1 --> T9["T9 · Registro opencode.json, CI y conectividad"]
+    T8 --> T9
+    T7 --> T10["T10 · Cierre: FTR, docs, CHANGELOG"]
+    T8 --> T10
+    T9 --> T10
 ```
 
-**Orden imposed por el grafo:** T1 → T2 → T3 → T4 → T5 → T6 · luego T7, T8, T9 **paralelizables**
-(independientes entre sí, todos dependen de T6) · luego T10, T11 · cierre T12.
+**Orden impuesto por el grafo:** T1 → {T2, T3, T5} · T2+T3 → T4, T6 · T2+T6 → T7 ·
+{T2,T3,T4,T5,T6} → T8 → T9 → T10.
 
-## 5. Arquitectura del módulo (hexagonal, D2 + ADR-005)
+**Paralelizables:** T2, T3 y T5 se pueden tacklear en paralelo (T5 necesita T3 solo para el
+refresh interno; puede empezar con el stub). T4 depende de T2+T3. T6 depende de T2+T3.
+T8 depende de los cuatro caminos.
+
+## 5. Arquitectura del módulo (hexagonal, ADR-005)
 
 ```mermaid
-graph LR
-    subgraph ADAPTADORES["Adaptadores (infraestructura)"]
-        SRC["localfs.walk_dir<br/>fuente 00-Resources"]
-        PARSE["parsers: markdown · txt · pdf_docling"]
-        EMB["adapters: sbert_embedder<br/>SentenceTransformerEmbedder 384d"]
-        DB["adapters: lancedb_reader<br/>LanceDB chunks"]
+graph TB
+    subgraph HARNESS["Harness OpenCode V2"]
+        OC["OpenCode V2"]
     end
 
-    subgraph PUERTOS["Puertos (contratos)"]
-        PSRC["SourcePolicy<br/>whitelist · exclusiones · tamano"]
-        PCH["ChunkReader<br/>search vectorial + FTS"]
-        PEMB["EmbedderProvider<br/>model · dims · provider"]
+    subgraph MCP["Capa de comunicación — .tepochcalli/mcp/tepochcalli_mcp/"]
+        SRV["server.py — MCPServer, registro de las 4 tools"]
+        TOOLS["tools/ — search · index_refresh · add_source · rag_status"]
+        ERR["errors.py — taxonomía E_* y legacy"]
+        BUD["budget.py — estimador y truncado determinista"]
+        PATHS["paths.py — validación de subdir y glob"]
+        EMB["embedder.py — fábrica de provider (local, litellm, none)"]
+        META["index_meta.py — rows, model, last_refresh, db_size"]
+        CONV["convert.py — markitdown en proceso"]
     end
 
-    subgraph DOMINIO["Dominio (puro, sin I/O)"]
-        CIT["citation.py<br/>source_path · heading · offsets"]
-        CFG["config.py<br/>tepochcalli.toml + defaults"]
-        MODELOS["modelos: Chunk · RefreshReport"]
+    subgraph FLOW["Capa de procesamiento — .tepochcalli/flow/tepochcalli_flow/ (Phase 1)"]
+        PORTS["ports.py — ChunkReader (CONGELADO en T9 de Phase 1)"]
+        ADAPT["adapters/lancedb_reader.py — ANN+FTS con fusión RRF"]
+        APP["app.py — refresh_blocking, RefreshReport"]
+        CFG["config.py — tepochcalli.toml"]
     end
 
-    subgraph FLOW["Flow CocoIndex (aplicacion)"]
-        PIPE["pipeline.py<br/>@coco.fn(memo=True) · mount_each"]
-        APP["app.py<br/>coco.App · update_blocking"]
+    subgraph STORAGE["Almacén derivado"]
+        LANCE[("LanceDB .tepochcalli/db/")]
     end
 
-    SRC --> PSRC
-    PSRC --> PIPE
-    PARSE --> CIT
-    CFG --> PEMB
-    PEMB --> EMB
-    PIPE --> CIT
-    PIPE --> EMB
-    EMB --> DB
-    DB --> PCH
-    PIPE --> MODELOS
-    APP --> PIPE
+    OC -->|tool call stdio| SRV
+    SRV --> TOOLS
+    TOOLS --> ERR
+    TOOLS --> BUD
+    TOOLS --> PATHS
+    TOOLS --> EMB
+    TOOLS --> META
+    TOOLS --> CONV
+    TOOLS -->|puerto| PORTS
+    TOOLS -->|refresh| APP
+    TOOLS -->|config| CFG
+    EMB --> PORTS
+    META --> PORTS
+    PORTS --> ADAPT
+    ADAPT --> LANCE
+    APP --> LANCE
+    CFG --> EMB
 ```
 
-**Regla de dependencia (clean-ddd-hexagonal):** el dominio (`citation.py`, `config.py`, `modelos`)
-**no importa** `cocoindex` ni `lancedb`. T9 verifica esta frontera con un test de arquitectura
-(parseo del grafo de imports con `ast`).
+**Regla de dependencia (clean-ddd-hexagonal):** los módulos **de dominio del server**
+(`errors.py`, `budget.py`, `paths.py`) no importan `mcp`, `cocoindex`, `lancedb`, `markitdown`
+ni `litellm` — es dominio puro, testeable sin infraestructura. El **test de arquitectura** de
+Phase 1 (`tests/unit/test_architecture.py`) se **extiende** para cubrir `tepochcalli_mcp` (T1 lo
+deja preparado; T2 lo cierra).
 
-### Contrato de datos (congelado para Phase 2)
+**Puertos que se reutilizan (no se reimplementan):** `tepochcalli_flow.ports.ChunkReader` y
+`tepochcalli_flow.ports.CitedChunk` (los 7 campos, congelados en Phase 1) y
+`tepochcalli_flow.models.RefreshReport` (`scanned/indexed/skipped/elapsed_ms/locked`).
+**El server NO toca el motor**: llama a los puertos y a `app.refresh_blocking()`; el motor
+sigue sin saber que existe un MCP.
 
-Fila en `chunks` (`.tepochcalli/db/tepochcalli.lance`):
+### Layout de ficheros (nuevo)
 
 ```text
-{ id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at }
+obsidian-workspace/.tepochcalli/
+├── pyproject.toml                    # AHORA con 2 paquetes + el script tepochcalli-mcp
+├── uv.lock                           # regenerado con las deps nuevas
+├── flow/tepochcalli_flow/             # Phase 1 — NO SE TOCA (salvo app.py en T6)
+└── mcp/tepochcalli_mcp/               # Phase 2 — NUEVO
+    ├── __init__.py
+    ├── __main__.py                   # python -m tepochcalli_mcp  (D17)
+    ├── server.py                     # MCPServer + registro de las 4 tools
+    ├── errors.py                     # taxonomía: legacy + E_* → payload canónico
+    ├── budget.py                     # estimador de tokens + truncado determinista
+    ├── paths.py                      # subdir/glob: normalización y anti-traversal
+    ├── embedder.py                   # fábrica de provider (local | litellm | none)
+    ├── index_meta.py                 # rows, model, last_refresh, db_size_bytes
+    ├── convert.py                    # markitdown en proceso + frontmatter
+    └── tools/
+        ├── __init__.py
+        ├── search.py
+        ├── index_refresh.py
+        ├── add_source.py
+        └── rag_status.py
 ```
 
-* `vector` con dims resueltas del embedder configurado (384 con el default ADR-006).
-* `model` = id del embedder → habilita `E_MODEL_MISMATCH` / `INDEX_STALE_MODEL` en Phase 2 (ADR-007, TD-3).
-* `source_path` relativo a la raíz del vault, POSIX, con prefijo `00-Resources/`.
-* `char_start` / `char_end` = offsets **de carácter dentro del texto extraído** (no del binario PDF).
+Tests nuevos: `tests/unit/test_mcp_errors.py`, `test_mcp_budget.py`, `test_mcp_paths.py`,
+`tests/integration/test_mcp_search.py`, `test_mcp_refresh.py`, `test_mcp_rag_status.py`,
+`test_mcp_add_source.py`, `tests/e2e/test_mcp_contract.py`, `tests/benchmarks/bench_search.py`
++ extensión de `tests/unit/test_architecture.py`.
 
-El puerto de lectura `ChunkReader` devuelve exactamente los campos que el contrato `search` de
-[specs/spec-mcp-server.md](../specs/spec-mcp-server.md) congela: `{text, source_path, heading,
-char_start, char_end, score}`.
+### Contrato de datos (congelado — la forma EXACTA que emits)
+
+| Tool | Firma | Response (JSON canónico en `content[0].text`) |
+|---|---|---|
+| `search` | `search(query: str, top_k: int = 5, path_filter: str \| None = None)` | `{query, took_ms, truncated, results: [{text, source_path, heading, char_start, char_end, score, offsets_ref}]}` — los **7 campos siempre presentes**; `heading` nullable (D13); `score` ∈ [0,1] descendente |
+| `index_refresh` | `index_refresh()` | `{scanned, indexed, skipped, elapsed_ms, locked}` — serializado **tal cual** desde `RefreshReport` |
+| `add_source` | `add_source(uri: str, subdir: str \| None = None)` | `{ok: true, written_to, indexed: {scanned, indexed, skipped, elapsed_ms}}` |
+| `rag_status` | `rag_status()` | `{embedder: {mode, model, dims, provider}, index: {rows, model_matches_config, last_refresh, db_size_bytes}, config: {path, valid}, health: {state, reason, fix_hint}}` |
+
+### Taxonomía de errores (forma única, sin texto libre)
+
+| Código | Forma del payload | Cuándo |
+|---|---|---|
+| `VALIDATION_ERROR` | `{error:{code,message,details}}` (legacy) | args inválidos: `top_k` fuera de [1,20], glob absoluto o con `..`, `subdir` fuera de `00-Resources/` |
+| `INDEX_EMPTY` | legacy + `details` | tabla `chunks` inexistente **con embedder configurado** |
+| `INDEX_STALE_MODEL` | legacy + `details` | alias heredado de `E_MODEL_MISMATCH` (viaja en `details.legacy_code`) |
+| `ENGINE_LOCKED` | legacy + `details` | el refresh quedó bloqueado por otro proceso **en `add_source`** (la forma de `index_refresh` sí tiene sitio: el campo `locked`) |
+| `SOURCE_UNREACHABLE` | legacy + `details` | fetch/convert falló |
+| `INTERNAL` | legacy + `details` | inesperado (traceback al log, **nunca** al cliente) y fallos de API **no** cubiertos por un `E_*` (rate limit, timeout, red) |
+| `E_NO_EMBEDDER` | `{error:{code,message,fix_hint}}` | sin modelo local ni API configurada (mode `none`) |
+| `E_API_AUTH` | `E_*` | clave rechazada (401/403) al primer embed — se nombra el proveedor, la clave **nunca** se loggea |
+| `E_MODEL_MISMATCH` | `E_*` (+ `details.legacy_code = "INDEX_STALE_MODEL"`) | `config.model` ≠ modelo del índice — `search` **no** cruza dims |
+| `E_MODEL_INVALID` | `E_*` | modelo no materializable (no está en cache y la descarga falla; o no es embedding model) |
+| `E_OFFLINE_NO_CACHE` | `E_*` | `provider = "local"`, modelo sin cachear y entorno offline (`HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`) |
+
+**Precedencia (escrita para que nadie la adivine):** `E_NO_EMBEDDER` > `INDEX_EMPTY` >
+`E_MODEL_MISMATCH` > `E_API_AUTH`. Es decir: sin embedder no se mira el índice; con embedder
+pero sin índice, el índice; con índice pero de otro modelo, el modelo; y solo después, la
+credencial.
+
+### Presupuesto de tokens (determinista, criterio 4)
+
+```text
+coste(resultado) = len(text) // 4  +  25 tokens de citación
+top_k efectivo   = 5 por omisión; tope duro 8; top_k ∈ [1,20] (fuera → VALIDATION_ERROR)
+techo de payload = 1600 tokens  →  si se excede: se descartan los de menor score y truncated = true
+margen restante  = ≥400 tokens para la pregunta y la respuesta del agente (cota 2000 de UH.md)
+```
+
+`rag_status` se mantiene **< 200 tokens por construcción** (su shape es fijo).
 
 ## 6. Tareas
 
-### Sub-fase A — Anclaje y cimientos
-
----
-
-#### T1 — Spike: anclar la API real de CocoIndex v1 y enmendar la spec congelada
-
-**Descripción:** antes de escribir el flow, probar en un scratch la forma real de la API v1 sobre
-`cocoindex==1.0.25` y corregir el ejemplo obsoleto de la spec. Es la tarea de mayor riesgo de la
-fase y va primero porque su resultado puede reescribir el resto del plan.
-
-**Criterios de aceptación:**
-- [ ] `uv` crea un venv con **CPython 3.12** e instala `cocoindex==1.0.25` + extras `[lancedb]` y `[sentence-transformers]` sin conflicto de resolución.
-- [ ] El spike ejecuta el camino completo `localfs.walk_dir` → `RecursiveSplitter.split` → `SentenceTransformerEmbedder.embed` → `lancedb.mount_table_target` + `declare_row` → `app.update_blocking()` y deja filas en `.tepochcalli/db/`.
-- [ ] **Hallazgo documentado:** si `Chunk` expone offsets de **carácter** o solo de **línea**, y cuál es la forma exacta de derivar `char_start`/`char_end` reproducibles.
-- [ ] **Hallazgo documentado:** comportamiento real de **borrado** (si el target declarativo purga las filas de un archivo eliminado).
-- [ ] **Hallazgo documentado:** firma real de `PatternFilePathMatcher` y del filtro de exclusión por segmento con punto.
-- [ ] `specs/spec-rag-engine.md` §Proposed Solution actualizado con el esqueleto v1 real (imports exactos de `cocoindex.connectors`, `cocoindex.ops.text`, `cocoindex.ops.sentence_transformers`, `cocoindex.resources`).
-- [ ] `docs/WORKFLOW.md` §8 tiene la entrada **"D11 — Corrección de la API de CocoIndex (pre-1.0 → v1)"**, declarando explícitamente que *no* es cambio de decisión y *no* requiere ADR.
-- [ ] `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) y `obsidian-workspace/.opencode/` **intactos** (verificado con `git status --short`).
-
-**Verificación:**
-- [ ] El script del spike corre de principio a fin sin `AttributeError`/`ImportError` y su salida se pega en el cuerpo del commit.
-- [ ] `markdownlint specs docs` limpio tras la enmienda.
-- [ ] `git diff --stat` muestra solo `specs/spec-rag-engine.md` y `docs/WORKFLOW.md`.
-
-**Dependencias:** ninguna.
-**Ficheros probables:** `specs/spec-rag-engine.md`, `docs/WORKFLOW.md`, scratch del spike (efímero o bajo `tests/spikes/`, ignorado por `.gitignore`).
-**Tamaño estimado:** M (3-5 ficheros).
-
----
-
-#### T2 — Cimientos del paquete: `pyproject.toml` pineado, `uv.lock`, venv 3.12 y gitignore del runtime
-
-**Descripción:** materializar el runtime tal como lo describe `spec-vault-structure` §Layout:
-`.tepochcalli/{pyproject.toml, uv.lock, .python-version, flow/}` versionado; `{venv,db,models,bin,config}`
-ignorado. Fijar los pines que [docs/TRD.md](../docs/TRD.md) §4 deja explícitamente para Phase 1.
-
-**Criterios de aceptación:**
-- [ ] `obsidian-workspace/.tepochcalli/pyproject.toml` con pines: `cocoindex==1.0.25` (con extra `lancedb`), `sentence-transformers>=3.3.1,<4`, `docling>=2,<3` (**sin** extra GPU). `lancedb`/`pyarrow` **no** se pinean aparte (vienen por el extra — TRD §4).
-- [ ] `uv.lock` commiteado; `uv sync` reproducible desde cero en máquina limpia.
-- [ ] `.tepochcalli/.python-version` = `3.12` (`uv python pin 3.12`).
-- [ ] `tepochcalli_flow` importable tras `uv sync` (paquete en `.tepochcalli/flow/tepochcalli_flow`, modo editable).
-- [ ] `.gitignore` (raíz) **ignora** `obsidian-workspace/.tepochcalli/{venv,db,models,bin,config}` y **NO ignora** `{flow,pyproject.toml,uv.lock,.python-version}` — verificado con `git check-ignore -v`.
-- [ ] `[tool.ruff]` con `target-version = "py312"` y `select` incluyendo `ANN` (type hints estrictos — CODE_STYLE).
-- [ ] `uv run ruff check .` y `uv run ruff format --check .` limpios.
-- [ ] `uv run pytest` desde `.tepochcalli/` completa la collection sin error.
-- [ ] Auditoría de CVEs y licencias de las 4 dependencias, resumida en el cuerpo del commit.
-
-**Verificación:**
-- [ ] `rm -rf .tepochcalli/venv && cd obsidian-workspace/.tepochcalli && uv sync && uv run pytest` → OK desde cero.
-- [ ] `git check-ignore -v obsidian-workspace/.tepochcalli/venv` devuelve regla; `git check-ignore obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/` **no** devuelve nada.
-
-**Dependencias:** T1 (los pines salen del spike).
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/pyproject.toml`, `obsidian-workspace/.tepochcalli/uv.lock`, `obsidian-workspace/.tepochcalli/.python-version`, `.gitignore` (raíz).
-**Tamaño estimado:** M.
-
----
-
-#### T3 — Config loader y resolución del cache de modelos (cierra la decisión abierta `SBERT_HOME`)
-
-**Descripción:** `WORKFLOW.md` §Phase 1 declara que *la decisión abierta de `spec-embeddings`
-(`env SBERT_HOME`) se resuelve aquí*. El flow lee `[embedding]` y `[chunking]` de
-`.tepochcalli/config/tepochcalli.toml` (gitignored) con fallbacks a default, y resuelve dónde vive
-el modelo sin hardcodear el id.
-
-**Criterios de aceptación:**
-- [ ] `tepochcalli_flow/config.py` lee `tepochcalli.toml` con `tomllib`; si falta el archivo o faltan claves → defaults: `paraphrase-multilingual-MiniLM-L12-v2`, 384d, `max_chunk_size=1024`, `overlap=128`, `top_k=5`.
-- [ ] `provider` ∈ {`local`, `litellm`}; `api_key_env` **nunca** aparece en `repr()`, `str()` ni logs — solo su nombre de variable.
-- [ ] `models_dir` resuelto a `<vault>/.tepochcalli/models`; el loader **exporta** `SENTENCE_TRANSFORMERS_HOME` y `HF_HOME` a ese path *antes* de instanciar el embedder.
-- [ ] `obsidian-workspace/.tepochcalli/config/tepochcalli.toml.example` commiteado como plantilla; el `.toml` real nunca se commitea.
-- [ ] Tests unitarios: defaults, overrides parciales, TOML malformado → default + warning, y clave nunca expuesta.
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_config.py -v` verde.
-- [ ] Test que serializa el objeto de config y afirma que no aparece ningún valor de clave.
-
-**Dependencias:** T2.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/config.py`, `obsidian-workspace/.tepochcalli/config/tepochcalli.toml.example`, `tests/phase1/test_config.py`.
-**Tamaño estimado:** S.
-
----
-
-### Sub-fase B — Camino Markdown completo
-
----
-
-#### T4 — Dominio de cita: `source_path`, `heading`, `char_start`/`char_end`, `doc_kind`, `model`
-
-**Descripción:** funciones puras (sin I/O, sin red, sin modelos) que derivan los metadatos de cita
-de cada chunk. Es el núcleo que garantiza el criterio 5 (citas precisas) y el contrato de `search`
-que Phase 2 congelará.
-
-**Criterios de aceptación:**
-- [ ] `source_path` = POSIX **relativo a la raíz del vault**, con prefijo `00-Resources/`, normalizado (sin `./`, sin `..`, separador `/`).
-- [ ] `heading` = último heading Markdown padre visto en el texto extraído (niveles `#`..`######`); para PDF, la sección (o el título del documento si no hay).
-- [ ] `char_start`/`char_end` = offsets **de carácter** dentro del texto extraído, verificables: `extracted_text[char_start:char_end]` corresponde al texto del chunk (con el overlap documentado).
-- [ ] `doc_kind` ∈ {`md`, `markdown`, `txt`, `pdf`}; `model` = id del embedder configurado.
-- [ ] Funciones puras: sin disco, sin red, sin modelos; cobertura de tests **100%** del módulo.
-- [ ] Type hints estrictos en todas las firmas públicas; docstrings en español citando el criterio afectado.
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_citation.py --cov=tepochcalli_flow.citation --cov-fail-under=100` verde.
-- [ ] Test que recorta el texto extraído con los offsets y compara con el texto del chunk.
-
-**Dependencias:** T3.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/citation.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/models.py`, `tests/phase1/test_citation.py`.
-**Tamaño estimado:** M.
-
----
-
-#### T5 — Fuentes y parseo Markdown/TXT: whitelist, exclusiones y chunks en memoria
-
-**Descripción:** camino vertical #1 — un `.md` en `00-Resources/` produce N chunks con metadatos de
-cita correctos, sin embeddings y sin escribir en LanceDB. Aísla el parseo para poder fallar rápido.
-
-**Criterios de aceptación:**
-- [ ] `localfs.walk_dir` sobre `00-Resources/`, recursivo, con `PatternFilePathMatcher` de whitelist `.md/.markdown/.txt` y `excluded_patterns` para segmentos con prefijo punto y `.git/**`.
-- [ ] Archivos >100MB, symlinks rotos y no legibles → `skipped` **con motivo**; la pasada no se aborta.
-- [ ] `RecursiveSplitter` con `chunk_size=1024`, `chunk_overlap=128`; comportamiento de separadores verificado en el spike de T1 y documentado.
-- [ ] Cada chunk sale con `source_path`, `heading`, `char_start`, `char_end`, `doc_kind` **no nulos**.
-- [ ] Fixture de anidamiento libre: `tests/phase1/fixtures/vault_markdown/00-Resources/{nota.md, sub/carpeta/anidada.md, .oculto/ignorar.md}` → 2 indexados, 1 excluido.
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_parsers.py -v` verde.
-- [ ] Test de exclusión: el archivo bajo `.oculto/` no aparece en la lista de procesados.
-
-**Dependencias:** T4.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/pipeline.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/parsers/{markdown.py,txt.py}`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/ports.py`, `tests/phase1/test_parsers.py`, `tests/phase1/fixtures/vault_markdown/**`.
-**Tamaño estimado:** M.
-
----
-
-#### T6 — Embeddings y target LanceDB: escritura de la fila completa
-
-**Descripción:** camino vertical #2 (escritura) — parseo → chunk → embed 384d → fila completa en
-LanceDB con **todos** los campos del contrato de datos.
-
-**Criterios de aceptación:**
-- [ ] `SentenceTransformerEmbedder("paraphrase-multilingual-MiniLM-L12-v2")` provisto en el `lifespan` de CocoIndex con `ContextKey(..., detect_change=True)`; dims resueltas = **384**.
-- [ ] Esquema de fila **exacto**: `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}`.
-- [ ] Base `.tepochcalli/db/tepochcalli.lance`, tabla `chunks`.
-- [ ] **M2:** 100% de las filas con metadatos de cita no nulos (assert explícito en el test de integración).
-- [ ] Índice **ANN** vectorial creado (IVF_PQ por default; si el bench no lo exige, brute-force queda documentado) e índice **FTS** sobre `text`.
-- [ ] **M3:** 0 llamadas LLM observables durante la indexación — el camino por defecto no importa `litellm`; test que bloquea la salida a red durante un refresh y afirma que el refresh completa.
-- [ ] `model` de las filas = modelo configurado (habilita `E_MODEL_MISMATCH` en Phase 2).
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_pipeline_integration.py -v` verde.
-- [ ] Inspección de la tabla con la API de LanceDB: nº de filas, columnas y dims del vector.
-
-**Dependencias:** T5.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/app.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/adapters/sbert_embedder.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/models.py`, `tests/phase1/test_pipeline_integration.py`.
-**Tamaño estimado:** M.
-
----
-
-### Sub-fase C — PDF, incrementalidad y puerto de lectura
-
----
-
-#### T7 — Ruta PDF con Docling (CPU) y exclusión por tamaño
-
-**Descripción:** camino vertical #3 — un PDF en `00-Resources/` produce chunks citados con heading de
-sección. Docling entra desde el inicio (D-c), pero el PDF **grande** queda fuera del presupuesto
-Δ<30s (TD-2) y su costo real se mide, no se estima.
-
-**Criterios de aceptación:**
-- [ ] `docling` invocado en modo **CPU** (sin opts GPU); salida markdown con **jerarquía de headings conservada**.
-- [ ] `doc_kind == "pdf"`; `heading` = sección del PDF (o título del documento).
-- [ ] `char_start`/`char_end` referidos al **texto markdown extraído** (no al binario PDF) — documentado de forma explícita en el docstring del módulo.
-- [ ] **M5:** costo real medido del parseo (PDF de N páginas → X s en la máquina de referencia); la cifra se reporta, nunca se estima.
-- [ ] PDF >100MB → `skipped` con motivo; el delta **no** se aborta.
-- [ ] Fixture PDF real y pequeño (1-2 páginas, commiteado en `tests/phase1/fixtures/`) → chunks con `heading` no nulo.
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_pdf.py -v` verde.
-- [ ] Tiempo de parseo del fixture registrado en el cuerpo del commit.
-
-**Dependencias:** T6.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/parsers/pdf_docling.py`, `tests/phase1/test_pdf.py`, `tests/phase1/fixtures/vault_golden/00-Resources/*.pdf`.
-**Tamaño estimado:** M.
-
----
-
-#### T8 — Semántica incremental Δ, lock de un solo proceso y métricas
-
-**Descripción:** el núcleo del criterio 2. `index_refresh` solo reprocesa lo que cambió; una
-segunda invocación concurrente devuelve `locked` sin escribir. El resultado debe ser **reutilizable
-tal cual** por el MCP de Phase 2 (`{scanned, indexed, skipped, elapsed_ms}`).
-
-**Criterios de aceptación:**
-- [ ] Primera pasada: `scanned=N, indexed=M, skipped=0`. Segunda pasada sin cambios: `indexed=0, skipped=N` (memoización efectiva, no re-embed).
-- [ ] Archivo **modificado** → solo sus chunks se reescriben. Archivo **eliminado** → sus filas se purgan (según el comportamiento real medido en T1; si el target no purga, se implementa reconciliación explícita y se documenta).
-- [ ] **Lock de un solo proceso**: la segunda invocación concurrente devuelve `{scanned:0, indexed:0, skipped:0, locked:true}` y **no** escribe en LanceDB.
-- [ ] Métricas por refresh: `{scanned, indexed, skipped, elapsed_ms, locked}` con `elapsed_ms` monotónico (`time.monotonic_ms`).
-- [ ] El valor de retorno es un modelo tipado (sin `Any` en la firma pública) que Phase 2 serializará tal cual.
-- [ ] Tests de los 5 escenarios: add / modify / delete / idempotencia / lock.
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_delta.py -v` verde.
-- [ ] Test del lock: dos procesos concurrentes → exactamente uno escribe, el otro reporta `locked:true`.
-
-**Dependencias:** T6.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/app.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/models.py`, `tests/phase1/test_delta.py`.
-**Tamaño estimado:** M.
-
----
-
-#### T9 — Puerto de lectura `ChunkReader` + adaptador LanceDB (fila queryable)
-
-**Descripción:** la frontera hexagonal que Phase 2 heredará. **No** es la tool `search` (esa es
-Phase 2): es el puerto de lectura, su adaptador LanceDB y un verificador que aserta que las filas
-son queryables con sus metadatos de cita (M4).
-
-**Criterios de aceptación:**
-- [ ] `tepochcalli_flow/ports.py` define el protocolo `ChunkReader` (búsqueda vectorial + FTS, `path_filter`, `top_k`) **sin** dependencias de LanceDB ni de CocoIndex.
-- [ ] `tepochcalli_flow/adapters/lancedb_reader.py` implementa el puerto y devuelve `{text, source_path, heading, char_start, char_end, score}` — exactamente los campos que el contrato `search` de `spec-mcp-server` congela.
-- [ ] `score` normalizado **[0,1]**, orden descendente garantizado.
-- [ ] `path_filter` como glob relativo a la raíz del vault (misma semántica que el contrato de Phase 2: `*`→`%` en el `WHERE`).
-- [ ] Verificador ejecutable (CLI del paquete) que abre la db, cuenta filas y devuelve los chunks citados de una query de ejemplo.
-- [ ] Test de arquitectura: `citation.py` y `config.py` **no** importan `lancedb` ni `cocoindex` (assert sobre el grafo de imports con `ast`).
-- [ ] Búsqueda ANN+FTS verificada **<500ms p95** en el corpus dorado (10 queries) — cifra preliminar; el corpus 10k/1k es Phase 6 (TRD §6).
-
-**Verificación:**
-- [ ] `uv run pytest tests/phase1/test_read_port.py -v` verde.
-- [ ] Ejecución manual del verificador mostrando filas con `source_path`, `heading` y offsets.
-
-**Dependencias:** T6.
-**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/ports.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/adapters/lancedb_reader.py`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/verify.py`, `tests/phase1/test_read_port.py`, `tests/phase1/test_architecture.py`.
-**Tamaño estimado:** M.
-
----
-
-### Sub-fase D — Medición, CI y cierre
-
----
-
-#### T10 — Bench Δ<30s p95 (20 corridas) + reporte del costo de PDF
-
-**Descripción:** la métrica de cierre M1. El protocolo es el de [docs/TRD.md](../docs/TRD.md) §6:
-20 corridas, corpus de 50 archivos md/txt, `p95 < 30000ms`, PDFs grandes **excluidos y reportados aparte**.
-
-**Criterios de aceptación:**
-- [ ] Script reproducible (`tests/phase1/bench_delta.py`) que prepara un corpus de 50 archivos md/txt, ejecuta 20 refresh modificando 1-50 archivos y calcula el p95 de `elapsed_ms`.
-- [ ] **M1:** p95 < 30.000 ms en la máquina de referencia, con host documentado (CPU, RAM, disco).
-- [ ] **M5:** los PDFs grandes quedan **excluidos** del presupuesto y **reportados aparte** con su costo real medido (T7).
-- [ ] El resultado con metodología y número de máquina se registra en `docs/WORKFLOW.md` §Phase 1 (cifra **medida**, nunca estimada).
-- [ ] El bench es idempotente, usa un vault temporal y **no** deja basura en `00-Resources/`.
-
-**Verificación:**
-- [ ] El número publicado en el documento es **idéntico** al del output del script.
-- [ ] Segunda ejecución del bench sobre el mismo corpus no degrada el p95 (estabilidad).
-
-**Dependencias:** T8.
-**Ficheros probables:** `tests/phase1/bench_delta.py`, `docs/WORKFLOW.md`.
-**Tamaño estimado:** S.
-
----
-
-#### T11 — CI de Phase 1 (ruff + unit/integration smoke)
-
-**Descripción:** el gate M6 exige *fixtures verdes en CI*. Decisión D-d: CI cubre unit + integración
-con smoke; el p95 de 20 corridas se queda en local documentado (T10), porque un runner compartido
-introduce ruido en la latencia.
-
-**Criterios de aceptación:**
-- [ ] `.github/workflows/phase1.yml` dispara en PR y push: `uv sync --frozen` → `uv run ruff check .` → `uv run ruff format --check .` → `uv run pytest tests/phase1 -m "not slow"`.
-- [ ] El job cachea el modelo HF con clave por **revisión pineada** (la integración no depende de red en cada corrida).
-- [ ] Smoke del bench Δ (**1** corrida, umbral generoso) para cazar regresiones groseras; el p95 de 20 corridas **no** corre en CI.
-- [ ] El workflow **no** toca `.tepochcalli/{db,models,config,venv}` del repo (todo artefacto vive en caché de CI).
-- [ ] El workflow está referenciado desde `docs/WORKFLOW.md` §Phase 1.
-
-**Verificación:**
-- [ ] Push a la rama → workflow verde.
-- [ ] Un PR de prueba con un fallo intencionado de lint → workflow rojo (el gate **muerde**).
-
-**Dependencias:** T6 (paquete instalable), T10 (define el smoke).
-**Ficheros probables:** `.github/workflows/phase1.yml`, `docs/WORKFLOW.md`.
-**Tamaño estimado:** S.
-
----
-
-#### T12 — Cierre de fase: FTR, métricas, deuda técnica y status de specs
-
-**Descripción:** documentar el resultado **medido** de Phase 1, re-revisar el registro de deuda
-técnica y cerrar el gate antes de que Phase 2 arranque.
-
-**Criterios de aceptación:**
-- [ ] `docs/WORKFLOW.md` §Phase 1 actualizado con las 3 métricas de cierre medidas (M1, M2, M3) y §8 con las *Lessons learned* de la fase.
-- [ ] `docs/TECH_DEBT.md` re-revisado: **TD-1** (autoría del flow) con su estado real; **TD-2** (costo Docling) con la cifra medida; **TD-3** (swap de modelo) anotando que el campo `model` ya se escribe por fila; **TD-4** (índice obsoleto) con el comportamiento Δ real.
-- [ ] `SPEC.md` §Índice de specs: `spec-rag-engine.md` y `spec-embeddings.md` pasan de `Proposed` a `Approved` (el gate de Phase 1 es quien los valida).
-- [ ] FTR Phase 0→1 ejecutado (WORKFLOW §4): consistencia D1-D9, enlaces funcionales, mermaid válido → `markdownlint docs specs AGENTS.md SPEC.md` limpio.
-- [ ] `docs/ARCHITECTURE.md`: component inventory actualizado con la ruta real del flow + **diagrama de componentes** del motor (§5 de este plan).
-- [ ] Checklist de pre-commit de `AGENTS.md` verificado: `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) y `obsidian-workspace/.opencode/` **intactos**.
-- [ ] `git status --short` no muestra `venv/db/models/bin/config`.
-- [ ] **M7:** gate Phase 1 → Phase 2 aprobado explícitamente por el usuario (firma en el documento).
-
-**Verificación:**
-- [ ] `markdownlint docs specs AGENTS.md SPEC.md` → 0 errores.
-- [ ] `git diff --stat main...HEAD` solo toca los ficheros previstos en este plan.
-
-**Dependencias:** T10, T11 (y T7/T9 para las métricas de PDF y de lectura).
-**Ficheros probables:** `docs/WORKFLOW.md`, `docs/TECH_DEBT.md`, `SPEC.md`, `docs/ARCHITECTURE.md`.
-**Tamaño estimado:** M.
+### Sub-fase A — Anclaje (fail-fast)
+
+#### T1 · Spike del SDK MCP v2, layout del paquete `mcp/` y esqueleto que anuncia las 4 tools
+
+* **Descripción:** anclar la API real del SDK de MCP v2 (el *omen mayor* de §3), decidir y
+  probar el empaquetado de los dos paquetes en un solo `pyproject.toml`, y dejar un servidor
+  que arranca por stdio y **declara** las 4 tools con sus schemas — sin lógica todavía, para
+  que el contrato quede congelado antes de implementarlo.
+* **AC:**
+  * `mcp==2.3.0`, `markitdown-mcp==0.0.1a8` y `litellm>=1.106,<2` pineados en
+    `.tepochcalli/pyproject.toml`; `uv.lock` regenerado y commiteado; `uv sync --frozen`
+    reproducible; **la suite de Phase 1 sigue verde** (el lock no se rompió).
+  * `pyproject.toml`: `packages = ["tepochcalli_flow", "tepochcalli_flow.adapters",
+    "tepochcalli_mcp", "tepochcalli_mcp.tools"]` + `package-dir = {"": "flow",
+    "tepochcalli_mcp": "mcp"}`; `[project.scripts] tepochcalli-mcp = "tepochcalli_mcp.__main__:main"`;
+    `[tool.mypy] files = ["flow", "mcp"]`.
+  * El editable install expone **ambos** paquetes (probado con `import tepochcalli_flow` **y**
+    `import tepochcalli_mcp`, con y sin subpaquete).
+  * Layout nuevo `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/` con `__init__.py`,
+    `__main__.py` y `server.py`.
+  * El server arranca por **stdio**, responde `initialize` y `tools/list` con las **4 tools** y
+    sus schemas (`search(query, top_k=5, path_filter=None)`, `index_refresh()`,
+    `add_source(uri, subdir=None)`, `rag_status()`).
+  * Cada handler devuelve ya el **placeholder con la forma EXACTA** declarada en §5 (sin
+    lógica): el contrato queda congelado antes de llenarlo.
+  * **Hallazgos del spike documentados** en el docstring de `server.py`: `FastMCP`→`MCPServer`,
+    `mcp.server.mcpserver.*`, `ToolError` insuficiente ⇒ `CallToolResult` explícito, transporte
+    en `run()`.
+  * **stdout reservado al JSON-RPC**: todo log a `stderr` (test que comprueba que stdout sólo
+    contiene JSON-RPC).
+  * `.gitignore`: `mcp/` **versionado** — verificado con `git check-ignore -v` en **ambos**
+    sentidos (como en T2/T3 de Phase 1).
+* **Verificar:** `uv run python -m tepochcalli_mcp` + cliente del SDK por stdio ⇒ `tools/list`
+  con 4 tools; `just ci` verde (suite Phase 1 incluida).
+* **Dep.:** — · **Tamaño:** M
+
+### Sub-fase B — Los cuatro caminos
+
+#### T2 · `search`: de la pregunta a los chunks citados
+
+* **Descripción:** el camino caliente del producto. El agente pregunta; el server vectoriza la
+  query, busca por el puerto de lectura de Phase 1, recorta al presupuesto y devuelve citas
+  exactas.
+* **AC:**
+  * `search(query, top_k=5, path_filter=None)` → `{query, took_ms, truncated, results:[…]}` con
+    los **7 campos** por resultado, `heading` nullable (D13) y `score` descendente en [0,1].
+  * Consume el puerto `ChunkReader` de Phase 1; el server **no** importa `cocoindex` ni
+    `lancedb` (test de arquitectura extendido a `tepochcalli_mcp`).
+  * Embedder `local` vía la fábrica de provider (T6 la generaliza; T2 solo `local`).
+  * `took_ms` medido **desde la entrada del handler hasta serializar la respuesta** (incluye el
+    embed de la query; excluye el arranque del proceso).
+  * `top_k`: por omisión 5; fuera de [1,20] → `VALIDATION_ERROR`; efectivo = `min(solicitado, 8)`.
+  * `path_filter`: glob relativo al vault; absoluto o con `..` → `VALIDATION_ERROR` (reutiliza
+    `path_filter_to_like_predicate` de Phase 1, que ya valida).
+  * Presupuesto determinista: `len(text)//4 + 25` por resultado; se acumulan por score
+    descendente mientras el total ≤1600; al cortar, `truncated: true`.
+  * Errores: índice inexistente → `INDEX_EMPTY`; `model` del índice ≠ config →
+    `E_MODEL_MISMATCH` (+ `details.legacy_code`), **sin** cruzar dims.
+  * **Cero** llamadas de red y **cero** LLM (guard con canario, como el M3 de Phase 1).
+* **Verificar:** test de integración contra un vault fixture real (100 chunks) + test de
+  arquitectura + `just quality`.
+* **Dep.:** T1 · **Tamaño:** M
+
+#### T3 · `index_refresh`: el ciclo Δ con su reporte honesto
+
+* **Descripción:** exponer el Δ de Phase 1 como tool, serializando `RefreshReport` **tal cual**
+  (sin recalcular cuentas) y exponiendo el estado del candado.
+* **AC:**
+  * `index_refresh()` → `{scanned, indexed, skipped, elapsed_ms, locked}` desde
+    `RefreshReport`, sin recalcular ni redondear.
+  * `locked: true` cuando otro proceso retiene el candado ⇒ el reporte va con las tres cuentas
+    a cero y **no** se ejecuta update.
+  * `E_NO_EMBEDDER` cuando no hay embedder configurado (mode `none`) — **precede** a
+    `INDEX_EMPTY`.
+  * `indexed` sale del data plane (nunca de `stats.total`); `skipped = scanned - indexed`;
+    `elapsed_ms` con reloj monótono.
+  * Idempotencia: una segunda llamada consecutiva ⇒ `indexed: 0`, `skipped == scanned`.
+* **Verificar:** test de integración con vault fixture (crea → modifica → borra → idempotencia)
+  + prueba del candado (dos refresh concurrentes ⇒ uno con `locked: true`).
+* **Dep.:** T1 · **Tamaño:** S
+
+#### T4 · `rag_status`: el diagnóstico que el agente puede llamar sin coste
+
+* **Descripción:** la tool que D7.3/ADR-007 hacen obligatoria ante cualquier `E_*`: dice qué
+  embedder hay, qué estado tiene el índice, si la config vale y qué hacer para arreglarlo.
+* **AC:**
+  * Exactamente **4 bloques**: `embedder {mode, model, dims, provider}`,
+    `index {rows, model_matches_config, last_refresh, db_size_bytes}`,
+    `config {path, valid}`, `health {state, reason, fix_hint}`.
+  * `state ∈ {ok, degraded}`; `reason` **exclusivamente** de la taxonomía `E_*`;
+    `fix_hint` = la solución exacta (texto de la spec).
+  * `mode ∈ {local, api, none}`.
+  * `model_matches_config` = (conjunto de `model` de las filas) == {`config.embedding.model`};
+    si no ⇒ `state: degraded` + `reason: E_MODEL_MISMATCH`.
+  * `last_refresh` = `max(indexed_at)` de las filas — **derivado, sin estado nuevo** — o `null`
+    si el índice está vacío; la semántica («última indexación efectiva») se declara en la
+    `description` de la tool.
+  * `db_size_bytes` = suma de tamaños de `.tepochcalli/db/`.
+  * `config.path` **relativa** (`.tepochcalli/config/tepochcalli.toml`) — nunca absoluta (no
+    filtra el home del usuario).
+  * Modo degradado: `mode: none` ⇒ `state: degraded`, `reason: E_NO_EMBEDDER`,
+    `fix_hint: "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`"`.
+  * Coste **< 200 tokens** verificado con el estimador.
+* **Verificar:** test de integración con 3 estados (sano / sin embedder / modelo distinto) +
+  assert de tokens <200.
+* **Dep.:** T2, T3 · **Tamaño:** S
+
+#### T5 · `add_source`: convertir, escribir y reindexar en una llamada
+
+* **Descripción:** el camino de entrada de material nuevo: el usuario da una URL o un archivo,
+  el server lo convierte a Markdown, lo deja citado en `00-Resources/` y reindexa.
+* **AC:**
+  * `add_source(uri, subdir=None)` → `{ok: true, written_to, indexed: {scanned, indexed,
+    skipped, elapsed_ms}}`.
+  * `uri` acepta `http(s):` y `file:`; `subdir` normalizado (sin `..`, sin absolutos) y
+    destino **siempre** dentro de `00-Resources/`; por omisión `_inbox`.
+  * Conversión con la **biblioteca markitdown en proceso** (`markitdown==0.1.9`); el archivo
+    escrito lleva frontmatter de trazabilidad (`source_uri`, `converted_at`).
+  * Nombre derivado del URI (slug) + `.md`; colisión ⇒ sufijo numérico.
+  * Escritura **atómica** (temporal + `rename`) dentro de `00-Resources/`.
+  * Tras escribir, invoca `index_refresh` **internamente** y serializa el reporte en `indexed`.
+  * Si ese refresh quedó bloqueado ⇒ error `ENGINE_LOCKED` (la forma de `add_source` no tiene
+    sitio para `locked`).
+  * Fallo de fetch/convert ⇒ `SOURCE_UNREACHABLE` con la guía («guárdalo manualmente en
+    `00-Resources/` y ejecuta `index_refresh`»).
+  * **`file:` fuera del vault ⇒ RECHAZADO** (D16) con `VALIDATION_ERROR`.
+  * **Nunca** escribe fuera de `00-Resources/` (test adversarial de `subdir`).
+* **Verificar:** tests de integración con `http(s):` (servidor local) y `file:`; negativos:
+  traversal, `subdir` absoluto, formato no convertible, `file:` fuera del vault.
+* **Dep.:** T1, T3 · **Tamaño:** M
+
+### Sub-fase C — Dialecto de errores, proveedor API y presupuestos
+
+#### T6 · Dialecto `E_*` y el proveedor `none | litellm`
+
+* **Descripción:** cerrar el contrato de errores (los 5 códigos `E_*` + la precedencia) y
+  habilitar el camino de API externo, que hoy el flow rechaza con
+  `EmbeddingProviderNotImplementedError`.
+* **AC:**
+  * `provider = "none"` aceptado por el loader (**3.er valor**, D15); un config **ausente**
+    sigue por defecto `local` (comportamiento de Phase 1 intacto).
+  * Fábrica de provider (`embedder.py`): `local` → `SentenceTransformer` pineado a
+    `MODEL_REVISION`; `litellm` → `litellm.embedding` con la clave de `api_key_env` (leída del
+    entorno, **nunca** loggeada); `none` ⇒ `E_NO_EMBEDDER`.
+  * **Camino de escritura** con litellm: `app.py` construye
+    `cocoindex.ops.litellm.LiteLLMEmbedder(model, api_key=…)` cuando `provider == "litellm"`
+    (en vez de lanzar el error tipado).
+  * **Camino de lectura** con litellm: la query se vectoriza con la misma API (mismo modelo y
+    dims que el índice); si el modelo no coincide ⇒ `E_MODEL_MISMATCH` **antes** de cruzar dims.
+  * Los **5** códigos `E_*` emitidos con el payload **exacto** `{error:{code,message,fix_hint}}`
+    (tabla de §5).
+  * Fallos de API **no** cubiertos por un `E_*` (rate limit, timeout, red) ⇒ `INTERNAL`
+    (forma legacy con `details`); el traceback va al log con la clave **redactada** y nunca al
+    cliente.
+  * Precedencia verificada: `E_NO_EMBEDDER` > `INDEX_EMPTY` > `E_MODEL_MISMATCH` >
+    `E_API_AUTH`.
+  * Enmienda de spec: `spec-embeddings.md` §`tepochcalli.toml` acepta `provider = "none"`
+    (corrección de hechos, sin ADR) + entrada en `docs/WORKFLOW.md` §8.
+* **Verificar:** contract test por código `E_*` (con proveedor falso inyectado) + test que
+  afirma que la clave **no** aparece en logs, `repr` ni payload + suite Phase 1 verde (el
+  cambio en `app.py` no rompe el flow local).
+* **Dep.:** T2, T3 · **Tamaño:** M
+
+#### T7 · Los dos gates numéricos: ≤1600 tokens y <500 ms
+
+* **Descripción:** medir, no estimar. Los criterios 3 y 4 de UH.md son números y este plan los
+  convierte en benchmarks reproducibles.
+* **AC:**
+  * Fixtures **adversas**: query unicode (CJK/emoji), query sobredimensionada (>10 000 chars →
+    `VALIDATION_ERROR`), chunk de 1536 bytes, PDF con tablas, chunk multibyte.
+  * Assert: payload serializado de `search` **≤1600 tokens** en **todas** las fixtures; cuando
+    hay corte ⇒ `truncated: true` y el orden por score se respeta.
+  * `rag_status` **<200 tokens**.
+  * Bench de `search`: **p95 < 500 ms** sobre fixture de 100 archivos. Se publica **n y método
+    de percentil** junto al número (lección (c) de Phase 1: n=20, *nearest-rank*, p95 = 19.º
+    valor ordenado).
+  * El bench vive en `tests/benchmarks/bench_search.py`, se marca `slow` (no corre en la suite de
+    corrección) y deja un *smoke* con umbral generoso para CI.
+  * Presupuesto por etapa **medido** y publicado: embed ≤120 ms · ANN+FTS ≤200 ms ·
+    ensamblado/truncado ≤30 ms · margen IPC ≤150 ms.
+* **Verificar:** `just bench-search` (local, documentado) + `just bench-search --smoke` (CI).
+* **Dep.:** T2, T6 · **Tamaño:** M
+
+### Sub-fase D — Contrato, e2e, registro y cierre
+
+#### T8 · Contract tests D7.3 y e2e «pregunta → tool-call → JSON citado»
+
+* **Descripción:** el gate de Phase 2: las formas exactas y una prueba real de proceso a
+  proceso, con el fixture **grabado**.
+* **AC:**
+  * Contract tests de las 4 tools: shape **exacto** (claves y orden) de request/response;
+    en error, `is_error = true` y `content[0].text` es **JSON parseable** (nunca texto libre);
+    `structured_content` coherente con el shape.
+  * Los 5 `E_*` con `{error:{code,message,fix_hint}}`; `rag_status` con los 4 bloques exactos y
+    <200 tokens; instalación degradada ⇒ `search` = `E_NO_EMBEDDER` y `rag_status` =
+    `degraded` con `fix_hint`.
+  * `path_filter`: globs válidos e inválidos (`..`, absoluto) y el prefijo `00-Resources/`.
+  * **e2e real**: el test lanza el proceso `tepochcalli-mcp` por stdio (cliente del SDK),
+    indexa un vault golden (md + PDF) y comprueba que cada resultado trae `source_path` real,
+    `heading` y **offsets reproducibles** (el slice del archivo original reproduce `text` para
+    md; `offsets_ref == "extract"` para PDF).
+  * El fixture golden queda **grabado** en `tests/fixtures/` (no se regenera en cada corrida).
+  * Cero red, cero LLM.
+* **Verificar:** `uv run python -m pytest ../../tests/e2e -v` + `just test` verde.
+* **Dep.:** T2, T3, T4, T5, T6 · **Tamaño:** M
+
+#### T9 · Registro en `opencode.json`, CI y conectividad real con OpenCode V2
+
+* **Descripción:** que el harness del vault real encuentre el server — el criterio «OpenCode V2
+  conecta vía `opencode.json` real del workspace».
+* **AC:**
+  * `obsidian-workspace/opencode.json` gana `mcp.servers.tepochcalli-rag` (`type: "local"`,
+    `command: [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"]`, `cwd: "."`,
+    `environment: {"TEPOCHCALLI_ROOT": "."}`) y `mcp.servers.markitdown`
+    (`command: [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"]`).
+  * Forma `python -m`, **no** console script (D17: el bit de ejecución se pierde en NTFS).
+  * Merge **conservador**: solo se tocan las claves `mcp.servers.*` gestionadas; el resto del
+    JSON se preserva byte a byte (spec-installer-wizard §merge).
+  * `TEPOCHCALLI_ROOT` (el nombre del contrato MCP) se traduce a `TEPOCHCALLI_VAULT_ROOT` (el
+    del flow) en el composition root del server: **un solo** nombre para el vault.
+  * `.github/workflows/phase1.yml` gana un job `mcp`; `just ci` incluye los pasos del server
+    (mypy sobre `flow` + `mcp`, suite con los tests nuevos). El nombre del workflow queda
+    histórico → anotado en `docs/TECH_DEBT.md`.
+  * Conectividad real: el harness **lista las 4 tools** de `tepochcalli-rag` (M1). El workflow
+    sigue sin poder ejecutarse en GitHub Actions (M6 de Phase 1, sin cambio) — **no** se
+    declara CI verde.
+* **Verificar:** listado de tools desde el harness + `just ci` verde.
+* **Dep.:** T1, T8 · **Tamaño:** S
+
+#### T10 · Cierre de fase: FTR, docs y CHANGELOG
+
+* **Descripción:** dejar la fase como se dejó Phase 1 — medidas, no estimadas; deuda
+  re-revisada; gate cerrado con el usuario.
+* **AC:**
+  * **FTR Phase 2→3** (WORKFLOW §4) ejecutado con el usuario: shapes = `spec-mcp-server`.
+  * `docs/WORKFLOW.md` §Phase 2: estado + **métricas medidas** (con n y método de percentil) +
+    entradas §8 nuevas (D15 `provider=none`, D16 `file:` fuera del vault rechazado, D17
+    invocación `python -m`, D18 peso de markitdown).
+  * `SPEC.md` (índice): `spec-mcp-server` → **Approved**; `spec-markitdown` → **Approved** si
+    T5 cumple su §Testing.
+  * `docs/ARCHITECTURE.md`: inventario del componente nuevo + diagrama de la capa MCP.
+  * `docs/TECH_DEBT.md`: re-review de TD-1…TD-11 (**TD-1 y TD-3 pagan su deuda aquí**) +
+    TD-12 (peso del venv) + cualquier deuda nueva.
+  * `docs/CODE_STYLE.md`: la superficie tipada pasa a `flow` + `mcp`.
+  * `docs/SECURITY.md`: nota del límite de `file:` (D16) y de la clave de API.
+  * `CHANGELOG.md`: entrada de la fase.
+  * **Cero** cambios en `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`,
+    `opencode.json` (raíz) ni `obsidian-workspace/.opencode/`.
+* **Verificar:** `just md-lint` sin errores nuevos + revisión del diff + `git status --short`
+  sin artefactos (`venv/`, `db/`, `models/`, `config/`).
+* **Dep.:** T7, T8, T9 · **Tamaño:** S
 
 ## 7. Checkpoints (gates de calidad entre sub-fases)
 
-| Checkpoint | Tareas | Debe pasar antes de continuar |
-|---|---|---|
-| **CP-A · Cimientos** | T1→T3 | ☐ La API v1 real está probada en el spike y la spec está corregida · ☐ `uv sync` reproducible desde cero · ☐ pines exactos y `ruff`/`mypy` limpios · ☐ `tepochcalli.toml` real nunca commiteable · ☐ revisión humana de la enmienda de la spec |
-| **CP-B · Camino Markdown** | T4→T6 | ☐ Un `.md` en `00-Resources/` produce filas completas en LanceDB · ☐ M2 (100% metadatos no nulos) · ☐ M3 (0 LLM) · ☐ el dominio no importa infra (test de arquitectura verde) · ☐ `code-reviewer` aprueba el diff de la sub-fase |
-| **CP-C · PDF + Δ + lectura** | T7→T9 | ☐ PDF produce chunks con heading · ☐ Δ: add/modify/delete/idempotencia/lock verdes · ☐ M4 (fila queryable con los 4 campos) · ☐ M5 con costo real medido · ☐ el puerto `ChunkReader` está congelado para Phase 2 |
-| **CP-D · Gate Phase 1** | T10→T12 | ☐ M1 (p95 < 30s) con cifra y máquina documentadas · ☐ M6 (CI verde y **muerde**) · ☐ FTR Phase 0→1 con checklist D1-D9 · ☐ `SPEC.md` y `TECH_DEBT.md` al día · ☐ **M7: aprobación explícita del usuario para arrancar Phase 2** |
+### ✅ CP-A · Anclaje — 5/5
+
+- [ ] El servidor arranca por stdio y `tools/list` devuelve las **4 tools** con sus schemas
+- [ ] `uv sync --frozen` reproducible; **suite de Phase 1 verde** (el lock no se rompió)
+- [ ] Ambos paquetes importables desde el editable install (`tepochcalli_flow` y `tepochcalli_mcp`)
+- [ ] `git check-ignore` en ambos sentidos para `mcp/` (versionado, no ignorado)
+- [ ] stdout del proceso contiene **solo** JSON-RPC (todo log a stderr)
+- ▶️ **Desbloquea** T2, T3 y T5.
+
+### ✅ CP-B · Los cuatro caminos — 5/5
+
+- [ ] Las 4 tools responden con la **forma exacta** de §5 contra un vault fixture real
+- [ ] `search` devuelve citas verificables (offsets reproducibles) y `rag_status` los 4 bloques
+- [ ] `add_source` escribe dentro de `00-Resources/` y reindexa
+- [ ] `just quality` verde (lint + fmt + mypy `flow`+`mcp` + tests)
+- [ ] **`code-reviewer` aprueba el diff de la sub-fase** (como el CP-B de Phase 1)
+- ▶️ **Desbloquea** T6 y T7.
+
+### ✅ CP-C · Errores, API y presupuestos — 5/5
+
+- [ ] Los **5** códigos `E_*` emitidos con su payload exacto + precedencia verificada
+- [ ] El camino `litellm` funciona en lectura **y** escritura (o queda registrado por qué no)
+- [ ] Payload de `search` **≤1600 tokens** en todas las fixtures adversas
+- [ ] `search` **p95 < 500 ms** **medido** (n y método publicados)
+- [ ] La suite de Phase 1 sigue verde tras tocar `app.py`
+- ▶️ **Desbloquea** T8.
+
+### ✅ CP-D · Gate Phase 2 → Phase 3 — 6/6
+
+- [ ] Contract tests D7.3 verdes (shapes, `E_*`, `rag_status`, globs)
+- [ ] e2e «pregunta → tool-call → JSON citado» **grabado como fixture** y verde
+- [ ] OpenCode **lista las 4 tools** desde el `opencode.json` real del workspace
+- [ ] `just ci` verde
+- [ ] **FTR Phase 2→3** ejecutado con el usuario
+- [ ] Docs al día (WORKFLOW, SPEC, ARCHITECTURE, TECH_DEBT, CODE_STYLE, SECURITY, CHANGELOG)
+- ▶️ **Desbloquea** Phase 3 (wizard).
 
 ## 8. Asignación de subagentes y skills
 
-> Solo subagentes (`mode: subagent`). Los agentes principales (`huitzilopochtli`, `quetzalcoatl`,
-> `mictlantecuhtli`, `tlaloc`, `tezcatlipoca`, `moctezuma`) quedan excluidos por diseño.
+> Solo subagentes (nunca los agentes principales). Skills del inventario del repo.
 
-| Tarea | Subagente(s) | Skill(s) |
+| Tarea | Subagentes | Skills |
 |---|---|---|
-| **T1** Spike API v1 + enmendar spec | `python-pro` (spike), `tool-evaluator` (investigar versión/docs; solo lectura), `minimal-change-engineer` (enmendar sin tocar decisiones) | `source-driven-development`, `find-docs`, `documentation-and-adrs`, `clean-code` |
-| **T2** pyproject + uv.lock + venv | `python-pro` (packaging/venv), `dependency-manager` (pines + CVEs) | `source-driven-development`, `dependency-audit`, `env-setup`, `clean-code` |
-| **T3** config loader + cache de modelos | `python-pro` (implementación), `security-auditor` (no-filtrado de claves) | `solid`, `clean-code`, `test-driven-development`, `security-and-hardening` |
-| **T4** Dominio de cita | `rag-pipeline-engineer` (estrategia de chunking y metadatos), `nlp-engineer` (deriva de heading/offsets) | `solid`, `clean-code`, `test-driven-development`, `clean-ddd-hexagonal`, `design-patterns` |
-| **T5** Fuentes + parseo md/txt | `data-engineer` (pipeline ETL), `rag-pipeline-engineer` (chunking), `test-engineer` (fixtures) | `test-driven-development`, `clean-code`, `solid`, `design-patterns`, `clean-ddd-hexagonal` |
-| **T6** Embeddings + target LanceDB | `rag-pipeline-engineer` (embeddings + ANN/FTS), `nlp-engineer` (modelo), `data-engineer` (esquema/target) | `source-driven-development`, `clean-ddd-hexagonal`, `design-patterns`, `test-driven-development`, `clean-code` |
-| **T7** Ruta PDF (Docling) | `data-engineer` (integración), `rag-pipeline-engineer` (calidad de chunks), `performance-benchmarker` (costo CPU real) | `source-driven-development`, `performance-analysis`, `test-driven-development`, `clean-code` |
-| **T8** Δ + lock + métricas | `rag-pipeline-engineer` (incrementalidad), `python-pro` (lock y tipado), `test-engineer` (escenarios add/modify/delete) | `test-driven-development`, `solid`, `clean-code`, `error-handling-patterns`, `observability-and-instrumentation` |
-| **T9** Puerto de lectura | `software-architect` (puertos/adapter), `search-relevance-engineer` (híbrido ANN+FTS, `path_filter`), `python-pro` | `clean-ddd-hexagonal`, `api-and-interface-design`, `design-patterns`, `test-driven-development`, `clean-code` |
-| **T10** Bench Δ p95 | `performance-benchmarker` (diseño y ejecución), `data-engineer` (corpus sintético) | `performance-analysis`, `performance-optimization`, `observability-and-instrumentation`, `documentation-and-adrs` |
-| **T11** CI | `devops-engineer` (workflow), `python-pro` (caché uv/HF) | `ci-cd-and-automation`, `source-driven-development`, `clean-code` |
-| **T12** Cierre + FTR + gate | `technical-writer` (docs), `code-reviewer` (5 ejes sobre el código de la fase), `security-auditor` (revisión de seguridad del flow), `minimal-change-engineer` (disciplina de alcance) | `documentation-and-adrs`, `code-review-and-quality`, `git-workflow-and-versioning`, `architecture-diagrams`, `security-and-hardening` |
+| **T1** · Anclaje | `mcp-builder` (lead), `python-pro`, `dependency-manager` | `source-driven-development`, `api-and-interface-design`, `dependency-audit`, `clean-code`, `spec-driven-development` |
+| **T2** · `search` | `mcp-developer` (lead), `rag-pipeline-engineer`, `search-relevance-engineer` | `test-driven-development`, `clean-ddd-hexagonal`, `design-patterns`, `api-and-interface-design`, `clean-code`, `performance-analysis` |
+| **T3** · `index_refresh` | `mcp-developer` (lead), `python-pro` | `test-driven-development`, `solid`, `error-handling-patterns`, `clean-code` |
+| **T4** · `rag_status` | `mcp-developer` (lead), `api-tester` | `api-and-interface-design`, `test-driven-development`, `observability-and-instrumentation`, `clean-code` |
+| **T5** · `add_source` | `mcp-developer` (lead), `python-pro`, `security-auditor` | `test-driven-development`, `security-and-hardening`, `error-handling-patterns`, `incremental-implementation`, `clean-code` |
+| **T6** · `E_*` y `litellm` | `mcp-developer` (lead), `rag-pipeline-engineer`, `security-auditor`, `error-detective` | `error-handling-patterns`, `security-and-hardening`, `test-driven-development`, `source-driven-development`, `clean-code` |
+| **T7** · Gates numéricos | `performance-benchmarker` (lead), `test-engineer` | `performance-analysis`, `performance-optimization`, `test-driven-development`, `observability-and-instrumentation` |
+| **T8** · Contrato y e2e | `test-automation-engineer` (lead), `api-tester`, `testing-reality-checker` | `test-driven-development`, `api-spec-generation`, `doubt-driven-development`, `clean-code` |
+| **T9** · Registro y CI | `build-engineer` (lead), `devops-engineer` | `ci-cd-and-automation`, `source-driven-development`, `incremental-implementation` |
+| **T10** · Cierre | `docs-writer` (lead), `technical-writer`, `code-reviewer` | `documentation-and-adrs`, `changelog-generate`, `code-review-and-quality`, `git-workflow-and-versioning` |
+| **CP-B** (gate) | `code-reviewer` | `code-review-and-quality`, `clean-code`, `solid` |
+| **CP-D** (gate) | `code-reviewer`, `testing-reality-checker` | `code-review-and-quality`, `doubt-driven-development`, `documentation-and-adrs` |
 
-**Dependencias de ejecución (secuencial / paralelo):**
+**Patrones que aplica cada tarea** (design-patterns, sin sobreingeniería):
 
-```text
-T1 → T2 → T3 → T4 → T5 → T6 ─┬─→ T7 ─┐
-                              ├─→ T8 ─┼─→ T10 ─┐
-                              └─→ T9 ─┘        ├─→ T12
-                                      T11 ─────┘
-```
-
-* **Secuencial:** T1→T2→T3→T4→T5→T6 (cadena de cimientos y camino principal).
-* **Paralelizable:** T7, T8, T9 arrancan en cuanto T6 está verde (ramaparable con worktrees de git).
-* **Remoto/depth:** T12 cierra la fase; nada arranca Phase 2 sin M7.
+| Tarea | Patrón | Por qué |
+|---|---|---|
+| T1 | **Composition Root** | `server.py` es el único sitio que conoce SDK, flow y config |
+| T2/T3/T4/T5 | **Ports & Adapters** + **DTO** | los handlers dependen de `ChunkReader`/`RefreshReport`, no del motor |
+| T6 | **Strategy** (por provider) + **Factory** | `local`/`litellm`/`none` son algoritmos intercambiables de embedding |
+| T5 | **Facade** (`add_source`) | una llamada para convertir+escribir+reindexar |
+| T7 | **Strategy** de medición | bench con y sin smoke |
+| T9 | **Adapter** (el JSON del harness) | `mcp.servers.*` es el formato de OpenCode, no el nuestro |
 
 ## 9. Riesgos (omens) y mitigación
 
-| # | Omen | Prob. | Impacto | Mitigación | Contingencia |
-|---|---|---|---|---|---|
-| O1 | La API v1 difiere de lo asumido en specs (offsets, purga, matcher) | **alta** | alto | T1 es el spike fail-fast; el hallazgo se escribe antes de escribir el flow | Ajustar T4-T9 con el dato real; la spec se enmenda en T1, no sobre la marcha |
-| O2 | `cocoindex` 1.0.x rompe API entre parches | media | alto | Pin exacto `==1.0.25` + `uv.lock`; bump solo con suite verde (TRD §4) | Bajar de versión; alternativa de target (ADR-002) documentada |
-| O3 | `docling` es pesado y choca con `sentence-transformers` en el mismo venv | media | medio | Aislar la resolución de deps en T2; `uv lock` antes de T6 | Extraer Docling a un venv/proceso aparte (sub-tarea, no ADR) |
-| O4 | Derivar `char_start`/`char_end` de forma **reproducible** no es trivial con overlap de 128 chars | **alta** | medio | T1 lo resuelve empíricamente; T4 fija la regla con test que recorta el texto | Redefinir la semántica de offsets en la spec (no nulos ≠ exactos) |
-| O5 | El target declarativo **no** purga filas al borrar un archivo | media | medio | Verificado en T1; T8 implementa reconciliación explícita si hace falta | Fase de reconciliación en `index_refresh` (contrato intacto) |
-| O6 | La descarga del modelo (470MB) falla o el host no la permite | baja | medio | T2/T3 cachean en `.tepochcalli/models/`; el bench documenta el modo "degraded" | Indexar sin embeddings está prohibido (M3): se reporta y se reintenta |
-| O7 | El p95 Δ<30s no se cumple en el hardware de referencia | media | crítico | T10 mide con el protocolo de TRD §6 y reporta la cifra real | Tope de `top_k`/tamaño de chunk solo con ADR nuevo; ajustar el corpus de la métrica |
-| O8 | El CI no reproduce el bench local (ruido de runner) | alta | bajo | D-d: el p95 NO corre en CI; solo smoke | Bench de nightly opcional en Phase 3+ |
-| O9 | Escribir en `obsidian-workspace/` choca con el checklist de pre-commit de AGENTS.md | **alta** | medio | Este plan es la autorización explícita; T12 verifica que `.opencode/` está intacto | Reubicar el código y copiar en Phase 3 (retrasa el gate) |
+| Omen | Prob | Impacto | Mitigación | Contingencia |
+|---|---|---|---|---|
+| El SDK MCP v2 es reciente (2.3.0) y renombró su API | alta | alto | **T1 es un spike fail-fast**; `mcp==2.3.0` pineado exacto | Si la v2 no sirve: usar el servidor de bajo nivel (`mcp.server.Server`) o fijar `mcp==1.30.0` (API v1 estable) — se registra en §8 |
+| `litellm` rompe la resolución de `uv.lock` (pesado, muchas deps) | media | alto | T6 lo aísla; `litellm>=1.106,<2` con pin superior | Caer a `litellm` en pin exacto o diferir el camino API a Phase 3 (registrado en §8, con los `E_*` emitidos por proveedor falso) |
+| `markitdown[all]` engorda el venv (+142 MB, +49 paquetes) | alta | bajo | D18 (decidido y medido); el wizard descarga el venv una vez | Si molesta: `override-dependencies` para recortar a `[docx,xlsx,pptx]` (−51 MB), documentado |
+| El bit de ejecución perdido en NTFS rompe el entrypoint | alta | medio | D17: invocación `python -m` | — |
+| Un `print` al `stdout` corrompe el JSON-RPC | media | alto | Regla «logs a stderr» + test que comprueba que stdout es JSON-RPC puro | — |
+| El traceback de litellm filtra la clave de API | media | **crítico** | Mapeo a `E_API_AUTH` con mensaje sanitizado; el traceback va al log con la clave redactada | Revocar y rotar la clave; nunca se escribe el valor en disco |
+| `rag_status` leyendo el índice completo se ralentiza con 100k filas | media | medio | Proyección de columnas con tope + `max(indexed_at)` | Muestreo del primer N y标注 «aproximado» en la descripción |
+| La API de `markitdown` cambia entre versiones | baja | medio | Pin exacto `markitdown==0.1.9` | Fijar la versión anterior en el lock |
+| Los `E_*` se mapean distinto de lo escrito en §5 | media | alto | La tabla de §5 es **la** especificación del mapping + contract test por código | — |
+| Los PDFs grandes rompen la latencia percibida de `add_source` | media | bajo | El flow solo reprocesa lo que cambia; TD-2 (coste de Docling) ya lo mide | Fuera del presupuesto Δ por protocolo (como en Phase 1) |
 
 ## 10. Nota sobre la rama de trabajo
 
-La rama activa es `feat/workspace-obsidian` (creada por el usuario antes de esta sesión), pero el
-contenido de este plan es **Phase 1 (Engine + Flow)**, no el payload del workspace (Phase 4/5).
-Dos lecturas posibles: (a) la rama es un contenedor genérico para el trabajo de Tepochcalli y se
-usa tal cual; (b) el nombre se quedó corto respecto a la intención. `docs/CODE_STYLE.md` §Nomenclatura
-y la skill `git-workflow-and-versioning` recomiendan `feature/<descripción-corta>`.
-**Este plan no renombra la rama** (decisión del usuario); se registra la discrepancia aquí y se
-revisará al cerrar T12, antes de que nazcan worktrees paralelos para T7/T8/T9.
+* Rama: **`feat/workspace-obsidian`** (la de Phase 1). Los commits son **atómicos, uno por
+  tarea**, en Conventional Commits (≤72 columnas, español) con el trailer
+  `Co-Authored-By: Moctezuma <dev@fisherk2.com>`.
+* Phase 1 sigue **sin pushear** (decisión del usuario 2026-10-23: no publicar los commits en un
+  repo público) ⇒ el workflow de GitHub Actions **nunca ha corrido** (M6). Phase 2 se verifica
+  **en local** con el mismo orden de pasos (`just ci`), y no se declara CI verde.
+* Nunca se commitean `.tepochcalli/{venv,db,models,bin,config}` — `mcp/` y `flow/` **sí** son
+  código fuente versionado (spec-vault-structure §gitignore).
 
 ## 11. Referencias
 
-* [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 1, §4 (FTR), §8 (Change Control) · [docs/TRD.md](../docs/TRD.md) §4 (pines), §6 (protocolo de performance) · [docs/CODE_STYLE.md](../docs/CODE_STYLE.md) · [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) TD-1..TD-4 · [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) · [AGENTS.md](../AGENTS.md)
-* [specs/spec-rag-engine.md](../specs/spec-rag-engine.md) · [specs/spec-embeddings.md](../specs/spec-embeddings.md) · [specs/spec-vault-structure.md](../specs/spec-vault-structure.md) · [specs/spec-mcp-server.md](../specs/spec-mcp-server.md) (contrato de lectura que hereda T9)
-* ADR-001 (motor) · ADR-002 (LanceDB) · ADR-004 (uv/venv) · ADR-005 (frontera MCP) · ADR-006 (MiniLM default) · ADR-007 (embedder + `E_*`)
-* CocoIndex v1 — <https://cocoindex.io/docs/> (API v1: `coco.App`, `connectors.localfs`, `ops.text.RecursiveSplitter`, `ops.sentence_transformers`, `connectors.lancedb`)
-
----
-
-**"Que la tierra se mida antes de sembrarla, y que el registro precede al obra."**
-Cada tarea es una calpulli: un camino completo, con su tribute (criterio de aceptación) y su
-verificación. Ninguna fase avanza sin su checkpoint en verde.
+* [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 2, §4 (FTR), §8 (Change Control)
+* [specs/spec-mcp-server.md](../specs/spec-mcp-server.md) — contrato congelado de las 4 tools
+* [specs/spec-markitdown.md](../specs/spec-markitdown.md) — `add_source` y cadena de fallback
+* [specs/spec-embeddings.md](../specs/spec-embeddings.md) — config, provider, matriz local/API
+* [specs/spec-vault-structure.md](../specs/spec-vault-structure.md) — layout `.tepochcalli/` y gitignore
+* [specs/spec-rag-engine.md](../specs/spec-rag-engine.md) — el motor que Phase 2 **no** toca
+* [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) · [docs/CODE_STYLE.md](../docs/CODE_STYLE.md) ·
+  [docs/SECURITY.md](../docs/SECURITY.md) · [docs/TECH_DEBT.md](../docs/TECH_DEBT.md)
+* ADR-005 (ports/adapters) · ADR-007 (provider + `rag_status` + `E_*`) · ADR-008 (swap atómico)
+* MCP Python SDK v2.3.0 — https://github.com/modelcontextprotocol/python-sdk
+  (`FastMCP`→`MCPServer`, `mcp.server.mcpserver.*`, `CallToolResult` explícito)
+* [tasks/phase1-plan.md](phase1-plan.md) · [tasks/phase1-todo.md](phase1-todo.md) — plan de Phase 1
