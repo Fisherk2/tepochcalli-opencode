@@ -44,8 +44,15 @@ texto libre (G1). El wiring de `index_refresh` (T3): tres seams perezosos —
 `_refresh_once` (`refresh_blocking()` + `dataclasses.asdict`, la única zona
 que serializa el `RefreshReport`), `_embedder_available` (costura `E_NO_EMBEDDER`
 de `embedder.is_available`) y `_index_exists` — que el handler invoca bajo la
-MISMA guarda. `add_source` y `rag_status` siguen con el placeholder de la
-forma exacta de §5 — T5 y T4 respectivamente.
+MISMA guarda (`rag_status`, T4, consume `_meta_seam`/`_vault_config`/
+`_config_valid` de este mismo módulo). El wiring de `add_source` (T5): tres
+seams — `_vault_root`, `_convert_seam` (markitdown EN PROCESO vía
+`tepochcalli_mcp.convert`, import perezoso para no pagar su coste en
+`tools/list`) y `_refresh_once` (el MISMO de T3). **Desviación del plan §5
+respecta a `convert.py`:** el diagrama dibuja `TOOLS → CONV`, pero la puerta
+de arquitectura (y la regla textual del mismo §5) impiden que `tools.*`
+importe `markitdown`; la costura se inyecta AQUÍ desde el composition root —
+el detalle y su rationale viven en el docstring de `tools/add_source.py`.
 """
 
 from __future__ import annotations
@@ -65,6 +72,7 @@ from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 import tepochcalli_mcp.tools
 from tepochcalli_mcp import __version__, budget
+from tepochcalli_mcp.tools import add_source as add_source_handler
 from tepochcalli_mcp.tools import index_refresh as index_refresh_handler
 from tepochcalli_mcp.tools import rag_status as rag_status_handler
 from tepochcalli_mcp.tools import search as search_handler
@@ -216,6 +224,21 @@ def _refresh_once() -> dict[str, object]:
     return asdict(refresh_blocking())
 
 
+def _convert_seam(uri: str) -> str:
+    """Seam T5: markitdown EN PROCESO (D-b) — markdown con frontmatter, import perezoso.
+
+    El composition root es el ÚNICO punto que puede conocer `convert.py`
+    (importa `markitdown`, raíz prohibida en `tools.*`): el handler recibe
+    ESTA costura, no el módulo — desviación `TOOLS → CONV` documentada en
+    `tools/add_source.py`. El import dentro de la función (patrón
+    `_refresh_once`/`_vault_root`) mantiene `tools/list` y el arranque stdio
+    libres del coste de markitdown.
+    """
+    from tepochcalli_mcp.convert import convert_source
+
+    return convert_source(uri)
+
+
 def _embedder_available() -> bool:
     """Seam T3: costura `E_NO_EMBEDDER` vía `embedder.is_available` (torch perezoso).
 
@@ -299,21 +322,26 @@ async def index_refresh() -> CallToolResult:
 
 
 @server.tool()
-def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
-    """Convierte una fuente externa (http(s)/file) a Markdown y la reindexa.
+async def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
+    """Convierte una fuente externa (http(s)/file) a Markdown, la escribe citada y reindexa.
 
-    Escribe siempre dentro de `00-Resources/<subdir|_inbox>/` con frontmatter
-    de trazabilidad, luego ejecuta el ciclo de `index_refresh` internamente
-    (spec-mcp-server §add_source; `file:` fuera del vault se rechaza, D16).
-    Placeholder de la forma exacta de §5 hasta T5.
+    Una sola llamada (Facade, plan §T5): validación en el borde (D16 —
+    `file:` fuera del vault ⇒ `VALIDATION_ERROR`), conversión con markitdown
+    EN PROCESO (D-b, costura `_convert_seam`), escritura atómica en
+    `00-Resources/<subdir|_inbox>/` con frontmatter de trazabilidad
+    (`source_uri`, `converted_at`) y ciclo Δ de `index_refresh` interno.
+    Fetch/convert fallido ⇒ `SOURCE_UNREACHABLE` con la guía de
+    spec-markitdown; refresh bloqueado ⇒ `ENGINE_LOCKED` (el archivo sí
+    quedó; ver `tools/add_source.py` para el detalle del `locked`).
     """
-    return tepochcalli_mcp.tools.json_result(
-        {
-            "ok": True,
-            "written_to": "",
-            "indexed": {"scanned": 0, "indexed": 0, "skipped": 0, "elapsed_ms": 0},
-        },
+    payload = await add_source_handler.add_source(
+        uri,
+        subdir,
+        vault_root=_vault_root,
+        convert=_convert_seam,
+        refresh=_refresh_once,
     )
+    return tepochcalli_mcp.tools.json_result(payload)
 
 
 @server.tool()

@@ -6,8 +6,8 @@ serializa en `content[0].text` (spec-mcp-server §Manejo de errores: «nunca
 texto libre»). Dos dialectos congelados:
 
 * **Legado** `{error:{code,message,details}}` — `VALIDATION_ERROR`,
-  `INDEX_EMPTY`, `INTERNAL` (T5 añadirá `ENGINE_LOCKED` y
-  `SOURCE_UNREACHABLE` con esta misma forma).
+  `INDEX_EMPTY`, `INTERNAL`, y desde T5 `ENGINE_LOCKED` y
+  `SOURCE_UNREACHABLE` con esta misma forma.
 * **`E_*`** `{error:{code,message,fix_hint}}` (D7.3/ADR-007) —
   `E_MODEL_MISMATCH` lleva además `details.legacy_code = "INDEX_STALE_MODEL"`,
   el alias heredado que viaja en el payload (spec-mcp-server §Códigos de error
@@ -94,6 +94,46 @@ def internal() -> dict[str, object]:
             "code": "INTERNAL",
             "message": "Error interno del server; revisa el log local (stderr) del proceso.",
             "details": None,
+        }
+    }
+
+
+GUIDE_MANUAL_SAVE: Final = "Guárdalo manualmente en `00-Resources/` y ejecuta `index_refresh`."
+"""Guía literal de spec-markitdown §Cadena de fallback paso 3 para `SOURCE_UNREACHABLE`."""
+
+GUIDE_RETRY_SECONDS: Final = "Reintenta en segundos o ejecuta `index_refresh` después."
+"""Guía de spec-mcp-server §Manejo de errores para `ENGINE_LOCKED` («reintentar en segundos»)."""
+
+
+def source_unreachable(uri: str, cause: str | None = None) -> dict[str, object]:
+    """`SOURCE_UNREACHABLE` legado (T5): fetch/convert falló; la guía es la literal de la spec.
+
+    `cause` es SOLO el nombre del tipo de la excepción (nunca el traceback ni
+    texto arbitrario): accionable para el agente y seguro para el cliente —
+    el traceback completo vive en el log stderr del server.
+    """
+    return {
+        "error": {
+            "code": "SOURCE_UNREACHABLE",
+            "message": f"No se pudo convertir {uri} a Markdown. {GUIDE_MANUAL_SAVE}",
+            "details": {"cause": cause} if cause else None,
+        }
+    }
+
+
+def engine_locked(details: object = None) -> dict[str, object]:
+    """`ENGINE_LOCKED` legado (T5): el refresh quedó bloqueado por otro proceso en `add_source`.
+
+    La forma de `add_source` no tiene campo `locked` (el sub-objeto `indexed`
+    congela 4 campos, plan §5), así que el candado se reporta COMO ERROR con
+    `details` — p. ej. `{"written_to": …}`: el archivo sí se escribió; lo que
+    falló fue el ciclo Δ, reintentable.
+    """
+    return {
+        "error": {
+            "code": "ENGINE_LOCKED",
+            "message": f"El refresh quedó bloqueado por otro proceso. {GUIDE_RETRY_SECONDS}",
+            "details": details,
         }
     }
 

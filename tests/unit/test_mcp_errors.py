@@ -108,3 +108,44 @@ def test_payloads_are_json_serializable_without_ascii_escaping() -> None:
     ):
         round_trip = json.loads(json.dumps(payload, ensure_ascii=False))
         assert round_trip == payload
+
+
+# --- legados de add_source (T5) -------------------------------------------------------
+
+
+def test_source_unreachable_is_legacy_shape_with_the_literal_guide() -> None:
+    """`SOURCE_UNREACHABLE` (T5) → legado; el mensaje lleva la guía LITERAL de la spec.
+
+    spec-markitdown §Cadena de fallback paso 3: «guárdalo manualmente en
+    00-Resources/ y ejecuta index_refresh» — el agente debe poder reportar la
+    acción, no el error crudo.
+    """
+    payload = errors.source_unreachable("https://example.org/x.docx")
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "details"]
+    assert error["code"] == "SOURCE_UNREACHABLE"
+    assert "https://example.org/x.docx" in error["message"]
+    assert "00-Resources/" in error["message"]
+    assert "index_refresh" in error["message"]
+    assert error["details"] is None
+
+
+def test_source_unreachable_carries_the_cause_type_in_details() -> None:
+    """El tipo de la causa viaja en `details` (sin traceback): accionable y seguro."""
+    payload = errors.source_unreachable("file:///vault/x.bin", cause="UnsupportedFormatException")
+
+    error = payload["error"]
+    assert error["details"] == {"cause": "UnsupportedFormatException"}
+
+
+def test_engine_locked_is_legacy_shape_with_retry_guide() -> None:
+    """`ENGINE_LOCKED` (T5) → legado con `details` y la guía «reintentar en segundos»."""
+    payload = errors.engine_locked(details={"written_to": "00-Resources/_inbox/x.md"})
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "details"]
+    assert error["code"] == "ENGINE_LOCKED"
+    assert "segundos" in error["message"]
+    assert "index_refresh" in error["message"]
+    assert error["details"] == {"written_to": "00-Resources/_inbox/x.md"}

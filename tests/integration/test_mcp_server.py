@@ -204,8 +204,10 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(
     materializa el embedder por CONSTRUCCIÓN (dims del esquema, aun sin
     ficheros), por eso el test fija el cache antes de arrancar el server.
     La forma de ÉXITO de `search` la pin `test_mcp_search.py` sobre un vault
-    indexado y la del journey completo `test_mcp_refresh.py`; `add_source` y
-    `rag_status` siguen con el placeholder congelado hasta T5/T4.
+    indexado y la del journey completo `test_mcp_refresh.py`; `add_source`
+    (real desde T5) usa un `file:` DENTRO del vault temporal —la forma la
+    pinan también `test_mcp_add_source.py`— y `rag_status` (T4) los cuatro
+    bloques; ningún paso de este test toca la red.
     """
     (tmp_path / citation.RESOURCES_DIR).mkdir()
     cache = resolve_model_cache()
@@ -230,8 +232,13 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(
             assert refresh["locked"] is False
             payloads["index_refresh"] = list(refresh)
 
-            result = await session.call_tool("add_source", {"uri": "https://example.org/paper"})
-            assert not result.is_error
+            staging = tmp_path / "staging.md"
+            staging.write_text(
+                "# Staging T5\n\nFichero minimo para ejercitar add_source sin red.\n",
+                encoding="utf-8",
+            )
+            result = await session.call_tool("add_source", {"uri": staging.as_uri()})
+            assert not result.is_error, result.content[0].text
             add = json.loads(result.content[0].text)
             assert add["ok"] is True
             assert list(add["indexed"]) == ["scanned", "indexed", "skipped", "elapsed_ms"]

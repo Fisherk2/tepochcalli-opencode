@@ -137,15 +137,19 @@ MCP_TOOL_MODULES: Final[tuple[str, ...]] = (
     f"{MCP_PACKAGE}.tools.search",
     f"{MCP_PACKAGE}.tools.index_refresh",
     f"{MCP_PACKAGE}.tools.rag_status",
+    f"{MCP_PACKAGE}.tools.add_source",
 )
-"""Handlers T2-T4: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
+"""Handlers T2-T5: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
 
 Sin allowlist de terceros aquí a propósito: el empaquetado en `CallToolResult`
 es frontera del SDK y vive en `tools/__init__.py`; lo que NO puede entrar es
 el motor (`cocoindex`/`lancedb`) ni los conversores (`markitdown`/`litellm`).
 T4 añade `tools.rag_status` y REPARA el hueco de T3: `tools.index_refresh`
 existía pero no estaba en la parametrización (la sanity de abajo es la que
-impide que un módulo ausente pase vacío).
+impide que un módulo ausente pase vacío). T5 añade `tools.add_source`: su
+conversor (`convert.py`, con `markitdown`) se cablea desde el composition
+root vía costura — la desviación `TOOLS → CONV` del plan §5, documentada en
+el propio handler.
 """
 
 MCP_COMPOSITION_ROOT: Final = f"{MCP_PACKAGE}.server"
@@ -362,6 +366,16 @@ def test_walker_covers_the_second_package_transitively() -> None:
     )
     assert f"{PACKAGE}.config" in reached_status
 
+    reached_add = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.add_source")}
+    assert f"{MCP_PACKAGE}.errors" in reached_add, "add_source (T5) usa la guarda y sus payloads"
+    assert f"{MCP_PACKAGE}.paths" in reached_add, "add_source (T5) delega validación/ slug en paths"
+    assert f"{MCP_PACKAGE}.convert" not in reached_add, (
+        "desviación TOOLS→CONV: el handler NO importa convert.py (markitdown); va por costura"
+    )
+    assert "markitdown" not in {target.split(".")[0] for target in reached_add}, (
+        "add_source es dominio del server: el conversor se cablea desde el composition root"
+    )
+
 
 def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
     """Dirección OPUESTA T2: `server.py` SÍ alcanza `lancedb` (composition root exento).
@@ -370,9 +384,15 @@ def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
     prueba el otro lado de la frontera del server — si el walker no viera el
     import del composition root, los tests negativos sobre `errors`/`budget`/
     `paths`/`tools` darían falsos positivos. La frontera exacta es
-    `tools/`+dominio (sin motor) ← `server.py` (con motor y SDK).
+    `tools/`+dominio (sin motor) ← `server.py` (con motor y SDK). T5 añade el
+    otro lado de la costura: el composition root SÍ alcanza `markitdown` (vía
+    `convert.py`, importado dentro de `_convert_seam`) — si no lo alcanzara,
+    el wiring de `add_source` estaría roto y los tests negativos del handler
+    seguirían pasando en vano.
     """
     reached = {target for _chain, target in _walk_imports(MCP_COMPOSITION_ROOT)}
     assert "lancedb" in reached, "el composition root construye el lector: importa lancedb"
     assert f"{MCP_PACKAGE}.tools.search" in reached, "registra el handler de search: lo importa"
     assert f"{PACKAGE}.config" in reached, "carga la config del vault: lo importa"
+    assert f"{MCP_PACKAGE}.convert" in reached, "cablea la costura de add_source: importa convert"
+    assert "markitdown" in reached, "convert.py importa markitdown: el root exento sí lo alcanza"

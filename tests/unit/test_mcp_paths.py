@@ -19,6 +19,8 @@ duplicar la traducción.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from tepochcalli_mcp import paths
 
@@ -119,3 +121,141 @@ def test_validated_subdir_joins_resources_dir() -> None:
     """La helper de destino compone `00-Resources/<subdir>` sin duplicar prefijo."""
     assert str(paths.resources_destination("lit")) == "00-Resources/lit"
     assert str(paths.resources_destination(None)) == "00-Resources/_inbox"
+
+
+# --- slug y colisión del nombre de archivo (T5) -----------------------------------
+
+
+@pytest.mark.parametrize(
+    ("uri", "slug"),
+    [
+        ("https://example.org/papers/ruiz-2024.pdf", "ruiz-2024"),
+        ("https://example.org/papers/ruiz%20final.pdf", "ruiz-final"),
+        ("file:///vault/staging/Informe Anual.docx", "informe-anual"),
+        ("file:///vault/staging/notas.md", "notas"),
+        ("https://example.org/papers/ñ-日.pdf", "ñ-日"),  # alnum multibyte se conserva
+        ("https://example.org/", "example-org"),  # sin segmento: hostname
+        ("file:///", "source"),  # sin hostname ni segmento: fallback
+    ],
+)
+def test_slugify_uri_derives_the_filename_stem(uri: str, slug: str) -> None:
+    """El slug sale del ÚLTIMO segmento sin extensión; separadores → `-` (plan §T5)."""
+    assert paths.slugify_uri(uri) == slug
+
+
+def test_slugify_uri_caps_the_length_without_trailing_dash() -> None:
+    """Slugs de URI larguísimos quedan acotados y sin `-` final (nombres Observables)."""
+    slug = paths.slugify_uri("https://example.org/" + "a" * 300 + ".pdf")
+    assert len(slug) <= 80
+    assert not slug.endswith("-")
+
+
+def test_available_name_returns_the_slug_when_free() -> None:
+    """Sin colisión el nombre es `<slug>.md`."""
+    assert paths.available_name("ruiz-2024", lambda _name: False) == "ruiz-2024.md"
+
+
+def test_available_name_appends_numeric_suffix_on_collision() -> None:
+    """Colisión ⇒ primer sufijo numérico libre `<slug>-N.md` (N creciente)."""
+    taken = {"ruiz-2024.md", "ruiz-2024-2.md"}
+    assert paths.available_name("ruiz-2024", taken.__contains__) == "ruiz-2024-3.md"
+
+
+def test_available_name_gives_up_after_the_cap() -> None:
+    """Un directorio donde todo está tomado no es un bucle infinito: RuntimeError (⇒ INTERNAL)."""
+    with pytest.raises(RuntimeError):
+        paths.available_name("ruiz-2024", lambda _name: True)
+
+
+# --- file: D16 — dentro del vault, nunca fuera --------------------------------------
+
+
+def test_resolve_file_uri_accepts_paths_inside_the_vault(tmp_path: Path) -> None:
+    """`file:` absoluto DENTRO del vault resuelve a la ruta pedida (D16, versión estricta)."""
+    vault = tmp_path / "vault"
+    inside = vault / "staging" / "nota.md"
+    resolved = paths.resolve_file_uri(inside.as_uri(), vault)
+    assert resolved == inside.resolve()
+
+
+def test_resolve_file_uri_rejects_paths_outside_the_vault(tmp_path: Path) -> None:
+    """D16: `file:` fuera del vault ⇒ ValueError → VALIDATION_ERROR (nunca se convierte)."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    with pytest.raises(ValueError):
+        paths.resolve_file_uri(Path("/etc/hostname").as_uri(), vault)
+
+
+def test_resolve_file_uri_rejects_traversal_out_of_the_vault(tmp_path: Path) -> None:
+    """Un `..` en el `file:` no escapa: se resuelve y se rechaza (anti-traversal)."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    traversal = vault.as_uri() + "/../secreto.md"
+    with pytest.raises(ValueError):
+        paths.resolve_file_uri(traversal, vault)
+
+
+def test_resolve_file_uri_rejects_symlinks_pointing_outside(tmp_path: Path) -> None:
+    """Un symlink DENTRO del vault que apunta FUERA también se rechaza (resolve estricto)."""
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    secret = tmp_path / "secreto.md"
+    secret.write_text("secreto", encoding="utf-8")
+    link = vault / "enlace.md"
+    link.symlink_to(secret)
+    with pytest.raises(ValueError):
+        paths.resolve_file_uri(link.as_uri(), vault)
+
+
+def test_resolve_file_uri_rejects_non_file_schemes(tmp_path: Path) -> None:
+    """Solo `file:` pasa por esta helper; otros esquemas no se resuelven como ruta."""
+    vault = tmp_path / "vault"
+    with pytest.raises(ValueError):
+        paths.resolve_file_uri("ftp://example.org/x.docx", vault)
+
+
+def test_ensure_within_keeps_the_target_inside_base(tmp_path: Path) -> None:
+    """Defensa en profundidad: destino dentro de base ⇒ pasa; fuera ⇒ ValueError."""
+    base = tmp_path / "00-Resources"
+    base.mkdir()
+    assert (
+        paths.ensure_within(base, base / "_inbox" / "x.md") == (base / "_inbox" / "x.md").resolve()
+    )
+    with pytest.raises(ValueError):
+        paths.ensure_within(base, tmp_path / "fuera.md")
+
+
+# --- esquemas aceptados por add_source (T5) ------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "https://example.org/papers/ruiz-2024.pdf",
+        "http://127.0.0.1:8123/articulo.html",
+    ],
+)
+def test_validate_source_uri_accepts_http_and_https(tmp_path: Path, uri: str) -> None:
+    """`http(s):` es el otro esquema admitido por el contrato de `add_source` (plan §T5)."""
+    paths.validate_source_uri(uri, tmp_path)  # no lanza
+
+
+def test_validate_source_uri_accepts_file_inside_the_vault(tmp_path: Path) -> None:
+    """`file:` DENTRO del vault pasa el borde (la ruta se resuelve, D16 solo expulsa fuera)."""
+    inside = tmp_path / "staging" / "nota.md"
+    paths.validate_source_uri(inside.as_uri(), tmp_path)  # no lanza
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "ftp://example.org/x.docx",
+        "mailto:autor@example.org",
+        "https://",  # sin host: URI malformada para descarga
+        "file:///etc/hostname",  # D16: fuera del vault (tmp_path ES el vault)
+    ],
+)
+def test_validate_source_uri_rejects_everything_else(tmp_path: Path, uri: str) -> None:
+    """Esquema desconocido, sin host o `file:` fuera ⇒ ValueError → VALIDATION_ERROR."""
+    with pytest.raises(ValueError):
+        paths.validate_source_uri(uri, tmp_path)

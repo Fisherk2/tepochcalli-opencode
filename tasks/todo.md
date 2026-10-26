@@ -50,7 +50,7 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: test de integración con 3 estados (sano / sin embedder / modelo distinto) + assert de tokens <200
   - Dep.: T2, T3 · Tamaño: S
 
-- [ ] **T5 · `add_source`: convertir, escribir y reindexar en una llamada**
+- [x] **T5 · `add_source`: convertir, escribir y reindexar en una llamada**
   - Subagentes: `mcp-developer` (lead), `python-pro`, `security-auditor` · Skills: `test-driven-development`, `security-and-hardening`, `error-handling-patterns`, `incremental-implementation`, `clean-code`
   - AC: `{ok: true, written_to, indexed: {scanned, indexed, skipped, elapsed_ms}}`; `uri` acepta `http(s):` y `file:`; `subdir` normalizado (sin `..`, sin absolutos) y destino **siempre** dentro de `00-Resources/` (por omisión `_inbox`); conversión con la **biblioteca markitdown en proceso**; frontmatter de trazabilidad (`source_uri`, `converted_at`); nombre slug + `.md` con sufijo ante colisión; escritura **atómica** (temporal + rename); reindexa **internamente**; refresh bloqueado ⇒ `ENGINE_LOCKED`; fallo de fetch/convert ⇒ `SOURCE_UNREACHABLE` con la guía; **`file:` fuera del vault ⇒ RECHAZADO (D16)**; nunca escribe fuera de `00-Resources/`
   - Verificar: tests de integración con `http(s):` (servidor local) y `file:`; negativos: traversal, `subdir` absoluto, formato no convertible, `file:` fuera del vault
