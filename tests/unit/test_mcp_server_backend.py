@@ -1,4 +1,4 @@
-"""R2 (riesgo de CP-B): frescura de la config en el backend cacheado de `server` (T6).
+"""R2 (riesgo de CP-B) + el borde de solo lectura del índice (review Phase 2, 2026-10-27).
 
 El problema: `_backend_instance` cacheaba `Config` + lector POR PROCESO
 mientras `rag_status` recargaba el toml por llamada (T4) — tras un swap de
@@ -18,6 +18,7 @@ posterior (reader perezoso: nada de carga de modelo en el rebuild mismo).
 from __future__ import annotations
 
 import asyncio
+import types
 from pathlib import Path
 
 import pytest
@@ -64,24 +65,27 @@ def test_backend_rebuilds_after_a_config_swap_in_the_same_session(
     assert server._backend() is swapped, "tras el rebuild vuelve a cachebar (sin rebuild en bucle)"
 
 
-def test_unreadable_table_yields_no_rows_instead_of_propagating(
+def test_unreadable_table_escalates_instead_of_faking_empty(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`ValueError` de lancedb al abrir la tabla ⇒ sin filas, nunca excepción.
+    """`ValueError` de lancedb sobre una tabla EXISTENTE pero ilegible ⇒ ESCALA (review 2026-10-27).
 
-    El borde de solo lectura del backend distingue «índice inexistente» por
-    `rows == 0`/`models == ∅`: una tabla con esquema incompatible se trata
-    igual (lectura barata, jamás un `INTERNAL` en `rag_status`/`search` antes
-    de su propia precedencia).
+    Semántica NUEVA (roto ≠ vacío): solo la ausencia (DB o tabla) devolvía
+    antes el vacío honesto de `INDEX_EMPTY`; una tabla con esquema
+    incompatible es un índice ROTO — fingir `rows == 0` escondía el fallo —
+    y el `ValueError` sube para que `internal_guard` lo vuelva `INTERNAL`.
     """
     import lancedb
     from tepochcalli_flow.config import load_config
-    from tepochcalli_flow.layout import DB_RELPATH
+    from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
 
     (tmp_path / DB_RELPATH).mkdir(parents=True)  # la DB existe: el fallo es de LECTURA
 
     class _UnreadableDb:
-        """Conexión cuyo `open_table` lanza el `ValueError` observado en lancedb 0.40.0."""
+        """Entrada que LISTA la tabla pero falla al abrirla (esquema incompatible)."""
+
+        async def list_tables(self) -> object:
+            return types.SimpleNamespace(tables=[TABLE_NAME])
 
         async def open_table(self, name: str) -> object:
             raise ValueError(f"tabla {name} ilegible (esquema incompatible)")
@@ -95,7 +99,40 @@ def test_unreadable_table_yields_no_rows_instead_of_propagating(
     monkeypatch.setattr(lancedb, "connect_async", _connect)
     backend = server._VaultSearchBackend(tmp_path, load_config(tmp_path))
 
-    assert asyncio.run(backend.index_models()) == set()
+    with pytest.raises(ValueError, match="ilegible"):
+        asyncio.run(backend.index_models())
+    with pytest.raises(ValueError, match="ilegible"):
+        asyncio.run(backend.index_meta())
 
+
+def test_table_absent_after_db_exists_yields_the_honest_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """DB presente pero SIN tabla `chunks` ⇒ set() / meta vacío (`INDEX_EMPTY`, no `INTERNAL`).
+
+    La diferenciación review 2026-10-27: la ausencia se detecta CON
+    `list_tables()` (lancedb 0.40) ANTES de abrir, sin fingir el vacío por
+    código de excepción — y sin conectar cuando ni siquiera existe `db/`.
+    """
+    import lancedb
+    from tepochcalli_flow.config import load_config
+
+    class _EmptyDb:
+        async def list_tables(self) -> object:
+            return types.SimpleNamespace(tables=[])
+
+        async def open_table(self, name: str) -> object:
+            raise AssertionError(f"no se debe abrir {name}: la tabla no existe")
+
+        def close(self) -> None:
+            """`close()` sync sin anotar en lancedb 0.40.0 — el backend no lo espera."""
+
+    async def _connect(_uri: str) -> _EmptyDb:
+        return _EmptyDb()
+
+    monkeypatch.setattr(lancedb, "connect_async", _connect)
+    backend = server._VaultSearchBackend(tmp_path, load_config(tmp_path))
+
+    assert asyncio.run(backend.index_models()) == set()
     meta = asyncio.run(backend.index_meta())
     assert (meta["rows"], meta["models"], meta["last_refresh"]) == (0, set(), None)

@@ -16,7 +16,9 @@ Flujo del handler, en orden de precedencia (la cadena D7.3 de T6):
    root: resolver vault + config) se invoca AQUÍ, bajo la guarda (G1);
 4. estado del índice — vacío → `INDEX_EMPTY`; modelo de las filas ≠ config →
    `E_MODEL_MISMATCH` (alias legado, SIN cruzar dims: el embed de la query ni
-   se intenta) — ambos ANTES de buscar;
+   se intenta) — ambos ANTES de buscar. Revisión 2026-10-27: una tabla
+   EXISTENTE pero ILEGIBLE ya no se finge vacía — el `ValueError` del backend
+   escala ⇒ `INTERNAL`; solo la ausencia (DB o tabla) produce `INDEX_EMPTY`;
 5. búsqueda por el puerto `ChunkReader` (el ADAPTADOR valida query y VECTORIZA
    la query: `took_ms` incluye el embed por construcción); los fallos del
    corte se traducen AQUÍ: `EmbedderAuthError` → `E_API_AUTH`,
@@ -25,8 +27,8 @@ Flujo del handler, en orden de precedencia (la cadena D7.3 de T6):
 6. presupuesto — corte determinista al techo 1600 (`truncated`), y `took_ms`
    se cierra al terminar de ensamblar el payload, justo antes de serializar.
 
-`ValueError` del borde (adaptador o dominio) → `VALIDATION_ERROR`; cualquier
-otro fallo —estado, arranque o búsqueda— lo captura
+`ValueError` del ADAPTADOR (query/path_filter) → `VALIDATION_ERROR`; el
+resto —arranque, estado del índice o búsqueda— lo captura
 `@errors.internal_guard` (G1): `INTERNAL` canónico con el traceback en el log
 stderr, nunca texto libre al cliente (los fallos de API no cubiertos llegan
 como `EmbedderApiError` YA SCRUBEADA: la clave no alcanza el log).
@@ -104,10 +106,12 @@ async def search(
     if not embedder_available():
         return errors.no_embedder()  # R1: precede a INDEX_EMPTY y a todo lo demás
     backend = backend_factory()  # arranque BAJO la guarda: un fallo ⇒ INTERNAL (G1)
-    try:
-        index_models = await backend.index_models()
-    except ValueError as exc:
-        return errors.validation_error(str(exc))
+    index_models = await backend.index_models()
+    # Revisión Phase 2: una tabla EXISTENTE pero ilegible ya NO se finge vacía —
+    # el `ValueError` del backend ESCALA y el guard lo convierte en `INTERNAL`
+    # (roto ≠ inexistente; `INDEX_EMPTY` solo con `model`s == ∅). Los
+    # `ValueError` que SÍ siguen aquí abajo son del borde del ADAPTADOR
+    # (`cited_chunks`: path_filter/query), donde son validación de usuario.
     if not index_models:
         return errors.index_empty()
     if index_models != {backend.expected_model}:

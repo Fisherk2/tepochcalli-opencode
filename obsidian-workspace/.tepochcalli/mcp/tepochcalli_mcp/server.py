@@ -57,13 +57,14 @@ el detalle y su rationale viven en el docstring de `tools/add_source.py`.
 
 from __future__ import annotations
 
+import contextlib
 import logging
 import os
 import tomllib
-from collections.abc import Awaitable
+from collections.abc import AsyncIterator, Awaitable
 from dataclasses import asdict
 from pathlib import Path
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
@@ -71,6 +72,9 @@ from tepochcalli_flow import citation
 from tepochcalli_flow.config import CONFIG_RELPATH, Config, load_config
 from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
 from tepochcalli_flow.ports import ChunkReader, CitedChunk
+
+if TYPE_CHECKING:
+    from lancedb.table import AsyncTable
 
 import tepochcalli_mcp.tools
 from tepochcalli_mcp import __version__, budget, embedder
@@ -120,63 +124,87 @@ class _VaultSearchBackend:
     async def index_models(self) -> set[str]:
         """Conjunto de `model` de las filas: vacío ⇒ índice inexistente (`INDEX_EMPTY`).
 
-        Misma costura `_select` que usa `rag_status` (T4): la consulta NO se
-        reimplementa — un solo punto con el borde de solo lectura documentado
-        allí (DB ausente sin conectar; tabla ilegible ⇒ `ValueError` de
-        lancedb ⇒ sin filas).
+        Revisión Phase 2: lo UNIQUE de la columna en un solo punto con el borde
+        de solo lectura de `_open_table` (review 2026-10-27): DB/tabla AUSENTE
+        sin conectar ⇒ vacío (lancedb 0.40 no expone `execute_sql`/DISTINCT —
+        coste residual documentado en `_select`); tabla EXISTENTE pero
+        ilegible ⇒ el `ValueError` SUBE (el guard lo vuelve `INTERNAL`) —
+        roto ya no finge vacío.
         """
-        rows = await self._select(["model"])
-        return {str(row["model"]) for row in rows}
+        return {str(row["model"]) for row in await self._select(["model"])}
 
     async def index_meta(self) -> rag_status_handler.IndexMeta:
         """DTO de estado del índice para `rag_status` (T4) — derivado, sin estado nuevo.
 
-        UNA proyección de 2 columnas (`model` + `indexed_at`); de ahí salen
-        `rows`, `models` y `last_refresh = max(indexed_at)` (ISO-8601 UTC con
-        offset fijo ⇒ orden lexicográfico = cronológico). `db_size_bytes` =
-        walk de TODO `<vault>/.tepochcalli/db/` — la spec dice `db/`, no solo
-        el `.lance`. shortcut: con ~100k filas reconsiderar el scan de
-        `indexed_at` (plan §9 riesgo «rag_status leyendo el índice completo»);
-        la proyección ya es de 2 columnas cortas y el AC es ≤10k notas.
+        Revisión Phase 2 (2026-10-27): el TOTAL sale de `count_rows()` —O(1),
+        metadatos del fragmento, no lectura de filas—; `models` y
+        `last_refresh` siguen de una proyección de 2 columnas
+        (`max(indexed_at)`, ISO-8601 UTC con offset fijo ⇒ orden
+        lexicográfico = cronológico). `db_size_bytes` = walk de TODO
+        `<vault>/.tepochcalli/db/` — la spec dice `db/`, no solo el `.lance`.
         """
-        rows = await self._select(["model", "indexed_at"])
-        # `.tepochcalli/db/` ENTERO (spec §rag_status dice `db/`, no solo `.lance`).
         db_root = self._vault_root / DB_RELPATH.parent
         size = (
             sum(path.stat().st_size for path in db_root.rglob("*") if path.is_file())
             if db_root.is_dir()
             else 0
         )
+        async with self._open_table() as table:
+            if table is None:  # DB o tabla AUSENTE: índice inexistente (vacío honesto)
+                return rag_status_handler.IndexMeta(
+                    rows=0, models=set(), last_refresh=None, db_size_bytes=size
+                )
+            total = await table.count_rows()
+            rows: list[dict[str, object]] = (
+                await table.query().select(["model", "indexed_at"]).to_list()
+            )
         return rag_status_handler.IndexMeta(
-            rows=len(rows),
+            rows=total,
             models={str(row["model"]) for row in rows},
             last_refresh=max((str(row["indexed_at"]) for row in rows), default=None),
             db_size_bytes=size,
         )
 
-    async def _select(self, columns: list[str]) -> list[dict[str, object]]:
-        """Proyección de columnas de `chunks` — costura compartida search/rag_status (T2/T4).
+    @contextlib.asynccontextmanager
+    async def _open_table(self) -> AsyncIterator[AsyncTable | None]:
+        """Apertura de solo lectura de `chunks` — `None` si DB/tabla AUSENTE.
 
-        Solo lectura con el MISMO borde ya probado en T2: DB ausente ⇒ sin
-        filas y SIN conectar (`connect_async` crearía el directorio); tabla
-        ausente/ilegible ⇒ `ValueError` de `lancedb==0.40.0` (sonda T2) ⇒ sin
-        filas. `rag_status` distingue «índice inexistente» por `rows == 0` y
-        `models == ∅`, sin necesidad del motivo exacto.
+        Revisión Phase 2: la diferenciación vacío vs ROTO es honesta — DB
+        ausente ∉ conectar (`connect_async` crearía el directorio) y tabla
+        ausente se distingue con `list_tables()`; si la tabla EXISTE y es
+        ilegible (`ValueError` de lancedb 0.40: esquema incompatible) el error
+        ESCALA al caller → `internal_guard` ⇒ `INTERNAL` — jamás se finge
+        `INDEX_EMPTY` con índice roto.
         """
         import lancedb  # composition root: el único sitio con el motor (decisión T2)
 
         db_uri = self._vault_root / DB_RELPATH
         if not db_uri.exists():
-            return []
+            yield None
+            return
+        db = await lancedb.connect_async(str(db_uri))
         try:
-            db = await lancedb.connect_async(str(db_uri))
-            try:
-                table = await db.open_table(TABLE_NAME)
-                rows: list[dict[str, object]] = await table.query().select(columns).to_list()
-            finally:
-                db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
-        except ValueError:
-            return []
+            names = (await db.list_tables()).tables
+            if TABLE_NAME not in names:
+                yield None
+                return
+            yield await db.open_table(TABLE_NAME)
+        finally:
+            db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
+
+    async def _select(self, columns: list[str]) -> list[dict[str, object]]:
+        """Proyección de columnas de `chunks` — costura compartida search/rag_status (T2/T4).
+
+        shortcut: lancedb 0.40.0 NO expone `execute_sql` — ni `SELECT DISTINCT
+        model` ni `SELECT MAX(indexed_at)` bajan como pushdown a DataFusion; la
+        proyección materializa solo ESAS columnas (cortas, sin `vector`) y el
+        coste residual es O(filas) en ancho mínimo. Ver `_open_table` para el
+        borde de ausencia/ilegibilidad (review 2026-10-27: roto ⇒ escala).
+        """
+        async with self._open_table() as table:
+            if table is None:
+                return []
+            rows: list[dict[str, object]] = await table.query().select(columns).to_list()
         return rows
 
     async def cited_chunks(

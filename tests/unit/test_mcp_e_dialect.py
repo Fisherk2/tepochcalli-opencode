@@ -146,16 +146,17 @@ class _UnreadableIndex(_Backend):
         raise ValueError("tabla chunks ilegible")
 
 
-def test_unreadable_index_state_maps_to_validation_error_not_internal() -> None:
-    """`ValueError` al leer el estado del índice ⇒ `VALIDATION_ERROR` (no `INTERNAL`).
+def test_unreadable_index_state_escalates_to_internal_not_validation_error() -> None:
+    """`ValueError` al leer el estado del índice ⇒ `INTERNAL` (roto ≠ validación del usuario).
 
-    El borde de solo lectura del backend (tabla con esquema incompatible)
-    responde con el mismo dialecto de validación que el resto de argumentos
-    inválidos — nunca con un `INTERNAL` opaco.
+    Review Phase 2 (2026-10-27): un esquema incompatible NO es un argumento
+    inválido del usuario — fingir `VALIDATION_ERROR` disfrazaba un fallo
+    nuestro; ahora el `ValueError` del backend escala y el guard lo vuelve
+    `INTERNAL` canónico. El handler dejó de mapear esa rama.
     """
     payload = _search(backend=_UnreadableIndex())
 
-    assert payload == errors.validation_error("tabla chunks ilegible")
+    assert payload == errors.internal()
 
 
 def test_model_mismatch_precedes_api_auth_and_never_embeds_the_query() -> None:
