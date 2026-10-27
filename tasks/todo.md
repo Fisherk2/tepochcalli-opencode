@@ -101,7 +101,7 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: contract test por código `E_*` (proveedor falso inyectado) + test de que la clave no aparece en logs/`repr`/payload + suite Phase 1 verde tras tocar `app.py`
   - Dep.: T2, T3 · Tamaño: M
 
-- [ ] **T7 · Los dos gates numéricos: ≤1600 tokens y <500 ms**
+- [x] **T7 · Los dos gates numéricos: ≤1600 tokens y <500 ms**
   - Subagentes: `performance-benchmarker` (lead), `test-engineer` · Skills: `performance-analysis`, `performance-optimization`, `test-driven-development`, `observability-and-instrumentation`
   - AC: fixtures **adversas** (unicode CJK/emoji, query >10 000 chars → `VALIDATION_ERROR`, chunk de 1536 bytes, PDF con tablas, multibyte); payload de `search` **≤1600 tokens** en todas ellas (con `truncated: true` al cortar, orden por score respetado); `rag_status` **<200 tokens**; bench de `search` con **p95 < 500 ms** sobre fixture de 100 archivos, publicando **n y método de percentil** (n=20, *nearest-rank*, p95 = 19.º valor); bench en `tests/benchmarks/bench_search.py` marcado `slow` + smoke con umbral generoso para CI; presupuesto por etapa **medido**: embed ≤120 ms · ANN+FTS ≤200 ms · ensamblado ≤30 ms · IPC ≤150 ms
   - Verificar: `just bench-search` (local, documentado) + `just bench-search --smoke` (CI)
@@ -210,6 +210,27 @@ dos refresh no se solaparon). Reescrito con **opción B** — el padre retiene e
 `flock` antes de lanzar las dos sesiones y lo suelta después de recibir ambas
 respuestas, de modo que el solapamiento lo garantiza el **kernel**, no el reloj.
 **Regla para T4-T10: ninguna aserción de la suite puede depender del tiempo.**
+
+## Hallazgos de T7 y decisiones del usuario (2026-10-26)
+
+**Números medidos** (host de desarrollo, corpus 100 archivos → 261 chunks;
+n=20, *nearest-rank*, p95 = 19.º valor ordenado — muestras crudas en el JSON):
+
+| Métrica | Medido | Presupuesto |
+|---|---|---|
+| p95 `search` cliente (stdio real) | **52 ms** | <500 ms ✅ |
+| p95 `took_ms` (punto de medición de la spec) | 49 ms | — |
+| embed (medición **directa**) | 24.7 ms | ≤120 ✅ |
+| ANN+FTS (por **diferencia**, ver F-T7-3) | 14.6 ms | ≤200 ✅ |
+| ensamblado (diferencia + JSON directo) | 1.9 ms | ≤30 ✅ |
+| IPC (cliente − `took_ms`) | 4.0 ms | ≤150 ✅ |
+
+| # | Hallazgo / decisión | Estado |
+|---|---|---|
+| **F-T7-1** | El **JSON serializado** suma **~1740** (+150 de envoltura que la spec no contabiliza) frente a **1590** de la fórmula. **Decisión del usuario 2026-10-26: manda la FÓRMULA de la spec** (`spec-mcp-server` §Presupuesto la define como Σ sobre resultados) ⇒ CP-C pasa. Se publican ambos números + **cota de envoltura ≤200 con test** (cualquier ensanchamiento futuro revienta). UH.md (<2000 con contexto) se cumple: ~1840 con la pregunta. **Desfase de ~150 tokens a documentar en T10.** | Resuelto |
+| **F-T7-2** | **Bug REAL de Phase 1 verificado:** `app.index_file` lee TODO con `read_text(utf-8, strict)` ⇒ los PDFs fallan con `UnicodeDecodeError` y el fallo se absorbe en `skipped` con `rc=0` — **los PDFs nunca se indexan en producción**. `parsers.extract_text` sí tiene la rama Docling y su docstring afirma que `index_file` la usa: el código contradice su propia doc. `test_pdf.py` llama a `parsers` directamente y no lo vio. **Decisión del usuario 2026-10-26: arreglar YA en `flow/app.py`** (autorización explícita de escritura en el motor) — commit `fix:` aparte de T7; desbloquea el e2e golden md+PDF de T8 y hace real el criterio 7 de UH.md | Pendiente de fix |
+| **F-T7-3** | El presupuesto de etapas se mide en las costuras del server: **embed medición directa**, ANN+FTS/ensamblado/IPC **por diferencia**. El desglose interno de LanceDB exigiría instrumentar `flow/` (vedado en T7). Margen y método declarados en docstring **y** en el JSON — no se presenta aproximación como medición directa | Documentado |
+| **F-T7-4** | `spec-mcp-server` §Testing pide «asserts de `took_ms` <500 **en CI**»; la regla anti-flake de la casa (aprendida con el fallo real de T3) prohíbe aserciones de latencia en la suite. **No se implementaron a propósito**: el p95 vive solo en `just bench-search` (medición local), y el `--smoke` va con umbral generoso sin percentil — idéntico a `bench_delta --smoke` | Discrepancia spec↔regla para **T10** |
 
 ## Decisiones ya tomadas (2026-10-26, usuario)
 

@@ -93,6 +93,12 @@ bench:
 bench-smoke:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_delta.py --smoke
 
+# Bench search p95 <500 ms (criterio 3) + presupuesto por etapa: medición LOCAL.
+# `just bench-search --smoke` = variante CI con umbral generoso (sin percentil);
+# el p95 real NUNCA corre en CI (misma disciplina que bench, ver bench_search.py).
+bench-search *args:
+    cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_search.py {{args}}
+
 # Markdown lint de docs/specs/AGENTS.md/SPEC.md (markdownlint-cli2 vía npx).
 md-lint:
     npx --yes markdownlint-cli2 docs specs AGENTS.md SPEC.md

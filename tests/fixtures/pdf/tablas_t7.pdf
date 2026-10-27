@@ -1,0 +1,113 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Length 2952 >>
+stream
+BT /F1 20 Tf 54 720 Td (Tepochcalli Tabla Fixture) Tj ET
+BT /F2 11 Tf 54 694 Td (PDF adverso del presupuesto: una tabla rejillada de trece filas.) Tj ET
+BT /F1 14 Tf 54 648 Td (Presupuestos de latencia) Tj ET
+BT /F2 11 Tf 54 626 Td (Tabla 1. Presupuestos por etapa de la busqueda en milisegundos.) Tj ET
+0 0 0 rg
+54 609 504 1 re f
+54 587 504 1 re f
+54 565 504 1 re f
+54 543 504 1 re f
+54 521 504 1 re f
+54 499 504 1 re f
+54 477 504 1 re f
+54 455 504 1 re f
+54 433 504 1 re f
+54 411 504 1 re f
+54 389 504 1 re f
+54 367 504 1 re f
+54 345 504 1 re f
+54 323 504 1 re f
+54 324 1 286 re f
+180 324 1 286 re f
+306 324 1 286 re f
+432 324 1 286 re f
+558 324 1 286 re f
+BT /F1 11 Tf 60.0 595.0 Td (Etapa) Tj ET
+BT /F1 11 Tf 186.0 595.0 Td (Presupuesto) Tj ET
+BT /F1 11 Tf 312.0 595.0 Td (Medido) Tj ET
+BT /F1 11 Tf 438.0 595.0 Td (Nota) Tj ET
+BT /F2 11 Tf 60.0 573.0 Td (Embed p50) Tj ET
+BT /F2 11 Tf 186.0 573.0 Td (120 ms) Tj ET
+BT /F2 11 Tf 312.0 573.0 Td (directo) Tj ET
+BT /F2 11 Tf 438.0 573.0 Td (MiniLM) Tj ET
+BT /F2 11 Tf 60.0 551.0 Td (Embed p95) Tj ET
+BT /F2 11 Tf 186.0 551.0 Td (120 ms) Tj ET
+BT /F2 11 Tf 312.0 551.0 Td (directo) Tj ET
+BT /F2 11 Tf 438.0 551.0 Td (frio+cpu) Tj ET
+BT /F2 11 Tf 60.0 529.0 Td (Embed max) Tj ET
+BT /F2 11 Tf 186.0 529.0 Td (120 ms) Tj ET
+BT /F2 11 Tf 312.0 529.0 Td (directo) Tj ET
+BT /F2 11 Tf 438.0 529.0 Td (1 frase) Tj ET
+BT /F2 11 Tf 60.0 507.0 Td (ANN+FTS p50) Tj ET
+BT /F2 11 Tf 186.0 507.0 Td (200 ms) Tj ET
+BT /F2 11 Tf 312.0 507.0 Td (hibrido) Tj ET
+BT /F2 11 Tf 438.0 507.0 Td (RRF K=60) Tj ET
+BT /F2 11 Tf 60.0 485.0 Td (ANN+FTS p95) Tj ET
+BT /F2 11 Tf 186.0 485.0 Td (200 ms) Tj ET
+BT /F2 11 Tf 312.0 485.0 Td (hibrido) Tj ET
+BT /F2 11 Tf 438.0 485.0 Td (prefiltro) Tj ET
+BT /F2 11 Tf 60.0 463.0 Td (ANN+FTS max) Tj ET
+BT /F2 11 Tf 186.0 463.0 Td (200 ms) Tj ET
+BT /F2 11 Tf 312.0 463.0 Td (hibrido) Tj ET
+BT /F2 11 Tf 438.0 463.0 Td (100k filas) Tj ET
+BT /F2 11 Tf 60.0 441.0 Td (JSON p50) Tj ET
+BT /F2 11 Tf 186.0 441.0 Td (30 ms) Tj ET
+BT /F2 11 Tf 312.0 441.0 Td (serial) Tj ET
+BT /F2 11 Tf 438.0 441.0 Td (ensamblado) Tj ET
+BT /F2 11 Tf 60.0 419.0 Td (JSON p95) Tj ET
+BT /F2 11 Tf 186.0 419.0 Td (30 ms) Tj ET
+BT /F2 11 Tf 312.0 419.0 Td (serial) Tj ET
+BT /F2 11 Tf 438.0 419.0 Td (truncado) Tj ET
+BT /F2 11 Tf 60.0 397.0 Td (JSON max) Tj ET
+BT /F2 11 Tf 186.0 397.0 Td (30 ms) Tj ET
+BT /F2 11 Tf 312.0 397.0 Td (serial) Tj ET
+BT /F2 11 Tf 438.0 397.0 Td (ensure_ascii) Tj ET
+BT /F2 11 Tf 60.0 375.0 Td (IPC p50) Tj ET
+BT /F2 11 Tf 186.0 375.0 Td (150 ms) Tj ET
+BT /F2 11 Tf 312.0 375.0 Td (stdio) Tj ET
+BT /F2 11 Tf 438.0 375.0 Td (por llamada) Tj ET
+BT /F2 11 Tf 60.0 353.0 Td (IPC p95) Tj ET
+BT /F2 11 Tf 186.0 353.0 Td (150 ms) Tj ET
+BT /F2 11 Tf 312.0 353.0 Td (stdio) Tj ET
+BT /F2 11 Tf 438.0 353.0 Td (margen) Tj ET
+BT /F2 11 Tf 60.0 331.0 Td (Total) Tj ET
+BT /F2 11 Tf 186.0 331.0 Td (500 ms) Tj ET
+BT /F2 11 Tf 312.0 331.0 Td (criterio 3) Tj ET
+BT /F2 11 Tf 438.0 331.0 Td (p95 < 500) Tj ET
+
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000000359 00000 n 
+0000000456 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3460
+%%EOF
