@@ -240,6 +240,12 @@ def _vault_root() -> Path:
     del contrato. `setdefault`: si el nombre del flow ya está (tests,
     `verify.py`), no se pisa.
 
+    Revisión Phase 2 (eje 7, 2026-10-27): el retorno va `.resolve()` — la env
+    (p. ej. `TEPOCHCALLI_ROOT: "."` de `opencode.json`) es RELATIVA al cwd del
+    harness, y el cwd del proceso stdio NO tiene por qué ser el vault;
+    resuelto, todo path/walk/written_to depende solo del filesystem, no del
+    directorio de lanzamiento.
+
     Import perezoso de `tepochcalli_flow.app` — arrastra `cocoindex` y no
     debe frenar el arranque stdio ni `tools/list`.
     """
@@ -247,7 +253,7 @@ def _vault_root() -> Path:
 
     if (contract_root := os.environ.get(CONTRACT_ROOT_ENV)) is not None:
         os.environ.setdefault(VAULT_ROOT_ENV, contract_root)
-    return resolve_vault_root()
+    return resolve_vault_root().resolve()
 
 
 def _backend() -> _VaultSearchBackend:

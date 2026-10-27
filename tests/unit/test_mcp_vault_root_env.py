@@ -47,3 +47,21 @@ def test_the_flow_root_env_wins_when_both_names_are_set(
 
     assert server._vault_root() == tmp_path
     assert os.environ["TEPOCHCALLI_VAULT_ROOT"] == str(tmp_path)
+
+
+def test_the_returned_root_is_resolved_even_when_the_env_is_relative(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Review Phase 2 (eje 7): env RELATIVA al cwd ⇒ raíz ABSOLUTA devuelta (`.resolve()`).
+
+    El harness puede lanzar el server stdio desde cualquier cwd con una raíz
+    tipo `.` (es el literal de `opencode.json`); paths/walks/written_to no
+    pueden depender del directorio de lanzamiento.
+    """
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("TEPOCHCALLI_VAULT_ROOT", "recursos-relativos")
+
+    root = server._vault_root()
+
+    assert root.is_absolute()
+    assert root == (tmp_path / "recursos-relativos").resolve()
