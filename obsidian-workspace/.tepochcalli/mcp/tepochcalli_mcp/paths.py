@@ -25,6 +25,8 @@ borde: defensa en profundidad SIN duplicar la traducción.
 
 from __future__ import annotations
 
+import ipaddress
+import socket
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Final
@@ -139,6 +141,15 @@ def validate_source_uri(uri: str, vault_root: Path) -> None:
     `VALIDATION_ERROR` ANTES de que el conversor vea nada — markitdown con
     `file:` leería cualquier archivo accesible al proceso (spec-markitdown
     §Seguridad del canal).
+
+    Revisión Phase 2 (2026-10-27, SSRF): para `http(s)` se RECHAZA además —
+    antes de cualquier fetch — userinfo en el URI (`user@host`), hosts de red
+    interna (`localhost`, `*.local`) y direcciones loopback/privadas/link-
+    local/reservadas, sea literal IP o por resolución DNS (`getaddrinfo`):
+    el conversor fetch-ea desde el proceso del vault y un URI apuntando a la
+    red interna (p. ej. `169.254.169.254` cloud metadata) es exfiltración,
+    no una fuente. La DNS que no resuelve NO se rechaza: fallará en el fetch
+    (`SOURCE_UNREACHABLE`), sin superficie SSRF por recorrer.
     """
     parsed = urlparse(uri)
     if parsed.scheme == "file":
@@ -146,8 +157,76 @@ def validate_source_uri(uri: str, vault_root: Path) -> None:
     elif parsed.scheme in ("http", "https"):
         if not parsed.netloc:
             raise ValueError(f"{parsed.scheme}: debe incluir host: {uri!r}")
+        if parsed.username is not None:
+            raise ValueError(
+                f"http(s) con userinfo (usuario@host) rechazado (SSRF/filtración "
+                f"de credenciales); sin credenciales inline: {uri!r}"
+            )
+        _deny_internal_host(uri)
     else:
         raise ValueError(f"uri debe empezar por http://, https:// o file:: {uri!r}")
+
+
+def _deny_internal_host(uri: str) -> None:
+    """Rechaza hosts de red interna en un `uri` http(s) — denylist SSRF (review 2026-10-27).
+
+    Cubre (aprobado en la review): `localhost` y `*.local`; `127.0.0.0/8`,
+    `::1`, `0.0.0.0`, `169.254.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12` y
+    `192.168.0.0/16`. El literal IP se resuelve con `ipaddress`; un hostname
+    DNS que RESUELVE a alguna IP sensible también cae (`socket.getaddrinfo`)
+    — el fetch del conversor resolvería por el mismo canal y alcanzaría el
+    servicio interno. `is_private`/`is_link_local`/`is_reserved` son el
+    superseto conservador de esos rangos exactos (más sobres, no menos).
+    """
+    host = urlparse(uri).hostname  # hostname ya minúsculas y sin corchetes (urlparse)
+    try:
+        literal = ipaddress.ip_address(host)
+    except ValueError:
+        literal = None
+    if literal is not None and _is_internal_address(literal):
+        raise ValueError(_SSRF_MESSAGE.format(uri=uri))
+    if literal is None:
+        host_l = host.lower()
+        if host_l == "localhost" or host_l.endswith(".local"):
+            raise ValueError(_SSRF_MESSAGE.format(uri=uri))
+        for resolved in _resolve_addresses(host):
+            if _is_internal_address(resolved):
+                raise ValueError(_SSRF_MESSAGE.format(uri=uri))
+
+
+def _is_internal_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
+    """¿Es una dirección del espacio de red interna? (review SSRF 2026-10-27)."""
+    return (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_unspecified
+    )
+
+
+def _resolve_addresses(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    """Resuelve DNS el hostname (`getaddrinfo`); sin resolver ⇒ [] (el fetch fallará)."""
+    addresses: list[ipaddress.IPv4Address | ipaddress.IPv6Address] = []
+    try:
+        infos = socket.getaddrinfo(hostname, None)
+    except (OSError, UnicodeError):
+        return addresses
+    for info in infos:
+        try:
+            addresses.append(
+                ipaddress.ip_address(info[4][0])  # type: ignore[arg-type]  # (family, type, proto, canonname, sockaddr)
+            )
+        except ValueError:
+            continue
+    return addresses
+
+
+_SSRF_MESSAGE: Final = (
+    "URI no aceptable: add_source no alcanza hosts de red interna (localhost, "
+    "*.local, loopback o rangos privados/reservados) — usa la URL pública "
+    "de la fuente: {uri!r}"
+)
 
 
 def resolve_file_uri(uri: str, vault_root: Path) -> Path:

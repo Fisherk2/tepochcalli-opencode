@@ -2,11 +2,14 @@
 
 Fuentes de verdad:
 
-* tasks/plan.md §6 T5 AC + «Verificar» — positivos `http(s):` (servidor HTTP
-  LOCAL, sin red externa) y `file:` dentro del vault → archivo en
-  `00-Resources/_inbox/` con frontmatter + chunk indexado con `source_path`
-  correcto; negativos: traversal en `subdir`, `subdir` absoluto, formato no
-  convertible ⇒ `SOURCE_UNREACHABLE`, `file:` fuera del vault ⇒ rechazado.
+* tasks/plan.md §6 T5 AC + «Verificar» — positivos `file:` (Dentro del vault)
+  → archivo en `00-Resources/_inbox/` con frontmatter + chunk indexado con
+  `source_path` correcto; negativos: traversal en `subdir`, `subdir`
+  absoluto, formato no convertible ⇒ `SOURCE_UNREACHABLE`, `file:` fuera
+  del vault ⇒ rechazado.
+* Revisión Phase 2 (2026-10-27, SSRF): `http(s)` contra hosts de red interna
+  (loopback incluido — el antiguo servidor HTTP local ya NO es caso
+  aceptado) ⇒ `VALIDATION_ERROR` SIN fetch (denylist de `paths`).
 * specs/spec-markitdown.md §Testing (mismos positivos/negativos) y
   §Seguridad del canal; specs/spec-mcp-server.md §Tool `add_source` (forma
   exacta, 4 campos en `indexed`, SIN `locked`).
@@ -18,11 +21,11 @@ Decisiones de test, documentadas (patrones T3):
   la tool se ejercita COMO LA VE EL HARNESS. El modelo se calienta UNA vez
   (fixture de módulo) porque el refresh INTERNO de `add_source` indexa el
   archivo escrito — el embedder es real, no simulado.
-* **Canario `nonet` por defecto** (`tests/support/nonet/sitecustomize.py`):
-  cualquier `connect` AF_INET lanza `OSError`. La ÚNICA excepción es el test
-  `http:`, que apunta SOLO a `127.0.0.1` con un servidor local del propio
-  test — cero red EXTERNA por construcción (AC: «cero red salvo el servidor
-  HTTP local de test»).
+* **Canario `nonet` SIEMPRE** (`tests/support/nonet/sitecustomize.py`):
+  cualquier `connect` AF_INET lanza `OSError`. Revisión Phase 2 (SSRF
+  2026-10-27): ya no hay excepción de loopback — la denylist rechaza el
+  `http://127.0.0.1` en el borde (sin fetch), y el canario protege TODOS los
+  tests de este módulo.
 * **ENGINE_LOCKED determinista** (sin reloj, gotera G1): el PADRE retiene el
   `flock` del refresh (`flow_app._acquire_refresh_lock`) mientras la tool
   corre — el solapamiento lo garantiza el kernel.
@@ -35,9 +38,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from threading import Thread
 
 import pytest
 from mcp import ClientSession
@@ -52,12 +53,6 @@ NOTAS = (
     "# Nota de staging para T5\n\n"
     "Texto distintivo para la busqueda: cohorte pediatria t5xyz-2026 con "
     "metricas de seguimiento y resultados observados en la muestra.\n"
-)
-ARTICLE_HTML = (
-    "<html><head><title>Articulo local T5</title></head><body>"
-    "<h1>Articulo local</h1>"
-    "<p>Texto distintivo del servidor local: biomarcadores t5http-2026 en sangre.</p>"
-    "</body></html>"
 )
 
 
@@ -149,52 +144,47 @@ def test_add_source_file_writes_frontmatter_and_indexes_the_chunk(
     assert search["results"][0]["source_path"] == added["written_to"]
 
 
-def test_add_source_http_from_local_server(source_vault: tuple[Path, Path]) -> None:
-    """`http:` contra un servidor LOCAL del test → convertido, escrito y con `source_uri` URL.
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "http://127.0.0.1:9/articulo.html",  # 127.0.0.0/8 (antes era el ACEPTADO aquí)
+        "http://localhost/articulo.html",  # loopback por nombre
+        "http://169.254.169.254/latest/meta-data/",  # link-local: cloud metadata
+        "http://192.168.1.1/articulo.html",  # 192.168.0.0/16
+        "http://usuario@example.org/articulo.html",  # userinfo
+    ],
+)
+def test_ssrf_denylist_rejects_internal_hosts_by_stdio(
+    source_vault: tuple[Path, Path], uri: str
+) -> None:
+    """Denylist SSRF por stdio (review Phase 2 2026-10-27) ⇒ `VALIDATION_ERROR`, cero fetch.
 
-    Única prueba sin canario `nonet`: el fetch es loopback a 127.0.0.1 (AC:
-    «cero red salvo el servidor HTTP local de test»); el hijo nunca ve red
-    externa porque el URI apunta al puerto efímero de ESTE proceso.
+    El URI es rechazado en el borde ANTES de que markitdown vea nada: ni
+    connect ni DNS — bajo el canario `nonet` (que bloquearía cualquier
+    connect) el rechazo nunca llega a red, y `00-Resources/` queda byte a
+    byte. Sustituye al antiguo positivo `http://127.0.0.1` (test_add_source_http_
+    from_local_server): con la denylist, TODA IP de loopback es rechazada por
+    diseño, y el camino feliz de conversión real queda cubierto por `file:`
+    (el mismo conversor markitdown EN PROCESO) y por los unit del handler.
     """
     vault, models_link = source_vault
+    env = server_env(vault, models_link)
+    before = _tree_snapshot(vault / citation.RESOURCES_DIR)
 
-    class _Handler(BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802 — API de BaseHTTPRequestHandler
-            body = ARTICLE_HTML.encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/html; charset=utf-8")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
+    async def call() -> tuple[dict[str, object], bool]:
+        async with running_server(env) as session:
+            return await _call_add_source(session, uri)
 
-        def log_message(self, *_args: object) -> None:
-            """Silencioso: el stderr del servidor de test ensucia la salida del hijo."""
+    payload, is_error = asyncio.run(call())
 
-    server = ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
-    thread = Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    try:
-        port = server.server_address[1]
-        uri = f"http://127.0.0.1:{port}/articulo.html"
-        env = server_env(vault, models_link, allow_loopback=True)
-
-        async def call() -> dict[str, object]:
-            async with running_server(env) as session:
-                added, is_error = await _call_add_source(session, uri)
-                assert not is_error, added
-                return added
-
-        added = asyncio.run(call())
-    finally:
-        server.shutdown()
-        thread.join(timeout=30)
-
-    assert list(added) == ["ok", "written_to", "indexed"]
-    assert added["written_to"] == "00-Resources/_inbox/articulo.md"
-    written = vault / added["written_to"]
-    fields = _frontmatter_fields(written)
-    assert fields["source_uri"] == json.dumps(uri, ensure_ascii=False)
-    assert "t5http-2026" in written.read_text(encoding="utf-8")
+    assert is_error
+    assert payload["error"]["code"] == "VALIDATION_ERROR"
+    assert (
+        "red interna" in payload["error"]["message"] or "userinfo" in payload["error"]["message"]
+    ), payload
+    assert _tree_snapshot(vault / citation.RESOURCES_DIR) == before, (
+        "un URI interno rechazado no puede escribir ni un byte"
+    )
 
 
 def test_add_source_twice_gets_the_numeric_suffix(source_vault: tuple[Path, Path]) -> None:

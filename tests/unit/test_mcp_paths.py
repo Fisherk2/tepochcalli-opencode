@@ -251,15 +251,30 @@ def test_ensure_within_keeps_the_target_inside_base(tmp_path: Path) -> None:
 # --- esquemas aceptados por add_source (T5) ------------------------------------------
 
 
+def _public_dns(monkeypatch: pytest.MonkeyPatch) -> None:
+    """DNS falsa que resuelve todo a una dirección PÚBLICA — cero red en unit."""
+    monkeypatch.setattr(
+        paths.socket,
+        "getaddrinfo",
+        lambda *_: [(2, 0, 6, "", ("93.184.216.34", 0))],
+    )
+
+
 @pytest.mark.parametrize(
     "uri",
     [
         "https://example.org/papers/ruiz-2024.pdf",
-        "http://127.0.0.1:8123/articulo.html",
     ],
 )
-def test_validate_source_uri_accepts_http_and_https(tmp_path: Path, uri: str) -> None:
-    """`http(s):` es el otro esquema admitido por el contrato de `add_source` (plan §T5)."""
+def test_validate_source_uri_accepts_http_and_https(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, uri: str
+) -> None:
+    """`http(s)` con host PÚBLICO es admitido por el contrato de `add_source` (plan §T5).
+
+    La DNS se stubbea a una IP pública: el caso rechazado por resolución
+    interna está en los rejects de abajo (review SSRF 2026-10-27).
+    """
+    _public_dns(monkeypatch)
     paths.validate_source_uri(uri, tmp_path)  # no lanza
 
 
@@ -282,3 +297,45 @@ def test_validate_source_uri_rejects_everything_else(tmp_path: Path, uri: str) -
     """Esquema desconocido, sin host o `file:` fuera ⇒ ValueError → VALIDATION_ERROR."""
     with pytest.raises(ValueError):
         paths.validate_source_uri(uri, tmp_path)
+
+
+@pytest.mark.parametrize(
+    "uri",
+    [
+        "http://localhost/articulo.html",  # loopback por nombre
+        "http://mantequilla.local/articulo.html",  # mDNS (*.local), sin DNS real
+        "http://127.0.0.1:8123/articulo.html",  # 127.0.0.0/8 (antes caso ACEPTADO)
+        "http://[::1]:8123/articulo.html",  # ::1
+        "http://0.0.0.0/articulo.html",  # unspecified
+        "http://169.254.169.254/latest/meta-data/",  # link-local: cloud metadata
+        "http://10.0.0.5/articulo.html",  # 10.0.0.0/8
+        "http://172.16.0.1/articulo.html",  # 172.16.0.0/12
+        "http://192.168.1.1/articulo.html",  # 192.168.0.0/16
+        "http://usuario@example.org/articulo.html",  # userinfo en el URI
+        "https://user:clave@89.234.183.98/articulo.html",  # userinfo (RFC 2732)
+    ],
+)
+def test_validate_source_uri_rejects_ssrf_internal_hosts(uri: str) -> None:
+    """Denylist SSRF: hosts internos/literal privado/userinfo ⇒ ValueError SIN fetch.
+
+    Review Phase 2026-10-27: el fetch es anterior al rechazo por diseño del
+    borde (el VALIDATION_ERROR sale ANTES de que el conversor vea nada) — los
+    hosts de arriba son literales o `.local`/`localhost`, verificados SIN
+    resolver DNS (y sin red: la unidad no toca el socket).
+    """
+    with pytest.raises(ValueError, match="red interna|userinfo"):
+        paths.validate_source_uri(uri, Path("/vault"))
+
+
+def test_validate_source_uri_rejects_hostname_resolving_to_internal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Un hostname DNS que resuelve a IP PRIVADA también cae (SSRF por resolución)."""
+    monkeypatch.setattr(
+        paths.socket,
+        "getaddrinfo",
+        lambda *_: [(2, 0, 6, "", ("10.9.8.7", 0))],
+    )
+
+    with pytest.raises(ValueError, match="red interna"):
+        paths.validate_source_uri("http://intranet.corp/articulo.html", Path("/vault"))

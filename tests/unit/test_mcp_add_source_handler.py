@@ -204,8 +204,17 @@ def test_written_to_is_json_serializable_unicode_safe(tmp_path: Path) -> None:
     assert "ñ-日" in payload["written_to"]
 
 
-def test_slug_and_subdir_are_reused_from_paths_domain(tmp_path: Path) -> None:
+def test_slug_and_subdir_are_reused_from_paths_domain(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """El handler NO reimplementa slug/subdir: delega en `paths` (una sola fuente)."""
+    # Review SSRF 2026-10-27: con la denylist, `http(s)` por nombre se valida
+    # vía DNS — se stubbea a pública para mantener la unidad sin red.
+    monkeypatch.setattr(
+        paths.socket,
+        "getaddrinfo",
+        lambda *_: [(2, 0, 6, "", ("93.184.216.34", 0))],
+    )
     uri = "https://example.org/papers/ruiz-2024.pdf"
     payload, _calls = _run(uri, vault=tmp_path)
 
