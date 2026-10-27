@@ -114,6 +114,20 @@
           "MCP_JUPYTER_TOKEN": "{env:MCP_JUPYTER_TOKEN}",
           "MCP_JUPYTER_NOTEBOOK_PATH": "agent_demo.ipynb"
         }
+      },
+      "tepochcalli-rag": {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "environment": {
+          "TEPOCHCALLI_ROOT": "."
+        },
+        "disabled": false
+      },
+      "markitdown": {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"],
+        "disabled": false
       }
     }
   },

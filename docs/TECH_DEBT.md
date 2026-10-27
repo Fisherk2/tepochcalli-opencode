@@ -56,4 +56,9 @@ Ningún TD asciende a blocker de Phase 2; TD-1 y TD-3 quedan con la puerta de Ph
   (TOCTOU symlink, documentada en SECURITY); ninguna otra está abierta — la deuda nueva no
   queda registrada (offsets_ref aditivo, pins de revisión, exit codes, probe de permisos) 
   porque el remediador se aplicó en el mismo pase.
+* **Nota T9 (2026-10-27):** `.github/workflows/phase1.yml` conserva el nombre
+  histórico de Phase 1; con el job `mcp` (Phase 2 T9 — gate `mypy flow+mcp` del
+  server `tepochcalli_mcp`) el fichero cubre ya dos fases. Renombrarlo
+  (p. ej. `quality.yml`) es deuda menor sin impacto funcional — los gates
+  dentro están documentados en su propia cabecera; decisión para T10.
 * Próxima revisión formal: cierre de Phase 6 (aceptación E2E).

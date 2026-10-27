@@ -58,10 +58,12 @@ el detalle y su rationale viven en el docstring de `tools/add_source.py`.
 from __future__ import annotations
 
 import logging
+import os
 import tomllib
 from collections.abc import Awaitable
 from dataclasses import asdict
 from pathlib import Path
+from typing import Final
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
@@ -80,6 +82,14 @@ from tepochcalli_mcp.tools import search as search_handler
 logger = logging.getLogger("tepochcalli_mcp")
 
 server = MCPServer(name="tepochcalli-rag", version=__version__)
+
+CONTRACT_ROOT_ENV: Final = "TEPOCHCALLI_ROOT"
+"""Nombre de la raíz del vault en el contrato MCP (`opencode.json` → `environment`).
+
+Spec-mcp-server §Carga de configuración. El flow NO lo conoce: su nombre es
+`TEPOCHCALLI_VAULT_ROOT` (Phase 1) y la traducción ocurre en `_vault_root`,
+el composition root — un solo nombre para el vault en todo el sistema.
+"""
 
 
 class _VaultSearchBackend:
@@ -192,13 +202,23 @@ _backend_instance: _VaultSearchBackend | None = None
 def _vault_root() -> Path:
     """Raíz del vault con la MISMA regla que el flow (`resolve_vault_root`).
 
-    Env `TEPOCHCALLI_VAULT_ROOT` o la del payload; T9 traducirá aquí
-    `TEPOCHCALLI_ROOT` (el nombre del contrato MCP) a ese env. Import perezoso
-    de `tepochcalli_flow.app` — arrastra `cocoindex` y no debe frenar el
-    arranque stdio ni `tools/list`.
-    """
-    from tepochcalli_flow.app import resolve_vault_root
+    **Traducción T9 (aquí, en el composition root):** el contrato MCP nombra
+    la raíz `TEPOCHCALLI_ROOT` (spec-mcp-server §Carga de configuración; la
+    inyecta `obsidian-workspace/opencode.json`) y el flow resuelve con
+    `TEPOCHCALLI_VAULT_ROOT` — un solo nombre para el vault, traducido en el
+    ÚNICO módulo que conoce ambos lados (ADR-005). La env queda traducida en
+    el proceso, de modo que `refresh_blocking()` (que llama
+    `resolve_vault_root()` directo) ve el mismo vault sin conocer el nombre
+    del contrato. `setdefault`: si el nombre del flow ya está (tests,
+    `verify.py`), no se pisa.
 
+    Import perezoso de `tepochcalli_flow.app` — arrastra `cocoindex` y no
+    debe frenar el arranque stdio ni `tools/list`.
+    """
+    from tepochcalli_flow.app import VAULT_ROOT_ENV, resolve_vault_root
+
+    if (contract_root := os.environ.get(CONTRACT_ROOT_ENV)) is not None:
+        os.environ.setdefault(VAULT_ROOT_ENV, contract_root)
     return resolve_vault_root()
 
 

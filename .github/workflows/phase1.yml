@@ -8,6 +8,14 @@
 # * docs/WORKFLOW.md §Testing — `pytest -m "not slow"` es el filtro de CI
 #   (la suite de corrección separada de la de medición, commit 004d4bd).
 #
+# Phase 2 (T9): el job `mcp` añade el gate `mypy` SIN argumentos
+# (`files = ["flow", "mcp"]` de pyproject) que cubre `tepochcalli_mcp` —
+# `quality` conserva su paso histórico `mypy flow`. La suite NO se duplica:
+# `quality` ya corre todos los tests (testpaths unit+integration+e2e). El
+# nombre del fichero (`phase1.yml`) queda como nombre histórico: anotado en
+# docs/TECH_DEBT.md. M6 sigue vigente: este workflow NUNCA ha corrido en
+# GitHub Actions y no se declara «CI verde».
+#
 # Decisiones, documentadas a propósito:
 # * SOLO Linux: la rama win32 del refresh lock (T8) no tiene cobertura de CI
 #   por diseño; una matriz que no podemos satisfacer no se declara.
@@ -141,3 +149,44 @@ jobs:
       - name: Smoke Δ (1 corrida, umbral generoso; sin p95)
         working-directory: obsidian-workspace/.tepochcalli
         run: uv run python ../../tests/benchmarks/bench_delta.py --smoke
+
+  # --- Job Phase 2 (T9): gate de TIPOS del server MCP ----------------------
+  # `quality` cumple el contrato T11 de Phase 1 con `mypy flow` (paso
+  # histórico, intacto); este job añade el gate estricto SIN argumentos —
+  # `files = ["flow", "mcp"]` de pyproject.toml — que cubre
+  # `tepochcalli_mcp`. La SUITE no se repite: `quality` ya corre
+  # `pytest -m "not slow"` sobre unit+integration+e2e (`testpaths`), que
+  # incluye los tests del server; `just ci` local refleja lo mismo
+  # (typecheck = mypy flow+mcp, test = la suite entera).
+  # En PARALELO con `quality` a propósito: mypy es el gate rápido, un fallo
+  # de tipos se ve antes que el resultado del suite largo (fail-fast).
+  # M6 (Phase 1, sin cambio): este workflow NUNCA se ha ejecutado en GitHub
+  # Actions — verde local no es «CI verde» y no se declara como tal.
+  mcp:
+    runs-on: ubuntu-latest
+    # Sync de uv (torch CPU ~1 GB en frío, cacheado por lock) + mypy sobre
+    # flow+mcp: sin suite ni modelos, mucho por debajo del job quality.
+    timeout-minutes: 30
+    env:
+      # Mismo quirk uv 0.12.9 que `quality` (cabecera del workflow).
+      UV_PROJECT_ENVIRONMENT: venv
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.9"
+
+      - name: Instala CPython 3.12 (gestionado por uv)
+        run: uv python install 3.12
+
+      - name: uv sync --frozen (deps exactas de uv.lock)
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv sync --frozen
+
+      # `python -m mypy` SIN argumentos = gate de pyproject (`files`:
+      # flow + mcp), misma forma local (`just typecheck`) y CI — la regla
+      # del bit exec en NTFS aplica igual que en `quality`.
+      - name: mypy (strict, flow + mcp)
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv run python -m mypy
