@@ -135,7 +135,7 @@ activo (respuesta user-facing a "cambié de opinión / elegí mal"):
 { "mcp": { "servers": {
     "tepochcalli-rag": {
       "type": "local",
-      "command": [".tepochcalli/venv/bin/tepochcalli-mcp"],
+      "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
       "cwd": ".",
       "environment": { "TEPOCHCALLI_ROOT": "." },
       "disabled": false

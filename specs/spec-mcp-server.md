@@ -204,13 +204,13 @@ Diseño determinista en el server (no depende del modelo):
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
 * Contract tests D7.3: `rag_status` con shape exacto de los 4 bloques y <200 tokens; los cinco códigos `E_*` (`E_NO_EMBEDDER`, `E_API_AUTH`, `E_MODEL_MISMATCH`, `E_MODEL_INVALID`, `E_OFFLINE_NO_CACHE`) con payload `{error:{code,message,fix_hint}}`; instalación degraded (salida 5) → `search` = `E_NO_EMBEDDER` + `rag_status` = `degraded` con `fix_hint`.
-* Fixtures de presupuesto: asserts de tokens ≤1600 payload y de `took_ms` <500 en CI con HW de referencia (metodología TRD).
+* Fixtures de presupuesto: asserts de tokens por la fórmula de §Presupuesto de tokens (Σ sobre resultados ≤1600, con cota de la envoltura aparte) y de `rag_status` <200, en la suite de corrección. La latencia se **mide** en `tests/benchmarks/bench_search.py`: p95 <500 ms **en local**, publicando n y método de percentil (metodología TRD) — **sin aserciones de latencia en CI**, que son la regla anti-flake de la casa: un rojo que depende de la máquina no es un rojo.
 * Golden answers: queries ES/EN sobre la muestra de `00-Resources/` (md+PDF) verificando que cada resultado cite `source_path` real y offsets reproducibles.
 
 ## Security Considerations
 
 * Solo stdio local; sin binding de red (docs/SECURITY.md).
-* `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera de `00-Resources/` ni lee fuera del vault salvo `file:` explícito en `add_source` (riesgo documentado del canal markitdown).
+* `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera de `00-Resources/`. **`file:` en `add_source` se RECHAZA si queda fuera del vault** (D16, ratificado 2026-10-26): markitdown con `file:` leería cualquier archivo accesible al proceso (riesgo documentado del canal markitdown, docs/SECURITY.md), y la validación corre **antes** de que el conversor toque el disco (`tepochcalli_mcp.paths.validate_source_uri` / `resolve_file_uri`).
 * Errores `INTERNAL` nunca exponen stack traces al harness.
 * Las claves API nunca aparecen en logs ni en payloads de error: `E_API_AUTH` nombra solo el proveedor (D7.3/ADR-007); la clave vive únicamente en `.tepochcalli/config/tepochcalli.toml` (gitignored) o `{env:VAR}`.
 

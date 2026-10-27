@@ -134,7 +134,7 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: listado de tools desde el harness + `just ci` verde
   - Dep.: T1, T8 · Tamaño: S
 
-- [ ] **T10 · Cierre de fase: FTR, docs y CHANGELOG**
+- [x] **T10 · Cierre de fase: FTR, docs y CHANGELOG** ✅ (2026-10-27 — FTR aprobado; CP-D 6/6)
   - Subagentes: `docs-writer` (lead), `technical-writer`, `code-reviewer` · Skills: `documentation-and-adrs`, `changelog-generate`, `code-review-and-quality`, `git-workflow-and-versioning`
   - AC: **FTR Phase 2→3** con el usuario (shapes = `spec-mcp-server`); `docs/WORKFLOW.md` §Phase 2 con estado + **métricas medidas** (n y método de percentil) + entradas §8 (D15, D16, D17, D18); `SPEC.md` índice: `spec-mcp-server` → **Approved** (y `spec-markitdown` → Approved si T5 cumple su §Testing); `docs/ARCHITECTURE.md` con el inventario y el diagrama de la capa MCP; `docs/TECH_DEBT.md` re-review TD-1…TD-11 (**TD-1 y TD-3 pagan su deuda**) + TD-12 (peso del venv); `docs/CODE_STYLE.md` (superficie tipada `flow` + `mcp`); `docs/SECURITY.md` (límite de `file:` y clave de API); `CHANGELOG.md`; **cero** cambios en `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/.opencode/`
   - Verificar: `just md-lint` sin errores nuevos + revisión del diff + `git status --short` sin artefactos
@@ -144,13 +144,13 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - **Discrepancias spec↔código encontradas y SOLO reportadas** (specs/ vedado salvo las 2 líneas): (a) `specs/spec-installer-wizard.md:138` sigue invocando `venv/bin/tepochcalli-mcp` (D17 y el código dicen `python -m`); (b) `specs/spec-mcp-server.md` §Security (línea ~213) conserva «salvo `file:` explícito» frente a **D16**, que rechaza todo `file:` fuera del vault; (c) `specs/spec-mcp-server.md` §Testing (línea ~207) exige asserts de `took_ms` <500 **en CI** frente a la regla anti-flake (F-T7-4).
   - **FTR Phase 2→3 NO ejecutado** (lo ejecuta el orquestador con el usuario). El paso `Proposed → Approved` está **escrito** en `SPEC.md` y en los `Status:` de las dos specs según el AC de T10 — si el FTR no aprueba, hay que revertir esos 3 marcadores. CP-D queda **sin marcar**.
 
-### ✅ CP-D · Gate Phase 2 → Phase 3 — **6/6**
-- [ ] Contract tests D7.3 verdes (shapes, `E_*`, `rag_status`, globs)
-- [ ] e2e «pregunta → tool-call → JSON citado» **grabado como fixture** y verde
-- [ ] OpenCode **lista las 4 tools** desde el `opencode.json` real del workspace
-- [ ] `just ci` verde
-- [ ] **FTR Phase 2→3** ejecutado con el usuario
-- [ ] Docs al día (WORKFLOW, SPEC, ARCHITECTURE, TECH_DEBT, CODE_STYLE, SECURITY, CHANGELOG)
+### ✅ CP-D · Gate Phase 2 → Phase 3 — **6/6** ✅ (2026-10-27, **FTR aprobado por el usuario**)
+- [x] Contract tests D7.3 verdes (shapes, `E_*`, `rag_status`, globs) — `tests/e2e/test_mcp_contract.py`
+- [x] e2e «pregunta → tool-call → JSON citado» **grabado como fixture** y verde — `tests/e2e/test_mcp_journey.py` + `tests/fixtures/golden_vault/`
+- [x] OpenCode **lista las 4 tools** desde el `opencode.json` real del workspace — `opencode mcp list` ⇒ connected, log ⇒ `tools=4`, control desde la raíz ⇒ no listado
+- [x] `just ci` verde — **404 passed**, 2 slow, smoke Δ PASS
+- [x] **FTR Phase 2→3** ejecutado con el usuario — **aprobado 2026-10-27** (registro en `docs/WORKFLOW.md` §4; las 3 discrepancias spec↔código autorizadas y corregidas en el mismo gate)
+- [x] Docs al día (WORKFLOW, SPEC, ARCHITECTURE, TECH_DEBT, CODE_STYLE, SECURITY, CHANGELOG) — `md-lint` 422/422 (cero errores nuevos)
 - ▶️ **Desbloquea Phase 3 (wizard).**
 
 ---
