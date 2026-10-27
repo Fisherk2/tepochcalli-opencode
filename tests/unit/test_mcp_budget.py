@@ -39,17 +39,24 @@ def _chunk(
 
 
 def test_estimate_tokens_is_chars_over_four_plus_citation_overhead() -> None:
-    """`len(text)//4 + 25`: el 25 es el sobrecoste de citación (path+heading+offsets)."""
+    """Peso latin: 4 chars/token + el 25 de citación (path+heading+offsets)."""
     assert budget.estimate_tokens("") == budget.CITATION_OVERHEAD_TOKENS
     assert budget.estimate_tokens("x" * 400) == 100 + budget.CITATION_OVERHEAD_TOKENS
     assert budget.estimate_tokens("x" * 403) == 100 + budget.CITATION_OVERHEAD_TOKENS  # //4
     assert budget.estimate_tokens("x" * 404) == 101 + budget.CITATION_OVERHEAD_TOKENS
 
 
-def test_estimate_tokens_counts_characters_not_bytes_for_multibyte_text() -> None:
-    """Chars, no bytes: un chunk CJK/multibyte no dispara el estimador (fixture adversa)."""
-    cjk = "日" * 400  # 1200 bytes UTF-8, 400 chars
-    assert budget.estimate_tokens(cjk) == 100 + budget.CITATION_OVERHEAD_TOKENS
+def test_estimate_tokens_weights_cjk_one_token_per_character() -> None:
+    """Peso CJK: 1 token POR CARÁCTER — la cota 2000 es REAL en chino/japonés (review eje 9)."""
+    cjk = "日" * 400  # 400 chars (antes estimaba 100; el tokenizer real consume ~400)
+    assert budget.estimate_tokens(cjk) == 400 + budget.CITATION_OVERHEAD_TOKENS
+    mixed = "cohorte 日" * 100  # 900 chars: 800 latin / 100 CJK
+    assert budget.estimate_tokens(mixed) == 800 // 4 + 100 + budget.CITATION_OVERHEAD_TOKENS
+
+
+def test_estimate_tokens_counts_emoji_as_heavy() -> None:
+    """Emoji (U+1F300+) también pesa 1 token por carácter — multibyte no escapa la cota."""
+    assert budget.estimate_tokens("🧪" * 100) == 100 + budget.CITATION_OVERHEAD_TOKENS
 
 
 def test_constants_pin_the_contract_numbers() -> None:

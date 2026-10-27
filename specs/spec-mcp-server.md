@@ -175,7 +175,7 @@ Diseño determinista en el server (no depende del modelo):
 
 * Payload máximo devuelto por `search`: `top_k` efectivo = min(solicitado, 5 por default; tope duro 8) × chunk ≤1024 chars ≈ 5×~260 tokens ≈ **1300 tokens**.
 * Overhead de citación por resultado ≈25 tokens (path+heading+offsets compactos) → +125 tokens.
-* Techo duro: si la suma estimada (tokenizador aprox chars/4 para ES/EN) excede 1600, se descartan resultados de menor `score` y se marca `truncated: true` — deja ≥400 tokens de margen para la pregunta del usuario y la respuesta generada dentro de los 2000 totales.
+* Techo duro: si la suma estimada (peso por carácter: CJK/emoji ⇒ 1 token/car, ES/EN ⇒ 4 chars/token — revisión Phase 2, 2026-10-27) excede 1600, se descartan resultados de menor `score` y se marca `truncated: true` — deja ≥400 tokens de margen para la pregunta del usuario y la respuesta generada dentro de los 2000 totales (criterio 4 REAL también en chino/japonés).
 * Fixtures de test assertan la cota con queries adversas (unicode, listas, PDFs con tablas).
 * `rag_status`: su shape fijo de cuatro bloques (`embedder/index/config/health`) lo mantiene **<200 tokens** por construcción — el coste de llamarlo ante cualquier `E_*` es despreciable (D7.3/ADR-007).
 

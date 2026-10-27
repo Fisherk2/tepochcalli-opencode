@@ -6,12 +6,13 @@ literales duplicados: `TOP_K_DEFAULT` es `config.DEFAULT_TOP_K`).
 
 Fuentes de verdad:
 
-* tasks/plan.md §5 «Presupuesto de tokens» — `coste = len(text)//4 + 25`,
-  techo **1600**, corte por score descendente, `truncated: true` al cortar,
+* tasks/plan.md §5 «Presupuesto de tokens» — base `len(text)//4`, techo
+  **1600**, corte por score descendente, `truncated: true` al cortar,
   `top_k` ∈ [1,20] con efectivo `min(solicitado, 8)`.
-* specs/spec-mcp-server.md §Presupuesto de tokens — el estimador chars/4
-  aproxima ES/EN; el margen ≥400 tokens deja la pregunta y la respuesta del
-  agente dentro de la cota 2000 de UH.md (criterio 4).
+* specs/spec-mcp-server.md §Presupuesto de tokens — el estimador aproxima
+  ES/EN a razón de 4 chars/token; revisión Phase 2 (eje 9): CJK/emoji pesa 1
+  token POR CARÁCTER — el margen ≥400 tokens deja la pregunta y la respuesta
+  del agente dentro de la cota 2000 de UH.md (criterio 4) en los cuatro scripts.
 """
 
 from __future__ import annotations
@@ -41,13 +42,30 @@ TOP_K_DEFAULT: Final = DEFAULT_TOP_K
 """Por omisión, 5 — el default canónico del flow, sin duplicar el literal."""
 
 
-def estimate_tokens(text: str) -> int:
-    """Coste de un resultado: chars/4 (aprox ES/EN) + sobrecoste de citación.
+def _is_cjk(char: str) -> bool:
+    """¿Pesa 1 token el carácter? CJK/hanja/hangul + emoji (peso por carácter, review eje 9)."""
+    codepoint = ord(char)
+    return (
+        0x3000 <= codepoint <= 0x9FFF  # puntuación CJK + hiragana/katakana + ideographs
+        or 0xF900 <= codepoint <= 0xFAFF  # ideographs de compatibilidad
+        or 0x1100 <= codepoint <= 0x11FF  # hangul jamo
+        or 0x1F300 <= codepoint <= 0x1FAFF  # emoji (arco simple)
+    )
 
-    Cuenta CARACTERES, no bytes: un chunk multibyte (CJK/emoji) no dispara el
-    estimador (fixture adversa de T7).
+
+def estimate_tokens(text: str) -> int:
+    """Coste de un resultado: peso por carácter + sobrecoste de citación.
+
+    Revisión Phase 2 (eje 9): el viejo `len(text)//4` asumía ES/EN; en
+    chino/japonés el tokenizer real consume ~1 token POR CARÁCTER — una cota
+    chars/4 con CJK falseaba el criterio 4 (un payload "1600" podía ser
+    >6000 tokens reales). Ahora: CJK/emoji ⇒ 1 token por carácter, resto ⇒
+    0.25 (`latin//4`, misma aproximación de ES/EN válida). La COTA 2000 de
+    UH.md es REAL ahora en los cuatro scripts.
     """
-    return len(text) // 4 + CITATION_OVERHEAD_TOKENS
+    heavy = sum(1 for char in text if _is_cjk(char))
+    light = len(text) - heavy
+    return light // 4 + heavy + CITATION_OVERHEAD_TOKENS
 
 
 def effective_top_k(top_k: int) -> int:
