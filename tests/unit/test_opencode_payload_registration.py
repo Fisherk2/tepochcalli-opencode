@@ -1,14 +1,17 @@
 """Registro T9 en `obsidian-workspace/opencode.json` con merge conservador (D-d, plan §6).
 
-Tres afirmaciones graduadas por el AC de T9:
+Tres afirmaciones graduadas por el AC de T9 (ajustadas en la review Phase 2,
+2026-10-27: el server markitdown standalone RETIRADO — la conversión en
+proceso (D-b, costura `_convert_seam`) es la ÚNICA consumidora de markitdown;
+la entrada de wire `mcp.servers.markitdown` era superficie sin cliente):
 
-1. El payload sigue **parseable** y las dos entradas gestionadas tienen la
-   forma EXACTA del contrato (`tepochcalli-rag` con `type/command/cwd/
-   environment`, `markitdown` con su `command`) — forma `python -m`, nunca
-   console script (D17: el bit de ejecución se pierde en NTFS/fuseblk).
+1. El payload sigue **parseable** y la única entrada nueva tiene la forma
+   EXACTA del contrato (`tepochcalli-rag` con `type/command/cwd/environment`)
+   — forma `python -m`, nunca console script (D17: el bit de ejecución se
+   pierde en NTFS/fuseblk); `markitdown` ya NO debe estar registrada.
 2. `excel` y `jupyter` (existentes, ambas `disabled: true`) quedan intactas.
-3. **Merge conservador demostrado, no afirmado:** al quitar SOLO las dos
-   entradas gestionadas, el resto del documento re-serializado con el MISMO
+3. **Merge conservador demostrado, no afirmado:** al quitar las entradas
+   gestionadas, el resto del documento re-serializado con el MISMO
    serializador es byte-idéntico al original congelado en
    `tests/fixtures/opencode_payload_before_t9.json` (copia de
    `git show HEAD:obsidian-workspace/opencode.json` al cerrar T8). Cualquier
@@ -23,8 +26,9 @@ from pathlib import Path
 PAYLOAD_JSON = Path(__file__).resolve().parents[2] / "obsidian-workspace" / "opencode.json"
 ORIGINAL_JSON = Path(__file__).resolve().parents[1] / "fixtures" / "opencode_payload_before_t9.json"
 
-# Forma exacta del AC de T9 (spec-markitdown §Config es la fuente de la
-# entrada `markitdown`; `disabled: false` explícito, como en ese jsonc).
+# Forma exacta del AC de T9 — la entrada markitdown del jsonc de spec-markitdown
+# §Config quedó RETIRADA en la review Phase 2: se POPea en ambos lados del
+# contrato byte-idéntico para mantener viva la afirmación del resto.
 TPOCHCALLI_RAG_ENTRY = {
     "type": "local",
     "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
@@ -32,36 +36,38 @@ TPOCHCALLI_RAG_ENTRY = {
     "environment": {"TEPOCHCALLI_ROOT": "."},
     "disabled": False,
 }
-MARKITDOWN_ENTRY = {
-    "type": "local",
-    "command": [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"],
-    "disabled": False,
-}
 MANAGED_KEYS = ("tepochcalli-rag", "markitdown")
 
 
-def test_payload_is_parseable_and_the_two_entries_have_the_exact_shape() -> None:
-    """El JSON parsea y las dos entradas gestionadas tienen la forma exacta del AC."""
+def test_payload_is_parseable_and_only_tepochcalli_rag_is_registered() -> None:
+    """El JSON parsea: `tepochcalli-rag` forma exacta, `markitdown` retirada."""
     data = json.loads(PAYLOAD_JSON.read_text(encoding="utf-8"))
     servers = data["mcp"]["servers"]
 
     assert servers["tepochcalli-rag"] == TPOCHCALLI_RAG_ENTRY, "forma exacta de tepochcalli-rag"
-    assert servers["markitdown"] == MARKITDOWN_ENTRY, "forma exacta de markitdown"
+    assert "markitdown" not in servers, (
+        "review Phase 2: sin server standalone (conversión EN PROCESO, D-b)"
+    )
     # D17: forma `python -m`, jamás el console script venv/bin/tepochcalli-mcp.
     assert TPOCHCALLI_RAG_ENTRY["command"][1] == "-m"
-    assert MARKITDOWN_ENTRY["command"][1] == "-m"
     # Las entradas preexistentes conservan su estado (una está disabled: true).
     assert servers["excel"]["disabled"] is True
     assert servers["jupyter"]["disabled"] is True
 
 
 def test_the_rest_of_the_json_is_byte_identical_to_the_original() -> None:
-    """Quitando SOLO las entradas gestionadas, el resto es byte-idéntico al original."""
+    """Quitando las entradas gestionadas de ambos lados, el resto es byte-idéntico.
+
+    `markitdown` existe en el fixture congelado de T8 y NO en el payload
+    actual (retirada en la review 2026-10-27): el POP simétrico mantiene la
+    afirmación del merge conservador (el RESTO del JSON no se toca).
+    """
     current = json.loads(PAYLOAD_JSON.read_text(encoding="utf-8"))
     original = json.loads(ORIGINAL_JSON.read_text(encoding="utf-8"))
 
     for key in MANAGED_KEYS:
-        del current["mcp"]["servers"][key]
+        current["mcp"]["servers"].pop(key, None)
+        original["mcp"]["servers"].pop(key, None)
 
     # Mismo serializador a ambos lados: compara estructura Y orden de claves;
     # un diff aquí = el merge tocó algo que no debía (D-d).

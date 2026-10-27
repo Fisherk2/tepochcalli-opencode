@@ -123,11 +123,6 @@
           "TEPOCHCALLI_ROOT": "."
         },
         "disabled": false
-      },
-      "markitdown": {
-        "type": "local",
-        "command": [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"],
-        "disabled": false
       }
     }
   },

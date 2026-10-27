@@ -8,7 +8,7 @@
 
 ## Summary
 
-MarkItDown (MCP oficial de Microsoft: paquete `markitdown-mcp`) es el convertidor de documentos a Markdown que Tepochcalli usa como capacidad de soporte: permite convertir un recurso (URL, DOCX, PPTX, XLSX, HTML…) a Markdown para colocarlo bajo `00-Resources/` y que el motor RAG lo indexe. Se configura como segundo MCP server local en `opencode.json` y su uso queda encapsulado por la herramienta `add_source` de `tepochcalli-rag`.
+MarkItDown (MCP oficial de Microsoft: paquete `markitdown-mcp`) es el convertidor de documentos a Markdown que Tepochcalli usa como capacidad de soporte: permite convertir un recurso (URL, DOCX, PPTX, XLSX, HTML…) a Markdown para colocarlo bajo `00-Resources/` y que el motor RAG lo indexe. La conversión corre EN PROCESO dentro del server `tepochcalli-rag` (decisión D-b: misma librería, mismo venv) y su uso queda encapsulado por la herramienta `add_source` de `tepochcalli-rag`.
 
 ## Problem / Motivation
 
@@ -20,8 +20,8 @@ Criterio 7 de UH.md: "Pueda procesar distintos formatos de texto, si no, utiliza
 
 ### Goals
 
-* Config V2 documentada para `opencode.json` (`mcp.servers`) para markitdown y `tepochcalli-rag`.
-* Contrato de `convert_to_markdown(uri)` documentado con ejemplos (http/https/file/data URIs).
+* Config V2 documentada para `opencode.json` (`mcp.servers`) para `tepochcalli-rag` — sin server markitdown standalone (retirado en la review Phase 2 del 2026-10-27: la conversión EN PROCESO de `add_source` es la única consumidora, y la entrada era superficie sin cliente que bypaseaba la puerta D16 de `paths`).
+* Contrato de la conversión documentado con ejemplos (http/https/file/data URIs).
 * Cadena de fallback de formatos definida y visible para el usuario.
 * Advertencias de seguridad del canal de lectura de archivos locales escritas en la spec (y reflejadas en docs/SECURITY.md).
 
@@ -33,7 +33,7 @@ Criterio 7 de UH.md: "Pueda procesar distintos formatos de texto, si no, utiliza
 
 ## Proposed Solution
 
-Dos consumers conviven: (a) el agente puede invocar `convert_to_markdown` directamente cuando el usuario pide convertir, y (b) `add_source` del server `tepochcalli-rag` integra conversión + escritura en `00-Resources/<subdir>/` + `index_refresh` en una sola operación, que es el camino recomendado y probado. markitdown corre como proceso stdio local dentro del venv del vault (misma garantía de aislamiento que ADR-004), distribuido como el paquete pip oficial `markitdown-mcp`.
+Un solo consumer: `add_source` del server `tepochcalli-rag` integra conversión + escritura en `00-Resources/<subdir>/` + `index_refresh` en una sola operación (camino recomendado y probado). markitdown NO se registra como server standalone en `opencode.json`: corre como librería EN PROCESO dentro del venv del vault (misma garantía de aislamiento que ADR-004), distribuida como el paquete pip oficial `markitdown-mcp`. La puerta D16 (¿qué `file:` entra?, `paths.resolve_file_uri`) queda así como ÚNICA entrada del conversor.
 
 ## Detailed Design
 
@@ -50,31 +50,25 @@ Schema V2 usado: entradas bajo `mcp.servers.<nombre>` con `type: "local"`, `comm
       "cwd": ".",
       "environment": { "TEPOCHCALLI_ROOT": "." },
       "disabled": false
-    },
-    "markitdown": {
-      "type": "local",
-      "command": [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"],
-      "disabled": false
     }
   }
 }
 ```
 
+* **Sin entrada `markitdown`:** retirada en la review Phase 2 (2026-10-27) — la conversión en proceso de `add_source` es la única consumidora; un server standalone sin agente que lo llame era superficie de ataque sin cliente. La librería `markitdown` vive en el venv y `tepochcalli_mcp.convert` la consume directamente (D-b).
+
 * Decisión de empaquetado: se usa el venv del proyecto en lugar de `uvx markitdown-mcp` por defecto — `uvx` requiere red en el primer arranque de cada sesión nueva (resuelve/empaqueta al vuelo) y rompería `--offline`; el venv ya pinea `markitdown-mcp` (D2/pyproject). `uvx` queda documentado como alternativa para usuarios sin wizard.
 * El wizard (fase 8) fusiona estas entradas y no toca servers preexistentes del usuario.
 
-### Contrato `convert_to_markdown`
+### Conversión en proceso (D-b)
 
-* Herramienta MCP del server markitdown: `convert_to_markdown(uri: string) -> markdown text`.
-* URI aceptadas: `http://`, `https://` (páginas → markdown), `file:///...` (DOCX/PPTX/XLSX/PDF/CSV/JSON/XML/ZIP…), `data:` (bloques embebidos).
-* Ejemplo (flujo agente → tool call):
+* Capacidad: `tepochcalli_mcp.convert.convert_source(uri: string) -> markdown con frontmatter` — NO es una tool de wire: la consume `tools/add_source` vía la costura `_convert_seam` (injected desde `server.py`; test de arquitectura).
+* URI aceptadas: `http://`, `https://` (páginas → markdown), `file:///...` (DOCX/PPTX/XLSX/PDF/CSV/JSON/XML/ZIP…), `data:` (bloques embebidos) — tras la denylist SSRF y la puerta D16 de `paths` (v. §Seguridad del canal).
+* Ejemplo (vía la ÚNICA tool; la conversión corre EN PROCESO, sin wire propio):
 
 ```jsonc
-// request
-{ "tool": "convert_to_markdown", "arguments": { "uri": "file:///vault/tmp/informe-anual.docx" } }
-// response (texto plano markdown dentro del content del tool result)
-{ "content": [{ "type": "text",
-  "text": "# Informe anual\n\n## Resumen ejecutivo\n..." }] }
+{ "tool": "add_source", "arguments": { "uri": "file:///vault/tmp/informe-anual.docx" } }
+{ "ok": true, "written_to": "00-Resources/_inbox/informe-anual.md", "indexed": {} }
 ```
 
 * Sin garantías de citas offset-level cuando la salida no conserva estructura de encabezados: por eso `add_source` añade un frontmatter de trazabilidad (`source_uri`, `converted_at`) al escribir el archivo.
@@ -126,7 +120,7 @@ Ver §Seguridad del canal arriba; política central en docs/SECURITY.md (no inge
 
 ## Rollback / Monitoring
 
-* Desactivar markitdown es trivial: `opencode.json` → `"disabled": true` en su entrada; `add_source` degradará a "copie el archivo manualmente" sin romper `search`.
+* Desactivar la conversión es trivial: la librería vive tras la costura `_convert_seam` del composition root; si un entorno necesita ropa sin markitdown, `add_source` degradará a "copie el archivo manualmente" sin romper `search`.
 * Monitoreo: tamaño/éxito de conversiones por semana = métrica de la fase 2; el fallback no debe superar ~5% de ingesta normal.
 
 ## Open Questions
