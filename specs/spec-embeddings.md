@@ -180,12 +180,13 @@ specs/spec-mcp-server.md §Códigos de error estructurados (ADR-007 §4.3).
 ```toml
 # .tepochcalli/config/tepochcalli.toml — NUNCA se commitea
 [embedding]
-provider = "local"            # local | litellm
+provider = "local"            # local | litellm | none (D15: none aceptado desde T6)
 model = "paraphrase-multilingual-MiniLM-L12-v2"
 device = "cpu"                # device explícito para SentenceTransformerEmbedder(..., device=...); sobre-escribible por el usuario (ADR-008)
 # provider = "litellm"
 # model = "openai/text-embedding-3-small"
 # api_key_env = "TEPOCHCALLI_EMBED_API_KEY"
+# provider = "none"           # D15: sin embedder — RAG en modo degraded (E_NO_EMBEDDER) hasta `tepochcalli config embedder`
 
 [chunking]
 max_chunk_size = 1536         # unidad: BYTES, no chars (el splitter mide bytes) — ver F4, spec-rag-engine.md §Chunking

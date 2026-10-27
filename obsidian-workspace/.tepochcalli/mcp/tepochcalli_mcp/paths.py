@@ -179,7 +179,13 @@ def ensure_within(base: Path, target: Path) -> Path:
 
     Último chequeo ANTES de escribir, tras componer el destino final — si una
     refactor futura de slug/colisión dejara componer una ruta que escapa,
-    aquí se corta con `ValueError` (→ `VALIDATION_ERROR`) en vez de escribir.
+    aquí se corta con `ValueError`. **Ese `ValueError` NO es de validación de
+    usuario:** en `add_source` la validación real (`validate_source_uri`/
+    `validate_subdir`) ya corrió ANTES con su `VALIDATION_ERROR`; si ESTE
+    chequeo dispara, la cadena anterior falló — un bug nuestro, y el handler
+    deja que `@errors.internal_guard` lo convierta en `INTERNAL` ruidoso
+    (corrección T6 al docstring, riesgo R3 de CP-B): la defensa en
+    profundidad debe SONAR, no disfrazarse de error de argumento.
     """
     resolved = target.resolve()
     if not resolved.is_relative_to(base.resolve()):

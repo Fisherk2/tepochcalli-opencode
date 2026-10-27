@@ -80,11 +80,22 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
 | R5 | TOCTOU en la colisión de slug (`available_name` + `os.replace` entre sesiones) — tool local single-user | `docs/TECH_DEBT.md` en **T10** |
 | R6 | `pyproject.toml` `packages` omite `tepochcalli_mcp.tools` — irrelevante con editable, rompería un wheel | nota en **T9/T10** |
 
+#### Deuda que T6 dejó explícita (pendiente de pago)
+
+| # | Deuda | Se paga en |
+|---|---|---|
+| D6-1 | **`just md-lint` NO está en verde**: falla sobre el baseline **pre-existente D12** (`spec-vault-structure` MD060, tablas viejas de `spec-embeddings` MD034). Verificado con `git stash`: ya fallaba en HEAD; T6 **no añade errores nuevos**. El AC de T10 pide «`just md-lint` sin errores **nuevos**» — conviene decidir si se limpia el baseline o se reescribe ese AC | **T10** |
+| D6-2 | **`spec-embeddings.md` §Proposed Solution (línea 37)** enumera «`local` (default) o `litellm`» — incompleto tras D15, pero queda **fuera** de la sección §`tepochcalli.toml` autorizada en T6. No se tocó por respetar la autorización estrecha | **T10** |
+| D6-3 | **`verify.py` (vedado en T6)** construye su lector local con `citation.model_id(config)` **ignorando el provider**: en un vault `none`/`litellm` esa CLI de desarrollo seguiría embebiendo en local. No afecta al server | **T10** / `docs/TECH_DEBT.md` |
+| D6-4 | **Fallos de API reales dentro del update de escritura** (401/rate-limit *dentro* de cocoindex) siguen saliendo `INTERNAL`: solo la **clave ausente** se traduce a `E_API_AUTH` (chequeo local en la fábrica). Traducirlos exigiría engancharse a los retries/batch de cocoindex | documentado en `server._refresh_once`; evaluar en **T10** |
+| D6-5 | **RED aislado ausente** para el test de integración `E_API_AUTH` (patrón `-k` mal escrito, no matcheó nada): su GREEN está observado y su lógica vive cubierta en unit, pero la deuda de proceso se declara | **T8** (contract test por código) |
+| D6-6 | **Primera indexación litellm hace UNA llamada de descubrimiento de dims** (`_get_dim` de cocoindex, inherit del update). Dato que el plan no decía; inherente a cocoindex | documentado en `app.py::_build_embedder` — evaluar en **T7** (presupuesto) |
+
 ---
 
 ## Sub-fase C — Dialecto de errores, proveedor API y presupuestos
 
-- [ ] **T6 · Dialecto `E_*` y el proveedor `none | litellm`**
+- [x] **T6 · Dialecto `E_*` y el proveedor `none | litellm`**
   - Subagentes: `mcp-developer` (lead), `rag-pipeline-engineer`, `security-auditor`, `error-detective` · Skills: `error-handling-patterns`, `security-and-hardening`, `test-driven-development`, `source-driven-development`, `clean-code`
   - AC: `provider = "none"` como **3.er** valor del loader (D15; config ausente ⇒ `local`, comportamiento de Phase 1 intacto); fábrica de provider (`local` → `SentenceTransformer` pineado a `MODEL_REVISION`; `litellm` → `litellm.embedding` con la clave de `api_key_env`; `none` ⇒ `E_NO_EMBEDDER`); **escritura** con litellm ⇒ `app.py` construye `LiteLLMEmbedder(model, api_key=…)`; **lectura** con litellm ⇒ misma API y mismo modelo/dims (mismatch ⇒ `E_MODEL_MISMATCH` antes de cruzar dims); los **5** `E_*` con payload exacto `{error:{code,message,fix_hint}}`; fallos de API no cubiertos (rate limit/timeout/red) ⇒ `INTERNAL` legacy con `details`; clave **nunca** en logs/`repr`/payload; precedencia `E_NO_EMBEDDER` > `INDEX_EMPTY` > `E_MODEL_MISMATCH` > `E_API_AUTH`; enmienda de `spec-embeddings.md` §`tepochcalli.toml` + entrada en `docs/WORKFLOW.md` §8 (**sin ADR**)
   - Verificar: contract test por código `E_*` (proveedor falso inyectado) + test de que la clave no aparece en logs/`repr`/payload + suite Phase 1 verde tras tocar `app.py`

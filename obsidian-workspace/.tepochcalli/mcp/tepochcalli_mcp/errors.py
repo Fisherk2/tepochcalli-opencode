@@ -11,8 +11,9 @@ texto libre»). Dos dialectos congelados:
 * **`E_*`** `{error:{code,message,fix_hint}}` (D7.3/ADR-007) —
   `E_MODEL_MISMATCH` lleva además `details.legacy_code = "INDEX_STALE_MODEL"`,
   el alias heredado que viaja en el payload (spec-mcp-server §Códigos de error
-  estructurados); `E_NO_EMBEDDER` (T3) es el segundo de la serie. T6 añadirá
-  los tres `E_*` restantes.
+  estructurados); desde T6 el dialecto está **5/5**: `E_NO_EMBEDDER` (T3),
+  `E_MODEL_MISMATCH` (T2) y `E_API_AUTH` + `E_MODEL_INVALID` +
+  `E_OFFLINE_NO_CACHE` (T6, con `FIX_*` single-homed como los dos primeros).
 
 El orden de claves es parte del contrato (Hyrum, ADR-005): los constructores
 lo fijan y los contract tests lo pinan. El traceback de un fallo inesperado
@@ -48,6 +49,33 @@ FIX_MODEL_MISMATCH: Final = (
 
 Misma dualidad que `FIX_NO_EMBEDDER`: payload de error Y `health.fix_hint` de
 `rag_status` (T4) — un solo texto para ambas superficies.
+"""
+
+FIX_API_AUTH: Final = (
+    "Ejecuta `tepochcalli config embedder` y re-ingresa la clave; "
+    "la clave nunca se registra en logs"
+)
+"""Texto LITERAL de spec-mcp-server §Códigos para `E_API_AUTH` (T6) — única fuente."""
+
+FIX_MODEL_INVALID: Final = (
+    "Verifica `[embedding].model` (o restaura `.tepochcalli/models/`) y "
+    "reconstruye con `tepochcalli reindex --confirm`."
+)
+"""Guía de `E_MODEL_INVALID` (T6).
+
+La spec §Códigos da el SIGNIFICADO («no es embedding model / models/ corrompido»)
+pero no un texto literal de `fix_hint` para este código: esta guía lo compone
+accionable y directo; T8 la fija en los contract tests.
+"""
+
+FIX_OFFLINE_NO_CACHE: Final = (
+    "Sin red no puedo descargar el modelo: quita el modo offline o precarga "
+    "`.tepochcalli/models/` con `tepochcalli config embedder`."
+)
+"""Guía de `E_OFFLINE_NO_CACHE` (T6) — derivada de spec-embeddings §Matriz de edge cases.
+
+«`--offline` sin `models/` cacheado ⇒ quitar `--offline` o `tepochcalli config
+embedder`» — la matriz da la acción; este texto la vuelve reportable.
 """
 
 
@@ -151,6 +179,63 @@ def no_embedder() -> dict[str, object]:
             "code": "E_NO_EMBEDDER",
             "message": "No hay embedder configurado (modo `none`): no puedo incrustar ni indexar.",
             "fix_hint": FIX_NO_EMBEDDER,
+        }
+    }
+
+
+def api_auth(api_key_env: str) -> dict[str, object]:
+    """`E_API_AUTH` (T6): clave ausente o rechazada al incrustar — nombra la ENV VAR.
+
+    `api_key_env` es SOLO el nombre de la variable (config guarda el nombre,
+    jamás el valor — spec-embeddings §Security): un valor de clave es
+    estructuralmente imposible en este payload (plan §9 riesgo crítico).
+    Cubre la ausencia local (chequeo sin red) y el 401/403 de la API.
+    """
+    return {
+        "error": {
+            "code": "E_API_AUTH",
+            "message": (
+                f"La clave de API declarada en `{api_key_env}` falta o fue rechazada "
+                "al incrustar la query."
+            ),
+            "fix_hint": FIX_API_AUTH,
+        }
+    }
+
+
+def model_invalid() -> dict[str, object]:
+    """`E_MODEL_INVALID` (T6): el modelo no es materializable — dos causas, una guía.
+
+    Descarga fallida o no-es-modelo de embeddings (la causa tipada con el
+    detalle vive en el log vía el guard; al cliente va la guía, no el
+    traceback). Sin `details`: solo `E_MODEL_MISMATCH` lleva el alias.
+    """
+    return {
+        "error": {
+            "code": "E_MODEL_INVALID",
+            "message": (
+                "El modelo de embeddings no es materializable (descarga fallida "
+                "o no es un modelo de embeddings)."
+            ),
+            "fix_hint": FIX_MODEL_INVALID,
+        }
+    }
+
+
+def offline_no_cache() -> dict[str, object]:
+    """`E_OFFLINE_NO_CACHE` (T6): modo offline sin el modelo en cache ni config de API.
+
+    Spec-mcp-server §Códigos + spec-embeddings §Matriz de edge cases: la
+    instalación offline sin `models/` cacheado falla limpio con esta guía.
+    """
+    return {
+        "error": {
+            "code": "E_OFFLINE_NO_CACHE",
+            "message": (
+                "Modo offline sin el modelo en `.tepochcalli/models/` "
+                "(ni config de API disponible)."
+            ),
+            "fix_hint": FIX_OFFLINE_NO_CACHE,
         }
     }
 

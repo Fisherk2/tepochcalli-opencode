@@ -215,13 +215,26 @@ def big_vault(tmp_path_factory: pytest.TempPathFactory) -> IndexedVault:
 
 
 def _backend_on(indexed: IndexedVault) -> Iterator[_VaultSearchBackend]:
-    """Backend real del composition root sobre `indexed`, con MiniLM cacheado y offline."""
+    """Backend real sobre `indexed`, con MiniLM cacheado, offline y PRIMED.
+
+    **Prime (patrón M3: warm ANTES del guard):** la PRIMERA construcción del
+    lector — `SentenceTransformer` incluido, dentro de `cited_chunks`— puede
+    sondear la red en proceso (sonda T6: los 41 dials IPv6 de `httpcore` con
+    cache en disco completo; ni `HF_HUB_OFFLINE` en proceso —sus constantes se
+    congelan al importar— ni el disco cálido lo evitan en esa primera carga).
+    El fixture ejecuta UNA búsqueda real SIN canario con la MISMA env y el
+    MISMO código que después usará el test: el reader queda cacheado en el
+    backend y el canario mide SOLO la búsqueda (cero dials), que es lo que su
+    nombre promete. En frío, `offline_env` permite la única descarga aquí.
+    """
     monkeypatch = pytest.MonkeyPatch()
     try:
         monkeypatch.setenv("HF_HOME", str(indexed.model_cache))
         monkeypatch.setenv("SENTENCE_TRANSFORMERS_HOME", str(indexed.model_cache))
         monkeypatch.setenv("HF_HUB_OFFLINE", "1")
-        yield _VaultSearchBackend(indexed.vault, load_config(indexed.vault))
+        backend = _VaultSearchBackend(indexed.vault, load_config(indexed.vault))
+        asyncio.run(backend.cited_chunks("calentamiento del lector", 1, None))
+        yield backend
     finally:
         monkeypatch.undo()
 
@@ -246,11 +259,19 @@ def _search(
 ) -> dict[str, object]:
     """Corre el handler en su propio loop (cada test, aislado).
 
-    El backend va como FACTORY (decisión G1): el handler invoca el arranque
-    dentro de su guarda; aquí la factory es solo `lambda: backend`.
+    El backend va como FACTORY (decisión G1) y el embedder disponible como
+    seam constante True (R1/T6: en la suite de `search` el proveedor local
+    siempre está — la precedencia `E_NO_EMBEDDER` se prueba en
+    `test_mcp_e_dialect.py`).
     """
     return asyncio.run(
-        search_handler.search(query, top_k, path_filter, backend_factory=lambda: backend)
+        search_handler.search(
+            query,
+            top_k,
+            path_filter,
+            backend_factory=lambda: backend,
+            embedder_available=lambda: True,
+        )
     )
 
 
@@ -598,7 +619,9 @@ def test_g1_backend_startup_failure_is_canonical_internal() -> None:
     def _boom() -> SearchBackend:
         raise RuntimeError("resolve_vault_root ilegible")
 
-    payload = asyncio.run(search_handler.search("pregunta", backend_factory=_boom))
+    payload = asyncio.run(
+        search_handler.search("pregunta", backend_factory=_boom, embedder_available=lambda: True)
+    )
 
     result = json_result(payload)
     assert result.is_error is True

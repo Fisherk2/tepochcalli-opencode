@@ -457,9 +457,14 @@ def test_apply_model_cache_env_runs_before_the_embedder_is_constructed() -> None
     TEXTO fuente — una refactorización equivalente pero de otro estilo (p. ej.
     extraer el orden a otro módulo) rompería este assert aunque el runtime
     siga bien; si eso pasa se reescribe la prueba, no el orden del AC.
+    **T6 aplicó esa cláusula:** la construcción se extrajo a la fábrica
+    `_build_embedder` (Strategy por provider), así que el ancla pasó de
+    `SentenceTransformerEmbedder` a la LLAMADA `_build_embedder(config)` —
+    que sigue DESPUÉS de `apply_model_cache_env` en el cuerpo del lifespan,
+    y la fábrica internamente no construye nada antes de su propia entrada.
     """
     source = _lifespan_source()
-    assert source.index("apply_model_cache_env") < source.index("SentenceTransformerEmbedder")
+    assert source.index("apply_model_cache_env") < source.index("_build_embedder(config)")
 
 
 def test_model_cache_lands_outside_the_repo_never_in_the_payload(
@@ -491,27 +496,45 @@ def test_engine_state_default_lives_under_the_gitignored_db_dir_d14(
     assert (indexed_run.vault / flow_app.ENGINE_STATE_RELPATH).exists()
 
 
-def test_litellm_provider_raises_a_typed_not_implemented_error(tmp_path: Path) -> None:
-    """`provider = "litellm"` → error tipado «no implementado aún», sin media-construcción."""
+def test_litellm_provider_wires_lifespan_with_lite_llm_embedder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """T6 INVIERTE el sentido de este test: `provider = "litellm"` YA se cablea.
+
+    Antes (Phase 1) el lifespan lanzaba `EmbeddingProviderNotImplementedError`
+    — T6 existe para levantar esa limitación. Ahora provee
+    `LiteLLMEmbedder(model, api_key=…)` con la clave de `api_key_env` leída
+    del entorno, SIN llamada a la API en el lifespan (el constructor es
+    inerte; la dim se descubre en `__coco_vector_schema__`, dentro del update).
+    `COCOINDEX_DB` se fija para saltar el settings del stub de builder.
+    """
+    from cocoindex.ops.litellm import LiteLLMEmbedder  # import perezoso: litellm pesa
+
+    monkeypatch.setenv(flow_app.VAULT_ROOT_ENV, str(tmp_path))
+    monkeypatch.setenv("COCOINDEX_DB", str(tmp_path / "engine-state"))
+    monkeypatch.setenv("TEPOCHCALLI_EMBED_API_KEY", "sk-t6-fake-key")
     config_dir = tmp_path / ".tepochcalli" / "config"
     config_dir.mkdir(parents=True)
     (config_dir / "tepochcalli.toml").write_text(
         '[embedding]\nprovider = "litellm"\nmodel = "openai/text-embedding-3-small"\n',
         encoding="utf-8",
     )
-    old_root = os.environ.get(flow_app.VAULT_ROOT_ENV)
-    os.environ[flow_app.VAULT_ROOT_ENV] = str(tmp_path)
     builder = _RecordingBuilder()
     lifespan = flow_app.provide_resources(builder)
-    try:
-        with pytest.raises(flow_app.EmbeddingProviderNotImplementedError, match="litellm"):
-            asyncio.run(_advance_lifespan(lifespan))
-    finally:
-        if old_root is None:
-            os.environ.pop(flow_app.VAULT_ROOT_ENV, None)
-        else:
-            os.environ[flow_app.VAULT_ROOT_ENV] = old_root
-    assert builder.provided == []  # falló antes de proveer recurso alguno
+    asyncio.run(_advance_and_close(lifespan))  # RED: hoy lanza el error tipado viejo
+
+    embedders = [value for key, value in builder.provided if key is flow_app.EMBEDDER]
+    assert len(embedders) == 1, "el lifespan debe proveer EXACTAMENTE el embedder"
+    embedder = embedders[0]
+    assert isinstance(embedder, LiteLLMEmbedder)
+    # Memo key canónica (fuente instalada): (model, kwargs) — la clave viaja en kwargs.
+    assert embedder.__coco_memo_key__() == (
+        "openai/text-embedding-3-small",
+        {"api_key": "sk-t6-fake-key"},
+    )
+    assert any(key is flow_app.LANCE_DB for key, _ in builder.provided), (
+        "la conexión LanceDB se provee ANTES que el embedder (orden del lifespan)"
+    )
 
 
 # --- helpers ---------------------------------------------------------------------
@@ -595,18 +618,34 @@ def _db_uri(vault: Path) -> Path:
 
 
 class _RecordingBuilder:
-    """Stub de `EnvironmentBuilder` que solo registra los recursos provistos."""
+    """Stub de `EnvironmentBuilder` que registra recursos y el exception handler.
+
+    T6: el lifespan litellm ya NO falla antes, así que el stub debe cubrir el
+    paso completo (incluido `set_exception_handler`).
+    """
 
     def __init__(self) -> None:
         self.provided: list[tuple[object, object]] = []
+        self.exception_handler: object | None = None
 
     def provide(self, key: object, value: object) -> None:
         self.provided.append((key, value))
 
+    def set_exception_handler(self, handler: object) -> None:
+        self.exception_handler = handler
 
-async def _advance_lifespan(lifespan: AsyncIterator[None]) -> None:
-    """Ejecuta el primer paso (setup) del lifespan como haría el engine."""
+
+async def _advance_and_close(lifespan: AsyncIterator[None]) -> None:
+    """Ejecuta el primer paso (setup) del lifespan como haría el engine y lo cierra.
+
+    Cierre en EL MISMO `asyncio.run` que el avance (T6): el gen asíncrono deja
+    recursos proveídos (conexión lancedb) colgando del loop del avance; cerrarlo
+    en el mismo loop evita finalizadores cruzados. Antes de T6 solo se usaba en
+    el camino de error (que terminaba el gen) — el camino de ÉXITO requiere el
+    cierre explícito.
+    """
     await lifespan.__anext__()
+    await lifespan.aclose()
 
 
 def _lifespan_source() -> str:

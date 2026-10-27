@@ -150,10 +150,48 @@ impide que un módulo ausente pase vacío). T5 añade `tools.add_source`: su
 conversor (`convert.py`, con `markitdown`) se cablea desde el composition
 root vía costura — la desviación `TOOLS → CONV` del plan §5, documentada en
 el propio handler.
+
+**Enmienda T6 a esta regla (documentada como Phase 1 documentó la suya):**
+`tepochcalli_mcp.embedder` ES la **fábrica de provider** del plan §5 — su
+import perezoso de `litellm`/`sentence_transformers` es el ÚNICO permitido
+dentro del paquete, y los handlers solo la usan por sus HECHOS
+(`mode`/`is_available`) y sus excepciones de dominio. El walker, partiendo de
+los handlers, **registra la arista hacia `embedder` pero NO traspasa su
+frontera** (`MCP_BOUNDARY_MODULES`): sin eso, `tools.search → embedder →
+litellm` parecería una violación de los handlers que no lo es. El CONTENIDO de
+la frontera se chequea con su propio test y banned-set adaptado (sin
+`litellm`; engines igualmente proscritos). `server` sigue exento entero.
 """
 
 MCP_COMPOSITION_ROOT: Final = f"{MCP_PACKAGE}.server"
 """Composition root del server: EXENTO de la regla (análogo a `app`/`adapters`)."""
+
+MCP_PROVIDER_MODULE: Final = f"{MCP_PACKAGE}.embedder"
+"""La fábrica de provider (plan §5): frontera de infraestructura del paquete (T6).
+
+Su contenido se chequea CON su banned-set adaptado (abajo): `litellm` y
+`sentence_transformers` son SU oficio; los engines siguen proscritos.
+"""
+
+MCP_BOUNDARY_MODULES: Final[frozenset[str]] = frozenset({MCP_PROVIDER_MODULE, MCP_COMPOSITION_ROOT})
+"""Fronteras que el walker REGISTRA pero NO traspasa desde dominio/handlers (T6).
+
+Ver enmienda T6 del docstring: `embedder` importa `litellm` perezosamente y un
+recorrido que la traspasara marcaría a cada handler como violador del dialecto
+que él mismo consume. La sanidad de abajo afirma que la arista SÍ se resuelve
+(llega a `embedder`) y que NO se traspasa (no llega a `litellm`).
+"""
+
+BANNED_PROVIDER_ROOTS: Final[frozenset[str]] = frozenset({"cocoindex", "lancedb", "markitdown"})
+"""Engines también prohibidos en la fábrica — `litellm`/`sentence_transformers` no (su oficio)."""
+
+PERMITTED_PROVIDER_ROOTS: Final[frozenset[str]] = STDLIB_ROOTS | {
+    PACKAGE,
+    MCP_PACKAGE,
+    "litellm",
+    "sentence_transformers",
+}
+"""Allowlist de la fábrica: stdlib + in-project + los dos providers de lectura/escritura."""
 
 
 # --- motor AST (sin importar los módulos analizados) ---------------------------
@@ -243,7 +281,8 @@ def _walk_imports(start: str) -> list[tuple[list[str], str]]:
         for target in sorted(_import_targets(tree, module)):
             if target.split(".")[0] in _PACKAGE_DIRS:
                 child = _module_source(target)
-                if child is not None:
+                # Frontera T6: la arista SE REGISTRA pero no se traspasa (docstring).
+                if child is not None and target not in MCP_BOUNDARY_MODULES:
                     queue.append([*chain, target])
             results.append((chain, target))
     return results
@@ -396,3 +435,34 @@ def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
     assert f"{PACKAGE}.config" in reached, "carga la config del vault: lo importa"
     assert f"{MCP_PACKAGE}.convert" in reached, "cablea la costura de add_source: importa convert"
     assert "markitdown" in reached, "convert.py importa markitdown: el root exento sí lo alcanza"
+
+
+def test_provider_factory_reaches_only_litellm_and_sentence_transformers() -> None:
+    """T6: la fábrica `embedder` sí habla con `litellm`/`sentence_transformers` — y SOLO con eso.
+
+    El otro lado de la frontera `MCP_BOUNDARY_MODULES`: engines
+    (`cocoindex`/`lancedb`/`markitdown`) proscritos también aquí; el allowlist
+    añade los dos providers, que ES su oficio (plan §5: fábrica de provider
+    `local | litellm | none`).
+    """
+    for chain, target in _walk_imports(MCP_PROVIDER_MODULE):
+        root = target.split(".")[0]
+        assert root not in BANNED_PROVIDER_ROOTS, (
+            f"la fábrica {MCP_PROVIDER_MODULE} alcanza un engine: {_describe(chain, target)}"
+        )
+        assert root in PERMITTED_PROVIDER_ROOTS, (
+            f"la fábrica {MCP_PROVIDER_MODULE} importa algo fuera de su allowlist: "
+            f"{_describe(chain, target)}"
+        )
+
+
+def test_handlers_record_the_provider_boundary_without_crossing_it() -> None:
+    """Sanidad T6 de la frontera: `tools.search` LLEGA a `embedder` y NO a `litellm`.
+
+    Si la arista dejara de resolverse, el banned test de `tools.*` pasaría sin
+    mirar la fábrica; si el walker traspasara la frontera, cada handler
+    «alcanzaría» `litellm` y la regla T2 original se volvería inaplicable a T6.
+    """
+    reached = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.search")}
+    assert f"{MCP_PACKAGE}.embedder" in reached, "la arista a la fábrica SÍ se registra"
+    assert "litellm" not in reached, "la frontera NO se traspasa desde los handlers"

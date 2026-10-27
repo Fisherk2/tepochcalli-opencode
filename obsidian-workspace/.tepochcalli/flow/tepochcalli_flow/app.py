@@ -28,10 +28,14 @@ Sin reimplementación: el walk y los skips F5 salen de `source.build_path_matche
 + `source.classify_file`, el particionado y la cita derivada de
 `parsers.chunk_document` y la forma canónica de la ruta de `citation` (T4/T5).
 
-**Alcance de provider (spec-embeddings §Embeddings):** v1 solo soporta
-`provider = "local"`; `provider = "litellm"` lanza
-`EmbeddingProviderNotImplementedError` en el lifespan — no se construye a
-medias la ruta LiteLLM.
+**Alcance de provider (spec-embeddings §Embeddings + D15/T6):** Strategy en el
+lifespan vía `_build_embedder` — `local` ⇒ `SentenceTransformerEmbedder`
+pineado; `litellm` ⇒ `LiteLLMEmbedder(model, api_key=…)` con la clave leída de
+`api_key_env` (sin clave ⇒ error tipado ANTES de cualquier llamada, con un
+mensaje que nombra solo la variable); `none` (D15) ⇒ `EmbedderNotConfiguredError` — el MCP
+responde `E_NO_EMBEDDER` ANTES de llegar aquí con sus costuras `is_available`.
+«No se construye a medias» sigue siendo la regla: cada provider o se cablea
+completo o lanza su error tipado.
 
 **Raíz del vault:** `TEPOCHCALLI_VAULT_ROOT` si está definida (pruebas y vaults
 alternativos); en caso contrario la derivada de este archivo
@@ -84,12 +88,35 @@ incremental).
 """
 
 
-class EmbeddingProviderNotImplementedError(NotImplementedError):
-    """Provider distinto de `local`: la ruta LiteLLM no está en v1 (§Embeddings).
+class EmbedderNotConfiguredError(NotImplementedError):
+    """`provider = "none"` (D15/T6): sin embedder que construir — estado VÁLIDO de config.
 
-    Aparece tipado para que T8/MCP pueda distinguir «configurado pero no
-    implementado aún» de un fallo de indexación genérico.
+    El MCP nunca debe llegar aquí con un config sano: sus costuras
+    (`embedder.is_available` en `search`/`index_refresh`) responden
+    `E_NO_EMBEDDER` ANTES de invocar el flow (precedencia D7.3). Este error
+    es la defensa para llamadas DIRECTAS al flow (verify/CLI/tests): nada se
+    construye a medias.
     """
+
+
+class EmbeddingApiKeyMissingError(ValueError):
+    """`provider = "litellm"` sin la variable `api_key_env` en el entorno (T6).
+
+    Se detecta ANTES de cualquier llamada a la API (chequeo local de
+    `os.environ`). El mensaje nombra SOLO el nombre de la variable — nunca un
+    valor de clave (plan §9 riesgo crítico: «el traceback de litellm filtra
+    la clave»; docs/SECURITY.md) — y el nombre viaja además en el atributo
+    `api_key_env`, que el composition root del MCP (`server._refresh_once`)
+    traduce a `E_API_AUTH` sin parsear mensajes.
+    """
+
+    def __init__(self, api_key_env: str) -> None:
+        """`api_key_env` es SOLO el nombre de la variable (jamás un valor)."""
+        super().__init__(
+            f"falta la variable de entorno {api_key_env!r} (api_key_env) — "
+            "define la clave para provider='litellm'"
+        )
+        self.api_key_env = api_key_env
 
 
 def resolve_vault_root() -> Path:
@@ -104,14 +131,38 @@ def resolve_vault_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
 
-def _require_local_provider(config: flow_config.Config) -> None:
-    """Exige `provider = "local"` en v1; `litellm` lanza el error tipado (§Embeddings)."""
-    if config.embedding.provider != flow_config.DEFAULT_EMBEDDING_PROVIDER:
-        raise EmbeddingProviderNotImplementedError(
-            f"provider={config.embedding.provider!r} no está implementado aún: "
-            "T6 soporta solo 'local' (SentenceTransformerEmbedder); la ruta "
-            "LiteLLM llegará en una tarea posterior — spec-embeddings §Embeddings"
+def _build_embedder(config: flow_config.Config) -> object:
+    """Strategy/Factory de provider (T6, plan §6): la ÚNICA puerta de construcción.
+
+    * `local` ⇒ `SentenceTransformerEmbedder(model, device)` (E1/ADR-006; el
+      pin de `revision` vive en el atajo documentado de `config.MODEL_REVISION`
+      — el embedder de cocoindex no acepta revision).
+    * `litellm` ⇒ `LiteLLMEmbedder(model, api_key=…)` con la clave LEÍDA del
+      entorno (`api_key_env` guarda solo el NOMBRE). Fuente instalada
+      `cocoindex==1.0.25/ops/litellm.py`: los kwargs pasan «to every
+      ``litellm.aembedding`` call (e.g., ``api_key``…)» y el constructor es
+      INERTE — sin clave ⇒ error tipado local, jamás una llamada con la pata
+      caída; la dim se descubre con un embed real dentro de
+      `__coco_vector_schema__`, durante el update.
+    * `none` (D15) ⇒ `EmbedderNotConfiguredError`: nada a medias.
+
+    `LiteLLMEmbedder` se importa perezosamente: `litellm` pesa y solo lo paga
+    quien configura el proveedor de API.
+    """
+    provider = config.embedding.provider
+    if provider == "litellm":
+        from cocoindex.ops.litellm import LiteLLMEmbedder
+
+        api_key = os.environ.get(config.embedding.api_key_env)
+        if not api_key:
+            raise EmbeddingApiKeyMissingError(config.embedding.api_key_env)
+        return LiteLLMEmbedder(config.embedding.model, api_key=api_key)
+    if provider == "none":
+        raise EmbedderNotConfiguredError(
+            "provider='none' (D15): sin embedder configurado — el MCP lo reporta "
+            "como E_NO_EMBEDDER ANTES de llegar aquí"
         )
+    return SentenceTransformerEmbedder(config.embedding.model, device=config.embedding.device)
 
 
 def _observe_component_failure(exc: BaseException, ctx: coco.ExceptionContext) -> None:
@@ -132,25 +183,23 @@ def _observe_component_failure(exc: BaseException, ctx: coco.ExceptionContext) -
 
 @coco.lifespan
 async def provide_resources(builder: coco.EnvironmentBuilder) -> AsyncIterator[None]:
-    """Provee conexión LanceDB y embedder al Environment (§Proposed Solution; E1).
+    """Provee conexión LanceDB y embedder al Environment (§Proposed Solution; E1/T6).
 
-    Orden obligatorio: resolver config → exigir provider local →
-    `apply_model_cache_env()` → construir el embedder. El cache de modelo se
-    fija ANTES de instanciar embedder alguno (T3/E1). El exception handler
+    Orden obligatorio: resolver config → `apply_model_cache_env()` →
+    construir el embedder POR PROVIDER con `_build_embedder` (Strategy T6:
+    `local` | `litellm`; `none` ⇒ error tipado D15). El cache de modelo se
+    fija ANTES de instanciar embedder alguno (T3/E1 — irrelevante para
+    litellm e inocuo, pero la regla no se relaja). El exception handler
     global (T8) asegura que un fallo por fichero quede aislado y localizado en
     el log sin abortar nunca el delta (F5).
     """
     vault_root = resolve_vault_root()
     config = flow_config.load_config(vault_root)
-    _require_local_provider(config)
     config.apply_model_cache_env()
     if "COCOINDEX_DB" not in os.environ:
         builder.settings.db_path = vault_root / ENGINE_STATE_RELPATH
     builder.provide(LANCE_DB, await lancedb.connect_async(str(vault_root / DB_RELPATH)))
-    builder.provide(
-        EMBEDDER,
-        SentenceTransformerEmbedder(config.embedding.model, device=config.embedding.device),
-    )
+    builder.provide(EMBEDDER, _build_embedder(config))
     builder.set_exception_handler(_observe_component_failure)
     yield
 

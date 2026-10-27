@@ -50,7 +50,7 @@ from pathlib import Path
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
-from tepochcalli_mcp import errors, paths
+from tepochcalli_mcp import embedder, errors, paths
 
 logger = logging.getLogger(__name__)
 
@@ -111,7 +111,14 @@ async def add_source(
     final = paths.ensure_within(root / RESOURCES_DIR, dest_dir / name)
     _write_atomic(final, content)
     written_to = final.relative_to(root).as_posix()
-    report = await asyncio.to_thread(refresh)
+    try:
+        report = await asyncio.to_thread(refresh)
+    except embedder.EmbedderAuthError as exc:
+        # T6: clave ausente del flow (litellm sin api_key_env) traducida por el
+        # composition root — `E_API_AUTH` (spec §Códigos lista add_source) y no
+        # INTERNAL. El archivo YA se escribió: tras reponer la clave basta con
+        # `index_refresh` — el texto del fix lo dice.
+        return errors.api_auth(str(exc))
     if report.get("locked"):
         return errors.engine_locked(details={"written_to": written_to})
     indexed = {field: report[field] for field in INDEXED_FIELDS}

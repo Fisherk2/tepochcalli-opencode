@@ -10,7 +10,7 @@ Fuentes de verdad de claves y defaults:
 Política de errores (decisión T3): el loader **nunca lanza**. Archivo ausente =
 defaults silenciosos; TOML malformado = warning + defaults (se pierden todas las
 overrides); clave/sección desconocida, tipo erróneo o `provider` fuera de
-{local, litellm} = warning + default de ese campo (las overrides hermanas se
+{local, litellm, none} = warning + default de ese campo (las overrides hermanas se
 respetan). Todo se loggea con `logging.getLogger(__name__)`.
 
 Seguridad: `api_key_env` es solo el NOMBRE de una variable de entorno — este
@@ -53,7 +53,14 @@ shortcut: el `SentenceTransformerEmbedder` de cocoindex no acepta revision (firm
 inspect 2026-10-23); la ruta de ESCRITURA queda sin pin de revisión — el upgrade
 es añadir `revision` a esa clase upstream y propagarlo aquí."""
 
-EMBEDDING_PROVIDERS: Final = ("local", "litellm")
+EMBEDDING_PROVIDERS: Final = ("local", "litellm", "none")
+"""Valores aceptados de `[embedding].provider` — `none` es el 3.er valor (D15, T6).
+
+`none` (instalación degradada, salida 5 del wizard) era inexpressable hasta
+T6: el loader lo advertía y caía a `local` EN SILENCIO justamente cuando la
+config degradada lo escribe. Es corrección de hechos (ADR-007 ya había
+decidido el estado `none`) ⇒ sin ADR nuevo (plan §2 D15).
+"""
 _KNOWN_SECTIONS: Final = ("embedding", "chunking", "search")
 
 
@@ -243,7 +250,7 @@ def _matches_type(value: object, expected: type) -> bool:
 
 
 def _resolve_embedding(values: dict[str, object], config_path: Path) -> EmbeddingConfig:
-    """Mergea `[embedding]` y valida `provider` ∈ {local, litellm} (spec-embeddings.md)."""
+    """Mergea `[embedding]` y valida `provider` ∈ {local, litellm, none} (spec, D15)."""
     embedding = _merge_section("embedding", EmbeddingConfig(), values, config_path)
     if not embedding.model:  # `model = ""` se trata como ausente (fallback al default)
         logger.warning(

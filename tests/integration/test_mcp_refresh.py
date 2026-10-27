@@ -64,6 +64,7 @@ from model_cache import link_model_cache, offline_env, resolve_model_cache
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow.config import MODEL_REVISION
+from tepochcalli_mcp import errors
 
 NONET_DIR = Path(__file__).parents[1] / "support" / "nonet"
 """Directorio con el `sitecustomize.py` canario (cero red) — va al PYTHONPATH del hijo."""
@@ -113,19 +114,25 @@ async def _running_server(env: dict[str, str]) -> AsyncIterator[ClientSession]:
             yield session
 
 
-def _server_env(vault: Path, model_cache: Path) -> dict[str, str]:
-    """Env del hijo: vault propio, modelo cacheado OFFLINE y canario `nonet`."""
+def _server_env(vault: Path, model_cache: Path | None = None) -> dict[str, str]:
+    """Env del hijo: vault propio + canario `nonet`; modelo OFFLINE solo si se pasa cache.
+
+    `model_cache` opcional (T6): la ruta `litellm` sin clave falla ANTES de
+    tocar modelo alguno, así que su test no necesita (ni quiere) env de modelo.
+    """
     pythonpath = [str(NONET_DIR)]
     if existing := os.environ.get("PYTHONPATH"):
         pythonpath.append(existing)
-    return {
+    env = {
         **os.environ,
         flow_app.VAULT_ROOT_ENV: str(vault),
-        "HF_HOME": str(model_cache),
-        "SENTENCE_TRANSFORMERS_HOME": str(model_cache),
-        "HF_HUB_OFFLINE": "1",  # el warm ya lo dejó en cache: tras esto, cero descargas
         "PYTHONPATH": os.pathsep.join(pythonpath),
     }
+    if model_cache is not None:
+        env["HF_HOME"] = str(model_cache)
+        env["SENTENCE_TRANSFORMERS_HOME"] = str(model_cache)
+        env["HF_HUB_OFFLINE"] = "1"  # el warm ya lo dejó en cache: tras esto, cero descargas
+    return env
 
 
 async def _call_refresh(session: ClientSession) -> dict[str, object]:
@@ -334,3 +341,43 @@ def test_payload_db_and_models_are_never_created_by_the_tool() -> None:
     payload = Path(__file__).parents[2] / "obsidian-workspace" / ".tepochcalli"
     assert not (payload / "db").exists()
     assert not (payload / "models").exists()
+
+
+# --- T6: la ruta litellm del refresh ------------------------------------------------------
+
+
+def test_refresh_without_api_key_for_litellm_reports_e_api_auth(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Config `litellm` SIN la clave ⇒ `E_API_AUTH` canónico — sin red, sin valor de clave.
+
+    El flow falla en SU fábrica con el error tipado de clave ausente ANTES de
+    cualquier llamada a la API (chequeo local de `api_key_env`);
+    `server._refresh_once` lo traduce a la excepción de dominio del server y
+    `index_refresh` responde el dialecto `E_*`. El hijo corre con el canario
+    `nonet` de este módulo: cualquier dial real lo convertiría en `INTERNAL`
+    y el test fallaría solo (auto-exigente).
+    """
+    config_dir = tmp_path / ".tepochcalli" / "config"
+    config_dir.mkdir(parents=True)
+    (config_dir / "tepochcalli.toml").write_text(
+        '[embedding]\nprovider = "litellm"\nmodel = "openai/text-embedding-3-small"\n',
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("TEPOCHCALLI_EMBED_API_KEY", raising=False)
+    env = _server_env(tmp_path)
+
+    async def go() -> dict[str, object]:
+        async with _running_server(env) as session:
+            result = await session.call_tool("index_refresh", {})
+            assert result.is_error, "sin clave debe responder un error canónico, no un reporte"
+            return json.loads(result.content[0].text)
+
+    payload = asyncio.run(go())
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "fix_hint"]
+    assert error["code"] == "E_API_AUTH"
+    assert "TEPOCHCALLI_EMBED_API_KEY" in error["message"], "nombra la variable, no un valor"
+    assert error["fix_hint"] == errors.FIX_API_AUTH
+    assert "sk-" not in json.dumps(payload)

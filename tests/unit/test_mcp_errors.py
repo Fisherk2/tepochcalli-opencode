@@ -149,3 +149,52 @@ def test_engine_locked_is_legacy_shape_with_retry_guide() -> None:
     assert "segundos" in error["message"]
     assert "index_refresh" in error["message"]
     assert error["details"] == {"written_to": "00-Resources/_inbox/x.md"}
+
+
+# --- T6: los tres E_* restantes — el dialecto queda 5/5 -------------------------------
+
+
+def test_api_auth_uses_the_e_dialect_and_names_only_the_env_variable() -> None:
+    """`E_API_AUTH` (T6): `{code,message,fix_hint}`; el mensaje nombra la ENV VAR, no la clave.
+
+    El constructor recibe SOLO el nombre de `api_key_env` — un valor cebo no
+    puede aparecer en el payload porque ni siquiera se le pasa.
+    """
+    payload = errors.api_auth("TEPOCHCALLI_EMBED_API_KEY")
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "fix_hint"]
+    assert error["code"] == "E_API_AUTH"
+    assert "TEPOCHCALLI_EMBED_API_KEY" in error["message"], "nombra QUÉ clave (accionable)"
+    assert error["fix_hint"] == errors.FIX_API_AUTH
+    assert "sk-" not in json.dumps(payload), "jamás un valor de clave en el payload"
+
+
+def test_api_auth_fix_hint_is_the_spec_literal() -> None:
+    """`FIX_API_AUTH` es el texto literal de spec-mcp-server §Códigos (`E_API_AUTH`)."""
+    assert errors.FIX_API_AUTH == (
+        "Ejecuta `tepochcalli config embedder` y re-ingresa la clave; "
+        "la clave nunca se registra en logs"
+    )
+
+
+def test_model_invalid_uses_the_e_dialect_with_actionable_fix() -> None:
+    """`E_MODEL_INVALID` (T6): modelo no materializable — fix accionable, sin details."""
+    payload = errors.model_invalid()
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "fix_hint"]
+    assert error["code"] == "E_MODEL_INVALID"
+    assert error["fix_hint"] == errors.FIX_MODEL_INVALID
+    assert "reindex --confirm" in error["fix_hint"], "la guía lleva el comando exacto"
+
+
+def test_offline_no_cache_uses_the_e_dialect_with_actionable_fix() -> None:
+    """`E_OFFLINE_NO_CACHE` (T6): offline sin cache — guía de spec §Matriz de edge cases."""
+    payload = errors.offline_no_cache()
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "fix_hint"]
+    assert error["code"] == "E_OFFLINE_NO_CACHE"
+    assert error["fix_hint"] == errors.FIX_OFFLINE_NO_CACHE
+    assert "offline" in error["fix_hint"].lower()

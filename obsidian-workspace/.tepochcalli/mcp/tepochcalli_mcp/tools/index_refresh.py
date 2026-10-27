@@ -29,7 +29,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable
 
-from tepochcalli_mcp import errors
+from tepochcalli_mcp import embedder, errors
 
 
 @errors.internal_guard
@@ -47,7 +47,12 @@ async def index_refresh(
     """
     if not embedder_available():
         return errors.no_embedder()  # precede a todo: sin embedder no hay ciclo Δ
-    report = await asyncio.to_thread(refresh)  # bloqueante ⇒ FUERA del event loop
+    try:
+        report = await asyncio.to_thread(refresh)  # bloqueante ⇒ FUERA del event loop
+    except embedder.EmbedderAuthError as exc:
+        # T6: el composition root tradujo la clave ausente del flow (litellm
+        # sin api_key_env) — el dialecto E_API_AUTH en vez de INTERNAL.
+        return errors.api_auth(str(exc))
     if report.get("locked"):
         return report  # candado retenido: Phase 1 ya garantiza los ceros y el no-update
     if not index_exists():

@@ -71,7 +71,7 @@ from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
 from tepochcalli_flow.ports import ChunkReader, CitedChunk
 
 import tepochcalli_mcp.tools
-from tepochcalli_mcp import __version__, budget
+from tepochcalli_mcp import __version__, budget, embedder
 from tepochcalli_mcp.tools import add_source as add_source_handler
 from tepochcalli_mcp.tools import index_refresh as index_refresh_handler
 from tepochcalli_mcp.tools import rag_status as rag_status_handler
@@ -96,6 +96,11 @@ class _VaultSearchBackend:
         self._vault_root = vault_root
         self._config = config
         self._reader: ChunkReader | None = None
+
+    @property
+    def config(self) -> Config:
+        """Config con la que se construyó este backend (R2: la compara `_backend()`)."""
+        return self._config
 
     @property
     def expected_model(self) -> str:
@@ -198,30 +203,51 @@ def _vault_root() -> Path:
 
 
 def _backend() -> _VaultSearchBackend:
-    """Backend del vault, perezoso y cacheado por proceso (una sola carga de modelo).
+    """Backend del vault — cache CON invalidación por cambio de config (riesgo R2, CP-B).
 
-    Se pasa al handler como FACTORY —no construida fuera—: el handler lo
-    invoca bajo `@errors.internal_guard` (G1), de modo que resolver vault y
-    config también queda cubierto por `INTERNAL` canónico.
+    **Decisión R2 (documentada aquí, en `tests/unit/test_mcp_server_backend.py`
+    y en el reporte T6):** `load_config` corre por CADA invocación (lectura de
+    toml, µs — lo caro, el embedder, sigue perezoso dentro del lector) y si la
+    config CAMBIÓ — swap de modelo en la misma sesión (ADR-008: `tepochcalli
+    config embedder` + reindex sin reiniciar el server)— el backend se
+    RECONSTRUYE con la config NUEVA. Así `search` y `rag_status` nombran
+    siempre la MISMA config viva en una sesión, y el lector con el modelo del
+    swap se construye en la primera búsqueda posterior. `Config.__eq__`
+    compara las secciones parseadas, no `models_dir` (firma del dataclass): un
+    cambio de raíz de vault no dispara rebuild. Como T2, la factory se invoca
+    DENTRO del handler bajo `@errors.internal_guard` (G1).
     """
     global _backend_instance
-    if _backend_instance is None:
-        vault_root = _vault_root()
-        _backend_instance = _VaultSearchBackend(vault_root, load_config(vault_root))
+    vault_root = _vault_root()
+    config = load_config(vault_root)
+    if _backend_instance is None or _backend_instance.config != config:
+        _backend_instance = _VaultSearchBackend(vault_root, config)
     return _backend_instance
 
 
 def _refresh_once() -> dict[str, object]:
-    """Seam T3: ciclo Δ de Phase 1 + `dataclasses.asdict` — único punto que serializa.
+    """Seam T3 + traducción T6: ciclo Δ + `asdict` — único punto que serializa.
 
     `refresh_blocking()` es síncrono y bloqueante: el handler lo corre con
     `asyncio.to_thread`; el candado vive DENTRO (un refresh bloqueado devuelve
     tres ceros con `locked: true` sin ejecutar update). `asdict` copia los
     campos EN SU ORDEN — el handler devuelve ese dict tal cual, sin recalcular.
-    """
-    from tepochcalli_flow.app import refresh_blocking
 
-    return asdict(refresh_blocking())
+    **Traducción T6 (aquí, en el composition root — dirección correcta flow→mcp):**
+    `EmbeddingApiKeyMissingError` del flow (litellm sin `api_key_env`) ⇒
+    `embedder.EmbedderAuthError` de dominio, que `index_refresh`/`add_source`
+    responden como `E_API_AUTH`. `from None` corta la cadena: el log del guard
+    nunca hereda texto del flow. Los rechazos de API que ocurren DENTRO del
+    update (401 real, rate limit) escapan como excepciones de litellm ⇒
+    `INTERNAL` con la política de redacción del flow — documentado en el
+    reporte T6 como límite del camino de escritura.
+    """
+    from tepochcalli_flow.app import EmbeddingApiKeyMissingError, refresh_blocking
+
+    try:
+        return asdict(refresh_blocking())
+    except EmbeddingApiKeyMissingError as exc:
+        raise embedder.EmbedderAuthError(exc.api_key_env) from None
 
 
 def _convert_seam(uri: str) -> str:
@@ -301,7 +327,9 @@ async def search(
     (spec-mcp-server §search). `top_k` por omisión 5, tope efectivo 8;
     `path_filter` es un glob RELATIVO al vault (`..` o absoluto → error).
     """
-    payload = await search_handler.search(query, top_k, path_filter, backend_factory=_backend)
+    payload = await search_handler.search(
+        query, top_k, path_filter, backend_factory=_backend, embedder_available=_embedder_available
+    )
     return tepochcalli_mcp.tools.json_result(payload)
 
 
