@@ -28,6 +28,8 @@ import logging
 from collections.abc import Awaitable, Callable
 from typing import Final
 
+from tepochcalli_mcp.paths import redact_uri
+
 logger = logging.getLogger(__name__)
 
 INDEX_STALE_MODEL_ALIAS: Final = "INDEX_STALE_MODEL"
@@ -139,11 +141,15 @@ def source_unreachable(uri: str, cause: str | None = None) -> dict[str, object]:
     `cause` es SOLO el nombre del tipo de la excepción (nunca el traceback ni
     texto arbitrario): accionable para el agente y seguro para el cliente —
     el traceback completo vive en el log stderr del server.
+
+    Review Phase 2 (eje 4): el URI entra REDACTADO (`paths.redact_uri`) — el
+    payload es la superficie de observabilidad del fallo y jamás ecoa
+    credenciales (userinfo/query secreta).
     """
     return {
         "error": {
             "code": "SOURCE_UNREACHABLE",
-            "message": f"No se pudo convertir {uri} a Markdown. {GUIDE_MANUAL_SAVE}",
+            "message": f"No se pudo convertir {redact_uri(uri)} a Markdown. {GUIDE_MANUAL_SAVE}",
             "details": {"cause": cause} if cause else None,
         }
     }

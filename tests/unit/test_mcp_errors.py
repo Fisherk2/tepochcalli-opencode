@@ -139,6 +139,16 @@ def test_source_unreachable_carries_the_cause_type_in_details() -> None:
     assert error["details"] == {"cause": "UnsupportedFormatException"}
 
 
+def test_source_unreachable_redacts_credentialed_uri() -> None:
+    """Review Phase 2 (eje 4): el payload JAMÁS ecoa credenciales del URI (userinfo)."""
+    payload = errors.source_unreachable("https://user:clave-secreta@example.org/x.docx")
+
+    message = payload["error"]["message"]  # type: ignore[index]
+    assert "clave-secreta" not in message and "user:" not in message
+    assert "//***@" in message
+    assert "***@example.org/x.docx" in message, "la redacción solo quita userinfo"
+
+
 def test_engine_locked_is_legacy_shape_with_retry_guide() -> None:
     """`ENGINE_LOCKED` (T5) → legado con `details` y la guía «reintentar en segundos»."""
     payload = errors.engine_locked(details={"written_to": "00-Resources/_inbox/x.md"})

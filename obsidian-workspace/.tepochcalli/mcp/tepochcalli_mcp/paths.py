@@ -26,11 +26,12 @@ borde: defensa en profundidad SIN duplicar la traducción.
 from __future__ import annotations
 
 import ipaddress
+import re
 import socket
 from collections.abc import Callable
 from pathlib import Path, PurePosixPath
 from typing import Final
-from urllib.parse import unquote, urlparse
+from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
@@ -106,7 +107,7 @@ def slugify_uri(uri: str) -> str:
     hostname y, en último término, a `source`. Puro: no toca el filesystem —
     la colisión la resuelve `available_name`.
     """
-    parsed = urlparse(uri)
+    parsed = urlsplit(uri)
     stem = PurePosixPath(unquote(parsed.path)).stem
     slug = _slugify_text(stem)
     if slug:
@@ -151,7 +152,7 @@ def validate_source_uri(uri: str, vault_root: Path) -> None:
     no una fuente. La DNS que no resuelve NO se rechaza: fallará en el fetch
     (`SOURCE_UNREACHABLE`), sin superficie SSRF por recorrer.
     """
-    parsed = urlparse(uri)
+    parsed = urlsplit(uri)
     if parsed.scheme == "file":
         resolve_file_uri(uri, vault_root)  # D16: lanza si queda fuera del vault
     elif parsed.scheme in ("http", "https"):
@@ -167,6 +168,38 @@ def validate_source_uri(uri: str, vault_root: Path) -> None:
         raise ValueError(f"uri debe empezar por http://, https:// o file:: {uri!r}")
 
 
+def redact_uri(uri: str) -> str:
+    """URI con credenciales REDACTADAS — para frontmatter, log y payload (review 2026-10-27).
+
+    Configuración de exportación de credenciales de `add_source` (eje 4): el
+    URI original queda SOLO para el fetch; toda persistencia/observabilidad
+    usa ESTA versión:
+
+    * userinfo (`//usuario:clave@`) → `//***@`;
+    * query params cuyo nombre contiene `key`/`token`/`password`/`secret`
+      → valor `***` (orden y parámetros no secretos intactos);
+    * un URI sin credenciales se devuelve BYTE A BYTE (Hyrum: los asserts de
+      frontmatter existentes sin credenciales no notan el paso).
+    """
+    if urlsplit(uri).scheme not in ("http", "https"):
+        return uri
+    without_userinfo = re.sub(r"//[^/?#]*@", "//***@", uri)
+    parsed = urlsplit(without_userinfo)
+    if not parsed.query:
+        return without_userinfo
+    params: list[tuple[str, str]] = []
+    for name, value in parse_qsl(parsed.query, keep_blank_values=True):
+        lowered = name.lower()
+        params.append(
+            (name, "***") if any(word in lowered for word in QUERY_SECRET_WORDS) else (name, value)
+        )
+    return urlunsplit(parsed._replace(query=urlencode(params, safe="*")))
+
+
+QUERY_SECRET_WORDS: Final = ("key", "token", "password", "secret")
+"""Ítems query-parameter que delatan credencial para `redact_uri` (review SSRF)."""
+
+
 def _deny_internal_host(uri: str) -> None:
     """Rechaza hosts de red interna en un `uri` http(s) — denylist SSRF (review 2026-10-27).
 
@@ -178,9 +211,9 @@ def _deny_internal_host(uri: str) -> None:
     servicio interno. `is_private`/`is_link_local`/`is_reserved` son el
     superseto conservador de esos rangos exactos (más sobres, no menos).
     """
-    host = urlparse(uri).hostname  # hostname ya minúsculas y sin corchetes (urlparse)
+    host = urlsplit(uri).hostname or ""  # hostname ya minúsculas y sin corchetes (urlsplit)
     try:
-        literal = ipaddress.ip_address(host)
+        literal = ipaddress.ip_address(host) if host else None
     except ValueError:
         literal = None
     if literal is not None and _is_internal_address(literal):
@@ -214,9 +247,7 @@ def _resolve_addresses(hostname: str) -> list[ipaddress.IPv4Address | ipaddress.
         return addresses
     for info in infos:
         try:
-            addresses.append(
-                ipaddress.ip_address(info[4][0])  # type: ignore[arg-type]  # (family, type, proto, canonname, sockaddr)
-            )
+            addresses.append(ipaddress.ip_address(info[4][0]))
         except ValueError:
             continue
     return addresses
@@ -239,7 +270,7 @@ def resolve_file_uri(uri: str, vault_root: Path) -> Path:
     `resolve()` (no-strict) colapsa `..` y symlinks: un enlace DENTRO del
     vault que apunta FUERA también cae rechazado.
     """
-    parsed = urlparse(uri)
+    parsed = urlsplit(uri)
     if parsed.scheme != "file":
         raise ValueError(f"solo `file:` se resuelve como ruta local: {uri!r}")
     if parsed.netloc:

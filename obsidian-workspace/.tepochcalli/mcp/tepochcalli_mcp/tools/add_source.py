@@ -109,8 +109,11 @@ async def add_source(
     try:
         content = await asyncio.to_thread(convert, uri)
     except Exception as exc:  # fetch/convert: cualquier motivo ⇒ SOURCE_UNREACHABLE
-        logger.exception("add_source: fallo de fetch/convert para %s", uri)
-        return errors.source_unreachable(uri, type(exc).__name__)
+        # Review Phase 2 (eje 4): log y payload REDACTAN el URI (userinfo/query
+        # secreta); el original solo queda dentro de esta llamada (fetch ya corrió).
+        redacted = paths.redact_uri(uri)
+        logger.exception("add_source: fallo de fetch/convert para %s", redacted)
+        return errors.source_unreachable(redacted, type(exc).__name__)
     dest_dir = root / paths.resources_destination(subdir_rel)
     dest_dir.mkdir(parents=True, exist_ok=True)
     name = paths.available_name(

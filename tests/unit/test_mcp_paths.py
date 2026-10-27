@@ -339,3 +339,30 @@ def test_validate_source_uri_rejects_hostname_resolving_to_internal(
 
     with pytest.raises(ValueError, match="red interna"):
         paths.validate_source_uri("http://intranet.corp/articulo.html", Path("/vault"))
+
+
+# --- redact_uri (review Phase 2, eje 4) ------------------------------------------------
+
+
+def test_redact_uri_removes_userinfo_and_secret_query_values() -> None:
+    """`//user:pass@` → `//***@` y params con key/token/password/secret → `***`."""
+    assert (
+        paths.redact_uri("https://user:pass@example.com/p.txt") == "https://***@example.com/p.txt"
+    )
+    assert (
+        paths.redact_uri("https://api.com/p.docx?token=z&lang=es")
+        == "https://api.com/p.docx?token=***&lang=es"
+    )
+    assert (
+        paths.redact_uri("https://api.com/p?api_key=z&q=2") == "https://api.com/p?api_key=***&q=2"
+    )
+
+
+def test_redact_uri_leaves_plain_uris_byte_a_byte() -> None:
+    """Sin credenciales es idéntico (Hyrum: los asserts existentes no notan el paso)."""
+    plain = "https://user@example.org"  # userinfo TAMBIÉN se redacta (solo el valor, hmm)
+    assert paths.redact_uri("http://example.org/papers/ruiz.pdf?q=1") == (
+        "http://example.org/papers/ruiz.pdf?q=1"
+    )
+    assert paths.redact_uri(plain) == "https://***@example.org"
+    assert paths.redact_uri("file:///vault/x.bin") == "file:///vault/x.bin"  # solo http(s)

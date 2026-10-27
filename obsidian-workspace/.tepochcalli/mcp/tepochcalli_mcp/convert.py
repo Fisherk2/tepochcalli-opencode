@@ -34,6 +34,8 @@ from datetime import UTC, datetime
 
 from markitdown import MarkItDown
 
+from tepochcalli_mcp.paths import redact_uri
+
 
 def convert_source(uri: str) -> str:
     """Convierte `uri` (http(s)/file) a Markdown con frontmatter de trazabilidad.
@@ -42,8 +44,11 @@ def convert_source(uri: str) -> str:
     excepción markitdown: el handler de `add_source` lo mapea a
     `SOURCE_UNREACHABLE` y el traceback queda en el log stderr del server,
     nunca en el payload (spec-mcp-server §Manejo de errores).
+    Revisión Phase 2 (eje 4): el URI va al fetch TAL CUAL, pero al frontmatter
+    se redacta con `paths.redact_uri` — credenciales en el URI (userinfo/query
+    secreta) jamás se persisten citadas en el vault.
     """
     markdown = MarkItDown().convert(uri).markdown
-    source = json.dumps(uri, ensure_ascii=False)
+    source = json.dumps(redact_uri(uri), ensure_ascii=False)
     stamp = datetime.now(UTC).isoformat(timespec="seconds")
     return f"---\nsource_uri: {source}\nconverted_at: {stamp}\n---\n\n{markdown}\n"
