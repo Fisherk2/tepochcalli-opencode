@@ -104,11 +104,11 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | Spec | Status | Alcance |
 |---|---|---|
 | [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved | Flujo CocoIndex: fuentes, chunking, PDF/Docling, Δ<30s, escala |
-| [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Proposed | Contratos de tools, errores, latencia/token budget, config |
+| [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved | Contratos de tools, errores, latencia/token budget, config |
 | [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Proposed | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia |
 | [specs/spec-embeddings.md](specs/spec-embeddings.md) | Approved | Modelo default, matriz local/externo, cache, swap+re-index |
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Proposed | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
-| [specs/spec-markitdown.md](specs/spec-markitdown.md) | Proposed | markitdown-mcp: config V2, `convert_to_markdown`, fallback, seguridad |
+| [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved | markitdown-mcp: config V2, `convert_to_markdown`, fallback, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
 | [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | Blueprint Phase 4 (diseño del agent workflow) — ejecución literal en Phase 5; gate Approved usuario |
 

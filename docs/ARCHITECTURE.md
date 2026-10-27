@@ -29,7 +29,7 @@ graph TB
     end
 
     subgraph MCP["Capa de Comunicación"]
-        RAG["MCP server tepochcalli-rag<br/>tools: search · index_refresh · add_source<br/>stdio local, sin puerto"]
+        RAG["MCP server tepochcalli-rag<br/>tools: search · index_refresh · add_source · rag_status<br/>stdio local, sin puerto"]
         MD["MCP server markitdown<br/>convert_to_markdown (stdio)"]
     end
 
@@ -109,8 +109,11 @@ sequenceDiagram
 | AGENTS.md del vault (MCP-first) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
 | `opencode.json` (`mcp.servers`) | Agente | `<vault>/opencode.json` | spec-markitdown §config |
-| `tepochcalli-rag` (search/index_refresh/add_source) | Comunicación | `.tepochcalli/mcp/` — **pendiente (Phase 2)** | spec-mcp-server, ADR-005 |
-| `markitdown-mcp` | Comunicación | venv del vault — pendiente (Phase 2) | spec-markitdown |
+| `tepochcalli-rag` (search/index_refresh/add_source/rag_status) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — **entregado (Phase 2, T1-T8)** | spec-mcp-server, ADR-005 |
+| `markitdown-mcp` | Comunicación | venv del vault — registrado en `opencode.json` del payload (T9) | spec-markitdown |
+| **Paquete `tepochcalli_mcp` (Phase 2):** `server.py` (MCPServer stdio, registro de las 4 tools, `CallToolResult` explícito — nunca `ToolError`), `tools/{search,index_refresh,add_source,rag_status}.py` (handlers + validación de borde), `errors.py` (taxonomía `E_*` + `internal_guard`), `budget.py` (estimador `chars/4 + 25`, techo 1600), `paths.py` (glob/`subdir`/`file:` dentro del vault — D16), `embedder.py` (fábrica `local`/`litellm`/`none` — D15), `convert.py` (markitdown en proceso — D-b), `__main__.py` (entrypoint `python -m tepochcalli_mcp` — D17) | Comunicación | `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/` | spec-mcp-server, ADR-005 |
+| **Contract tests + e2e golden (Phase 2):** `tests/e2e/test_mcp_contract.py` (shapes en el wire, 5 `E_*`, instalación degradada, globs de `path_filter`), `tests/e2e/test_mcp_journey.py` (pregunta → tool-call → JSON citado), fixture grabada `tests/fixtures/golden_vault/` (md+PDF) | Verificación | repo `tests/e2e/`, `tests/fixtures/` | CP-C, CP-D, spec-mcp-server §Testing |
+| **Soporte de tests y bench (Phase 2):** `tests/support/mcp_server.py` (ayudantes de arranque/env compartidos — residuo R4 pagado en T8), `tests/benchmarks/bench_search.py` (p95 <500 ms con n y método publicados — M2) | Verificación | repo `tests/support/`, `tests/benchmarks/` | T7, T8 |
 | **Flow `tepochcalli_flow` (Phase 1, T2–T8):** `app.py` (entrada CocoIndex, lock de proceso + refresh con stats), `source.py` (walk de `00-Resources/` con skips tipados), `parsers.py` (md/txt + Docling + RecursiveSplitter 1536/192 bytes), `models.py` (cache de modelos) | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/` | spec-rag-engine, ADR-001 |
 | **Dominio puro (sin I/O):** `citation.py` (metadatos de cita por chunk, `heading` nullable), `config.py` (`tepochcalli.toml` con fallbacks a defaults) | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/` | spec-rag-engine §Target, D13 |
 | **Puerto `ChunkReader` (T9):** 6 campos congelados, engine-free — contrato de lectura para Phase 2 | Procesamiento | `.tepochcalli/flow/tepochcalli_flow/ports.py` | spec-mcp-server, ADR-005 |
@@ -152,7 +155,7 @@ graph TB
     end
 
     DB[("LanceDB<br/>.tepochcalli/db/")]
-    MCP2["tepochcalli-rag — MCP de Phase 2 (pendiente)"]
+    MCP2["tepochcalli-rag — capa MCP (Phase 2)"]
 
     CIT --> CFG
     PRT --> CFG
@@ -169,11 +172,75 @@ graph TB
     LDR --> DB
     VER -->|referencias del puerto| PRT
     VER -->|usa el adaptador| LDR
-    MCP2 -.->|consumirá en Phase 2| PRT
+    MCP2 -.->|consume desde Phase 2| PRT
 ```
 
 * **Write path (indexación):** `app` orquesta `source` (walk) → `parsers` (extracto + chunking, cita derivada en `citation`) → embedder → LanceDB — sin pasar por el puerto.
-* **Read path (búsqueda citada):** el puerto `ChunkReader` lo implementa `lancedb_reader` y lo consumen `verify` (hoy) y `tepochcalli-rag` (Phase 2) — el único contrato que cruza capas (ADR-005).
+* **Read path (búsqueda citada):** el puerto `ChunkReader` lo implementa `lancedb_reader` y lo consumen `tepochcalli-rag` (Phase 2, desde `search`) y `verify` (CLI de desarrollo) — el único contrato que cruza capas (ADR-005).
+
+## MCP layer components (Phase 2)
+
+Detalle de la capa de comunicación tal como quedó tras Phase 2 (T1-T8): el harness solo ve
+JSON-RPC por stdio; cada handler construye el `CallToolResult` explícito con
+`content[0].text` = JSON canónico (nunca `ToolError`, que metería texto libre — omen H4).
+**Flechas = dirección de dependencia** (`importa` / `consume`), con la misma regla que el
+diagrama hexagonal: `tepochcalli_mcp` importa el puerto `ChunkReader` y el flow; nunca al
+revés, y el server **no** importa `cocoindex` ni `lancedb` (test de arquitectura).
+
+```mermaid
+graph TB
+    subgraph HARNESS["Harness OpenCode V2 — opencode.json del payload"]
+        OC["OpenCode V2<br/>spawn stdio de los dos servers"]
+    end
+
+    subgraph MCPL["Capa MCP — .tepochcalli/mcp/tepochcalli_mcp/"]
+        SRV["server.py<br/>MCPServer stdio · registro 4 tools"]
+        TS["tools/search.py"]
+        TR["tools/index_refresh.py"]
+        TA["tools/rag_status.py"]
+        TAD["tools/add_source.py"]
+        ERR["errors.py<br/>taxonomía E_* · internal_guard"]
+        BUD["budget.py<br/>chars/4 + 25 · techo 1600"]
+        PATHS["paths.py<br/>glob · subdir · file: dentro del vault"]
+        EMB["embedder.py<br/>local · litellm · none"]
+        CONV["convert.py<br/>markitdown en proceso"]
+    end
+
+    subgraph ENGC["Capa de procesamiento — Phase 1"]
+        PRT["ports.py<br/>ChunkReader / CitedChunk"]
+        APP["app.py<br/>refresh con lock y stats"]
+        DB[("LanceDB<br/>.tepochcalli/db/")]
+    end
+
+    RES["00-Resources/"]
+
+    OC -->|"stdio JSON-RPC"| SRV
+    SRV --> TS
+    SRV --> TR
+    SRV --> TA
+    SRV --> TAD
+    SRV -.-> ERR
+    TS --> BUD
+    TS --> EMB
+    TS --> PRT
+    TR --> APP
+    TA --> EMB
+    TAD --> PATHS
+    TAD --> CONV
+    TAD --> APP
+    CONV --> RES
+    PRT --> DB
+    APP --> DB
+```
+
+* **Write path (`index_refresh`/`add_source`):** `app` (Phase 1) orquesta walk → parsers →
+  embedder → LanceDB — la capa MCP solo lo invoca y serializa su `RefreshReport`.
+* **Read path (`search`):** query → `embedder` + puerto `ChunkReader` → `budget` (truncado a
+  1600) → JSON canónico; sin red y sin LLM.
+* **`file:` (D16):** `paths.py` es la única puerta que decide qué `file:` entra — fuera del
+  vault ⇒ `VALIDATION_ERROR` antes de que markitdown toque el disco.
+* `markitdown` (server independiente) y `convert.py` (biblioteca **en proceso** de
+  `add_source`, D-b) comparten el mismo venv; ver [spec-markitdown](../specs/spec-markitdown.md).
 
 ## Decision Index
 

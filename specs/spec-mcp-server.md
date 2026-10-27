@@ -1,6 +1,6 @@
 # Spec: Servidor MCP `tepochcalli-rag` (capa de comunicación)
 
-* **Status:** Proposed
+* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -186,7 +186,7 @@ Diseño determinista en el server (no depende del modelo):
 
 ### Empaquetado en el venv
 
-* Entrypoint console: `tepochcalli-mcp` (definido en el paquete `.tepochcalli/mcp/`, instalado editable/`uv sync`). `opencode.json` lo invoca como `["<root>/.tepochcalli/venv/bin/tepochcalli-mcp"]` con `cwd` = raíz del vault (spec-installer-wizard §merge de config).
+* Entrypoint: el server se invoca como `python -m tepochcalli_mcp` (D17 — el bit de ejecución se pierde en NTFS/fuseblk, lección (f) de Phase 1). `opencode.json` lo lanza como `[".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"]` con `cwd` = raíz del vault (spec-installer-wizard §merge de config); el console script `tepochcalli-mcp` sigue definido en el paquete pero **no se usa**.
 
 ## Alternatives Considered
 

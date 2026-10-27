@@ -1,6 +1,6 @@
 # Spec: Integración de MarkItDown (conversión a Markdown como capacidad de soporte)
 
-* **Status:** Proposed
+* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -46,7 +46,7 @@ Schema V2 usado: entradas bajo `mcp.servers.<nombre>` con `type: "local"`, `comm
   "servers": {
     "tepochcalli-rag": {
       "type": "local",
-      "command": [".tepochcalli/venv/bin/tepochcalli-mcp"],
+      "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
       "cwd": ".",
       "environment": { "TEPOCHCALLI_ROOT": "." },
       "disabled": false

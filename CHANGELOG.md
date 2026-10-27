@@ -7,7 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
 
+- **Phase 2 — servidor MCP `tepochcalli-rag`** (2026-10-27): paquete `tepochcalli_mcp`
+  (stdio local) con las 4 tools del contrato congelado — `search`, `index_refresh`,
+  `add_source`, `rag_status` — registrado en `opencode.json` del payload e invocado con
+  `python -m tepochcalli_mcp` (D17).
+- Dialecto de errores `E_*` (5 códigos con precedencia fija) y proveedor de embeddings
+  `none | litellm` además de `local` (D15), con fábrica única de embedders.
+- `add_source`: conversión con markitdown **en proceso**, escritura atómica dentro de
+  `00-Resources/` y reindex en una llamada; **rechazo de `file:` fuera del vault** (D16) —
+  ver docs/SECURITY.md.
+- Contract tests D7.3 (`tests/e2e/test_mcp_contract.py`), e2e «pregunta → tool-call →
+  JSON citado» con fixture golden grabada (`tests/fixtures/golden_vault/`) y bench
+  `tests/benchmarks/bench_search.py` (p95 = 52 ms medido, n=20 nearest-rank, cota <500 ms).
+- `markitdown-mcp` como segundo server local del payload: `markitdown[all]`, **+142 MB y
+  49 paquetes** medidos (D18, coste registrado en TD-12).
+
+### Changed
+
+- Superficie tipada de mypy estricto: `flow/` → **`flow/` + `mcp/`**
+  (`files = ["flow", "mcp"]`).
+- Docs de fase cerrados con métricas **medidas**: `docs/WORKFLOW.md` (Phase 2 + §8 D15-D18),
+  `docs/ARCHITECTURE.md` (inventario y diagrama de la capa MCP), `docs/TECH_DEBT.md`
+  (TD-1 pagada, TD-3 pagada, TD-12 nueva y deuda de Phase 2), `docs/CODE_STYLE.md`,
+  `docs/SECURITY.md` (límite `file:` + clave de API).
+
+### Fixed
+
+- **PDFs que nunca se indexaban en producción** (bug de Phase 1, F-T7-2): `app.index_file`
+  leía el PDF como UTF-8 y absorbía el `UnicodeDecodeError` en `skipped` con `rc=0` —
+  ahora delega la lectura en `extract_text` (Docling), con guardia TOCTOU preservada y
+  offsets F1 byte-idénticos para md/txt.
 
 ---
 

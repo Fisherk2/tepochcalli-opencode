@@ -41,8 +41,14 @@ al que tenga permiso el usuario del proceso** — no solo el vault. Consecuencia
 1. Usar el conversor únicamente con material **que el usuario indicó explícitamente** en
    la conversación (no "pruébase todos los .docx del home").
 2. `add_source` de `tepochcalli-rag` restringe escritura a `00-Resources/` (validación
-   anti-traversal), pero el `file:` arbitrario del markitdown directo es responsabilidad del
-   harness/agente — reglado en el `AGENTS.md` del vault.
+   anti-traversal) y, desde **D16** (2026-10-26), **rechaza cualquier `file:` que resuelva
+   fuera de la raíz del vault**: markitdown con `file:` leería cualquier archivo accesible al
+   proceso y la tool la invoca un agente, así que `paths.validate_source_uri` /
+   `paths.resolve_file_uri` son la única puerta (esquema desconocido, `file:` sin host o
+   absoluto malformado, `..` o ruta fuera de la raíz ⇒ `VALIDATION_ERROR`, antes de que
+   markitdown toque el disco; negativos en `tests/integration/test_mcp_add_source.py`).
+   El `file:` arbitrario del markitdown **directo** (`convert_to_markdown`) sigue siendo
+   responsabilidad del harness/agente — reglado en el `AGENTS.md` del vault.
 3. El material descargado/convertido es **no confiado**: puede contener prompt injection.
    Política: chunks viajan como datos citados; `/validate` y `/cite` exigen verificación de
    fuente/autor. No dar órdenes ejecutables basadas en contenido de documentos.
@@ -87,6 +93,12 @@ requeriría rewiring del conector, fuera del scope v1):
 * Configuración con secretos: sustitución `{env:VAR}` en `opencode.json` — nunca literal de
   clave en el JSON commiteado; o `api_key_env` apuntando a variable en
   `.tepochcalli/config/` local.
+* **Clave de API (camino `litellm`):** `api_key_env` guarda **solo el nombre** de la
+  variable, nunca el valor. La clave no aparece en logs, en el `repr()` de embedder/config ni
+  en ningún payload MCP (test de no-fuga, T6); las excepciones de API se reescriben con el
+  valor redactado como `***` (`EmbedderApiError`, `embedder.py`) y `from None` para no
+  arrastrar el traceback, y el fallo de credencial sale como `E_API_AUTH` con `fix_hint` que
+  nombra la variable — jamás su contenido.
 
 ## Provenance de descargas (primer arranque requiere internet)
 
@@ -107,7 +119,8 @@ todo egress y exige caché previa.
 |---|---|---|---|
 | Filtro de claves al commitear el vault | media | alto | gitignore config/ + checklist AGENTS.md + `{env:VAR}` |
 | Inyección de prompt vía material ingerido | media | medio | regla de datos-como-citas + `/validate`/`/cite` |
-| Lectura de archivos sensibles por markitdown | media | medio-alto | §MarkItDown arriba; uso guiado por petición explícita |
+| Lectura de archivos sensibles por markitdown | media | medio-alto | §MarkItDown arriba; **D16** — `add_source` rechaza `file:` fuera del vault (2026-10-26); uso guiado por petición explícita |
+| Fuga de clave de API vía logs o payloads MCP | baja | alto | `api_key_env` guarda solo el nombre; redacción `***` en excepciones; test de no-fuga en logs/`repr`/payload (T6) |
 | Índice expuesto al sincronizar el vault | media | medio | `db/` fuera de git; advertir en APPFLOW/README futuro: nubes personales (OneDrive/Dropbox) copiarían `.tepochcalli/db/` — recomendar excluir el vault o la ruta de sync |
 | Supply-chain (deps Rust/Python) | baja | alto | pins (uv.lock, cargo-dist), releases solo por tag con CI |
 

@@ -107,12 +107,12 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: `just bench-search` (local, documentado) + `just bench-search --smoke` (CI)
   - Dep.: T2, T6 · Tamaño: M
 
-### ✅ CP-C · Errores, API y presupuestos — **5/5**
-- [ ] Los **5** códigos `E_*` emitidos con su payload exacto + precedencia verificada
-- [ ] El camino `litellm` funciona en lectura **y** escritura (o queda registrado por qué no)
-- [ ] Payload de `search` **≤1600 tokens** en todas las fixtures adversas
-- [ ] `search` **p95 < 500 ms** **medido** (n y método publicados)
-- [ ] La suite de Phase 1 sigue verde tras tocar `app.py`
+### ✅ CP-C · Errores, API y presupuestos — **5/5** ✅ (2026-10-27)
+- [x] Los **5** códigos `E_*` emitidos con su payload exacto + precedencia verificada — `test_mcp_e_dialect.py` (4 tests por par adyacente) + `test_mcp_contract.py` en el **wire**
+- [x] El camino `litellm` funciona en lectura **y** escritura (o queda registrado por qué no) — ✅ **con declaración honesta:** escritura `LiteLLMEmbedder` cableado y verificado contra la fuente instalada; lectura con el mismo id de modelo. **Ambos con proveedor FALSO — sin credenciales no hay llamada real**, y eso queda escrito
+- [x] Payload de `search` **≤1600 tokens** en todas las fixtures adversas — fórmula de la spec **1590** (decisión del usuario: manda la fórmula); JSON literal ~1740 documentado con cota de envoltura ≤200 testada
+- [x] `search` **p95 < 500 ms** **medido** (n y método publicados) — **52 ms**, n=20 nearest-rank, 20 muestras crudas en el JSON
+- [x] La suite de Phase 1 sigue verde tras tocar `app.py` — `just ci` **404 passed**; `app.py` tocado **dos veces** (T6 + fix F-T7-2)
 - ▶️ **Desbloquea T8.**
 
 ---
@@ -139,6 +139,10 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - AC: **FTR Phase 2→3** con el usuario (shapes = `spec-mcp-server`); `docs/WORKFLOW.md` §Phase 2 con estado + **métricas medidas** (n y método de percentil) + entradas §8 (D15, D16, D17, D18); `SPEC.md` índice: `spec-mcp-server` → **Approved** (y `spec-markitdown` → Approved si T5 cumple su §Testing); `docs/ARCHITECTURE.md` con el inventario y el diagrama de la capa MCP; `docs/TECH_DEBT.md` re-review TD-1…TD-11 (**TD-1 y TD-3 pagan su deuda**) + TD-12 (peso del venv); `docs/CODE_STYLE.md` (superficie tipada `flow` + `mcp`); `docs/SECURITY.md` (límite de `file:` y clave de API); `CHANGELOG.md`; **cero** cambios en `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/.opencode/`
   - Verificar: `just md-lint` sin errores nuevos + revisión del diff + `git status --short` sin artefactos
   - Dep.: T7, T8, T9 · Tamaño: S
+  - **Registro T10 (2026-10-27):** docs de fase cerrados — `docs/WORKFLOW.md` (estado Phase 2 + **M1-M8 medidas con n y método** + entradas §8 **D16/D17/D18**; la fila **D15** ya la había metido T6 y se verificó completa), `SPEC.md` (índice: `spec-mcp-server` y `spec-markitdown` → **Approved**) + metadatos `Status:` actualizados **dentro** de ambos ficheros (formato Phase 1), `docs/ARCHITECTURE.md` (inventario del paquete `tepochcalli_mcp` + tests/e2e + `tests/support/mcp_server.py` + `bench_search.py`, y nueva sección §MCP layer components con diagrama; los 3 bloques mermaid tocados **renderizados con mermaid-cli, 0 fallos**), `docs/TECH_DEBT.md` (re-review TD-1…TD-11 — **TD-1 y TD-3 pagadas aquí** — + **TD-12** + deuda nueva R5/R6/D6-1…D6-6/F-T7-4/`FIX_OFFLINE_NO_CACHE`/fixture pre-T9 + decisión de no renombrar `phase1.yml`), `docs/CODE_STYLE.md` (superficie tipada `flow` + `mcp`), `docs/SECURITY.md` (límite `file:` D16 + clave de API), `CHANGELOG.md` (entrada de fase). En `specs/` **solo** las 2 líneas autorizadas corregidas a `python -m` (D17).
+  - **Verificación propia T10:** `just test` corrido de principio a fin → **404 passed, 2 deselected, 1 warning** (exactamente la esperada TD-9), 21m57s. `just md-lint`: **422 errores en HEAD / 422 tras T10** — cero errores nuevos (baseline D12 pre-existente).
+  - **Discrepancias spec↔código encontradas y SOLO reportadas** (specs/ vedado salvo las 2 líneas): (a) `specs/spec-installer-wizard.md:138` sigue invocando `venv/bin/tepochcalli-mcp` (D17 y el código dicen `python -m`); (b) `specs/spec-mcp-server.md` §Security (línea ~213) conserva «salvo `file:` explícito» frente a **D16**, que rechaza todo `file:` fuera del vault; (c) `specs/spec-mcp-server.md` §Testing (línea ~207) exige asserts de `took_ms` <500 **en CI** frente a la regla anti-flake (F-T7-4).
+  - **FTR Phase 2→3 NO ejecutado** (lo ejecuta el orquestador con el usuario). El paso `Proposed → Approved` está **escrito** en `SPEC.md` y en los `Status:` de las dos specs según el AC de T10 — si el FTR no aprueba, hay que revertir esos 3 marcadores. CP-D queda **sin marcar**.
 
 ### ✅ CP-D · Gate Phase 2 → Phase 3 — **6/6**
 - [ ] Contract tests D7.3 verdes (shapes, `E_*`, `rag_status`, globs)

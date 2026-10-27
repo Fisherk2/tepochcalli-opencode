@@ -1,6 +1,6 @@
 # Technical Debt Register — Tepochcalli v1
 **Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Active
-**Revisión de gate:** Phase 1 (2026-10-23) — ver §Revisión Phase 1 más abajo.
+**Revisión de gate:** Phase 1 (2026-10-23) y Phase 2 (2026-10-27) — ver §Revisión Phase 1 y §Revisión Phase 2 más abajo.
 **Cobertura:** abre en Phase 0 y se actualiza en cada gate de [WORKFLOW.md](WORKFLOW.md).
 
 Deuda conocida y aceptada al diseñar el sistema. Cada entrada: descripción, por qué existe,
@@ -19,6 +19,7 @@ coste si se ignora, y acción/oráculo para pagarla.
 | **TD-9** | **`cocoindex` llama a un método que `sentence-transformers` ya deprecó**: observado al correr la suite de Phase 1 — `FutureWarning: The get_sentence_embedding_dimension method has been renamed to get_embedding_dimension` emitido desde `cocoindex/ops/sentence_transformers.py`. No es código nuestro | ADR-001 (motor) + pineo de `sentence-transformers` vía extra de cocoindex (TRD §4); evidencia medida 2026-10-22 en Phase 1 | Hoy `uv.lock` fija 6.2.0 y el método sigue existiendo. Si una versión futura de `sentence-transformers` lo retira, la resolución de dims del embedder revienta **en tiempo de ejecución** durante la indexación — fallo tardío, no de import | El lock nos protege ahora: al bumpear `sentence-transformers` o `cocoindex`, **correr la suite de Phase 1** (especialmente `test_pipeline_integration.py`, que construye el embedder real) **antes de aceptar el lock**. Si revienta: esperar fix de cocoindex o fijar un upper bound en `pyproject.toml`. Oráculo: el `FutureWarning` dejando de emitirse cuando cocoindex adopte `get_embedding_dimension`. **Estado Phase 1 (2026-10-23):** abierta y confirmada — la suite de Phase 1 emite exactamente **1 warning** (137 passed / 1 deselected / 1 warning), la esperada; el oráculo no se ha disparado y el gate de bump (suite Phase 1 antes de aceptar el lock) sigue vigente |
 | **TD-10** | **`default_env_loop` es un símbolo interno de cocoindex**: `_update_blocking_with_stats()` en `app.py` importa `cocoindex._internal.environment.default_env_loop` y programa la consumición con `asyncio.run_coroutine_threadsafe(_consume(), default_env_loop())` — única vía en `cocoindex==1.0.25` de leer `handle.stats()` en el loop de fondo compartido (un `asyncio.run` por pasada cierra el loop y la segunda corrida falla con «Event loop is closed») | T8 (stats de refresh); pin `cocoindex==1.0.25` en `.tepochcalli/pyproject.toml` | Un bump de cocoindex que renombre o mueva el símbolo revienta **todo refresh con stats**, sin aviso: vive en `_internal` (fuera de cualquier garantía de estabilidad) y el changelog de features del bump no lo menciona — rotura silenciosa para quien solo mira la nota de release | Oráculo doble: **`uv.lock` pineado** + **suite delta de T8** (`tests/integration/test_delta.py`, que ejecuta `refresh_blocking()` completo) **corrida antes de aceptar cualquier bump**. Si revienta: buscar la API pública de stats en la versión nueva o fijar upper bound en `pyproject.toml`. Síntoma a vigilar: `ImportError`/`AttributeError` de `default_env_loop` |
 | **TD-11** | **TOCTOU symlink re-target**: la frontera de symlinks se evalúa al clasificar pero NO se re-verifica con fd propio al leer el conector (localfs de cocoindex no expone `O_NOFOLLOW` fd-level); hardlinks fuera del recurso tampoco se detectan | ADR-002 (motor), revisión Phase 1 5-ejes | En vault multiusuario/hostil admitiría swap de objetivo entre check y lectura; en el modelo v1 (vault del propio usuario, material confiado) se acepta | Documentado en docs/SECURITY.md §Symlinks (limitaciones); si el conector expone fd/NOFOLLOW, re-chequear en `classify_file`; no requiere decisiones D1-D8 — remediación de mecanismo propio |
+| **TD-12** | **Peso de `markitdown[all]` en el venv del vault**: **+142 MB y +49 paquetes** (medido 2026-10-26 con `uv pip install --dry-run` contra PyPI, CPython 3.12) — entre los extras hay soporte que v1 no usa (PDF, audio, YouTube, Azure AI) | D18 (plan §2/§3); el layout congelado (spec-vault-structure §Layout) y `--offline` (spec-markitdown) exigen el paquete oficial completo | venv más pesado en disco y en la descarga inicial del wizard; candidato a reclasificar cuando markitdown publique un extra mínimo | Aceptado en v1: el venv ya ronda los ~2 GB con torch/Docling (margen relativo ~7 %) y el PDF lo cubre Docling. Revisar en Phase 6 si aparece un extra mínimo o si el wizard debe mostrar el peso real al usuario |
 
 ## Revisión Phase 1 (gate CP-D, 2026-10-23)
 
@@ -39,6 +40,47 @@ Re-review de TD-1…TD-10 con estado real tras T1-T11 (medido, no estimado):
 | **TD-11** | **Nueva (2026-10-23, pase 5-ejes)** | Limitación TOCTOU de symlinks/hardlinks, documentada en SECURITY §Symlinks; pago atado al conector de cocoindex |
 
 Ningún TD asciende a blocker de Phase 2; TD-1 y TD-3 quedan con la puerta de Phase 2 en su plan de pago.
+
+## Revisión Phase 2 (gate CP-D, 2026-10-27)
+
+Re-review de TD-1…TD-11 con el estado real tras T1-T10 (medido, no estimado). Cierre de fase:
+`just ci` verde en local con **404 tests** (2 deselected `slow`) y **1 warning** — exactamente
+la esperada de TD-9; GitHub Actions **sigue sin correr** (M6 de Phase 1, sin cambio): no se
+declara CI verde.
+
+| ID | Estado (2026-10-27) | Evidencia / próxima acción |
+| --- | --- | --- |
+| **TD-1** | **Pagada en Phase 2** | El glue MCP existe y está probado: contract tests D7.3 (`tests/e2e/test_mcp_contract.py`), e2e golden (`test_mcp_journey.py` + fixture `tests/fixtures/golden_vault/`) y la capa se mantuvo fina — `tepochcalli_mcp` habla con el motor solo por el puerto `ChunkReader`, sin importar `cocoindex`/`lancedb` (test de arquitectura extendido a `mcp/`). Pineos intactos. Oráculo vigente: `just ci` tras cada bump |
+| **TD-2** | Sin cambios (coste ya medido en Phase 1) | Límite de tamaño / cache de parse → Phase 6 |
+| **TD-3** | **Pagada en Phase 2** (detección y mensaje) | `E_MODEL_MISMATCH`, `rag_status.model_matches_config` y su `fix_hint` son **reales y verificados en el wire** (contract tests): el usuario ya no puede quedarse en silencio con un modelo distinto. El comando `tepochcalli reindex --confirm` (D7.4/ADR-008) es entrega del wizard en **Phase 3**, no deuda pendiente |
+| **TD-4** | Sin cambios (mitigación validada en Phase 1) | Refresco típico barato + regla MCP-first; sin watcher (ADR-002 intacto); `auto_refresh` sigue siendo decisión de spec futura |
+| **TD-5** | Sin cambios | No ejecutar; revisit date de ADR-001 (2027-04) con bench comparativo |
+| **TD-6** | Sin cambios | MCP-first sigue en texto editable (`AGENTS.md` del vault); tracker Phase 6+ |
+| **TD-7** | Pendiente de diseño | Aseo/consolidación en Phase 4 (blueprint); ejecución en Phase 5 |
+| **TD-8** | Pendiente | Alias `00-resources/` → decisión Phase 4, remediación Phase 5 |
+| **TD-9** | Abierta; **oráculo activo** | La suite completa de Phase 2 (**404 passed**) emite **exactamente 1 warning**, la esperada `FutureWarning` de `get_sentence_embedding_dimension`. Oráculo sin disparar; gate de bump (suite antes de aceptar el lock) intacto |
+| **TD-10** | Abierta; oráculo intacto | `default_env_loop` sigue tras el pin `cocoindex==1.0.25`; `tests/integration/test_delta.py` corre dentro de las 404 |
+| **TD-11** | Sin cambios | Limitación TOCTOU de symlinks documentada en SECURITY §Symlinks; pago atado al conector de cocoindex. Relacionada con **R5** (TOCTOU de slug) más abajo |
+
+Ningún TD asciende a blocker de Phase 3; **TD-1 y TD-3 quedan pagadas** en esta fase.
+
+### Deuda nueva en Phase 2 (abierta al cierre de T10)
+
+Procede de los registros de `tasks/todo.md` (residuos CP-B, deuda declarada por T6, hallazgos
+de T7/T8/T9): nada aquí es deuda inventada en T10.
+
+| ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
+| --- | --- | --- | --- | --- |
+| **R5** | **TOCTOU en la colisión de slug** de `add_source`: `available_name` + `os.replace` entre sesiones — dos procesos concurrentes podrían elegir el mismo sufijo y pisarse | Residuo CP-B (T5) | Pérdida de una fuente recién convertida en el caso de dos `add_source` simultáneos en el mismo `subdir` | Aceptada: tool local single-user (mismo modelo que TD-11); re-chequeo post-rename (`O_EXCL`/reintento) si el uso multi-proceso llega a ser real — evaluar en Phase 6 |
+| **R6** | `pyproject.toml` `packages` omite `tepochcalli_mcp.tools` — con el editable instalado es irrelevante (MetaPathFinder, H2), pero un **wheel construido perdería el subpaquete `tools/`** | Residuo CP-B (T9/T10) | `uv build` produciría un paquete incompleto | Añadir el subpaquete (o `find`) al preparar la primera distribución del flow/server — antes de construir ningún wheel |
+| **D6-1** | **`just md-lint` no está en verde**: cae sobre el baseline pre-existente **D12** (MD060 en tablas antiguas, MD034 en specs) | T6 (verificado con `git stash`: ya fallaba en HEAD) | El AC «sin errores nuevos» es manual de por sí; el ruido dificulta ver regresiones | Recuento del cierre de T10: **422 errores en HEAD / 422 tras T10** (cero errores nuevos; `just md-lint` en ambas revisiones). Limpieza del baseline → tarea de aseo de docs sin gate (D12 permite vivir con ello) |
+| **D6-2** | `spec-embeddings.md` §Proposed Solution (línea 37) sigue diciendo `provider = "local" (default) o "litellm"` — incompleto tras **D15** (`none` es el 3.er valor); §`tepochcalli.toml` sí está al día | T6 (fuera de la sección autorizada) | Un lector de la §Proposed Solution cree que `none` no existe | Enmienda en la siguiente pasada autorizada sobre `specs/` (reportada en el cierre de T10; `specs/` vedado en T6/T10) |
+| **D6-3** | `verify.py` (CLI de desarrollo, vedado en T6) construye su lector con `citation.model_id(config)` **ignorando el provider**: en un vault `none`/`litellm` sigue embebiendo en local | T6 | La CLI minte sobre el embedder real del vault; no afecta al server | Reusar la fábrica `tepochcalli_mcp.embedder` (o `adapters`) desde `verify.py` — fix de flow, sin contrato; evaluar con Phase 6 |
+| **D6-4** | Los **fallos de API reales dentro del update de escritura** (401/rate-limit ocurridos *dentro* de cocoindex) salen como `INTERNAL`; solo la **clave ausente** se traduce a `E_API_AUTH` (chequeo local en la fábrica) | T6, documentado en `server._refresh_once` | El agente ve `INTERNAL` donde podría ver un `fix_hint` de credenciales | Traducirlos exigiría engancharse a los retries/batch de cocoindex — evaluar en Phase 6 si el criterio de aceptación lo exige |
+| **D6-6** | La **primera indexación con litellm** hace **una llamada extra de descubrimiento de dims** (`_get_dim` de cocoindex, heredada del update) — dato que el plan no decía, inherente a cocoindex | T6, documentado en `app.py::_build_embedder` | Una llamada de API imprevista en el primer refresh (coste y fallo posible sin red) | Evaluado en T7: sola llamada, dentro de presupuesto con margen; queda registrado — vigilar si cocoindex la añade a cada pasada |
+| **F-T7-4** | **Discrepancia spec↔regla:** `spec-mcp-server` §Testing pide «asserts de `took_ms` <500 **en CI**»; la regla anti-flake de la casa (aprendida con el fallo real de T3) prohíbe aserciones de latencia en la suite. **No se implementó a propósito** — el p95 vive solo en `just bench-search` (medición local) y el `--smoke` va con umbral generoso sin percentil | Hallazgo T7 | Una spec pide algo que la casa rechaza: próxima lectura genera duda o un flake | Enmendar `spec-mcp-server` §Testing (quitar «en CI» o explicitar «bench local») en la siguiente pasada autorizada — reportada al FTR; `specs/` vedado en T10 |
+| **`FIX_OFFLINE_NO_CACHE`** | El literal de ese `fix_hint` **no tiene ancla en ninguna spec**: unit y wire se comparan auto-referenciados, así que una derivación silenciosa del texto pasaría inadvertida | Duda declarada en T8 | El contrato del `fix_hint` puede derivar sin que nada falle | Fijar el literal en `spec-mcp-server` §errores (enmienda futura) o fijar el esperado en un test con fuente externa al código |
+| **`opencode_payload_before_t9.json`** | Fixture con la copia del `opencode.json` pre-T9: sostiene el test de *merge conservador* y **irá obsoleta si el payload cambia legítimamente en Phase 4-5** | T9 | El test de merge fallaría por un cambio legítimo del payload y tentaría a «arreglar» el test a ciegas | **Regenerarla en Phase 4-5** cuando el payload cambie; no combatirla. Cualquier cambio de `mcp.servers.*` por tarea autorizada la invalida a propósito |
 
 ## Deuda no aceptada (evitada por diseño)
 
@@ -61,4 +103,9 @@ Ningún TD asciende a blocker de Phase 2; TD-1 y TD-3 quedan con la puerta de Ph
   server `tepochcalli_mcp`) el fichero cubre ya dos fases. Renombrarlo
   (p. ej. `quality.yml`) es deuda menor sin impacto funcional — los gates
   dentro están documentados en su propia cabecera; decisión para T10.
+* **Decisión T10 (2026-10-27):** el fichero **no se renombra** — `.github/` está vedado en T10
+  y el nombre histórico no rompe nada (los gates están documentados en su cabecera). Queda como
+  deuda menor: renombrar en la siguiente tarea que toque CI.
+* **Deuda nueva de Phase 2 registrada:** ver §Deuda nueva en Phase 2 (R5, R6, D6-1…D6-6,
+  F-T7-4, `FIX_OFFLINE_NO_CACHE`, fixture pre-T9) — TD-12 añadida a la tabla principal.
 * Próxima revisión formal: cierre de Phase 6 (aceptación E2E).
