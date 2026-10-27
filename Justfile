@@ -1,9 +1,12 @@
 # Justfile — punto de entrada canónico de comandos de Tepochcalli.
 #
 # `just` sin argumentos ejecuta `quality`: el gate local de corrección
-# (lint + formato + tipos + tests rápidos). `just ci` reproduce el orden exacto
-# del gate de .github/workflows/phase1.yml, para verificar en local lo mismo
-# que muerde en CI.
+# (lint + formato + tipos + tests rápidos). `just ci` es el gate de integración:
+# añade `sync`, la cobertura con umbral y el smoke de Δ.
+#
+# Divergencia conocida con CI: `.github/workflows/phase1.yml` NO ejecuta el gate
+# de cobertura (solo el workflow local lo exige); inventariado en
+# docs/TECH_DEBT.md. GitHub Actions nunca ha corrido en este repo (M6).
 #
 # Se exporta UV_PROJECT_ENVIRONMENT=venv porque uv 0.12.9 ignora la clave
 # `[tool.uv] project-environment` del pyproject.toml: la única forma de que uv
@@ -106,8 +109,12 @@ md-lint:
 # Gate local: lint → fmt-check → typecheck → test (corta en el primer fallo).
 quality: lint fmt-check typecheck test
 
-# Espejo local del gate de CI: sync → lint → fmt-check → typecheck → test → smoke.
-ci: sync lint fmt-check typecheck test bench-smoke
+# Espejo local del gate de integración: sync → lint → fmt-check → typecheck → coverage → smoke.
+# `coverage` corre el MISMO `pytest -m "not slow"` que `test` (solo instrumentado),
+# así que sustituirlo no encarece el gate: le añade el umbral `fail_under = 95`
+# sobre `tepochcalli_flow` + `tepochcalli_mcp` (decisión del usuario 2026-10-27:
+# un gate que nadie ejecuta no es un gate). Ciclo corto sin cobertura: `just quality`.
+ci: sync lint fmt-check typecheck coverage bench-smoke
 
 # DESTRUCTIVO: borra caches locales y cualquier `.venv` accidental (creado por un
 # `uv` invocado a mano sin UV_PROJECT_ENVIRONMENT); no toca fuentes ni `venv/`.

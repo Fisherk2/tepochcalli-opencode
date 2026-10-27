@@ -82,6 +82,35 @@ de T7/T8/T9): nada aquí es deuda inventada en T10.
 | **`FIX_OFFLINE_NO_CACHE`** | El literal de ese `fix_hint` **no tiene ancla en ninguna spec**: unit y wire se comparan auto-referenciados, así que una derivación silenciosa del texto pasaría inadvertida | Duda declarada en T8 | El contrato del `fix_hint` puede derivar sin que nada falle | Fijar el literal en `spec-mcp-server` §errores (enmienda futura) o fijar el esperado en un test con fuente externa al código |
 | **`opencode_payload_before_t9.json`** | Fixture con la copia del `opencode.json` pre-T9: sostiene el test de *merge conservador* y **irá obsoleta si el payload cambia legítimamente en Phase 4-5** | T9 | El test de merge fallaría por un cambio legítimo del payload y tentaría a «arreglar» el test a ciegas | **Regenerarla en Phase 4-5** cuando el payload cambie; no combatirla. Cualquier cambio de `mcp.servers.*` por tarea autorizada la invalida a propósito |
 
+### Pasada de calidad sobre Phase 2 (rito `/test`, 2026-10-27)
+
+Auditoría de cobertura del código de la fase (**1.760 LOC** del paquete `tepochcalli_mcp`) más
+medición real con `just coverage` (404 tests).
+
+**Hallazgo estructural, cerrado aquí:** el gate de cobertura medía **solo `tepochcalli_flow`**. Los
+1.760 LOC del server —los 4 handlers, `errors`, `paths`, `embedder`, `budget`, `server`— quedaban
+fuera de todo umbral: `just coverage` podía seguir verde con el server entero sin ejercitar.
+Corregido: `source = ["tepochcalli_flow", "tepochcalli_mcp"]`, y `just ci` ejecuta `coverage` **en
+lugar de** `test` (misma suite, solo instrumentada ⇒ mismo coste). Un gate que nadie ejecuta no es
+un gate. Medición final: **414 tests, TOTAL 99 %** (1376 stmts, 238 ramas) y `mcp/tepochcalli_mcp`
+al **100 % en 13 de 14 ficheros** (`__main__.py` 91 %, rama `24->exit`).
+
+**Bug de contrato corregido en esta pasada** (historia, no deuda): `add_source` no emitía
+`E_NO_EMBEDDER` en instalación degradada, aunque `spec-mcp-server.md:151` lo exige para las tres
+tools; respondía `INTERNAL` **después** de escribir el `.md` en `00-Resources/`, dejando un
+huérfano sin `fix_hint`. Test que lo demuestra:
+`tests/e2e/test_mcp_contract.py::test_degraded_install_add_source_returns_e_no_embedder_and_writes_nothing`.
+Siete ramas más que estaban sin ejecutar (lectura `litellm` con éxito, limpieza del temporal en
+`_write_atomic`, `_is_auth_error` por nombre de clase, `_select` sobre tabla ilegible,
+`resolve_file_uri` con host/relativa, `index_models` con `ValueError`, `build_embedder` en `none`)
+quedaron cubiertas con tests de caracterización.
+
+| ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
+| --- | --- | --- | --- | --- |
+| **Q-1** | `.github/workflows/phase1.yml` **no ejecuta el gate de cobertura** que `just ci` sí exige | Rito `/test` (2026-10-27) | Local y CI divergen: una regresión de cobertura no la vería GitHub. Se suma a M6 (Actions nunca ha corrido) | Añadir el paso `coverage` al job `mcp` cuando se toque CI; hoy invisible porque Actions nunca corrió |
+| **Q-2** | El 95 % global tiene **4 puntos de margen** y todo lo que queda sin cubrir es de **Phase 1**: `flow/refresh_lock.py` **83 %** (30-32, 42-45, 70), `verify.py` **94 %** (111-116, 134→exit), `source.py` **96 %** (339, 352-353, 417), `app.py:383`, y `mcp/__main__.py` **91 %** (rama `24->exit`) | Medición 2026-10-27 (414 tests) | Cualquier línea nueva sin test en `mcp/` o `flow/` tumba el gate recién atado a `just ci` | Cubrir las ramas del lock (concurrencia real) y de `verify.py` (ligado a D6-3) en Phase 6 |
+| **Q-3** | El caso «`uri` inválida **y** `provider=none` a la vez» no tiene test explícito: la precedencia `VALIDATION_ERROR > E_NO_EMBEDDER` es estructural (orden de código), no afirmada | Fase verde del rito | Un reordenamiento futuro del handler podría invertir la precedencia sin que nada falle | Test de precedencia por pares cuando se toque `add_source` de nuevo (el patrón ya existe en `test_mcp_e_dialect.py`) |
+
 ## Deuda no aceptada (evitada por diseño)
 
 * RAG desde cero (UH.md lo prohíbe explícitamente) → mitigado por ADR-001.

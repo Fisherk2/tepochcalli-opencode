@@ -144,8 +144,26 @@ en Phase 1 y **`flow/` + `mcp/` desde Phase 2** (`files = ["flow", "mcp"]` en el
 `just coverage` es la ÚNICA cifra honesta: instrumenta también los subprocesos (`refresh` y el CLI
 `verify`), vía `sitecustomize` + `[tool.coverage.run] parallel`. `pytest --cov` a secas sub-mide
 (`verify.py` 0 %, `app.py` 74 % → real medido: `verify.py` 98 %, `app.py` 93 %,
-total 98 %). Gate: `fail_under = 95` en el pyproject del
-flow; por debajo, la receta falla.
+total 98 %). Gate: `fail_under = 95`; por debajo, la receta falla.
+
+**Alcance desde Phase 2 (decisión del usuario 2026-10-27):** `source = ["tepochcalli_flow",
+"tepochcalli_mcp"]`. Antes el gate medía **solo el motor**: los 1.760 LOC del server (`tools/*`,
+`errors`, `paths`, `embedder`, `budget`, `server`) quedaban fuera de todo umbral, así que `just
+coverage` podía seguir verde con el server entero sin ejercitar. Medición del cambio, sobre HEAD
+`28afe26` con 404 tests: **TOTAL 98 %** (1374 stmts, 25 sin cubrir, 236 ramas) — extender el gate
+no lo tumbó. Por paquete, `mcp/tepochcalli_mcp` entre 94 % (`tools/add_source.py`) y 100 %
+(`errors.py`, `budget.py`, `tools/rag_status.py`).
+
+**Tras cubrir los gaps de la fase** (rito `/test`, 2026-10-27; 414 tests): **TOTAL 99 %** (1376
+stmts, 14 sin cubrir, 238 ramas) y `mcp/tepochcalli_mcp` al **100 % en 13 de sus 14 ficheros** —
+el único por debajo es `__main__.py` (91 %, rama `24->exit`). Lo que queda fuera son líneas de
+**Phase 1** (`refresh_lock` 83 %, `verify` 94 %, `source` 96 %, `app.py:383`), inventariadas como
+Q-2 en [TECH_DEBT.md](TECH_DEBT.md).
+
+**El gate ya no es manual:** `just ci` ejecuta `coverage` en lugar de `test` (misma suite, solo
+instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Ciclo corto sin cobertura:
+`just quality`. **Divergencia conocida:** `.github/workflows/phase1.yml` **no** ejecuta cobertura
+(inventariado en [TECH_DEBT.md](TECH_DEBT.md)); GitHub Actions sigue sin haber corrido (M6).
 
 ## 4. Formal Technical Reviews (FTRs)
 

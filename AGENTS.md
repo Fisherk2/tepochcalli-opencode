@@ -42,7 +42,8 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `.tepochcalli/flow/` y `.tepochcalli/mcp/`; nada de lógica de negocio en `opencode.json`.
 * El portero de comandos es el Justfile (raíz): **lanzar comandos vía recetas `just`, nunca
   crudos** — `just typecheck` es el gate mypy strict sobre `flow/`, `just quality` el gate
-  táctico, y `just ci` el gate completo (sync → lint → fmt-check → typecheck → test → bench-smoke).
+  táctico, y `just ci` el gate completo (sync → lint → fmt-check → typecheck → coverage →
+  bench-smoke; `coverage` impone `fail_under = 95` sobre `flow` + `mcp`).
 * Rust (wizard): `cargo fmt` + `cargo clippy -D warnings`; fases del instalador como
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).
 * Nomenclatura: specs `specs/spec-<kebab>.md`; ADRs `specs/adr/adr-NNN-<kebab>.md`; commits

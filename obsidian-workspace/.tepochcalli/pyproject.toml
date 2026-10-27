@@ -115,10 +115,14 @@ markers = [
 # Cobertura REAL: `parallel` + sitecustomize hacen que los subprocesos
 # (refresh, CLI de verify) escriban su propio `.coverage.<host>.<pid>`, que
 # `coverage combine` une. Sin esto el informe miente: mide solo el padre.
+#
+# `tepochcalli_mcp` entra en el gate con la Phase 2 (decisión del usuario
+# 2026-10-27): 1.760 LOC y los 4 handlers quedaban fuera de todo umbral, así
+# que `just coverage` podía seguir verde con el server sin ejercitar.
 [tool.coverage.run]
 branch = true
 parallel = true
-source = ["tepochcalli_flow"]
+source = ["tepochcalli_flow", "tepochcalli_mcp"]
 
 [tool.coverage.report]
 show_missing = true
