@@ -354,6 +354,48 @@ def test_degraded_install_returns_e_no_embedder_and_degraded_rag_status(tmp_path
     assert refresh == errors.no_embedder()
 
 
+def _resources_paths(vault: Path) -> set[str]:
+    """Snapshot de rutas bajo `00-Resources/` (relativas al vault) — prueba de NO escritura."""
+    resources = vault / "00-Resources"
+    if not resources.is_dir():
+        return set()
+    return {path.relative_to(vault).as_posix() for path in resources.rglob("*")}
+
+
+def test_degraded_install_add_source_returns_e_no_embedder_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    """`provider = "none"` ⇒ `add_source` = `E_NO_EMBEDDER` y CERO escritura (spec §Códigos).
+
+    Spec-mcp-server.md:151 exige `E_NO_EMBEDDER` para `search`, `index_refresh`
+    **y `add_source`**; el test vecino recorre las dos primeras y deja fuera la
+    tercera. End-to-end contra el proceso real, con una fuente `file:`
+    DENTRO del vault que SÍ existe: si el corte faltara, la conversión real
+    escribiría el `.md` y el refresh fallaría más tarde (enmascarando el
+    código correcto con `INTERNAL`). Por eso aquí se afirman las dos mitades:
+    el dialecto en el wire Y el efecto secundario ausente.
+    """
+    _write_toml(tmp_path, '[embedding]\nprovider = "none"\n')
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    source = staging / "degradado.md"
+    source.write_text("# Degradado\n\nfuente real dentro del vault\n", encoding="utf-8")
+    before = _resources_paths(tmp_path)
+    env = server_env(tmp_path)  # la degradación jamás debe cargar pesos
+
+    async def call() -> tuple[CallToolResult, dict[str, object]]:
+        async with running_server(env) as session:
+            result = await session.call_tool("add_source", {"uri": source.as_uri()})
+            return result, wire_payload(result)
+
+    result, payload = asyncio.run(call())
+
+    assert result.is_error
+    assert payload == errors.no_embedder(), "payload byte a byte igual al constructor del dominio"
+    assert _resources_paths(tmp_path) == before, "sin embedder no se escribe NADA en 00-Resources/"
+    assert not (tmp_path / "00-Resources" / "_inbox").exists(), "ni siquiera se crea el destino"
+
+
 # --- los E_* RECORRIENDO el proceso: escenario real por código y por stdio -----------------
 
 

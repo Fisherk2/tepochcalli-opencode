@@ -23,6 +23,7 @@ import json
 from collections.abc import Callable
 from pathlib import Path
 
+import pytest
 from tepochcalli_mcp import paths
 from tepochcalli_mcp.tools import add_source as handler
 
@@ -61,6 +62,7 @@ def _run(
             vault_root=lambda: vault,
             convert=convert or fake_convert,
             refresh=fake_refresh,
+            embedder_available=lambda: True,
         ),
     )
     return payload, calls
@@ -106,6 +108,30 @@ def test_atomic_write_leaves_no_temporary_behind(tmp_path: Path) -> None:
 
     inbox = tmp_path / "00-Resources" / "_inbox"
     assert sorted(p.name for p in inbox.iterdir()) == ["notas.md"]
+
+
+def test_atomic_write_cleans_the_temporary_and_reraises_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fallo ANTES del rename ⇒ el `.tmp` se limpia y la excepción sube (⇒ `INTERNAL`).
+
+    Sin esta rama, un rename fallido (disco lleno, permisos) dejaría basura
+    `.tmp` en `00-Resources/` — material que el walk de indexación vería.
+    """
+    inbox = tmp_path / "00-Resources" / "_inbox"
+    inbox.mkdir(parents=True)
+    target = inbox / "notas.md"
+
+    def _broken_replace(_src: object, _dst: object) -> None:
+        raise OSError("cross-device link")
+
+    monkeypatch.setattr(handler.os, "replace", _broken_replace)
+
+    with pytest.raises(OSError, match="cross-device"):
+        handler._write_atomic(target, "# contenido\n")
+
+    assert not target.exists(), "el destino no existe: el rename no llegó a correr"
+    assert list(inbox.iterdir()) == [], "el temporal se limpia en la rama de fallo"
 
 
 def test_traversal_subdir_is_validation_error_and_writes_nothing(tmp_path: Path) -> None:

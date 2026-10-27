@@ -139,6 +139,25 @@ def test_index_empty_precedes_model_mismatch() -> None:
     assert payload["error"]["code"] == "INDEX_EMPTY"  # type: ignore[index]
 
 
+class _UnreadableIndex(_Backend):
+    """Índice ilegible en el borde: `index_models` lanza el `ValueError` de lancedb."""
+
+    async def index_models(self) -> set[str]:
+        raise ValueError("tabla chunks ilegible")
+
+
+def test_unreadable_index_state_maps_to_validation_error_not_internal() -> None:
+    """`ValueError` al leer el estado del índice ⇒ `VALIDATION_ERROR` (no `INTERNAL`).
+
+    El borde de solo lectura del backend (tabla con esquema incompatible)
+    responde con el mismo dialecto de validación que el resto de argumentos
+    inválidos — nunca con un `INTERNAL` opaco.
+    """
+    payload = _search(backend=_UnreadableIndex())
+
+    assert payload == errors.validation_error("tabla chunks ilegible")
+
+
 def test_model_mismatch_precedes_api_auth_and_never_embeds_the_query() -> None:
     """Mismatch ⇒ `E_MODEL_MISMATCH` ANTES de cruzar dims: `cited_chunks` NO se invoca.
 
@@ -264,6 +283,35 @@ def test_litellm_read_wrapper_raises_auth_error_on_401_without_key_in_message(
     assert len(calls) == 1, "la llamada al proveedor SÍ se hizo (401 viene de la API)"
 
 
+def test_litellm_read_wrapper_returns_the_embedding_as_floats(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Camino de ÉXITO del corte de API: `response.data[0]["embedding"]` ⇒ `list[float]`.
+
+    Ejercita las líneas que convierten la respuesta del proveedor en el vector
+    de la query: sin esta pierna, un cambio de forma en `litellm` (p. ej.
+    devolver `int`/`str`) viajaría hasta el adaptador sin que nada lo afirme.
+    """
+    monkeypatch.setenv(DEFAULT_API_KEY_ENV, FAKE_KEY)
+    calls: list[dict[str, object]] = []
+
+    def _fake_embedding(**kwargs: object) -> object:
+        calls.append(kwargs)
+        return types.SimpleNamespace(data=[{"embedding": [0.25, 1, "2.5"]}])
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(embedding=_fake_embedding))
+
+    cut = embedder.build_embedder(_config("litellm", model=LITELLM_MODEL))
+
+    vector = cut("una consulta")
+
+    assert vector == [0.25, 1.0, 2.5]
+    assert all(type(value) is float for value in vector), "el contrato es list[float]"
+    assert calls == [
+        {"model": LITELLM_MODEL, "input": ["una consulta"], "api_key": FAKE_KEY},
+    ], "una sola llamada, con el texto como `input` de una lista"
+
+
 def test_litellm_read_wrapper_never_calls_the_provider_without_the_key(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -314,6 +362,32 @@ def test_litellm_read_wrapper_scrubs_the_key_from_non_auth_failures(
     assert error.__cause__ is None, (
         "`from None`: la causa original (con la clave) no se encadena al log"
     )
+
+
+@pytest.mark.parametrize("error_name", ["AuthenticationError", "PermissionDeniedError"])
+def test_litellm_auth_errors_are_classified_by_class_name_without_status_code(
+    monkeypatch: pytest.MonkeyPatch, error_name: str
+) -> None:
+    """401/403 que llegan SOLO por nombre de clase (sin `status_code`) ⇒ `EmbedderAuthError`.
+
+    El clasificador no puede depender de `status_code`: hay wraps/proveedores
+    que exponen la credencial rechazada únicamente en el nombre del tipo.
+    """
+    monkeypatch.setenv(DEFAULT_API_KEY_ENV, FAKE_KEY)
+    fake_error = type(error_name, (Exception,), {})
+
+    def _fake_embedding(**kwargs: object) -> object:
+        raise fake_error(f"rechazado con {FAKE_KEY}")
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(embedding=_fake_embedding))
+
+    cut = embedder.build_embedder(_config("litellm", model=LITELLM_MODEL))
+
+    with pytest.raises(embedder.EmbedderAuthError) as exc_info:
+        cut("una consulta")
+
+    assert str(exc_info.value) == DEFAULT_API_KEY_ENV, "solo el nombre de la env var"
+    assert FAKE_KEY not in str(exc_info.value)
 
 
 def test_local_embedder_offline_failure_is_classified_as_offline_no_cache(
@@ -418,6 +492,7 @@ def test_add_source_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
             vault_root=lambda: tmp_path,
             convert=lambda uri: "# convertido\n",
             refresh=_auth_refresh,
+            embedder_available=lambda: True,
         )
     )
 

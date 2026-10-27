@@ -23,14 +23,17 @@ Contrato y precedencia, en orden:
 1. **Borde de validación** — esquema (`http(s):`/`file:`; D16: `file:` fuera
    del vault ⇒ `VALIDATION_ERROR`, decidido ANTES de que el conversor vea
    la ruta) y `subdir` (`paths.validate_subdir`, anti-traversal);
-2. **conversión** — la costura inyectada; cualquier fallo de fetch/convert
+2. **corte `E_NO_EMBEDDER`** — sin embedder no hay indexación, y escribir sin
+   indexar deja un huérfano en el vault: se corta ANTES de convertir y de
+   escribir (spec-mcp-server §Códigos lista también esta tool);
+3. **conversión** — la costura inyectada; cualquier fallo de fetch/convert
    ⇒ `SOURCE_UNREACHABLE` con la guía literal de spec-markitdown (el
    traceback va al log stderr, nunca al cliente);
-3. **escritura atómica** — slug + `.md` con sufijo numérico ante colisión
+4. **escritura atómica** — slug + `.md` con sufijo numérico ante colisión
    (`paths`), temporal en el MISMO directorio de destino + `os.replace`
    (mismo filesystem ⇒ rename atómico), con `ensure_within` como última
    defensa antes de escribir;
-4. **reindexación** — el MISMO seam de refresh de T3; reporte con `locked`
+5. **reindexación** — el MISMO seam de refresh de T3; reporte con `locked`
    ⇒ `ENGINE_LOCKED` (la forma congelada de §5 no tiene campo `locked` en
    su sub-objeto `indexed`, así que el candado viaja COMO ERROR con
    `details.written_to`: el archivo sí quedó, el ciclo Δ es reintentable).
@@ -84,6 +87,7 @@ async def add_source(
     vault_root: Callable[[], Path],
     convert: Callable[[str], str],
     refresh: Callable[[], dict[str, object]],
+    embedder_available: Callable[[], bool],
 ) -> dict[str, object]:
     """`{ok, written_to, indexed:{scanned, indexed, skipped, elapsed_ms}}` — forma §5.
 
@@ -98,6 +102,10 @@ async def add_source(
         subdir_rel = paths.validate_subdir(subdir)
     except ValueError as exc:
         return errors.validation_error(str(exc))
+    if not embedder_available():
+        # Sin embedder no hay indexación: escribir dejaría un huérfano sin citar
+        # en el vault. El borde ya validó, así que VALIDATION_ERROR precede.
+        return errors.no_embedder()
     try:
         content = await asyncio.to_thread(convert, uri)
     except Exception as exc:  # fetch/convert: cualquier motivo ⇒ SOURCE_UNREACHABLE

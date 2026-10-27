@@ -69,7 +69,8 @@ def apply_budget(chunks: Sequence[CitedChunk]) -> tuple[list[CitedChunk], bool]:
     (los empatados conservan el orden estable) — y el caller marca
     `truncated: true`. Borde documentado: si un ÚNICO chunk excede el techo por
     sí solo se entrega igual —una cita parcial vale más que un payload vacío—
-    con `truncated: true`; con el flow de Phase 1 no ocurre (chunks ≤1536 bytes).
+    con `truncated: false` (no se descartó ninguno: `kept == ordered`); con el
+    flow de Phase 1 no ocurre (chunks ≤1536 bytes).
     """
     ordered = sorted(chunks, key=lambda chunk: chunk.score, reverse=True)
     kept: list[CitedChunk] = []

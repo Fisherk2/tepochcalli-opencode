@@ -388,6 +388,7 @@ async def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
         vault_root=_vault_root,
         convert=_convert_seam,
         refresh=_refresh_once,
+        embedder_available=_embedder_available,
     )
     return tepochcalli_mcp.tools.json_result(payload)
 
