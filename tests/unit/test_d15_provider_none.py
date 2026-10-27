@@ -86,3 +86,18 @@ def test_real_none_config_drives_the_e_no_embedder_seam() -> None:
     assert embedder.is_available(config) is False, (
         "is_available deriva de mode: none ⇒ no disponible"
     )
+
+
+def test_build_embedder_refuses_none_with_the_typed_error() -> None:
+    """Segunda capa (R1): construir el corte con `none` ⇒ `EmbedderUnavailableError`.
+
+    Si alguien bypassea la costura `is_available` y pide el embedder de todos
+    modos, el fallo es tipado — nunca una descarga silenciosa de pesos.
+    """
+    config = flow_config.Config(
+        models_dir=Path("/vault/.tepochcalli/models"),
+        embedding=flow_config.EmbeddingConfig(provider="none"),
+    )
+
+    with pytest.raises(embedder.EmbedderUnavailableError):
+        embedder.build_embedder(config)

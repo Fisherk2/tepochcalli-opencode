@@ -17,6 +17,7 @@ posterior (reader perezoso: nada de carga de modelo en el rebuild mismo).
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
@@ -61,3 +62,40 @@ def test_backend_rebuilds_after_a_config_swap_in_the_same_session(
     assert swapped is not first, "R2: el cache viejo NO puede sobrevivir a un swap de config"
     assert swapped.expected_model == NEW_MODEL, "la config nombrada por search es la NUEVA"
     assert server._backend() is swapped, "tras el rebuild vuelve a cachebar (sin rebuild en bucle)"
+
+
+def test_unreadable_table_yields_no_rows_instead_of_propagating(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`ValueError` de lancedb al abrir la tabla ⇒ sin filas, nunca excepción.
+
+    El borde de solo lectura del backend distingue «índice inexistente» por
+    `rows == 0`/`models == ∅`: una tabla con esquema incompatible se trata
+    igual (lectura barata, jamás un `INTERNAL` en `rag_status`/`search` antes
+    de su propia precedencia).
+    """
+    import lancedb
+    from tepochcalli_flow.config import load_config
+    from tepochcalli_flow.layout import DB_RELPATH
+
+    (tmp_path / DB_RELPATH).mkdir(parents=True)  # la DB existe: el fallo es de LECTURA
+
+    class _UnreadableDb:
+        """Conexión cuyo `open_table` lanza el `ValueError` observado en lancedb 0.40.0."""
+
+        async def open_table(self, name: str) -> object:
+            raise ValueError(f"tabla {name} ilegible (esquema incompatible)")
+
+        def close(self) -> None:
+            """`close()` sync sin anotar en lancedb 0.40.0 — el backend no lo espera."""
+
+    async def _connect(_uri: str) -> _UnreadableDb:
+        return _UnreadableDb()
+
+    monkeypatch.setattr(lancedb, "connect_async", _connect)
+    backend = server._VaultSearchBackend(tmp_path, load_config(tmp_path))
+
+    assert asyncio.run(backend.index_models()) == set()
+
+    meta = asyncio.run(backend.index_meta())
+    assert (meta["rows"], meta["models"], meta["last_refresh"]) == (0, set(), None)

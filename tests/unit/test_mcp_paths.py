@@ -214,6 +214,29 @@ def test_resolve_file_uri_rejects_non_file_schemes(tmp_path: Path) -> None:
         paths.resolve_file_uri("ftp://example.org/x.docx", vault)
 
 
+@pytest.mark.parametrize(
+    ("uri", "reason"),
+    [
+        ("file://otrohost/vault/nota.md", "host"),
+        ("file:nota-relativa.md", "absoluta"),
+    ],
+)
+def test_resolve_file_uri_rejects_remote_hosts_and_relative_paths(
+    tmp_path: Path, uri: str, reason: str
+) -> None:
+    """`file://host/…` y `file:` relativo se rechazan: D16 solo acepta rutas locales absolutas.
+
+    Un `file:` con host designa otro equipo y uno relativo depende del cwd del
+    server: ambos escapan del vault por construcción, así que el borde los
+    corta antes de que markitdown toque el disco.
+    """
+    vault = tmp_path / "vault"
+    vault.mkdir()
+
+    with pytest.raises(ValueError, match=reason):
+        paths.resolve_file_uri(uri, vault)
+
+
 def test_ensure_within_keeps_the_target_inside_base(tmp_path: Path) -> None:
     """Defensa en profundidad: destino dentro de base ⇒ pasa; fuera ⇒ ValueError."""
     base = tmp_path / "00-Resources"
