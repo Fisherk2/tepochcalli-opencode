@@ -103,8 +103,8 @@ async def add_source(
     except ValueError as exc:
         return errors.validation_error(str(exc))
     if not embedder_available():
-        # Sin embedder no hay indexación: escribir dejaría un huérfano sin citar
-        # en el vault. El borde ya validó, así que VALIDATION_ERROR precede.
+        # VALIDATION_ERROR precede: el borde ya validó, y sin indexación
+        # convertir/escribir solo fabricaría huérfanos. Igual que los hermanos.
         return errors.no_embedder()
     try:
         content = await asyncio.to_thread(convert, uri)
