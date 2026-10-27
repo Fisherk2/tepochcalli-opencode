@@ -70,7 +70,7 @@ from . import source
 from .citation import RESOURCES_DIR, normalize_source_path
 from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME  # noqa: F401  # re-export: tests y wiring del flow consumen los nombres vía app
 from .models import EMBEDDER, LANCE_DB, ChunkRow, RefreshReport
-from .parsers import DocumentChunk, chunk_document
+from .parsers import DocumentChunk, chunk_document, extract_text
 from .refresh_lock import acquire_refresh_lock as _acquire_refresh_lock
 from .refresh_lock import release_refresh_lock as _release_refresh_lock
 
@@ -242,22 +242,29 @@ async def index_file(
     """Particiona un archivo con su cita derivada y fan-outea sus chunks (T5/T6).
 
     Memoizable por contenido: un archivo inmutable no se re-parsea ni se
-    re-embebe (semántica Δ de spec-rag-engine §Semántica incremental). La ruta
-    citada se normaliza con `citation.normalize_source_path` — nunca se
-    reconstruye a mano. La lectura es UTF-8 estricto (`errors="strict"`, BOM
-    incluido): el MISMO decodificador que `parsers.extract_text`, para que los
-    offsets F1 se midan sobre el mismo string en ambos caminos.
+    re-embebe (semántica Δ de spec-rag-engine §Semántica incremental); la clave
+    de memo depende de los ARGUMENTOS (el `localfs.File` de entrada), no del
+    mecanismo de lectura del cuerpo. La ruta citada se normaliza con
+    `citation.normalize_source_path` — nunca se reconstruye a mano. El texto
+    sale de `parsers.extract_text`, el ÚNICO decodificador: md/txt en UTF-8
+    estricto (BOM incluido, byte a byte equivalente a la lectura directa) y
+    PDF vía Docling, cuyos offsets F1 se miden sobre el markdown extraído
+    (decisión T7, `offsets_ref="extract"`).
     """
-    text = await file.read_text(encoding="utf-8", errors="strict")
     file_path = Path(os.fspath(file.file_path))
     # Re-chequeo TOCTOU classify→read: el archivo pudo crecer (o conmutarse) tras
     # el classifier; superarlo aquí falla el componente de ESTE fichero (aislado,
-    # el pase continúa) en vez de indexar >100MB.
+    # el pase continúa) en vez de indexar >100MB. ANTES de extraer el texto:
+    # Docling sobre un PDF que creció costaría minutos antes de fallar igual.
     if (size := os.stat(file_path).st_size) > source.DEFAULT_MAX_FILE_BYTES:
         raise ValueError(
             f"{file_path}: creció a {size} bytes tras el classify "
             f"(> {source.DEFAULT_MAX_FILE_BYTES}); cambió durante el pase"
         )
+    # `extract_text` es síncrono (en PDF ejecuta Docling en CPU, segundos a
+    # minutos): en un thread para no saturar el loop del environment, que
+    # comparte proceso con el server MCP.
+    text = await asyncio.to_thread(extract_text, file_path)
     chunks = chunk_document(
         text,
         normalize_source_path(file_path.relative_to(resources_dir)),

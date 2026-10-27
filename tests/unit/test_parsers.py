@@ -291,6 +291,24 @@ def test_extract_text_reads_markdown_and_txt_directly(tmp_path: Path) -> None:
     assert parsers.extract_text(txt) == "texto plano sin jerarquía\n"
 
 
+@pytest.mark.parametrize("filename", ["una.md", "dos.markdown", "tres.txt"])
+def test_extract_text_is_byte_equivalent_to_the_strict_utf8_decoder(
+    tmp_path: Path, filename: str
+) -> None:
+    """Equivalencia EXACTA con `read_text(encoding="utf-8", errors="strict")`, BOM incluido.
+
+    `app.index_file` delega la lectura en `extract_text`, así que ESTE string es
+    el documento de referencia sobre el que miden los offsets F1 (M2/F1): cualquier
+    divergencia del decodificador (`utf-8-sig` quita el BOM, `errors="replace"`
+    insera U+FFFD) desplazaría los offsets y rompería la identidad de cada fila
+    ya indexada. El caso con BOM ancla el peor byte posible del contrato.
+    """
+    path = tmp_path / filename
+    path.write_bytes(BOM.encode("utf-8") + "# Título\n\nprosa con café.\n".encode())
+
+    assert parsers.extract_text(path) == path.read_text(encoding="utf-8", errors="strict")
+
+
 # T7 retiró `PdfParserPendingError` y el skip `pdf_parser_pending`: la rama PDF vive en
 # `test_pdf.py` (parseo Docling, skip oversized de un PDF y error en PDF corrupto).
 

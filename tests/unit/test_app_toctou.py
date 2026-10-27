@@ -15,14 +15,11 @@ class _FakeFile:
     def __init__(self, path: Path) -> None:
         self.file_path = path
 
-    async def read_text(self, encoding: str, errors: str) -> str:  # noqa: ARG002
-        return "conten FARCO post-classify"
-
 
 def test_index_file_raises_when_file_grows_after_classify(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """El re-chequeo tras lectura detecta el crecimiento y falla el componente por fichero."""
+    """El re-chequeo post-classify detecta el crecimiento y falla el componente por fichero."""
     nota = tmp_path / "nota.md"
     nota.write_text("1234567890", encoding="utf-8")  # >2 bytes
     monkeypatch.setattr(source, "DEFAULT_MAX_FILE_BYTES", 2)

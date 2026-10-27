@@ -25,8 +25,9 @@ Decisiones de test, documentadas a propósito (convención de T2/T6):
   tamaño de chunk (1536 BYTES, D11), la multibyte-idad y la tabla del PDF son
   propiedades deterministas de `parsers.extract_text`/`chunk_document`; lo que
   `search` devuelve sobre las fuentes MD se verifica aparte CON retrieval real
-  (`path_filter` para anclar cada fixture). El PDF se prueba a nivel handler
-  (budget post-retrieval) porque su retrieval real está bloqueado por F-T7-2.
+  (`path_filter` para anclar cada fixture). El PDF se prueba además a nivel
+  handler (budget post-retrieval) Y con retrieval real sobre el índice
+  (F-T7-2 cerrado: `app.index_file` ya delega en `parsers.extract_text`).
 * **Cero aserciones de reloj** (regla anti-flake T3): aquí SOLO se miden
   tokens — la latencia vive en `tests/benchmarks/bench_search.py` (medición
   local, jamás en la suite de corrección).
@@ -43,21 +44,24 @@ Hallazgos de T7 que este módulo deja por escrito (medidos, no estimados):
   envoltura (≤200 tokens) y PUBLICA ambos números en cada fallo: recortar más
   exigiría cambiar la fórmula congelada de plan §5 (decisión de docs, vedada
   aquí — se propone al lead para T10).
-* **F-T7-2 — el flow NO indexa PDFs.** `app.index_file` (flow/, intocable en
-  T7) lee TODO con `read_text(utf-8)`; un PDF falla con `UnicodeDecodeError`
+* **F-T7-2 — el flow NO indexaba PDFs (CERRADO con este fix).** `app.index_file`
+  (flow/) leía TODO con `read_text(utf-8)`; un PDF fallaba con `UnicodeDecodeError`
   y el fallo por fichero se ABSORBE en `skipped` (rc=0, sin abortar), así que
   un vault con PDFs los indexa en silencio… nunca. La rama Docling
   (`parsers.extract_text`) existe y funciona (lo prueba este módulo) pero
   NUNCA se enganchó en `index_file` — los tests de Phase 1 llaman a `parsers`
   directamente y no lo vieron. Prueba reproducida aquí con traceback
   (`'utf-8' codec can't decode byte 0xe2 in position 10'` sobre el header del
-  PDF). El fix (propuesto, NO aplicado: flow/ vedado) es usar
-  `parsers.extract_text(file_path)` en `index_file`. Mientras tanto la
-  búsqueda sobre el PDF indexado queda marcada `xfail` con esa raíz.
+  PDF). **Fix aplicado:** `index_file` delega en `parsers.extract_text(file_path)`
+  (vía `asyncio.to_thread`: Docling corre en un thread y no satura el loop del
+  environment), el PDF indexa de verdad y este módulo lo prueba de punta a
+  punta: filas con identidad F1 sobre el markdown extraído + `search` real con
+  `offsets_ref == "extract"`.
 """
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import shutil
@@ -71,7 +75,7 @@ from model_cache import link_model_cache, offline_env, resolve_model_cache
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation, parsers
 from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL
-from tepochcalli_flow.layout import DB_RELPATH
+from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
 from tepochcalli_flow.parsers import DocumentChunk
 from tepochcalli_flow.ports import CitedChunk
 from tepochcalli_mcp import budget
@@ -181,11 +185,9 @@ def _build_adversarial_vault(tmp_path_factory: pytest.TempPathFactory) -> Indexe
     El indexador es EXACTAMENTE el de T2 (`UPDATE_SCRIPT` importado): misma env
     aislada, mismo `offline_env` cuando el cache resuelto ya tiene el modelo.
 
-    El PDF se COPIA AQUÍ pero NO se indexa: su componente falla con
-    `UnicodeDecodeError` (UTF-8 sobre el binario) y el fallo por fichero se
-    absorbe en `skipped` con rc=0 — hallazgo F-T7-2 del docstring. Su
-    presencia en el vault es lo que hace que el `xfail` de búsqueda sobre el
-    PDF indexado se vuelva XPASS en cuanto se arregle `app.index_file`.
+    El PDF se COPIA y se INDEXA de verdad (fix de F-T7-2: `index_file` delega
+    en `parsers.extract_text`, Docling corre dentro del subproceso): su presencia
+    en el índice es lo que hace firme el test de búsqueda sobre el PDF indexado.
     """
     vault = tmp_path_factory.mktemp("vault-t7-adversarial")
     shutil.copytree(FIXTURE_VAULT, vault, dirs_exist_ok=True)
@@ -241,6 +243,22 @@ def pdf_markdown() -> str:
 def pdf_chunks(pdf_markdown: str) -> list[DocumentChunk]:
     """Chunks REALES del PDF tabular (`chunk_document` sobre su markdown, F1 intacta)."""
     return parsers.chunk_document(pdf_markdown, "00-Resources/tablas.pdf")
+
+
+def _read_pdf_rows(vault: Path) -> list[dict[str, object]]:
+    """Filas de `tablas.pdf` en LanceDB — solo lectura (patrón `_count_chunks` de T2)."""
+    import lancedb
+
+    async def _go() -> list[dict[str, object]]:
+        db = await lancedb.connect_async(str(vault / DB_RELPATH))
+        try:
+            table = await db.open_table(TABLE_NAME)
+            arrow = await table.to_arrow()
+        finally:
+            db.close()
+        return [row for row in arrow.to_pylist() if row["source_path"] == "00-Resources/tablas.pdf"]
+
+    return asyncio.run(_go())
 
 
 class _StaticBackend:
@@ -409,8 +427,8 @@ def test_pdf_with_table_is_extracted_as_markdown_table_by_docling(
     """Premisa «PDF con tablas»: Docling emite la rejilla como TABLA markdown.
 
     ≥10 líneas que empiezan por `|` (13 filas + separador de la rejilla de
-    `gen_fixture_pdf.py --tabla`) con sus celdas: la tabla SE EXTRAE; lo que no
-    llega al índice es por F-T7-2 (ver `xfail` más abajo), no por Docling.
+    `gen_fixture_pdf.py --tabla`) con sus celdas: la tabla SE EXTRAE; lo que
+    antes no llegaba al índice era por F-T7-2 (hoy cerrado), no por Docling.
     """
     pipe_lines = [line for line in pdf_markdown.splitlines() if line.strip().startswith("|")]
 
@@ -426,7 +444,8 @@ def test_pdf_table_chunks_flow_through_the_real_handler_within_budget(
     Los chunks REALES del PDF (Docling → `chunk_document`) entran al handler a
     través del puerto `SearchBackend` con scores sintéticos (patrón T2 de
     presupuesto): el corte es POST-retrieval, así que el budget ejercitado es
-    el de producción — solo falta el retrieval, que es lo que bloquea F-T7-2.
+    el de producción — el retrieval REAL sobre el mismo PDF indexado lo cubre
+    `test_search_over_the_indexed_pdf_returns_its_table_chunks`.
     """
     backend = _StaticBackend(_cited_chunks(pdf_chunks))
 
@@ -443,26 +462,41 @@ def test_pdf_table_chunks_flow_through_the_real_handler_within_budget(
     _assert_within_budget(payload)
 
 
-@pytest.mark.xfail(
-    reason=(
-        "F-T7-2: `app.index_file` (flow/, intocable en T7) lee TODO como UTF-8 — el PDF "
-        "falla con UnicodeDecodeError y el fallo por fichero se absorbe en skipped, así que "
-        "nunca se indexa. Fix propuesto al lead: usar `parsers.extract_text(file_path)` en "
-        "index_file; al aplicarse, este test pasa (XPASS) y cierra el AC end-to-end."
-    ),
-    strict=False,
-)
 def test_search_over_the_indexed_pdf_returns_its_table_chunks(
     backend: SearchBackend,
 ) -> None:
-    """AC end-to-end «PDF con tablas» vía SEARCH: bloqueado por F-T7-2, no por T7."""
+    """AC end-to-end «PDF con tablas» vía SEARCH: F-T7-2 cerrado, el PDF SÍ se indexa."""
     payload = _search(backend, PDF_QUERY, 8, path_filter="00-Resources/tablas.pdf")
 
     assert payload["results"], "path_filter tablas.pdf debe devolver chunks del PDF"
     assert all(
         str(result["source_path"]) == "00-Resources/tablas.pdf" for result in payload["results"]
     )
+    assert all(
+        result["offsets_ref"] == citation.OFFSETS_REF_EXTRACT for result in payload["results"]
+    ), "los offsets de un PDF citan el markdown extraído (decisión T7 congelada)"
     _assert_within_budget(payload)
+
+
+def test_pdf_is_indexed_as_rows_whose_offsets_cite_the_extracted_markdown(
+    adversarial_vault: IndexedVault,
+) -> None:
+    """AC de aceptación (F-T7-2 cerrado): el PDF dentro de `00-Resources/` queda INDEXADO.
+
+    Cada fila de `tablas.pdf` existe en la tabla con `doc_kind="pdf"` y su
+    identidad F1 se cumple sobre el markdown que Docling extrajo — nunca sobre
+    el binario (decisión T7). El buscado va aparte, en
+    `test_search_over_the_indexed_pdf_returns_its_table_chunks`.
+    """
+    rows = _read_pdf_rows(adversarial_vault.vault)
+
+    assert rows, "el PDF debe producir filas en la tabla chunks (F-T7-2)"
+    markdown = parsers.extract_text(TABLE_PDF)
+    for row in rows:
+        assert row["doc_kind"] == "pdf"
+        assert citation.verify_slice_identity(
+            markdown, int(row["char_start"]), int(row["char_end"]), str(row["text"])
+        ), f"identidad F1 rota en [{row['char_start']}, {row['char_end']})"
 
 
 def test_short_golden_query_stays_within_budget(backend: SearchBackend) -> None:
@@ -497,8 +531,9 @@ def test_every_adversarial_payload_stays_under_1600_tokens(
 ) -> None:
     """AC: ≤1600 tokens EN TODAS las fixtures — contrato gateado + envoltura publicada.
 
-    El caso PDF tabular no está aquí: su retrieval real está bloqueado por
-    F-T7-2 y cubre `test_pdf_table_chunks_flow_through_the_real_handler…`.
+    El caso PDF tabular no está aquí: su presupuesto lo cubren
+    `test_pdf_table_chunks_flow_through_the_real_handler…` (handler) y
+    `test_search_over_the_indexed_pdf_returns_its_table_chunks` (retrieval real).
     """
     payload = _search(backend, query, top_k, path_filter=path_filter)
 

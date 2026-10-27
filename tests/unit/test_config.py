@@ -193,23 +193,37 @@ def test_api_key_env_value_never_reaches_renderings_or_logs(
     assert sentinel not in logs
 
 
-def test_model_cache_env_resolves_under_vault(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """`models_dir` y las dos env vars del cache apuntan a `<vault>/.tepochcalli/models`."""
-    monkeypatch.delenv("SENTENCE_TRANSFORMERS_HOME", raising=False)
-    monkeypatch.delenv("HF_HOME", raising=False)
-    expected = tmp_path / ".tepochcalli" / "models"
+def test_model_cache_env_resolves_under_vault(tmp_path: Path) -> None:
+    """`models_dir` y las dos env vars del cache apuntan a `<vault>/.tepochcalli/models`.
 
-    cfg = flow_config.load_config(tmp_path)
-    assert cfg.models_dir == expected
+    Guarda y restaura las dos claves A MANO (no con `monkeypatch.delenv`):
+    pytest no registra nada en su stack de undo cuando la clave NO existe
+    (`delitem` solo apenda si `name in dic`), así que el `os.environ[...] =`
+    crudo de `apply_model_cache_env` sobreviviría al teardown y fugaría
+    `HF_HOME`/`SENTENCE_TRANSFORMERS_HOME` al resto de la suite —
+    `resolve_model_cache()` confiaría en un cache fantasma y los hijos con
+    `HF_HUB_OFFLINE=1` no encontrarían sus modelos (raíz del fallo de PDFs
+    en suite, 2026-10-27).
+    """
+    saved = {key: os.environ.pop(key, None) for key in ("SENTENCE_TRANSFORMERS_HOME", "HF_HOME")}
+    try:
+        expected = tmp_path / ".tepochcalli" / "models"
 
-    # El entrypoint llamará a esto ANTES de construir ningún embedder (E1/T3).
-    cfg.apply_model_cache_env()
+        cfg = flow_config.load_config(tmp_path)
+        assert cfg.models_dir == expected
 
-    assert Path(os.environ["SENTENCE_TRANSFORMERS_HOME"]) == expected
-    assert Path(os.environ["HF_HOME"]) == expected
-    assert expected.is_dir()
+        # El entrypoint llamará a esto ANTES de construir ningún embedder (E1/T3).
+        cfg.apply_model_cache_env()
+
+        assert Path(os.environ["SENTENCE_TRANSFORMERS_HOME"]) == expected
+        assert Path(os.environ["HF_HOME"]) == expected
+        assert expected.is_dir()
+    finally:
+        for key, value in saved.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
 
 
 def test_unreadable_config_file_warns_and_falls_back_to_defaults(
