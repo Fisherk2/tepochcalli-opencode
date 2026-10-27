@@ -67,7 +67,16 @@ def _write_atomic(target: Path, content: str) -> None:
     El temporal NO va a `/tmp`: renombrar cruza dispositivos y dejaría de ser
     atómico. Ante cualquier fallo el temporal se limpia y la excepción sube
     (el guard la convierte en `INTERNAL`).
+
+    Revisión Phase 2 (eje 5, TOCTOU): si el target APARECIÓ tras la carrera
+    con `available_name`, se ABORTA con `RuntimeError` ⇒ `INTERNAL` — jamás
+    `ok: true` borrando un material que otra rama convirtió.
     """
+    if target.exists():
+        raise RuntimeError(
+            f"add_source: carrera TOCTOU — {target} apareció tras elegir el nombre; "
+            "nada se sobrescribe"
+        )
     fd, tmp_name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
     tmp_path = Path(tmp_name)
     try:
