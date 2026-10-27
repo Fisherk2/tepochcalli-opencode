@@ -56,13 +56,29 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
   - Verificar: tests de integración con `http(s):` (servidor local) y `file:`; negativos: traversal, `subdir` absoluto, formato no convertible, `file:` fuera del vault
   - Dep.: T1, T3 · Tamaño: M
 
-### ✅ CP-B · Los cuatro caminos — **5/5**
-- [ ] Las 4 tools responden con la **forma exacta** del plan §5 contra un vault fixture real
-- [ ] `search` devuelve citas verificables (offsets reproducibles) y `rag_status` los 4 bloques
-- [ ] `add_source` escribe dentro de `00-Resources/` y reindexa
-- [ ] `just quality` verde (lint + fmt + mypy `flow`+`mcp` + tests)
-- [ ] **`code-reviewer` aprueba el diff de la sub-fase**
+### ✅ CP-B · Los cuatro caminos — **5/5** ✅ (2026-10-26, `code-reviewer` → **APRUEBA**)
+- [x] Las 4 tools responden con la **forma exacta** del plan §5 contra un vault fixture real
+- [x] `search` devuelve citas verificables (offsets reproducibles) y `rag_status` los 4 bloques
+      — *salvedad honesta del gate:* la identidad F1 (`text[char_start:char_end]`) está verificada
+      en Phase 1 por fila indexada y los 7 campos pasan verbatim del puerto, pero el corte
+      **directo** «slice del original desde un resultado de `search`» es del e2e de **T8**.
+      No se maquilla: CP-B lo aprueba heredado, T8 lo demostrará end-to-end.
+- [x] `add_source` escribe dentro de `00-Resources/` y reindexa
+- [x] `just quality` verde (lint + fmt + mypy `flow`+`mcp` + tests) — `just ci` independiente:
+      **334 passed**, 2 slow, smoke Δ PASS
+- [x] **`code-reviewer` aprueba el diff de la sub-fase** (`884af25..1777465`)
 - ▶️ **Desbloquea T6 y T7.**
+
+#### Riesgos residuales que aceptó el gate (y dónde se pagan)
+
+| # | Riesgo | Se paga en |
+|---|---|---|
+| R1 | `E_NO_EMBEDDER` **sin costura en `search`/`add_source`**: la precedencia está probada en `index_refresh`/`rag_status`, pero la spec lista `search` como emisor | **T6** (añadir el seam a `search`) |
+| R2 | **Staleness de config** en `_backend_instance`: cachea `Config` por proceso mientras `rag_status` recarga por llamada ⇒ tras un swap (ADR-008) en la misma sesión, `search` nombraría la config vieja como «actual» | **T6** (sitio natural) |
+| R3 | Docstring **inacertado** en `paths.ensure_within`: dice `ValueError → VALIDATION_ERROR`, pero en el handler esa ruta cae en el guard → `INTERNAL` | fix rápido (T6 o T10) |
+| R4 | Ayudantes de test triplicados (`_running_server`/`_server_env`/`WARM_SCRIPT` en 3 módulos) | **T8** (extraer a `tests/support/`) |
+| R5 | TOCTOU en la colisión de slug (`available_name` + `os.replace` entre sesiones) — tool local single-user | `docs/TECH_DEBT.md` en **T10** |
+| R6 | `pyproject.toml` `packages` omite `tepochcalli_mcp.tools` — irrelevante con editable, rompería un wheel | nota en **T9/T10** |
 
 ---
 
