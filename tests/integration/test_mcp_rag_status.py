@@ -28,24 +28,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import subprocess
-import sys
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from model_cache import link_model_cache, offline_env, resolve_model_cache
-from tepochcalli_flow import app as flow_app
+from mcp import ClientSession
+from support.mcp_server import running_server, server_env, warm_model
 from tepochcalli_flow import citation
-from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL, MODEL_REVISION
+from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL
 from tepochcalli_mcp import budget
-
-NONET_DIR = Path(__file__).parents[1] / "support" / "nonet"
-"""Directorio con el `sitecustomize.py` canario (cero red) — va al PYTHONPATH del hijo."""
 
 TOML_RELPATH = ".tepochcalli/config/tepochcalli.toml"
 """Literal de `config.path` (spec §rag_status) — relativo, con `/` en todo SO."""
@@ -61,41 +51,6 @@ BETA = (
     "# Beta — segunda nota\n\n"
     "Fichero estable del vault T4: completa el índice mínimo del estado sano.\n"
 )
-
-WARM_SCRIPT = (
-    "from sentence_transformers import SentenceTransformer\n"
-    "from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL, MODEL_REVISION\n"
-    f"SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device='cpu', revision={MODEL_REVISION!r})\n"
-    "print('warm ok')\n"
-)
-"""Calienta el cache del modelo UNA vez (en frío: la única descarga permitida)."""
-
-
-@asynccontextmanager
-async def _running_server(env: dict[str, str]) -> AsyncIterator[ClientSession]:
-    """Server `python -m tepochcalli_mcp` por stdio con `env` dado (patrón T1)."""
-    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            yield session
-
-
-def _server_env(vault: Path, model_cache: Path | None = None) -> dict[str, str]:
-    """Env del hijo: vault propio + canario `nonet`; modelo OFFLINE solo si se pasa cache."""
-    pythonpath = [str(NONET_DIR)]
-    if existing := os.environ.get("PYTHONPATH"):
-        pythonpath.append(existing)
-    env = {
-        **os.environ,
-        flow_app.VAULT_ROOT_ENV: str(vault),
-        "PYTHONPATH": os.pathsep.join(pythonpath),
-    }
-    if model_cache is not None:
-        env["HF_HOME"] = str(model_cache)
-        env["SENTENCE_TRANSFORMERS_HOME"] = str(model_cache)
-        env["HF_HUB_OFFLINE"] = "1"  # el warm ya lo dejó en cache: tras esto, cero descargas
-    return env
 
 
 async def _call(session: ClientSession, tool: str, arguments: dict[str, object]) -> dict:
@@ -124,27 +79,12 @@ def test_sane_install_reports_the_full_block_contract(
     (resources / "alpha.md").write_text(ALPHA, encoding="utf-8")
     (resources / "beta.md").write_text(BETA, encoding="utf-8")
 
-    cache = resolve_model_cache()
-    models_link = link_model_cache(vault, cache)
-    warm = subprocess.run(
-        [sys.executable, "-c", WARM_SCRIPT],
-        env={
-            **os.environ,
-            "HF_HOME": str(models_link),
-            "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-            **offline_env(cache),
-        },
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
-    assert warm.returncode == 0, f"calentamiento del modelo falló:\n{warm.stderr}"
+    models_link = warm_model(vault)
 
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
 
     async def go() -> dict:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             refresh = await _call(session, "index_refresh", {})
             assert refresh["indexed"] >= 1, "el estado sano necesita un índice REAL"
             return await _call(session, "rag_status", {})
@@ -197,12 +137,12 @@ def test_malformed_toml_reports_valid_false_without_degrading_health(tmp_path: P
     toml_path = tmp_path / TOML_RELPATH
     toml_path.parent.mkdir(parents=True)
     toml_path.write_text("[embedding\nmodel = 'roto", encoding="utf-8")  # TOML malformado
-    env = _server_env(tmp_path)
+    env = server_env(tmp_path)
 
     try:
 
         async def go() -> dict:
-            async with _running_server(env) as session:
+            async with running_server(env) as session:
                 return await _call(session, "rag_status", {})
 
         payload = asyncio.run(go())

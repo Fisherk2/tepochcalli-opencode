@@ -12,9 +12,10 @@ cliente REAL (mcp==2.3.0) que el proceso `python -m tepochcalli_mcp`
 
 **T2:** `search` dejó de ser placeholder — implementa el camino real y contra
 un vault SIN índice responde `INDEX_EMPTY` (canónico, no vacío); su shape de
-éxito vive en `tests/integration/test_mcp_search.py`. Las otras 3 tools
-siguen con el placeholder congelado hasta T3/T4/T5. T8 añadirá después
-`tests/e2e/test_mcp_contract.py`; este fichero sigue anclando el esqueleto.
+éxito vive en `tests/integration/test_mcp_search.py`. T3-T5 llenaron las
+otras 3 tools. El contract test D7.3 completo vive desde T8 en
+`tests/e2e/test_mcp_contract.py`; este fichero sigue anclando el esqueleto
+(arranque stdio, `tools/list` y stdout exclusivo de JSON-RPC).
 """
 
 from __future__ import annotations
@@ -31,9 +32,9 @@ from pathlib import Path
 
 import pytest
 import tepochcalli_mcp
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
+from mcp import ClientSession
 from model_cache import link_model_cache, offline_env, resolve_model_cache
+from support.mcp_server import running_server
 from tepochcalli_flow import citation
 
 # Las 4 tools congeladas del contrato (spec-mcp-server §API / plan §5), con
@@ -78,16 +79,17 @@ def test_mcp_sdk_resolves_to_site_packages_without_shadowing() -> None:
 async def _running_server(vault_root: Path | None = None) -> AsyncIterator[ClientSession]:
     """Levanta `python -m tepochcalli_mcp` por stdio y devuelve una sesión cliente.
 
-    `vault_root` fija `TEPOCHCALLI_VAULT_ROOT` en el proceso hijo: T2 lo usa
-    para que `search` responda `INDEX_EMPTY` de forma DETERMINISTA (un vault
-    temporal sin `.tepochcalli/db/`), sin depender del índice local del repo.
+    Adaptador de una línea sobre `support.mcp_server.running_server` (R4/T8):
+    esta única variante monta la env desde `vault_root` (None ⇒ heredar la del
+    padre), como siempre. `vault_root` fija `TEPOCHCALLI_VAULT_ROOT` en el
+    proceso hijo: T2 lo usa para que `search` responda `INDEX_EMPTY` de forma
+    DETERMINISTA (un vault temporal sin `.tepochcalli/db/`), sin depender del
+    índice local del repo. A propósito SIN canario `nonet`: aquí no se indexa
+    ni se busca, solo se arranca el proceso y se leen shapes.
     """
     env = None if vault_root is None else {**os.environ, "TEPOCHCALLI_VAULT_ROOT": str(vault_root)}
-    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            yield session
+    async with running_server(env) as session:
+        yield session
 
 
 def test_tools_list_returns_exactly_four_tools_with_expected_schemas() -> None:

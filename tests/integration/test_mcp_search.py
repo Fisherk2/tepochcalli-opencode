@@ -38,15 +38,13 @@ import json
 import os
 import shutil
 import socket
-import subprocess
 import sys
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-from model_cache import link_model_cache, offline_env, resolve_model_cache
-from tepochcalli_flow import app as flow_app
+from support.mcp_server import index_vault
 from tepochcalli_flow import citation
 from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL, load_config
 from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
@@ -70,8 +68,6 @@ CONTRACT_RESULT_FIELDS = [
 ]
 
 LLM_MODULES = frozenset({"litellm", "openai", "anthropic"})
-
-UPDATE_SCRIPT = "from tepochcalli_flow.app import app; app.update_blocking()"
 
 GOLDEN_QUERY = "whitelist de extensiones indexables"
 """Consulta dorada determinista sobre la fixture de Phase 1 (vocabulario real del corpus)."""
@@ -156,9 +152,10 @@ def _build_vault(
 ) -> IndexedVault:
     """Fixture dorada (+ plano) indexada en subproceso; opcionalmente con corpus ≥100.
 
-    El update corre en subproceso (docstring del módulo): environment de
-    cocoindex aislado y red off cuando el cache resuelto ya contiene el modelo
-    (`model_cache.offline_env`). `min_rows` aserta la premisa del AC (≥100).
+    El update corre en subproceso vía `support.mcp_server.index_vault` (R4/T8):
+    environment de cocoindex aislado y red off cuando el cache resuelto ya
+    contiene el modelo (`model_cache.offline_env`, dentro de `index_vault`).
+    `min_rows` aserta la premisa del AC (≥100).
     """
     vault = tmp_path_factory.mktemp(name)
     shutil.copytree(FIXTURE_VAULT, vault, dirs_exist_ok=True)
@@ -169,29 +166,7 @@ def _build_vault(
         )
         (vault / citation.RESOURCES_DIR / "grande.md").write_text(GRANDE_CONTENT, encoding="utf-8")
 
-    cache = resolve_model_cache()
-    models_link = link_model_cache(vault, cache)
-
-    env = {
-        **os.environ,
-        flow_app.VAULT_ROOT_ENV: str(vault),
-        "HF_HOME": str(models_link),
-        "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-        **offline_env(cache),
-    }
-    env.pop("COCOINDEX_DB", None)
-    proc = subprocess.run(
-        [sys.executable, "-c", UPDATE_SCRIPT],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
-    assert proc.returncode == 0, (
-        f"update_blocking() falló en subproceso:\n{proc.stdout}\n{proc.stderr}"
-    )
-    assert (vault / DB_RELPATH).exists(), "el update no materializó LanceDB en el vault"
+    models_link = index_vault(vault)  # hijo: env canónica + UPDATE_SCRIPT (assert de db incluido)
     if min_rows is not None:
         assert _count_chunks(vault) >= min_rows, f"se esperaban ≥{min_rows} chunks reales"
     return IndexedVault(vault=vault, model_cache=models_link)

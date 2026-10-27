@@ -15,12 +15,12 @@ Fuentes de verdad:
 Decisiones de test, documentadas a propósito (convención de T2/T6):
 
 * **Indexación SIEMPRE en subproceso** con `TEPOCHCALLI_VAULT_ROOT` propio
-  (mismo patrón y MISMO indexador `UPDATE_SCRIPT` que T2 — se importa de
-  `test_mcp_search`, no se reinventa): el environment global de cocoindex no
-  admite dos vaults en el proceso padre.
-* **Reutilización de T2**: `FIXTURE_VAULT`, `IndexedVault`, `UPDATE_SCRIPT`,
-  `_search` y `_backend_on` se importan del módulo de T2 (R4 — la extracción a
-  `tests/support/` la paga T8); aquí SOLO se compone el vault adverso.
+  (mismo patrón e indexador compartido que T2 — hoy
+  `support.mcp_server.index_vault`, extracción R4 de T8): el environment
+  global de cocoindex no admite dos vaults en el proceso padre.
+* **Reutilización de T2**: `FIXTURE_VAULT`, `IndexedVault`, `_search` y
+  `_backend_on` se importan del módulo de T2; aquí SOLO se compone el vault
+  adverso.
 * **Premisas de fixture vía `parsers`** (chunker real de Phase 1, sin red): el
   tamaño de chunk (1536 BYTES, D11), la multibyte-idad y la tabla del PDF son
   propiedades deterministas de `parsers.extract_text`/`chunk_document`; lo que
@@ -63,16 +63,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import shutil
-import subprocess
-import sys
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
-from model_cache import link_model_cache, offline_env, resolve_model_cache
-from tepochcalli_flow import app as flow_app
+from support.mcp_server import index_vault
 from tepochcalli_flow import citation, parsers
 from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL
 from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
@@ -83,7 +79,6 @@ from tepochcalli_mcp.server import _VaultSearchBackend
 from tepochcalli_mcp.tools.search import SearchBackend
 from test_mcp_search import (
     FIXTURE_VAULT,
-    UPDATE_SCRIPT,
     IndexedVault,
     _backend_on,
     _search,
@@ -182,8 +177,9 @@ def _cjk_content() -> str:
 def _build_adversarial_vault(tmp_path_factory: pytest.TempPathFactory) -> IndexedVault:
     """Vault dorada + las 3 fuentes adversas (cjk, denso, PDF tabular), indexado en subproceso.
 
-    El indexador es EXACTAMENTE el de T2 (`UPDATE_SCRIPT` importado): misma env
-    aislada, mismo `offline_env` cuando el cache resuelto ya tiene el modelo.
+    El indexador es el compartido `support.mcp_server.index_vault` (R4/T8):
+    MISMA env canónica, mismo `offline_env` cuando el cache resuelto ya tiene
+    el modelo — el que antes duplicaba el `UPDATE_SCRIPT` de T2.
 
     El PDF se COPIA y se INDEXA de verdad (fix de F-T7-2: `index_file` delega
     en `parsers.extract_text`, Docling corre dentro del subproceso): su presencia
@@ -196,28 +192,7 @@ def _build_adversarial_vault(tmp_path_factory: pytest.TempPathFactory) -> Indexe
     (resources / "denso.md").write_text(_dense_content(), encoding="utf-8")
     shutil.copy(TABLE_PDF, resources / "tablas.pdf")
 
-    cache = resolve_model_cache()
-    models_link = link_model_cache(vault, cache)
-    env = {
-        **os.environ,
-        flow_app.VAULT_ROOT_ENV: str(vault),
-        "HF_HOME": str(models_link),
-        "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-        **offline_env(cache),
-    }
-    env.pop("COCOINDEX_DB", None)
-    proc = subprocess.run(
-        [sys.executable, "-c", UPDATE_SCRIPT],
-        env=env,
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
-    assert proc.returncode == 0, (
-        f"indexación adversa falló en subproceso:\n{proc.stdout}\n{proc.stderr}"
-    )
-    assert (vault / DB_RELPATH).exists(), "el update no materializó LanceDB en el vault"
+    models_link = index_vault(vault)
     return IndexedVault(vault=vault, model_cache=models_link)
 
 

@@ -119,7 +119,8 @@ historial de git (`git show c4f7db3:tasks/todo.md`).
 
 ## Sub-fase D — Contrato, e2e, registro y cierre
 
-- [ ] **T8 · Contract tests D7.3 y e2e «pregunta → tool-call → JSON citado»**
+- [x] **T8 · Contract tests D7.3 y e2e «pregunta → tool-call → JSON citado»**
+  - Residuos declarados al cerrar: **RED de primera escritura inexistente** (T2-T7 ya cumplían la spec y `mcp/` está vedado) — sustituido por **controles negativos observados y borrados** que demostraron que las aserciones muerden (orden invertido ⇒ falla; un byte de corrimiento en offsets ⇒ falla). **6 corridas e2e consecutivas verdes, no 10** (`pytest-repeat` no instalado y `pyproject.toml` vedado). Coste del e2e ~5-6 min de los 16-19 del gate, dominado por el arranque de torch/Docling en cada hijo. **Duda T10:** `FIX_OFFLINE_NO_CACHE` no tiene literal de ancla en ninguna spec (unit y wire se comparan auto-referenciados) ⇒ una derivación silenciosa pasaría inadvertida.
   - Subagentes: `test-automation-engineer` (lead), `api-tester`, `testing-reality-checker` · Skills: `test-driven-development`, `api-spec-generation`, `doubt-driven-development`, `clean-code`
   - AC: shape **exacto** (claves y orden) de las 4 tools; en error `is_error = true` y `content[0].text` **JSON parseable** (nunca texto libre) + `structured_content` coherente; los 5 `E_*` con su payload; `rag_status` con los 4 bloques exactos y <200 tokens; instalación degradada ⇒ `search` = `E_NO_EMBEDDER` y `rag_status` = `degraded` con `fix_hint`; globs de `path_filter` válidos e inválidos (`..`, absoluto) y prefijo `00-Resources/`; **e2e real** (proceso `tepochcalli-mcp` por stdio con cliente del SDK, vault golden md+PDF) con `source_path` real, `heading` y **offsets reproducibles** (slice del original reproduce `text` en md; `offsets_ref == "extract"` en PDF); fixture golden **grabado** en `tests/fixtures/`; cero red, cero LLM
   - Verificar: `uv run python -m pytest ../../tests/e2e -v` + `just test` verde

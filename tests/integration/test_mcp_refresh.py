@@ -50,24 +50,14 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
-import subprocess
-import sys
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from model_cache import link_model_cache, offline_env, resolve_model_cache
+from mcp import ClientSession
+from support.mcp_server import running_server, server_env, warm_model
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
-from tepochcalli_flow.config import MODEL_REVISION
 from tepochcalli_mcp import errors
-
-NONET_DIR = Path(__file__).parents[1] / "support" / "nonet"
-"""Directorio con el `sitecustomize.py` canario (cero red) — va al PYTHONPATH del hijo."""
 
 REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
 """Orden exacto de `asdict(RefreshReport)` — contrato §Tool `index_refresh`."""
@@ -94,45 +84,6 @@ GAMMA = (
     "Creado en el paso `add` y borrado en el paso `delete`: un archivo que entra "
     "y sale del índice dentro del mismo journey.\n"
 )
-
-WARM_SCRIPT = (
-    "from sentence_transformers import SentenceTransformer\n"
-    "from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL, MODEL_REVISION\n"
-    f"SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device='cpu', revision={MODEL_REVISION!r})\n"
-    "print('warm ok')\n"
-)
-"""Calienta el cache del modelo UNA vez (en frío: la única descarga permitida)."""
-
-
-@asynccontextmanager
-async def _running_server(env: dict[str, str]) -> AsyncIterator[ClientSession]:
-    """Server `python -m tepochcalli_mcp` por stdio con `env` dado (patrón T1)."""
-    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            yield session
-
-
-def _server_env(vault: Path, model_cache: Path | None = None) -> dict[str, str]:
-    """Env del hijo: vault propio + canario `nonet`; modelo OFFLINE solo si se pasa cache.
-
-    `model_cache` opcional (T6): la ruta `litellm` sin clave falla ANTES de
-    tocar modelo alguno, así que su test no necesita (ni quiere) env de modelo.
-    """
-    pythonpath = [str(NONET_DIR)]
-    if existing := os.environ.get("PYTHONPATH"):
-        pythonpath.append(existing)
-    env = {
-        **os.environ,
-        flow_app.VAULT_ROOT_ENV: str(vault),
-        "PYTHONPATH": os.pathsep.join(pythonpath),
-    }
-    if model_cache is not None:
-        env["HF_HOME"] = str(model_cache)
-        env["SENTENCE_TRANSFORMERS_HOME"] = str(model_cache)
-        env["HF_HUB_OFFLINE"] = "1"  # el warm ya lo dejó en cache: tras esto, cero descargas
-    return env
 
 
 async def _call_refresh(session: ClientSession) -> dict[str, object]:
@@ -184,24 +135,7 @@ def refresh_vault(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]
     (resources / "alpha.md").write_text(ALPHA, encoding="utf-8")
     (resources / "beta.md").write_text(BETA, encoding="utf-8")
 
-    cache = resolve_model_cache()
-    models_link = link_model_cache(vault, cache)
-
-    warm_env = {
-        **os.environ,
-        "HF_HOME": str(models_link),
-        "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-        **offline_env(cache),
-    }
-    proc = subprocess.run(
-        [sys.executable, "-c", WARM_SCRIPT],
-        env=warm_env,
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
-    assert proc.returncode == 0, f"calentamiento del modelo falló:\n{proc.stderr}"
+    models_link = warm_model(vault)
     return vault, models_link
 
 
@@ -214,11 +148,11 @@ def test_journey_creates_modifies_deletes_and_stays_idempotent(
     """Secuencia completa a través de la tool con las cuentas exactas de Phase 1."""
     vault, models_link = refresh_vault
     resources = vault / citation.RESOURCES_DIR
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
 
     async def journey() -> list[dict[str, object]]:
         reports: list[dict[str, object]] = []
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             reports.append(await _call_refresh(session))  # initial: indexa los 2 ficheros
             (resources / "gamma.md").write_text(GAMMA, encoding="utf-8")
             reports.append(await _call_refresh(session))  # add
@@ -261,10 +195,10 @@ def test_retained_lock_returns_zeros_and_writes_nothing(
     assert lock_fd is not None, "nadie retenía el candado: el acquire debe triunfar"
     try:
         db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
-        env = _server_env(vault, models_link)
+        env = server_env(vault, models_link)
 
         async def locked_call() -> dict[str, object]:
-            async with _running_server(env) as session:
+            async with running_server(env) as session:
                 return await _call_refresh(session)
 
         report = asyncio.run(locked_call())
@@ -314,10 +248,10 @@ def test_two_concurrent_refreshes_both_yield_locked_and_write_nothing(
     assert lock_fd is not None, "nadie retenía el candado: el acquire debe triunfar"
     try:
         db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
-        env = _server_env(vault, models_link)
+        env = server_env(vault, models_link)
 
         async def both() -> list[dict[str, object]]:
-            async with _running_server(env) as first, _running_server(env) as second:
+            async with running_server(env) as first, running_server(env) as second:
                 return list(await asyncio.gather(_call_refresh(first), _call_refresh(second)))
 
         first_report, second_report = asyncio.run(both())
@@ -365,10 +299,10 @@ def test_refresh_without_api_key_for_litellm_reports_e_api_auth(
         encoding="utf-8",
     )
     monkeypatch.delenv("TEPOCHCALLI_EMBED_API_KEY", raising=False)
-    env = _server_env(tmp_path)
+    env = server_env(tmp_path)
 
     async def go() -> dict[str, object]:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             result = await session.call_tool("index_refresh", {})
             assert result.is_error, "sin clave debe responder un error canónico, no un reporte"
             return json.loads(result.content[0].text)

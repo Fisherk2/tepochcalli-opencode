@@ -35,24 +35,15 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import subprocess
-import sys
-from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from threading import Thread
 
 import pytest
-from mcp import ClientSession, StdioServerParameters
-from mcp.client.stdio import stdio_client
-from model_cache import link_model_cache, offline_env, resolve_model_cache
+from mcp import ClientSession
+from support.mcp_server import running_server, server_env, warm_model
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
-from tepochcalli_flow.config import MODEL_REVISION
-
-NONET_DIR = Path(__file__).parents[1] / "support" / "nonet"
-"""Directorio con el `sitecustomize.py` canario (cero red) — va al PYTHONPATH del hijo."""
 
 INDEXED_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms"]
 """Los 4 campos del sub-objeto `indexed` — SIN `locked` (contrato congelado §5)."""
@@ -68,42 +59,6 @@ ARTICLE_HTML = (
     "<p>Texto distintivo del servidor local: biomarcadores t5http-2026 en sangre.</p>"
     "</body></html>"
 )
-WARM_SCRIPT = (
-    "from sentence_transformers import SentenceTransformer\n"
-    "from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL, MODEL_REVISION\n"
-    f"SentenceTransformer(DEFAULT_EMBEDDING_MODEL, device='cpu', revision={MODEL_REVISION!r})\n"
-    "print('warm ok')\n"
-)
-"""Calienta el cache del modelo UNA vez (en frío: la única descarga permitida)."""
-
-
-@asynccontextmanager
-async def _running_server(env: dict[str, str]) -> AsyncIterator[ClientSession]:
-    """Server `python -m tepochcalli_mcp` por stdio con `env` dado (patrón T1/T3)."""
-    params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
-    async with stdio_client(params) as (read, write):
-        async with ClientSession(read, write) as session:
-            await session.initialize()
-            yield session
-
-
-def _server_env(vault: Path, model_cache: Path, *, allow_loopback: bool = False) -> dict[str, str]:
-    """Env del hijo: vault propio + modelo cacheado OFFLINE; canario `nonet` salvo `http:`."""
-    pythonpath: list[str] = []
-    if not allow_loopback:
-        pythonpath.append(str(NONET_DIR))
-    if existing := os.environ.get("PYTHONPATH"):
-        pythonpath.append(existing)
-    env = {
-        **os.environ,
-        flow_app.VAULT_ROOT_ENV: str(vault),
-        "HF_HOME": str(model_cache),
-        "SENTENCE_TRANSFORMERS_HOME": str(model_cache),
-        "HF_HUB_OFFLINE": "1",
-    }
-    if pythonpath:
-        env["PYTHONPATH"] = os.pathsep.join(pythonpath)
-    return env
 
 
 async def _call_add_source(
@@ -153,23 +108,7 @@ def source_vault(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
     (staging / "notas.md").write_text(NOTAS, encoding="utf-8")
     (staging / "datos.bin").write_bytes(os.urandom(64))
 
-    cache = resolve_model_cache()
-    models_link = link_model_cache(vault, cache)
-    warm_env = {
-        **os.environ,
-        "HF_HOME": str(models_link),
-        "SENTENCE_TRANSFORMERS_HOME": str(models_link),
-        **offline_env(cache),
-    }
-    proc = subprocess.run(
-        [sys.executable, "-c", WARM_SCRIPT],
-        env=warm_env,
-        capture_output=True,
-        text=True,
-        timeout=600,
-        check=False,
-    )
-    assert proc.returncode == 0, f"calentamiento del modelo falló:\n{proc.stderr}"
+    models_link = warm_model(vault)
     return vault, models_link
 
 
@@ -181,11 +120,11 @@ def test_add_source_file_writes_frontmatter_and_indexes_the_chunk(
 ) -> None:
     """`file:` dentro del vault → shape exacto, frontmatter de trazabilidad y chunk CITABLE."""
     vault, models_link = source_vault
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
     uri = (vault / "staging" / "notas.md").as_uri()
 
     async def journey() -> tuple[dict[str, object], dict[str, object]]:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             added, is_error = await _call_add_source(session, uri)
             assert not is_error, added
             found = await session.call_tool("search", {"query": "cohorte pediatria t5xyz-2026"})
@@ -237,10 +176,10 @@ def test_add_source_http_from_local_server(source_vault: tuple[Path, Path]) -> N
     try:
         port = server.server_address[1]
         uri = f"http://127.0.0.1:{port}/articulo.html"
-        env = _server_env(vault, models_link, allow_loopback=True)
+        env = server_env(vault, models_link, allow_loopback=True)
 
         async def call() -> dict[str, object]:
-            async with _running_server(env) as session:
+            async with running_server(env) as session:
                 added, is_error = await _call_add_source(session, uri)
                 assert not is_error, added
                 return added
@@ -268,11 +207,11 @@ def test_add_source_twice_gets_the_numeric_suffix(source_vault: tuple[Path, Path
     (vault / "staging" / "colision.md").write_text(
         "# Colision\n\nFichero propio del test de sufijo numerico.\n", encoding="utf-8"
     )
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
     uri = (vault / "staging" / "colision.md").as_uri()
 
     async def twice() -> tuple[object, object]:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             first, first_error = await _call_add_source(session, uri)
             assert not first_error, first
             second, second_error = await _call_add_source(session, uri)
@@ -291,11 +230,11 @@ def test_add_source_twice_gets_the_numeric_suffix(source_vault: tuple[Path, Path
 def test_file_outside_the_vault_is_rejected_d16(source_vault: tuple[Path, Path]) -> None:
     """D16: `file:` fuera del vault ⇒ `VALIDATION_ERROR`; `00-Resources/` queda byte a byte."""
     vault, models_link = source_vault
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
     before = _tree_snapshot(vault / citation.RESOURCES_DIR)
 
     async def call() -> tuple[dict[str, object], bool]:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             return await _call_add_source(session, "file:///etc/hostname")
 
     payload, is_error = asyncio.run(call())
@@ -310,7 +249,7 @@ def test_file_outside_the_vault_is_rejected_d16(source_vault: tuple[Path, Path])
 def test_traversal_and_absolute_subdir_are_rejected(source_vault: tuple[Path, Path]) -> None:
     """`subdir` con `..` o absoluto ⇒ `VALIDATION_ERROR`; cero escrituras dentro o fuera."""
     vault, models_link = source_vault
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
     (vault / "staging" / "subdir.md").write_text(
         "# Subdir\n\nFichero propio del test de subdir invalido.\n", encoding="utf-8"
     )
@@ -318,7 +257,7 @@ def test_traversal_and_absolute_subdir_are_rejected(source_vault: tuple[Path, Pa
     before = _tree_snapshot(vault / citation.RESOURCES_DIR)
 
     async def calls() -> list[dict[str, object]]:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             traversal, error_a = await _call_add_source(session, uri, "../escape")
             absolute, error_b = await _call_add_source(session, uri, "/etc")
             assert error_a and error_b
@@ -335,12 +274,12 @@ def test_traversal_and_absolute_subdir_are_rejected(source_vault: tuple[Path, Pa
 def test_unconvertible_format_maps_to_source_unreachable(source_vault: tuple[Path, Path]) -> None:
     """Binario sin conversor ⇒ `SOURCE_UNREACHABLE` con la guía literal; cero escrituras."""
     vault, models_link = source_vault
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
     uri = (vault / "staging" / "datos.bin").as_uri()
     before = _tree_snapshot(vault / citation.RESOURCES_DIR)
 
     async def call() -> tuple[dict[str, object], bool]:
-        async with _running_server(env) as session:
+        async with running_server(env) as session:
             return await _call_add_source(session, uri)
 
     payload, is_error = asyncio.run(call())
@@ -363,11 +302,11 @@ def test_locked_refresh_reports_engine_locked_and_keeps_the_file(
     uri = (vault / "staging" / "notas.md").as_uri()
     lock_fd = flow_app._acquire_refresh_lock(vault)
     assert lock_fd is not None, "nadie retenía el candado: el acquire debe triunfar"
-    env = _server_env(vault, models_link)
+    env = server_env(vault, models_link)
     try:
 
         async def call() -> tuple[dict[str, object], bool]:
-            async with _running_server(env) as session:
+            async with running_server(env) as session:
                 return await _call_add_source(session, uri, "bloqueado")
 
         payload, is_error = asyncio.run(call())
