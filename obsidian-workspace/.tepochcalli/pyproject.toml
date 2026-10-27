@@ -36,7 +36,10 @@ dependencies = [
     # LiteLLM: proveedor de embeddings por API (D-a: lectura+escritura en
     # Phase 2; ADR-007 menú D7.2). Pin superior <2 porque la serie 2.x rompería
     # el contrato `litellm.embedding` que T6 ancla (plan §9 riesgo de lock).
-    "litellm>=1.106,<2",
+    # Review Phase 2 (2026-10-27): `<1.107.0` EXCLUSIVO — la serie 1.107.0
+    # publicó malware roba-credenciales (GHSA-92x9-889m-jgmw); no re-abrir el
+    # rango hasta que una serie se declare limpia.
+    "litellm>=1.106.2,<1.107.0",
 ]
 
 [project.scripts]
