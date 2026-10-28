@@ -79,7 +79,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - 📌 **OM-4 cerrado aquí**: sin este AC, F7 no puede producir índice.
   - Dep.: T7 · Tamaño: L
 
-- [ ] **T9 · F4 bootstrap de `uv` + F5 `uv venv`/`uv sync` + fix de R6**
+- [x] **T9 · F4 bootstrap de `uv` + F5 `uv venv`/`uv sync` + fix de R6**
   - Subagentes: `rust-engineer` (lead), `devops-engineer`, `dependency-manager` · Skills: `bash-defensive-patterns`, `dependency-audit`, `debugging-and-error-recovery`
   - AC: (a) F4 descarga el binario de `uv` de la release oficial para la plataforma, **verifica su SHA-256**, lo deja en `.tepochcalli/bin/uv` con bit de ejecución y comprueba `uv --version`; (b) F4 **no** ejecuta scripts remotos; (c) F5 crea el venv **en `.tepochcalli/venv/`** (con `UV_PROJECT_ENVIRONMENT=venv`, quirk de uv 0.12.9) y ejecuta `uv sync --frozen` con el `uv.lock` del payload; (d) **R6**: `pyproject.toml` del payload pasa a declarar `tepochcalli_mcp.tools` (explícito o `find`) ⇒ **verificación**: `python -c "import tepochcalli_mcp.tools.search"` dentro del venv del vault; (e) las compensaciones son `rm .tepochcalli/bin/` (F4) y `rm -rf .tepochcalli/venv/` (F5), y **no tocan** `models/`, `db/` ni `config/`; (f) `uv python install 3.12` (CPython gestionado) deja el intérprete en `.tepochcalli/venv/`
   - Verificar: `cargo test` con `FakeProc` que simula el fallo de `uv` ⇒ compensación ejecutada y `bin/`/`venv/` ausentes · instalación real en `tempfile` con red ⇒ `uv --version` y `import tepochcalli_mcp.tools.search` OK · **R6 cerrado** (anotado en `docs/TECH_DEBT.md`)

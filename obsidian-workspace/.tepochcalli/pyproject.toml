@@ -148,5 +148,5 @@ build-backend = "setuptools.build_meta"
 # directorio literal `mcp/tepochcalli_mcp`. La raíz `""` sigue siendo `flow`
 # para que `tepochcalli_flow[.adapters]` resuelva igual que en Phase 1.
 [tool.setuptools]
-packages = ["tepochcalli_flow", "tepochcalli_flow.adapters", "tepochcalli_mcp"]
+packages = ["tepochcalli_flow", "tepochcalli_flow.adapters", "tepochcalli_mcp", "tepochcalli_mcp.tools"]
 package-dir = {"" = "flow", "tepochcalli_mcp" = "mcp/tepochcalli_mcp"}

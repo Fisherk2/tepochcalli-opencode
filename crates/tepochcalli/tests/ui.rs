@@ -110,8 +110,10 @@ fn install_non_interactive_with_closed_stdin_terminates() {
     );
 }
 
-/// Same, with explicit `--vault` + `--payload`: F1→F3 run for real,
-/// exit 0, no stdin read.
+/// Same, with explicit `--vault` + `--payload`: F1→F5 run for real with
+/// closed stdin and terminate (T9: F4 succeeds, the empty fixture payload
+/// has no pyproject/lock so F5 exits 42 — the point here is it terminates,
+/// never that the fixture installs cleanly).
 #[test]
 fn install_non_interactive_with_vault_flag_terminates() {
     // T8: F3 needs a payload tree; an empty dir still yields placeholders.
@@ -136,5 +138,5 @@ fn install_non_interactive_with_vault_flag_terminates() {
     let out = rx
         .recv_timeout(Duration::from_secs(15))
         .expect("install --non-interactive --vault must not block on closed stdin");
-    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.status.code(), Some(42));
 }

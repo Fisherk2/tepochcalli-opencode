@@ -83,6 +83,8 @@ de T7/T8/T9): nada aquí es deuda inventada en T10.
 | **`FIX_OFFLINE_NO_CACHE`** | El literal de ese `fix_hint` **no tiene ancla en ninguna spec**: unit y wire se comparan auto-referenciados, así que una derivación silenciosa del texto pasaría inadvertida | Duda declarada en T8 | El contrato del `fix_hint` puede derivar sin que nada falle | Fijar el literal en `spec-mcp-server` §errores (enmienda futura) o fijar el esperado en un test con fuente externa al código |
 | **`opencode_payload_before_t9.json`** | Fixture con la copia del `opencode.json` pre-T9: sostiene el test de *merge conservador* y **irá obsoleta si el payload cambia legítimamente en Phase 4-5** | T9 | El test de merge fallaría por un cambio legítimo del payload y tentaría a «arreglar» el test a ciegas | **Regenerarla en Phase 4-5** cuando el payload cambie; no combatirla. Cualquier cambio de `mcp.servers.*` por tarea autorizada la invalida a propósito |
 
+**R6 cerrada (2026-10-28, T9):** `pyproject.toml` declara `tepochcalli_mcp.tools`; `import tepochcalli_mcp.tools.search` verificado en `crates/tepochcalli/tests/phases_f4f5.rs` (check del venv en F5).
+
 ### Pasada de calidad sobre Phase 2 (rito `/test`, 2026-10-27)
 
 Auditoría de cobertura del código de la fase (**1.760 LOC** del paquete `tepochcalli_mcp`) más

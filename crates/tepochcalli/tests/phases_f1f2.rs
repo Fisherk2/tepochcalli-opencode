@@ -170,9 +170,13 @@ fn install_non_interactive_vault_runs_f1_f2_for_real() {
         ])
         .output()
         .expect("spawn install");
+    // T9: install runs F1→F2→F3→F4→F5 for real. The empty fixture payload
+    // carries no pyproject.toml/uv.lock, so the real F5 `uv sync --frozen`
+    // fails AFTER F1–F4 succeeded (F4 proves the pinned download, the
+    // executable bit and `uv --version`); F5 compensates `venv/`.
     assert_eq!(
         out.status.code(),
-        Some(0),
+        Some(42),
         "stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -188,9 +192,22 @@ fn install_non_interactive_vault_runs_f1_f2_for_real() {
             .is_file(),
         "F3 must write the intent file"
     );
-    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        stdout.contains(target.to_str().expect("utf8 tmp")),
-        "vault path goes to stdout, got:\n{stdout}"
+        target.join(".tepochcalli").join("bin").join("uv").is_file()
+            || target
+                .join(".tepochcalli")
+                .join("bin")
+                .join("uv.exe")
+                .is_file(),
+        "F4 must leave the bootstrapped uv behind"
+    );
+    assert!(
+        !target.join(".tepochcalli").join("venv").exists(),
+        "failed F5 must compensate venv/"
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("phase F5 failed"),
+        "the failure must name F5, got:\n{stderr}"
     );
 }

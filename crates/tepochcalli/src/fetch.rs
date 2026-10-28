@@ -41,41 +41,62 @@ pub struct UvAsset {
     pub sha256_hex: &'static str,
 }
 
-/// Real pins land in T9/T18; placeholders are deliberate, not oversights.
-pub const UV_VERSION: &str = "0.9.0";
+/// Official release base (astral-sh/uv GitHub releases, no remote scripts).
+pub const UV_RELEASE_BASE: &str = "https://github.com/astral-sh/uv/releases/download";
+
+/// Pinned `uv` (repo canonical: Justfile + `phase1.yml` pin **0.12.9**).
+pub const UV_VERSION: &str = "0.12.9";
 
 pub const UV_ASSETS: &[UvAsset] = &[
     UvAsset {
         os: "linux",
         arch: "x86_64",
         filename: "uv-x86_64-unknown-linux-gnu.tar.gz",
-        sha256_hex: "PLACEHOLDER_T9_LINUX_X86_64",
+        sha256_hex: "ec7a99cd05e0cd7f80243f135ce1361c76835cb0ee60055d14d20eba8eba1460",
     },
     UvAsset {
         os: "linux",
         arch: "aarch64",
         filename: "uv-aarch64-unknown-linux-gnu.tar.gz",
-        sha256_hex: "PLACEHOLDER_T9_LINUX_AARCH64",
+        sha256_hex: "c36fe17937ff6bd16dc42fc13854b5465999fcab2efe0af559381e945e3c6001",
     },
     UvAsset {
         os: "macos",
         arch: "x86_64",
         filename: "uv-x86_64-apple-darwin.tar.gz",
-        sha256_hex: "PLACEHOLDER_T9_MACOS_X86_64",
+        sha256_hex: "e1ca175824f1056589ce9908f7631879ebc3c36535b5e63dc06510beb370b4c1",
     },
     UvAsset {
         os: "macos",
         arch: "aarch64",
         filename: "uv-aarch64-apple-darwin.tar.gz",
-        sha256_hex: "PLACEHOLDER_T9_MACOS_AARCH64",
+        sha256_hex: "301f72afaf54060f92da7016cb0115bd077f43a9c8e39c1d8170a0bac80fd398",
+    },
+    UvAsset {
+        os: "windows",
+        arch: "x86_64",
+        filename: "uv-x86_64-pc-windows-msvc.zip",
+        sha256_hex: "ddbfcee1ac615a0499f6aa97b5ec8ebdf3ee4a7714a48055ec2ba0030e3cf810",
     },
 ];
+
+/// Asset for an explicit platform pair (test seam; production passes the
+/// build's own `std::env::consts` values via [`uv_asset_for_current_platform`]).
+#[must_use]
+pub fn uv_asset_for(os: &str, arch: &str) -> Option<&'static UvAsset> {
+    UV_ASSETS.iter().find(|a| a.os == os && a.arch == arch)
+}
 
 /// Asset matching this build's platform, if the table covers it.
 #[must_use]
 pub fn uv_asset_for_current_platform() -> Option<&'static UvAsset> {
-    let (os, arch) = (std::env::consts::OS, std::env::consts::ARCH);
-    UV_ASSETS.iter().find(|a| a.os == os && a.arch == arch)
+    uv_asset_for(std::env::consts::OS, std::env::consts::ARCH)
+}
+
+/// Release download URL for `asset` (pinned version, official release).
+#[must_use]
+pub fn uv_download_url(asset: &UvAsset) -> String {
+    format!("{UV_RELEASE_BASE}/{UV_VERSION}/{}", asset.filename)
 }
 
 fn decode_sha256(hex: &str) -> Result<[u8; 32], FetchError> {
