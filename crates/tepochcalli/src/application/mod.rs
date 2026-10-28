@@ -5,6 +5,7 @@
 
 pub mod embedder_menu;
 pub mod installer;
+pub mod phase7;
 
 pub use embedder_menu::{run_phase6, Phase6Deps, Phase6Report, Provenance, EMBEDDER_PATHS};
 pub use installer::{
@@ -15,3 +16,4 @@ pub use installer::{
     PLACEHOLDER_MD_NAME, PLACEHOLDER_PDF_NAME, RESOURCES_DIR, RUNTIME_DIR, SUPPORTED_OS,
     UV_BIN_DIR, UV_MANAGED_PYTHON, UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR, VENV_DIR_NAME,
 };
+pub use phase7::{run_phase7, Phase7Report};
