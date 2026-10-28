@@ -14,14 +14,14 @@ historial de git (`git show a070385:tasks/todo.md`).
 
 ## Sub-fase A — Anclaje y contratos (fail-fast)
 
-- [ ] **T1 · Reconciliar contratos: el §Merge de la spec y las olas D19-D27**
+- [x] **T1 · Reconciliar contratos: el §Merge de la spec y las olas D19-D27**
   - Subagentes: `technical-writer` (lead), `code-reviewer` · Skills: `documentation-and-adrs`, `spec-driven-development`, `clean-code`
   - AC: (a) `specs/spec-installer-wizard.md` §Merge deja de registrar `mcp.servers.markitdown` y explica que la conversión es **en proceso** (D19); (b) el §Merge dice que el comando del MCP se **genera por SO** (`venv/bin/python` POSIX · `venv/Scripts/python.exe` Windows) (D20); (c) la *Open Question* de `--resume` queda **resuelta** como «deducir por artefactos + marker `.install-state`» (D21); (d) la spec documenta que el wizard crea `00-Resources/` + placeholders (D22) y que el TUI es line-based (D23); (e) `docs/WORKFLOW.md` §8 registra las olas D19-D27 con su justificación; (f) la spec sigue en *Proposed* (el paso a *Approved* es T20, con FTR)
   - Verificar: `just md-lint` verde · `grep -n "markitdown" specs/spec-installer-wizard.md` no devuelve la entrada de registro · el diff de §8 es aditivo (no reescribe olas previas)
   - 📌 **Por qué primero:** la spec es el contrato que T3-T13 implementan; si el §Merge sigue diciendo `markitdown`, T13 implementaría el contrato equivocado.
   - Dep.: — · Tamaño: S
 
-- [ ] **T2 · Spike fail-fast: extracción de archivos segura + bootstrap de `uv` portable**
+- [x] **T2 · Spike fail-fast: extracción de archivos segura + bootstrap de `uv` portable**
   - Subagentes: `rust-engineer` (lead), `security-auditor` · Skills: `test-driven-development`, `security-and-hardening`, `error-handling-patterns`, `doubt-driven-development`
   - AC: (a) existe un extractor capaz de desenvolver un `.tar.gz` **y** un `.zip` en un directorio destino; (b) **rechaza** con error tipado las 4 clases de ataque: `../` en el nombre (`zip-slip`/`tar-slip`), ruta absoluta POSIX (`/etc/passwd`), ruta absoluta Windows (`C:\...`), y symlink con destino absoluto o fuera del destino; (c) la comprobación ocurre **antes** de escribir en disco (test que verifica que el destino queda intacto); (d) se puede descargar el binario de `uv` de la release oficial **por plataforma** (`x86_64`/`aarch64` × linux/macos), verificar su SHA-256, dejarlo ejecutable y obtener `uv --version`; (e) el spike **no** usa scripts remotos (`install.sh`/`install.ps1`): solo artefactos released con checksum
   - Verificar: `cargo test` verde con los 4 casos de ataque como tests nominales (no `xfail`) · spike manual en linux y macos · **el AC de `cargo clippy -D warnings` limpio**
