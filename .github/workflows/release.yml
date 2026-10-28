@@ -5,7 +5,8 @@
 # disponible en este entorno, así que no se pudo generar ni verificar con
 # `dist plan`/`dist generate --check`. Reconciliar cuando `dist` esté
 # instalado (`dist.toml` lleva `allow-dirty = ["ci"]` para proteger las
-# divergencias deliberadas); T19 cablea el asset del payload.
+# divergencias deliberadas); el asset versionado del payload (T19) se
+# empaqueta en el job `global`.
 #
 # Divergencias deliberadas (documentadas, no olvidos):
 # * Un solo action de terceros (`actions/checkout`, pineado por SHA como en
@@ -14,6 +15,13 @@
 # * `cargo-dist` se instala con su installer oficial pineado a la misma
 #   versión que `dist.toml` (`0.33.1`); el tag (`v*` o `tepochcalli-v*`) lo
 #   valida `cargo dist plan` en el job `draft`.
+#
+# T19: el asset del payload (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`)
+# se empaqueta en el job `global` con `<ver>` = `version` del crate. Regla
+# one-version: el binario pide `releases/download/tepochcalli-v<ver>/…`, así
+# que las releases del wizard DEBEN etiquetarse `tepochcalli-vX.Y.Z` (el
+# patrón `v*` sigue aceptado por compatibilidad con `cargo dist plan`, pero
+# un tag `vX.Y.Z` dejaría el asset fuera del alcance del binario).
 #
 # D-b: `x86_64-pc-windows-msvc` SE compila aquí (para que exista el
 # instalador `powershell`), pero Windows sigue fuera de la matriz de
@@ -137,8 +145,16 @@ jobs:
           set -euo pipefail
           gh release upload "${TAG}" crates/tepochcalli/target/distrib/* --clobber
 
-  # Installers `shell`/`powershell` + tarball de fuentes: plantillas puras,
-  # sin binarios — basta un runner.
+  # Installers `shell`/`powershell` + tarball de fuentes + asset versionado
+  # del payload: plantillas puras + empaquetado del árbol del repo, sin
+  # binarios — basta un runner.
+  #
+  # T19 (one-version): el payload viaja como asset de la MISMA release
+  # (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`, con `<ver>` =
+  # `version` de `crates/tepochcalli/Cargo.toml`). El binario lo descarga con
+  # verificación de checksum (`ReleasePayload::for_current_version`); el
+  # árbol empaquetado es el mismo que usa el smoke de `phase3.yml`
+  # (`pyproject.toml` + `uv.lock` + `flow/` + `mcp/` bajo `.tepochcalli/`).
   global:
     needs: build
     runs-on: ubuntu-latest
@@ -164,6 +180,30 @@ jobs:
       - name: cargo dist build (artefactos globales)
         working-directory: crates/tepochcalli
         run: cargo dist build --artifacts=global
+
+      # T19: asset versionado del payload + sidecar SHA-256 (one-version).
+      # El árbol es el mismo que el smoke local (`phase3.yml` + Justfile
+      # `wizard-smoke`): `pyproject.toml` + `uv.lock` + `flow/` + `mcp/`.
+      - name: Empaqueta el payload versionado (+ sha256)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          asset="tepochcalli-workspace-${version}.tar.gz"
+          stage="${RUNNER_TEMP}/payload-stage"
+          rm -rf "${stage}"
+          mkdir -p "${stage}/.tepochcalli"
+          cp obsidian-workspace/.tepochcalli/pyproject.toml \
+            obsidian-workspace/.tepochcalli/uv.lock \
+            "${stage}/.tepochcalli/"
+          cp -r obsidian-workspace/.tepochcalli/flow \
+            obsidian-workspace/.tepochcalli/mcp \
+            "${stage}/.tepochcalli/"
+          tar -czf "${RUNNER_TEMP}/${asset}" -C "${stage}" .tepochcalli
+          (cd "${RUNNER_TEMP}" && sha256sum "${asset}" > "${asset}.sha256")
+          (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
+          gh release upload "${TAG}" "${RUNNER_TEMP}/${asset}" "${RUNNER_TEMP}/${asset}.sha256" --clobber
 
       - name: Sube los installers al draft release
         env:

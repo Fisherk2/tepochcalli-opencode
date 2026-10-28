@@ -24,9 +24,70 @@ const OBSIDIAN_DIR: &str = ".obsidian";
 const STAGE_DIR: &str = ".tepochcalli/.payload-stage";
 
 /// T19 wires the real asset; until then this URL fails closed (unfetchable).
+/// T19: still the fail-closed sentinel — the real asset comes from
+/// [`payload_asset_url`] (one-version rule), never from this constant.
 pub const RELEASE_ASSET_URL_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSET_URL";
 /// T19 wires the real checksum; until then nothing can match it.
+/// T19: still the fail-closed sentinel — the real checksum comes from the
+/// `<asset>.sha256` sidecar via [`fetch_release_payload`], never from here.
 pub const RELEASE_ASSET_SHA256_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSET_SHA256";
+
+/// Release repo hosting the versioned payload asset (one-version rule: the
+/// binary never follows a floating `latest` — it asks for its own version).
+pub const PAYLOAD_RELEASE_REPO: &str = "Fisherk2/tepochcalli-opencode";
+/// Asset stem: the published file is `{stem}-<ver>.tar.gz` + `.sha256`.
+pub const PAYLOAD_ASSET_STEM: &str = "tepochcalli-workspace";
+
+/// Release tag carrying the payload for `version` (canonical form; the
+/// workflow publishes under this tag — see `release.yml`).
+#[must_use]
+pub fn payload_release_tag(version: &str) -> String {
+    format!("tepochcalli-v{version}")
+}
+
+/// Versioned asset name: `tepochcalli-workspace-<ver>.tar.gz` (T19 AC-b).
+#[must_use]
+pub fn payload_asset_name(version: &str) -> String {
+    format!("{PAYLOAD_ASSET_STEM}-{version}.tar.gz")
+}
+
+/// Checksum sidecar name (`sha256sum` format: `<hex>  <filename>`).
+#[must_use]
+pub fn payload_checksum_name(version: &str) -> String {
+    format!("{}.sha256", payload_asset_name(version))
+}
+
+/// Download URL of the versioned payload asset (pinned to `version`,
+/// never `latest` — T19 AC-c, one-version rule).
+#[must_use]
+pub fn payload_asset_url(version: &str) -> String {
+    format!(
+        "https://github.com/{}/releases/download/{}/{}",
+        PAYLOAD_RELEASE_REPO,
+        payload_release_tag(version),
+        payload_asset_name(version)
+    )
+}
+
+/// Download URL of the asset's SHA-256 sidecar.
+#[must_use]
+pub fn payload_checksum_url(version: &str) -> String {
+    format!("{}.sha256", payload_asset_url(version))
+}
+
+/// First token of a `sha256sum` sidecar; anything else is `PayloadCorrupt`
+/// (clean failure, exit 32 — never a partial install).
+pub fn parse_sha256_sidecar(sidecar: &[u8]) -> Result<String, WizardError> {
+    let text = std::str::from_utf8(sidecar).map_err(|_| WizardError::PayloadCorrupt)?;
+    let first = text
+        .split_whitespace()
+        .next()
+        .ok_or(WizardError::PayloadCorrupt)?;
+    if first.len() != 64 || !first.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err(WizardError::PayloadCorrupt);
+    }
+    Ok(first.to_string())
+}
 
 /// Copies a local dir tree — `--payload <ruta>`, for dev and tests.
 #[derive(Debug, Clone)]
@@ -72,8 +133,29 @@ impl ReleasePayload {
         }
     }
 
-    /// Placeholder until T19 wires the real asset: fails closed on use
-    /// (the URL is unfetchable and the SHA matches nothing).
+    /// Release asset for an explicit version (one-version rule: callers pass
+    /// the binary's own version, never `latest`).
+    #[must_use]
+    pub fn for_version(version: &str, expected_sha256: &str) -> Self {
+        Self::new(&payload_asset_url(version), expected_sha256)
+    }
+
+    /// Release asset for this binary's own version (`CARGO_PKG_VERSION`):
+    /// vX.Y.Z always installs payload vX.Y.Z (T19 AC-c).
+    #[must_use]
+    pub fn for_current_version(expected_sha256: &str) -> Self {
+        Self::for_version(env!("CARGO_PKG_VERSION"), expected_sha256)
+    }
+
+    /// The asset URL this payload downloads (test seam for the one-version
+    /// rule: requested version must equal the binary version).
+    #[must_use]
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    /// Fail-closed sentinel (T8): the URL is unfetchable and the SHA matches
+    /// nothing. The real asset comes from [`for_current_version`](Self::for_current_version).
     #[must_use]
     pub fn placeholder() -> Self {
         Self::new(
@@ -82,7 +164,7 @@ impl ReleasePayload {
         )
     }
 
-    /// `false` until T19 configures the real asset URL + checksum.
+    /// `true` unless this is the fail-closed [`placeholder`](Self::placeholder).
     #[must_use]
     pub fn is_configured(&self) -> bool {
         self.url != RELEASE_ASSET_URL_PLACEHOLDER
@@ -127,6 +209,29 @@ impl PayloadSource for ReleasePayload {
         }
         outcome
     }
+}
+
+/// Build the versioned payload from an already-fetched checksum sidecar
+/// (pure: no network — the caller supplies the sidecar bytes).
+pub fn release_payload_from_sidecar(
+    version: &str,
+    sidecar: &[u8],
+) -> Result<ReleasePayload, WizardError> {
+    Ok(ReleasePayload::for_version(
+        version,
+        &parse_sha256_sidecar(sidecar)?,
+    ))
+}
+
+/// One-version online source: fetch the `<asset>.sha256` sidecar for
+/// `version`, then download the asset SHA-gated. Unknown sidecar URL is
+/// `NetDownload`; a bad sidecar or a SHA mismatch is `PayloadCorrupt`.
+pub fn fetch_release_payload(
+    http: &dyn HttpClient,
+    version: &str,
+) -> Result<ReleasePayload, WizardError> {
+    let sidecar = http.get(&payload_checksum_url(version))?;
+    release_payload_from_sidecar(version, &sidecar)
 }
 
 /// Empty `dir`, creating it (an interrupted F3 may leave a stale stage).

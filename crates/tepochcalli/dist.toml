@@ -14,6 +14,14 @@
 # (un solo action de terceros + `gh` CLI). Reconciliar con
 # `cargo dist generate --check` cuando `dist` esté instalado (T19); M6 sigue
 # vigente: este workflow NUNCA se ha ejecutado.
+#
+# T19: el asset del payload (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`,
+# empaquetado por `release.yml`, NO es un artefacto cargo) lo descarga el
+# binario con verificación de checksum (`ReleasePayload::for_current_version`,
+# regla one-version: el binario pide su propia versión, nunca `latest`).
+# Hasta que `dist` genere los installers oficiales, los de referencia
+# (con caveat de inspección + verificación SHA-256) viven en
+# `crates/tepochcalli/installers/`.
 
 [dist]
 cargo-dist-version = "0.33.1"

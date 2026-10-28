@@ -167,7 +167,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: `just rust-test` y `just rust-lint` verdes en local · `dist plan` produce el plan de artefactos sin errores · los workflows tienen las acciones pineadas por SHA · `just md-lint` verde (el YAML cuenta)
   - Dep.: T17 · Tamaño: M
 
-- [ ] **T19 · `install.sh`/`install.ps1` + asset del payload + regla one-version + SHA-256**
+- [x] **T19 · `install.sh`/`install.ps1` + asset del payload + regla one-version + SHA-256**
   - Subagentes: `devops-engineer` (lead), `security-auditor` · Skills: `security-and-hardening`, `ci-cd-and-automation`
   - AC: (a) `dist` genera `install.sh` y `install.ps1` que descargan el binario de la release, **verifican su SHA-256** y lo ejecutan; (b) el payload viaja como **asset de la misma release** (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`) y el wizard lo descarga con verificación de checksum (integrado con `ReleasePayload` de T8); (c) **regla one-version**: el binario v0.3.x instala **siempre** el payload v0.3.x (el binario pide su propia versión al asset, no una «latest» suelta); (d) el instalador **no** requiere Python ni Node en el host (es el criterio del gate); (e) `curl | sh` documenta el caveat de inspección antes de ejecutarlo
   - Verificar: `dist build` genera los installers · el smoke de T18 usa el payload **local** (no red) · test de la regla one-version (la versión del payload solicitada == la del binario) · checksum corrupto ⇒ fallo limpio

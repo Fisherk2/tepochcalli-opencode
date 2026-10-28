@@ -6,7 +6,7 @@
 
 use std::io::{Read, Write};
 use std::net::TcpListener;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use sha2::{Digest as _, Sha256};
 use tepochcalli::adapters::{LocalPayload, ReleasePayload};
@@ -446,30 +446,90 @@ fn install_help_mentions_payload_flag() {
 }
 
 #[test]
-fn install_without_payload_flag_fails_with_usage_code() {
+fn install_without_payload_offline_fails_clean_before_touch() {
+    // T19: no `--payload` means the versioned release asset (network). Under
+    // `--offline` with no local payload there is nothing to install from, so
+    // the guard fails with `E_OFFLINE_NO_CACHE` (exit 21) BEFORE the vault is
+    // touched — never a half-written tree, never a network attempt.
     let dir = tmp();
     let target = dir.path().join("vault-no-payload");
-    let target_str: PathBuf = target.clone();
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
         .args([
             "install",
             "--non-interactive",
+            "--offline",
             "--vault",
-            target_str.to_str().expect("utf8 tmp"),
+            target.to_str().expect("utf8 tmp"),
         ])
         .output()
         .expect("spawn install");
-    // Exit 2 = CLI usage error (same class as `--vault` without a value):
-    // no `--payload` and no release URL configured yet (T19 wires it).
     assert_eq!(
         out.status.code(),
-        Some(2),
+        Some(i32::from(WizardError::OfflineNoCache.exit_code())),
         "stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("--payload"),
-        "the failure must tell the user about --payload, got:\n{stderr}"
+        stderr.contains("offline"),
+        "the failure must name the offline cause, got:\n{stderr}"
     );
+    assert!(
+        !target.exists(),
+        "the offline guard runs before F2: no vault dir may exist"
+    );
+}
+
+#[test]
+fn install_payload_flag_conflicts_with_url_override() {
+    // Usage error (exit 2), decided before any I/O or network.
+    let dir = tmp();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--vault",
+            dir.path().join("v").to_str().expect("utf8 tmp"),
+            "--payload",
+            dir.path().to_str().expect("utf8 tmp"),
+            "--payload-url",
+            "http://127.0.0.1:9/asset.tar.gz",
+            "--payload-sha256",
+            &"0".repeat(64),
+        ])
+        .output()
+        .expect("spawn install");
+    assert_eq!(out.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--payload"),
+        "the failure must name the conflict, got:\n{stderr}"
+    );
+}
+
+#[test]
+fn install_half_url_override_is_usage_error() {
+    // `--payload-url` without `--payload-sha256` (and vice versa) is exit 2
+    // before any network: a URL without a checksum is never fetched.
+    for extra in [
+        vec!["--payload-url", "http://127.0.0.1:9/asset.tar.gz"],
+        vec!["--payload-sha256", &"0".repeat(64)],
+    ] {
+        let dir = tmp();
+        let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"));
+        cmd.args([
+            "install",
+            "--non-interactive",
+            "--vault",
+            dir.path().join("v").to_str().expect("utf8 tmp"),
+        ]);
+        cmd.args(extra);
+        let out = cmd.output().expect("spawn install");
+        assert_eq!(out.status.code(), Some(2));
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains("--payload-sha256") || stderr.contains("--payload-url"),
+            "the failure must name the missing half, got:\n{stderr}"
+        );
+    }
 }

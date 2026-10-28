@@ -11,7 +11,10 @@ use std::path::Path;
 use std::process::ExitCode;
 
 use tepochcalli::adapters::UreqHttpClient;
-use tepochcalli::adapters::{HeadlessUi, LocalPayload, StdCommandRunner, SysHostProbe, TtyUi};
+use tepochcalli::adapters::{
+    fetch_release_payload, HeadlessUi, LocalPayload, ReleasePayload, StdCommandRunner,
+    SysHostProbe, TtyUi,
+};
 use tepochcalli::application::failure::{
     log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
 };
@@ -48,7 +51,11 @@ fn usage_for(command: &str) -> String {
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --skip-model       preselect \"configure later\" (degraded, no index)\n  \
          --vault <ruta>     vault directory (asked interactively if omitted)\n  \
-         --payload <ruta>   payload tree to merge (dev/tests; required until T19)\
+         --payload <ruta>   local payload tree (dev/tests; default: the\n  \
+         versioned release asset for this binary (one-version rule))\n  \
+         --payload-url <url>   override the release asset URL (dev/tests;\n  \
+         needs --payload-sha256)\n  \
+         --payload-sha256 <hex>  expected SHA-256 for --payload-url\n  \
           --resume           skip phases already done (artifacts + .install-state)\
           --offline          no network: local payload + cached model only\n  \
          --help     print this help\n  \
@@ -173,12 +180,10 @@ fn report_failure(
 /// `--non-interactive`, `--skip-model`, `--vault <ruta>` and
 /// `--payload <ruta>` select the [`HeadlessUi`] answers (never stdin) vs.
 /// [`TtyUi`]; then F1 gates prereqs, F2 ensures the vault dir, F3 merges
-/// the payload, F4 installs the pinned `uv`, F5 syncs the venv, F6 picks
+/// the payload (local tree, URL override, or the versioned release asset),
+/// F4 installs the pinned `uv`, F5 syncs the venv, F6 picks
 /// the embedder (menu + gate + atomic config) and F7 indexes the vault
-/// (path 5 skips it: degraded install, no index). Without
-/// `--payload` (and no release URL configured yet — T19 wires the asset)
-/// install stops here with exit 2 (CLI usage error, same class as `--vault`
-/// without a value).
+/// (path 5 skips it: degraded install, no index).
 fn run_install(
     args: Vec<&str>,
     stdout: &mut dyn std::io::Write,
@@ -190,6 +195,8 @@ fn run_install(
     let mut offline = false;
     let mut vault: Option<String> = None;
     let mut payload: Option<String> = None;
+    let mut payload_url: Option<String> = None;
+    let mut payload_sha256: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i] {
@@ -225,11 +232,37 @@ fn run_install(
                     }
                 }
             }
+            "--payload-url" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => payload_url = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "install: --payload-url needs a value");
+                        return 2;
+                    }
+                }
+            }
+            "--payload-sha256" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => payload_sha256 = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "install: --payload-sha256 needs a value");
+                        return 2;
+                    }
+                }
+            }
             flag if flag.starts_with("--vault=") => {
                 vault = Some(flag["--vault=".len()..].to_string());
             }
             flag if flag.starts_with("--payload=") => {
                 payload = Some(flag["--payload=".len()..].to_string());
+            }
+            flag if flag.starts_with("--payload-url=") => {
+                payload_url = Some(flag["--payload-url=".len()..].to_string());
+            }
+            flag if flag.starts_with("--payload-sha256=") => {
+                payload_sha256 = Some(flag["--payload-sha256=".len()..].to_string());
             }
             flag => {
                 let _ = writeln!(stderr, "install: unknown flag: {flag}");
@@ -237,6 +270,31 @@ fn run_install(
             }
         }
         i += 1;
+    }
+    // Payload source validation (usage errors, exit 2 — no network touched):
+    // `--payload` (local tree) conflicts with the URL override, and the
+    // override needs both halves (URL + SHA-256) or neither.
+    let payload_dir = payload.filter(|p| !p.trim().is_empty());
+    let has_override = payload_url.as_ref().is_some_and(|u| !u.trim().is_empty())
+        || payload_sha256
+            .as_ref()
+            .is_some_and(|s| !s.trim().is_empty());
+    if payload_dir.is_some() && has_override {
+        let _ = writeln!(
+            stderr,
+            "install: --payload conflicts with --payload-url/--payload-sha256 \
+             (local tree or release asset, not both)"
+        );
+        return 2;
+    }
+    let url_override = payload_url.filter(|u| !u.trim().is_empty());
+    let sha_override = payload_sha256.filter(|s| !s.trim().is_empty());
+    if url_override.is_some() != sha_override.is_some() {
+        let _ = writeln!(
+            stderr,
+            "install: --payload-url needs --payload-sha256 (and vice versa)"
+        );
+        return 2;
     }
     // T6 rule: no TTY means no prompts — fail fast instead of hanging or
     // resolving the default dir under an unintended cwd.
@@ -294,8 +352,11 @@ fn run_install(
     // T14: offline pre-check BEFORE the vault is touched (exit 21, no writes).
     if offline {
         let cache_ready = skip_model || models_cached(Path::new(&raw));
-        match guard_offline_before_touch(true, payload_local_ready(payload.as_deref()), cache_ready)
-        {
+        match guard_offline_before_touch(
+            true,
+            payload_local_ready(payload_dir.as_deref()),
+            cache_ready,
+        ) {
             Ok(()) => {}
             Err(err) => {
                 return report_failure(
@@ -324,7 +385,17 @@ fn run_install(
     };
     mark_phase_done(vault_path.as_path(), Phase::F1);
     mark_phase_done(vault_path.as_path(), Phase::F2);
-    run_phases(&vault_path, payload, resume, offline, &*ui, stdout, stderr)
+    run_phases(
+        &vault_path,
+        payload_dir,
+        url_override,
+        sha_override,
+        resume,
+        offline,
+        &*ui,
+        stdout,
+        stderr,
+    )
 }
 
 /// `true` when the vault already holds downloaded models (offline resume).
@@ -399,29 +470,63 @@ fn run_f6_or_degraded(
 }
 
 /// F3..F8 with `--resume` skips (marker + artifacts, never a re-download).
+#[allow(clippy::too_many_arguments)]
 fn run_phases(
     path: &VaultPath,
-    payload: Option<String>,
+    payload_dir: Option<String>,
+    payload_url: Option<String>,
+    payload_sha256: Option<String>,
     resume: bool,
     offline: bool,
     ui: &dyn Ui,
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
+    // The HTTP client lives before F3 now: the online payload source (T19)
+    // needs it, the local one ignores it.
+    let http = UreqHttpClient::new();
     // F3: merge the payload without overwrite (placeholders + intent).
-    let Some(payload_dir) = payload.filter(|p| !p.trim().is_empty()) else {
-        let _ = writeln!(
-            stderr,
-            "install: no payload source: pass --payload <ruta> \
-             (local tree for dev/tests); the versioned release asset lands in T19"
-        );
-        return 2;
+    // Source priority: `--payload` (local tree, dev/tests) →
+    // `--payload-url` + `--payload-sha256` (override, dev/tests) →
+    // the versioned release asset for this binary (one-version rule).
+    let online: Option<ReleasePayload> = match (&payload_url, &payload_sha256) {
+        (Some(url), Some(sha)) => Some(ReleasePayload::new(url, sha)),
+        (None, None) if payload_dir.is_none() => match fetch_release_payload(&http, VERSION) {
+            Ok(release) => {
+                let _ = writeln!(
+                    stderr,
+                    "payload: release asset {} (one-version {})",
+                    release.url(),
+                    VERSION
+                );
+                Some(release)
+            }
+            Err(err) => {
+                return report_failure(
+                    ui,
+                    Some(Phase::F3),
+                    "install: phase F3 failed",
+                    offline_map(offline, err),
+                    Some(path.as_path()),
+                    &[],
+                );
+            }
+        },
+        (None, None) => None,
+        // Unreachable: `run_install` rejects a half override with exit 2.
+        _ => return 2,
     };
     let skipped: Vec<std::path::PathBuf> = if resume && is_phase_done(path.as_path(), Phase::F3) {
         let _ = writeln!(stderr, "resume: F3 already done, skipping");
         Vec::new()
     } else {
-        match run_phase3(&LocalPayload::new(Path::new(&payload_dir)), path.as_path()) {
+        let outcome = match (&payload_dir, &online) {
+            (Some(dir), None) => run_phase3(&LocalPayload::new(Path::new(dir)), path.as_path()),
+            (None, Some(release)) => run_phase3(release, path.as_path()),
+            // Unreachable: `run_install` rejects `--payload` + override.
+            _ => return 2,
+        };
+        match outcome {
             Ok(report) => {
                 mark_phase_done(path.as_path(), Phase::F3);
                 report.skipped
@@ -447,7 +552,6 @@ fn run_phases(
     }
     // F4: pinned `uv` into `.tepochcalli/bin/` (+ version proof).
     // Compensates itself on failure.
-    let http = UreqHttpClient::new();
     let proc = StdCommandRunner;
     if resume && is_phase_done(path.as_path(), Phase::F4) {
         let _ = writeln!(stderr, "resume: F4 already done, skipping (uv cached)");
