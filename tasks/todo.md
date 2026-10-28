@@ -85,7 +85,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: `cargo test` con `FakeProc` que simula el fallo de `uv` ⇒ compensación ejecutada y `bin/`/`venv/` ausentes · instalación real en `tempfile` con red ⇒ `uv --version` y `import tepochcalli_mcp.tools.search` OK · **R6 cerrado** (anotado en `docs/TECH_DEBT.md`)
   - Dep.: T8 · Tamaño: M
 
-- [ ] **T10 · F6a: `presets.toml` embebido + parser + badges D8.1/D8.2/D8.3**
+- [x] **T10 · F6a: `presets.toml` embebido + parser + badges D8.1/D8.2/D8.3**
   - Subagentes: `rust-engineer`, `test-engineer` · Skills: `source-driven-development`, `test-driven-development`, `clean-code`
   - AC: (a) `src/config/presets.toml` embebido con `include_str!` (D7.2: **datos, no UI**) con los campos de D8.1 (`name`, `hf_id`, `dims`, `size_mb`, `disk_mb`, `min_ram_gb`, `rec_ram_gb`, `gpu_recommended`, `recommended_flag`); (b) el parser **falla con error tipado** ante un preset mal formado (no en silencio); (c) la función de badge computa el ratio `rec_ram_gb` / RAM disponible ⇒ `recommended` (≥ 50 % margen) · `viable` · `no recomendado` (excede RAM **o** `gpu_recommended` && sin GPU); (d) **fixture host 4 GB**: MiniLM = `recommended`, `BAAI/bge-m3` = `no recomendado`; (e) `no recomendado` **no bloquea** la selección (D8.3 — el test elige `bge-m3` y el menú lo acepta); (f) si el sondeo del host falla ⇒ **sin badge** y se usan los valores declarados, sin crash
   - Verificar: tests de la tabla de badges con `FakeHost` (4 GB, 8 GB, 16 GB, sin GPU, con GPU) · el caso «sin GPU» con `gpu_recommended = true` ⇒ `no recomendado` pero seleccionable

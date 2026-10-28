@@ -1,0 +1,22 @@
+# presets.toml (embebido en el binario) — v2 con campos de hardware (D8.1/ADR-008)
+[[preset]]
+name = "MiniLM multilingüe (default)"
+hf_id = "paraphrase-multilingual-MiniLM-L12-v2"
+dims = 384
+size_mb = 470
+disk_mb = 500
+min_ram_gb = 0.7
+rec_ram_gb = 1.0
+gpu_recommended = false
+recommended_flag = true
+
+[[preset]]
+name = "BGE-M3 (GPU)"
+hf_id = "BAAI/bge-m3"
+dims = 1024
+size_mb = 2300
+disk_mb = 2300
+min_ram_gb = 2.4
+rec_ram_gb = 2.9
+gpu_recommended = true
+recommended_flag = false
