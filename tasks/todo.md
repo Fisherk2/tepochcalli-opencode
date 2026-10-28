@@ -34,7 +34,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: `cargo build`, `cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` verdes · `tepochcalli --help` y `tepochcalli install --help` imprimen uso legible
   - Dep.: T2 · Tamaño: M
 
-- [ ] **T4 · Los 5 puertos + fakes + test de arquitectura**
+- [x] **T4 · Los 5 puertos + fakes + test de arquitectura**
   - Subagentes: `rust-engineer`, `test-engineer` · Skills: `clean-ddd-hexagonal`, `api-and-interface-design`, `test-driven-development`
   - AC: (a) `ports/` define `CommandRunner`, `HttpClient`, `HostProbe`, `PayloadSource`, `Ui` con **firma mínima** (nada de opciones "para luego"); (b) `tests/common/mod.rs` trae `FakeProc` (guion de respuestas por comando), `FakeHttp` (offline, 404, cuerpo corrupto), `FakeHost` (RAM/disco/GPU configurables) y `ScriptedUi` (respuestas predefinidas por pregunta); (c) `tests/architecture.rs` falla si `domain/` importa `adapters/`, `std::fs`, `std::process` o crates de infra (réplica de `tests/unit/test_architecture.py` del flow); (d) **no** hay puerto `FileSystem`: los tests de FS usan `tempfile` real (D26); (e) cada puerto tiene **al menos un test** que lo ejercita
   - Verificar: `cargo test` verde · el test de arquitectura **falla** si se añade `use std::fs` a `domain/` (se comprueba rompiéndolo a mano y revirtiendo)
