@@ -129,6 +129,6 @@ Ver §Seguridad del canal arriba; política central en docs/SECURITY.md (no inge
 
 ## References
 
-* MarkItDown MCP — https://github.com/microsoft/markitdown (paquete `markitdown-mcp`, pypi/uvx)
-* OpenCode V2 MCP servers — https://opencode.ai/v2/docs/mcp-servers/
+* MarkItDown MCP — <https://github.com/microsoft/markitdown> (paquete `markitdown-mcp`, pypi/uvx)
+* OpenCode V2 MCP servers — <https://opencode.ai/v2/docs/mcp-servers/>
 * specs/spec-mcp-server.md; specs/spec-rag-engine.md; docs/SECURITY.md

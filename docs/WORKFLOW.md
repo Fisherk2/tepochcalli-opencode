@@ -1,4 +1,5 @@
 # Implementation Plan — Tepochcalli v1
+
 **Date:** 2026-10-21 (rev. 5 — estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
@@ -8,7 +9,7 @@
 ## 1. Phase Overview
 
 | Phase | Nombre | Objetivo | Gate (criterio de salida, medible) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 0 | Foundations | Specs/ADRs aprobadas y congeladas | APROBACIÓN: usuario confirma este set de docs; D1-D9 sin cambios; ADR-001..008 Accepted |
 | 1 | Engine + Flow | Flujo CocoIndex indexa un vault real incrementalmente | `cocoindex update` sobre vault muestra: Δ <30s; filas en LanceDB queryables con `{source_path,heading,char_start,char_end}`; bench PDF-exclusión documentado |
 | 2 | MCP Server | `tepochcalli-rag` conecta a OpenCode con contratos D6 — 4 tools: `search`, `index_refresh`, `add_source`, `rag_status` | opencode listá tools; `search` devuelve chunks citados <500ms en fixture; asserts de token-budget (≤1600 payload) en tests; taxonomía `E_*` + precedencia `INDEX_EMPTY` cubiertas (contract tests D7.3) |
@@ -106,7 +107,7 @@
 * Tabla §6.3 de salida (llenar en la corrida):
 
 | Criterio UH.md | Test | Result |
-|---|---|---|
+| --- | --- | --- |
 | 1. Sin interferencias | checklist Vault-OK post-instalación (0 puertos, `.obsidian/` intacto, UI limpia) | ☐ |
 | 2. Δ <30s | bench `index_refresh` 20 corridas típicas | ☐ |
 | 3. Búsqueda <500ms | bench `search` p95 sobre corpus 10k/1k | ☐ |
@@ -118,7 +119,7 @@
 **Gate adicional (no criterio UH)** — no forma parte de la tabla de 7 criterios de UH.md (no se renumeran ni se añade un "criterio 8"):
 
 | Gate | Test | Result |
-|---|---|---|
+| --- | --- | --- |
 | Methodology e2e (§Phase 5 Validación D9) completo en corpus golden | corrida `/rubric→/update` con bandeajes D9.2 + permission fixtures D9.3 + frontmatters assertados | ☐ |
 
 * Dependencias: Phases 1-5 verdes. Métricas: tabla completa; TECH_DEBT re-revisado.
@@ -127,7 +128,7 @@
 ## 3. Testing Strategy per Phase
 
 | Phase | Tool | Scope | Success |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | pytest + cocoindex runtime | flujo unit/integración | como §Phase 1 métricas |
 | 2 | pytest + fixture vault | contracts MCP, presupuestos, contrato `rag_status` + códigos `E_*` | shapes + cotas duras assertadas |
 | 3 | cargo test + VM matrix | fases/rollback/idempotencia, menú embedder paths 1-5, swap D8.4 | sin datos del usuario perdidos en fallo |
@@ -169,7 +170,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 ## 4. Formal Technical Reviews (FTRs)
 
 | Gate | Artefacto | Checklist | Participantes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Phase 0→1 | specs/ + ADRs | consistencia D1-D9, links, mermaid | Usuario + arquitecto |
 | Phase 2→3 | contratos vs código | shapes = spec-mcp-server | arquitecto |
 | Phase 4→5 | blueprint (spec-payload-vault Approved) | tabla invocación + matriz conflictos + permisos V2 sin legacy | Usuario + arquitecto |
@@ -196,7 +197,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 ## 5. Risk Management
 
 | Riesgo | Prob | Impacto | Mitigación | Contingencia |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | Bump roto de cocoindex/lancedb | med | alto | pineos, CI con lock, capa fina TD-1 | pin downgrade; target migration (ADR-002) |
 | Criterio 3 falla en HW mínimo | med | crítico | presupuesto por etapas (spec-mcp-server), ANN tuning | top_k default 3 + re-ranking ligero; revisar ADR-006 (dimensión) |
 | Wizard multi-OS complejo | med | alto | CI matrix temprana (Phase 3), `--resume` | Windows en v1.1 si bloquea (Linux/macOS first) |
@@ -223,7 +224,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 ### Registro de olas de scope (2026-10-21)
 
 | Ola | Qué decidió | Aprobó | Artefactos afectados |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **D7** (ADR-007, Accepted 2026-10-21) | Selección de embedder en instalación: menú "Embedding provider" 5 salidas con default preseleccionado; `presets.toml` como datos; modo degraded + `rag_status` y taxonomía `E_*`; re-entrada `tepochcalli config embedder` / `tepochcalli reindex --confirm`. Reemplaza solo ADR-006 §4.1 | Usuario vía follow-up entrevista /spec (question tool) | specs/adr/adr-007*, spec-embeddings, spec-installer-wizard, spec-mcp-server, ARCHITECTURE, AGENTS, SPEC, TECH_DEBT |
 | **D8** (ADR-008, Accepted 2026-10-21; refina D7 sin reemplazarlo) | Transparencia de hardware: `medido` > `estimado` > `declarado` + fórmula de RAM; autodetección de host (`sysinfo`, `nvidia-smi`/`rocm-smi`) con badges `recommended`/`viable`/`no recomendado`; warn-never-block; swap de modelo atómico sin reinstalar (`--keep-previous`, auto-GC) | Usuario vía question tool (4 opciones "Recommended") | specs/adr/adr-008*, spec-embeddings, spec-installer-wizard, APPFLOW, ARCHITECTURE, AGENTS, SPEC |
 | **D9** (sin ADR, por decisión explícita del usuario — spec-only) | Semántica de carpetas: tres zonas de propiedad (entrada del usuario / bandejas del agente / biblioteca personal); set de bandejas 6 con mapa comandos→bandejas total y único (`04-review/`, `05-outputs/`); desviación documentada del UH: Pochteca escribe solo `01-tasks/research/` | Usuario vía question tool | specs/spec-vault-structure, specs/spec-agent-workflow, docs/APPFLOW, AGENTS, SPEC, docs/WORKFLOW (esta ola de conformación, rev. 2) |

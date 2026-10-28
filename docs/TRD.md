@@ -1,4 +1,5 @@
 # Technical Requirements Document — Tepochcalli v1 (MVP)
+
 **Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Approved (alineado a docs/UH.md + ADRs)
 
 ## 1. Reference Architecture
@@ -15,7 +16,7 @@ Arquitectura hexagonal por capas con frontera única MCP (ADR-005). Detalle y di
 ## 2. Matriz de plataformas soportadas
 
 | SO | Arquis | Notas |
-|---|---|---|
+| --- | --- | --- |
 | Linux | x86_64, aarch64 | primary (distro-agnostic: binarios estáticos de uv/wizard; torch CPU wheel) |
 | macOS | arm64 (Apple Silicon), x86_64 | rutas estándar Obsidian; quarantine por Gatekeeper → documentado en wizard UX |
 | Windows | x86_64 | `install.ps1`; venv layout `Scripts\` — el merge de opencode.json usa rutas por plataforma |
@@ -26,7 +27,7 @@ detecta e instruye, no instala).
 ## 3. Pisos de recursos (hardware mínimo)
 
 | Recurso | Mínimo | Recomendado |
-|---|---|---|
+| --- | --- | --- |
 | RAM | 8 GB | 16 GB (bge-m3/local grande) |
 | CPU | 4 núcleos (AVX2 deseable para MiniLM) | 8+ |
 | Disco para `.tepochcalli/` | 3-4 GB libres | +0.5 GB por cada 1k PDFs (~150MB por 100k chunks + margen LanceDB) |
@@ -37,7 +38,7 @@ Desglose v1: venv 1-2GB (torch CPU), modelo ~470MB, LanceDB inicial ~50MB muestr
 ## 4. Versiones pineadas (plan de pin; valores concretos en Phase 1)
 
 | Componente | Plan | Fijado en |
-|---|---|---|
+| --- | --- | --- |
 | CPython | 3.12.x gestionado por uv (`uv python pin 3.12`) | `.tepochcalli/` (marker uv) |
 | uv | latest estable al construir release (binario en `.tepochcalli/bin/`) | wizard lock de release |
 | cocoindex | `cocoindex[lancedb] ~= 0.x` — pin exacto al cerrar Phase 1, bump solo con suite verde | `.tepochcalli/pyproject.toml` + `uv.lock` |
@@ -52,7 +53,7 @@ Regla: ningún bump entra sin los benches §6 verdes (gate de docs/WORKFLOW.md).
 
 ## 5. Notas de schema de config MCP (OpenCode V2)
 
-Estructura usada por el wizard (fuente: https://opencode.ai/v2/docs/mcp-servers/):
+Estructura usada por el wizard (fuente: <https://opencode.ai/v2/docs/mcp-servers/>):
 
 ```jsonc
 { "mcp": { "servers": {
@@ -79,7 +80,7 @@ dentro de las handlers del server MCP (punto de medición = tool-call recibido�
 serializada; definición en spec-mcp-server §latencia).
 
 | Criterio | Protocolo de test | Pass |
-|---|---|---|
+| --- | --- | --- |
 | 2. Δ indexación <30s | Corridas ×20: tocar/crear 1-50 archivos md en `00-Resources/`, luego `index_refresh()`; registrar `elapsed_ms` | p95 < 30000ms; PDFs grandes excluidos y reportados aparte |
 | 3. Búsqueda <500ms | 100 queries muestreadas del corpus 10k/1k, `search(top_k=5)`, tras índice estable | p95 < 500ms en HW mínimo |
 | 4. ≤2000 tokens/consulta | Fixture adversa (unicode, tablas, listas largas): estimador chars/4 sobre payload `search` + overhead cita + query del usuario; validar contra tokenizador real del harness en e2e | payload ≤1600 tokens garantizado por server + e2e total <2000 |

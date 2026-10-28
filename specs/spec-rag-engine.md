@@ -130,7 +130,7 @@ app = coco.App(coco.AppConfig(name="tepochcalli"), build_flow)  # run: `cocoinde
 
 ### Chunking
 
-* `RecursiveSplitter` con separators en orden: heading Markdown (`#`), párrafo (`\n\n`), oración (`. `), palabra.
+* `RecursiveSplitter` con separators en orden: heading Markdown (`#`), párrafo (`\n\n`), oración (`.`), palabra.
 * **F4 — el splitter mide en BYTES, no en chars** (verificado empírico con `chunk_size=200`: texto CJK cortado a 65 chars / **195 bytes**; español con `ñ` a 167 chars / **195 bytes** — la longitud en bytes sigue a `chunk_size`, la de chars no). Presupuesto reescrito en bytes, decisión de usuario 2026-10-21: **`chunk_size=1536`, `chunk_overlap=192`** — conserva la intención original de ~1024 caracteres de prosa española (1536 bytes con holgura para la expansión UTF-8 de acentos y `ñ`) y el ratio de overlap declarado (192/1536 = 128/1024 = **12,5%**; ~14% de chunks adicionales). El overlap cubre frases cortadas entre chunks sin inflar el índice. Fuente: [ops/text.md](https://cocoindex.io/docs/ops/text.md).
 * Por chunk se derivan metadatos de cita: `source_path` (relativo a la raíz del vault), `heading` (último heading padre visto, o título del PDF), `char_start`/`char_end` (offsets dentro del texto extraído), `doc_kind` (md|pdf|txt), `model` (nombre del embedder, para detección de índice mixto — ADR-006).
 * **F1 — offsets citables exactos:** `Chunk` (`from cocoindex.resources.chunk import Chunk`) es un dataclass congelado con `text: str` y `start`/`end: TextPosition` (`byte_offset`, `char_offset`, `line` 1-based, `column` 1-based). La cita se toma de `chunk.start.char_offset` / `chunk.end.char_offset`, sobre los que se cumple exactamente `text[chunk.start.char_offset : chunk.end.char_offset] == chunk.text` al indexar sobre la salida de `FileLike.read_text()` (verificado 51/51 filas). **`heading` NO es campo de `Chunk`** — se deriva escaneando las líneas previas a `char_start` (o el título del PDF). Fuente: [ops/text.md](https://cocoindex.io/docs/ops/text.md), [common_resources/data_types.md](https://cocoindex.io/docs/common_resources/data_types.md).
@@ -177,7 +177,7 @@ flowchart LR
 ### Presupuesto de escala (criterio 6)
 
 | Concepto | Estimación 10k notas + 1k PDFs |
-|---|---|
+| --- | --- |
 | Chunks totales | ~100k (notas ≈6, PDFs ≈40 promedio) |
 | Vectores | 100k × 384 × 4B ≈ **154MB** (+ overhead LanceDB ≈300MB total) |
 | RAM de búsqueda ANN | <1GB (índice mapeado, sin servidor) |
@@ -225,7 +225,7 @@ flowchart LR
 
 ## References
 
-* CocoIndex docs — https://cocoindex.io/docs/
-* Docling — https://github.com/docling-project/docling
-* LanceDB — https://lancedb.github.io/lancedb/
+* CocoIndex docs — <https://cocoindex.io/docs/>
+* Docling — <https://github.com/docling-project/docling>
+* LanceDB — <https://lancedb.github.io/lancedb/>
 * ADR-001 / ADR-002 / ADR-004 / ADR-006 (specs/adr/)

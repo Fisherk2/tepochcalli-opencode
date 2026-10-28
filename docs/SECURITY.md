@@ -7,14 +7,14 @@
 ## Supported Versions
 
 | Versión (wizard/payload) | Soportada |
-|---|---|
+| --- | --- |
 | 0.x (develop/pre-1.0) | ✅ correcciones al último tag `v*` |
 | < última release | ❌ (reinstalar vía wizard) |
 
 ## Reporting a Vulnerability
 
 * Reporte privado: **GitHub Security Advisories** del repo `Fisherk2/tepochcalli-opencode`
-  (https://github.com/Fisherk2/tepochcalli-opencode/security/advisories/new) o correo del
+  (<https://github.com/Fisherk2/tepochcalli-opencode/security/advisories/new>) o correo del
   mantenedor (`dev@fisherk2.com`).
 * **Nunca** abrir issue público para un problema de seguridad sin coordinación previa.
 * Proceso: ack ≤48h → triage ≤5 días (crítico: hotfix antes) → fix con timeline según severidad.
@@ -23,7 +23,7 @@
 ## Nunca se commitea (regla dura, repo del producto Y vault del usuario)
 
 | Ruta / dato | Motivo |
-|---|---|
+| --- | --- |
 | Cualquier API key (`.env*`, claves LiteLLM/OpenAI embedders) | secreto en VCS = filtración permanente |
 | `.tepochcalli/config/` (incl. `tepochcalli.toml`) | puede contener claves y prefs del usuario |
 | `.tepochcalli/db/` | contenido indexado del investigador = dato sensible |
@@ -103,7 +103,7 @@ requeriría rewiring del conector, fuera del scope v1):
 ## Provenance de descargas (primer arranque requiere internet)
 
 | Artefacto | Origen verificado | Integridad |
-|---|---|---|
+| --- | --- | --- |
 | Wizard `install.sh`/binarios | GitHub Releases de este repo (cargo-dist) | SHA-256 en release; caveat `curl \| sh`: inspeccionar el script o usar `cargo binstall` |
 | `uv` | astral-sh (binario oficial, fase 4 wizard) | checksum del wizard |
 | Wheels Python (cocoindex, sentence-transformers, docling, markitdown-mcp) | PyPI vía `uv sync`, pineado por `uv.lock` | hashes del lockfile |
@@ -116,7 +116,7 @@ todo egress y exige caché previa.
 ## Model de amenaza resumido (v1)
 
 | Amenaza | Prob. | Impacto | Mitigación vigente |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Filtro de claves al commitear el vault | media | alto | gitignore config/ + checklist AGENTS.md + `{env:VAR}` |
 | Inyección de prompt vía material ingerido | media | medio | regla de datos-como-citas + `/validate`/`/cite` |
 | Lectura de archivos sensibles por markitdown | media | medio-alto | §MarkItDown arriba; **D16** — `add_source` rechaza `file:` fuera del vault (2026-10-26); uso guiado por petición explícita |

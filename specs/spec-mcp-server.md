@@ -128,7 +128,7 @@ Toda falla → tool result con `isError` y payload JSON canónico (nunca texto l
 ```
 
 | Code | Significado | Acción sugerida del agente |
-|---|---|---|
+| --- | --- | --- |
 | `VALIDATION_ERROR` | argumentos inválidos (top_k>20, glob malformado, subdir fuera de 00-Resources) | reintentar corrigiendo args |
 | `INDEX_EMPTY` | tabla `chunks` inexistente **con embedder configurado** (sin embedder el estado es `E_NO_EMBEDDER`, que tiene precedencia) | invocar `index_refresh()`; si devuelve `E_NO_EMBEDDER` → `rag_status()` y reportar fix_hint |
 | `INDEX_STALE_MODEL` | dims/modelo del índice ≠ config actual | avisar usuario: requiere `tepochcalli reindex --confirm` (spec-embeddings; alias D7.3: `E_MODEL_MISMATCH`) |
@@ -147,7 +147,7 @@ Además de los códigos heredados de la tabla anterior, los tools emitidos desde
 ```
 
 | Código | Significado | Tools que pueden emitirlo |
-|---|---|---|
+| --- | --- | --- |
 | `E_NO_EMBEDDER` | sin modelo local ni API configurada (modo `none`) | `search`, `index_refresh`, `add_source` (diagnóstico en `rag_status`) |
 | `E_API_AUTH` | clave de API inválida/expirada — detectada al primer embed; se nombra el proveedor, la clave NUNCA se loggea | `search`, `index_refresh`, `add_source` |
 | `E_MODEL_MISMATCH` | `config.model` ≠ modelo registrado en los metadatos del índice; `search` se niega a cruzar dims | `search`, `index_refresh` |
@@ -162,7 +162,7 @@ Además de los códigos heredados de la tabla anterior, los tools emitidos desde
 Punto de medición: desde que el server recibe `tools/call(search)` (marca en handler) hasta que serializa la respuesta completa — excluye arranque del proceso MCP (cold start del harness, amortizado por sesión) e incluye embed de la query.
 
 | Etapa | Presupuesto p95 |
-|---|---|
+| --- | --- |
 | Embed de query (MiniLM CPU, 1 frase) | ≤120ms |
 | Búsqueda ANN+FTS (≤100k chunks) | ≤200ms |
 | Ensamblado/truncado/JSON | ≤30ms |
@@ -225,6 +225,6 @@ Diseño determinista en el server (no depende del modelo):
 
 ## References
 
-* MCP Python SDK — https://github.com/modelcontextprotocol/python-sdk
-* OpenCode V2 MCP servers — https://opencode.ai/v2/docs/mcp-servers/
+* MCP Python SDK — <https://github.com/modelcontextprotocol/python-sdk>
+* OpenCode V2 MCP servers — <https://opencode.ai/v2/docs/mcp-servers/>
 * ADR-005; ADR-007 (`rag_status` + dialecto `E_*`, D7.3); specs/spec-rag-engine.md; specs/spec-markitdown.md; specs/spec-embeddings.md

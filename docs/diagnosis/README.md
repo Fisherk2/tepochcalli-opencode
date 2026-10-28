@@ -27,8 +27,10 @@ Use `diagnosis-template.md` as a starting point for new diagnoses.
 
 ## Naming Convention
 
+<!-- markdownlint-disable MD040 -->
 ```
 fix<NNN>-<short-description>.md
 ```
+<!-- markdownlint-enable MD040 -->
 
 Where `<NNN>` is a sequential number (01, 02, ...) and `<short-description>` is a kebab-case summary of the issue.

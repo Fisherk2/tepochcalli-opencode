@@ -104,7 +104,7 @@ sequenceDiagram
 ## Component inventory
 
 | Componente | Capa | Ubicación | Spec/ADR |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Vault numerado (00-Resources, 01-tasks…) | Usuario | `obsidian-workspace/` (payload) | spec-vault-structure |
 | AGENTS.md del vault (MCP-first) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
@@ -245,7 +245,7 @@ graph TB
 ## Decision Index
 
 | ADR | Título | Status | Date |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | [ADR-001](../specs/adr/adr-001-motor-rag-cocoindex.md) | Motor RAG: CocoIndex (vs LEANN/LightRAG/RAG-Anything/PageIndex) | Accepted | 2026-10-21 |
 | [ADR-002](../specs/adr/adr-002-lancedb-embebido.md) | LanceDB embebido (vs pgvector/Qdrant/ChromaDB/SQLite) | Accepted | 2026-10-21 |
 | [ADR-003](../specs/adr/adr-003-distribucion-cargo-dist.md) | Distribución cargo-dist + GitHub Releases (no bunx) | Accepted | 2026-10-21 |
@@ -275,5 +275,5 @@ Coste conocido: re-index completo y re-validación de los benchmarks <30s/<500ms
 
 ## References
 
-* [C4 model](https://c4model.com/) · [MADR](https://adr.github.io/) · OpenCode V2 docs (https://opencode.ai/v2/docs)
+* [C4 model](https://c4model.com/) · [MADR](https://adr.github.io/) · OpenCode V2 docs (<https://opencode.ai/v2/docs>)
 * Specs: [../specs/](../specs/) · Requisitos: [UH.md](UH.md)

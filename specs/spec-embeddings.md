@@ -41,7 +41,7 @@ El flow lee `[embedding]` de `tepochcalli.toml`: `provider = "local"` (default) 
 ### Modelo default (D4/ADR-006)
 
 | Propiedad | Valor |
-|---|---|
+| --- | --- |
 | Modelo | `paraphrase-multilingual-MiniLM-L12-v2` |
 | Dimensiones | 384 |
 | Peso | ~470MB |
@@ -52,7 +52,7 @@ El flow lee `[embedding]` de `tepochcalli.toml`: `provider = "local"` (default) 
 ### Matriz local vs externo
 
 | Criterio | Local MiniLM (default) | Local bge-m3 (upgrade GPU) | Externo vía LiteLLM |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Coste por consulta | $0 | $0 | $ (tokens embedder) |
 | Privacidad | material no sale del host | no sale | sale al proveedor |
 | RAM mín. | 8GB | 16GB + GPU recomendada | host liviano |
@@ -70,7 +70,7 @@ El flow lee `[embedding]` de `tepochcalli.toml`: `provider = "local"` (default) 
 El wizard incluye un paso **"Embedding provider"** (ubicación y rollback en specs/spec-installer-wizard.md §Fases) con cinco salidas. La elección alimenta `[embedding]` de `tepochcalli.toml`; ninguna salida escribe half-config.
 
 | # | Salida del menú | provider/model en config | Descarga | Comportamiento |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 1 | `paraphrase-multilingual-MiniLM-L12-v2` — RECOMENDADO, pre-seleccionado | `local` / `paraphrase-multilingual-MiniLM-L12-v2` | ~470MB | Preserva el ready-to-use (ADR-006); indexación inicial corre al terminar el paso |
 | 2 | Preset local alternativo: `BAAI/bge-m3` o `all-MiniLM-L6-v2` | `local` / id del preset | ~2.3GB / ~90MB | Peso estimado + detección de GPU en la UI; advertencia (no bloqueo) si no hay GPU para `BAAI/bge-m3`; `all-MiniLM-L6-v2` avisa EN-only, calidad ES limitada |
 | 3 | ID libre de HuggingFace | `local` / id escrito por el usuario | variable | Pasa el **gate test-embed** (§abajo); campo opcional `HF_TOKEN` para modelos gated |
@@ -90,7 +90,7 @@ El wizard incluye un paso **"Embedding provider"** (ubicación y rollback en spe
 Embebido en el binario Rust del wizard vía `include_str!`. Actualizar modelos = editar datos + release por cargo-dist; la UI del wizard nunca se toca. Revisión periódica vinculada a los revisit-triggers de ADR-006 §8.
 
 | Campo | Tipo | Descripción |
-|---|---|---|
+| --- | --- | --- |
 | `name` | string | Etiqueta mostrada en el menú |
 | `hf_id` | string | ID en HuggingFace (p.ej. `BAAI/bge-m3`) |
 | `dims` | integer | Dimensiones del vector (384, 1024…) |
@@ -134,7 +134,7 @@ certidumbre; **todo número mostrado se etiqueta con su procedencia** (`medido`/
 — nunca presentar una estimación como promesa (NFR cero-sorpresas).
 
 | Fuente | Certidumbre | Cómo se obtiene | Cuándo aplica |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Medido** | ground truth | muestreo del RSS pico durante la prueba de embedding del gate test-embed (salidas 1-3, presets y HF custom por igual) | tras ejercitar el modelo en el host real |
 | **Estimado (API HF)** | fórmula sobre metadatos | consulta a la API pública de HF antes de la descarga (tabla §abajo) | cualquier id de HF, pre-elección |
 | **Declarado (presets.toml v2)** | curado por mantenedores | campos `disk_mb`, `min_ram_gb`, `rec_ram_gb`, `gpu_recommended` | presets; fallback cuando no hay red ni sondeo |
@@ -144,7 +144,7 @@ certidumbre; **todo número mostrado se etiqueta con su procedencia** (`medido`/
 Para CUALQUIER id de HF (preset o libre), el wizard consulta la API pública ANTES de descargar:
 
 | Campo de la API HF | Uso en el menú |
-|---|---|
+| --- | --- |
 | `safetensors.parameters.total` | conteo de parámetros → RAM estimada con la fórmula canónica `params × 4 bytes × 1.3 overhead factor` (fp32, CPU resident); VRAM para modo GPU: el mismo tamaño de pesos + margen de activaciones |
 | tamaños de blobs de `model.safetensors` | requisito de disco exacto (`disk_mb` estimado) |
 | `gated` | si es `true` → el requisito de `HF_TOKEN` se surfaced temprano, antes de intentar la descarga |
@@ -163,7 +163,7 @@ lo pida explícitamente. La API key de la salida 4 sí se persiste, solo en
 #### Matriz de edge cases (D7)
 
 | Caso | Comportamiento motor-MCP (código) | Comportamiento wizard (código/flag) | Recuperación (comando) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Sin modelo + sin key (salida 5 o config vacía) | `search`/`index_refresh` → `E_NO_EMBEDDER`; `rag_status` → `health.state = degraded` con `fix_hint` | instala el vault COMPLETO, omite indexación inicial, muestra checklist final de re-entrada | `tepochcalli config embedder` |
 | API key inválida/expirada (salida 4) | detectada al primer embed → `E_API_AUTH` (proveedor nombrado, clave NUNCA loggeada) | valida la clave con un test-embed en el paso; reintento sin continuar | `tepochcalli config embedder` (re-ingresar clave) |
 | Modelo HF no-válido (no es embedding model, salida 3) | no alcanza al motor si el gate funciona; índice corrupto → `E_MODEL_INVALID` | rechazo en el gate test-embed; no escribe config (flag implícita: volver al menú) | `tepochcalli config embedder` |
@@ -250,4 +250,4 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 
 ## References
 
-* ADR-006; CocoIndex embedders docs (SentenceTransformerEmbedder, LiteLLM); https://www.sbert.net/docs/pretrained_models.html; HF: `BAAI/bge-m3`
+* ADR-006; CocoIndex embedders docs (SentenceTransformerEmbedder, LiteLLM); <https://www.sbert.net/docs/pretrained_models.html>; HF: `BAAI/bge-m3`

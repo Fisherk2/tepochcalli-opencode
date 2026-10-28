@@ -191,7 +191,7 @@ investigación). Edit deny: su salida es análisis/enrutamiento/estado.
 ### Blueprint de los 9 comandos (mapeo D9.2 — frontmatter: `description` no vacío + `agent`)
 
 | Comando | `agent:` | Bandeja destino | Contract del cuerpo |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `/rubric` | nezahualcoyotl | `01-tasks/` | matriz: pregunta central, objetivos, alcance, criterios inclusión/exclusión, metodología (UH Definición) |
 | `/research` | pochteca | `01-tasks/research/` | evidencia con frontmatter {agent, timestamp, fuentes, método}; search + web según rúbrica |
 | `/validate` | chilam | `04-review/` | informe con frontmatter {command, agent, target_doc, verdict}; contradicciones/sesgos/obsolescencia |
@@ -241,7 +241,7 @@ Siete secciones obligatorias:
 Referencia cruzada de cada comando contra el inventario REAL. Las columnas de skills citan nombres que EXISTEN hoy en `.opencode/skills/` (ls 2026-10-21, 208 dirs); donde la matriz de conflictos CONSOLIDA una familia, Phase 5 deja de citar a la perdedora y conserva la ganadora (marcadas ⟵G). Política de subagentes: los 5 primarios llevan `subagent * deny` — SI un comando necesitara un helper, se DOCUMENTA aquí como enmienda pendiente al blueprint; no se inventa.
 
 | Comando | Skills concretas (inventario real) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | `/rubric` | scientific-problem-selection, experimental-design, writing-plans | read · glob · grep · question · todowrite | `tepochcalli-rag`: search (dimensionar corpus), rag_status ante `E_*` | ninguno |
 | `/research` | deep-research⟵G, research-lookup⟵G, paper-lookup⟵G, arxiv-search⟵G, pubmed-search⟵G, wikipedia-search, multi-search-engine, parallel-web | webfetch · websearch · read · edit `01-tasks/research/**` | search · index_refresh · add_source (ingesta externa vía markitdown MCP) · rag_status | ninguno |
 | `/validate` | scholar-evaluation⟵G, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units | read · glob · grep · edit `04-review/**` | search (cruce con corpus) · rag_status | ninguno |
@@ -257,7 +257,7 @@ Referencia cruzada de cada comando contra el inventario REAL. Las columnas de sk
 Contra `ls obsidian-workspace/.opencode/skills/` = **208 dirs** (recuento de esta ola). Veredictos: **CONSERVAR / CONSOLIDAR (nominando ganadora) / RETIRAR (out-of-domain) / INSTALAR-GAP**. Cobertura: filas 1-13 nombran 58 dirs en conflicto explícito; fila 14 suma 14 ganadoras del núcleo en dominio; fila 15 barre el resto por familia (~120 out-of-domain según Anexo A; el remanente en dominio no listado se falla CONSERVAR por el criterio de la fila 14); fila 16 gaps = 0 dirs hoy. Phase 5 repite el `ls` y cierra el recuento 1:1 por fila (métrica WORKFLOW: 100% del inventario).
 
 | Grupo | Skills miembros (inventario real) | Solape/conflicto | Veredicto | Acción Phase 5 |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | 1. PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | cuatro wrappers de la misma conversión; liteparse duplica al motor (Docling, spec-rag-engine) | CONSOLIDAR — gana `pdf` (general) + `pdf-processing-pro` (documentos largos) | retirar 3 (pdf-anthropic, liteparse, uno de processing) |
 | 2. Office ×6 | docx, docx-official, pptx, pptx-official, xlsx, xlsx-official | duplicado exacto por familia | CONSOLIDAR — ganan `docx-official`, `pptx-official`, `xlsx-official` | retirar 3 variantes libres |
 | 3. Excel/MCP | excel-analysis, data-transform + entrada `excel` MCP en opencode.json (disabled; `uvx` → rompe `--offline`) | tres caminos para CSV/Excel | CONSOLIDAR — gana la vía skill (offline-safe) | retirar 1 (`data-transform` si `excel-analysis` cubre); dejar/eliminar la entrada MCP disabled |

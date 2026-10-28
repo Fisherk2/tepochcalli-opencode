@@ -1,10 +1,11 @@
 # Navigation Flow — Tepochcalli v1
+
 **Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec)
 
 ## 1. Actores y roles
 
 | Rol | Descripción | Superficies | Inicial |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Investigador (humano) | Dueño del vault | Obsidian (notas/PDFs) + terminal OpenCode | abrir vault |
 | Itzamná | Orquestador del workspace | enrutamiento, estado, sugerencias | conversación |
 | Especialistas | Nezahualcóyotl · Pochteca · Chilam · Tlacuilo | comandos `/rubric…/update` | vía Itzamná |

@@ -43,6 +43,7 @@ El stack de procesamiento (CocoIndex + sentence-transformers + Docling + markitd
 * ✅ **Pros:** Auto-instala CPython gestionado; resolver/instalador más rápido del ecosistema; lockfile reproducible; binario único fácil de bootstrap desde Rust; venv estándar del proyecto.
 * ⚠️ **Cons:** Primer arranque requiere internet (wheels + interpretación); ~1-2GB extra de disco (presupuestado en TRD).
 * ⚖️ **Neutral:** El vault pasa a contener un entorno ejecutable; gitignore de `.tepochcalli/venv/` obligatorio.
+
 ### pip + venv
 
 * ✅ **Pros:** Universal, cero software nuevo.

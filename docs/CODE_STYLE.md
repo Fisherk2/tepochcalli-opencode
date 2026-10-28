@@ -6,7 +6,7 @@
 ## Herramientas y comandos
 
 | Área | Toolchain | Comandos (recetas del Justfile raíz) |
-|---|---|---|
+| --- | --- | --- |
 | Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `just lint-fix` · `just fmt` · `just typecheck` · `just test` |
 | Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | comandos crudos de cargo (sin receta hasta Phase 3, cuando el crate exista — ver §Convenciones Rust) |
 | Docs | markdownlint (reglas desactivadas: líneas largas en MD) | `just md-lint` |
@@ -68,7 +68,7 @@ def _truncate_for_budget(results: list[Chunk], max_tokens: int = 1600) -> list[C
 ## Nomenclatura de archivos y docs
 
 | Constructo | Convención | Ejemplo |
-|---|---|---|
+| --- | --- | --- |
 | Specs | `specs/spec-<kebab>.md` | `spec-rag-engine.md` |
 | ADRs | `specs/adr/adr-NNN-<kebab>.md` (3 dígitos, secuencial inmutable) | `adr-001-motor-rag-cocoindex.md` |
 | Docs núcleo | `docs/<MAYUSCULAS>.md` fijos del proyecto | `APPFLOW.md`, `TECH_DEBT.md` |

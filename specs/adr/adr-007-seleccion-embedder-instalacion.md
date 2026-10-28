@@ -59,7 +59,8 @@ queda vinculada a los revisit-triggers ya existentes de ADR-006 §8.
 ### 4.3 D7.3 — Observabilidad del modo degraded
 
 Cuarto tool MCP `rag_status()` en `tepochcalli-rag` (JSON mínimo, coste de tokens despreciable)
-+ dialecto de errores estructurados en los tools existentes, con códigos:
+
+* dialecto de errores estructurados en los tools existentes, con códigos:
 `E_NO_EMBEDDER` (sin modelo ni API), `E_API_AUTH` (key inválida/expirada — detectada al primer
 embed; proveedor nombrado, clave NUNCA loggeada), `E_MODEL_MISMATCH` (`config.model` ≠ modelo del
 índice — `search` se niega a cruzar dims), `E_MODEL_INVALID` (custom HF falló el test-embed o no

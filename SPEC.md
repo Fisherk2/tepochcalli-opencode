@@ -33,7 +33,7 @@ Cobertura: criterios 1-2-3-4-5-6-7 → [spec-rag-engine](specs/spec-rag-engine.m
 ## Comandos del workspace (metodología)
 
 | Comando | Fase | Agente dueño |
-|---|---|---|
+| --- | --- | --- |
 | `/rubric` | Definición | Nezahualcóyotl |
 | `/research` | Recolección | Pochteca |
 | `/validate` | Evaluación crítica | Chilam |
@@ -68,13 +68,13 @@ repo                                # este repositorio (producto + plantilla)
 ## Stack técnico (decisiones D1-D7, inmutables sin ADR nuevo)
 
 | Componente | Decisión | ADR |
-|---|---|---|
+| --- | --- | --- |
 | Motor RAG | **CocoIndex** (`pip install cocoindex`; flow `@coco.fn(memo=True)`; runner-up LEANN) | [ADR-001](specs/adr/adr-001-motor-rag-cocoindex.md) |
 | Runtime dir | **`.tepochcalli/`** engine-neutral (flow/mcp/db/models/venv/bin/config) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) (db) + layout D2 |
 | Vector store | **LanceDB embebido** (file-based, sin daemon/puerto) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) |
 | Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
 | Selección de embedder (wizard) | **menú "Embedding provider"** con default preseleccionado; `presets.toml` como datos; modo `degraded` + `rag_status` (D7) | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
-| Instalador | **TUI Rust + cargo-dist + GitHub Releases** (`curl|sh`, `cargo binstall`); NO bunx | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) |
+| Instalador | **TUI Rust + cargo-dist + GitHub Releases** (`curl\|sh`, `cargo binstall`); NO bunx | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) |
 | Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
 | Conversor soporte | **markitdown-mcp** (oficial, stdio local, mismo venv) | specs/spec-markitdown.md |
 | Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) |
@@ -93,7 +93,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 ## Boundaries
 
 | Siempre (Always) | Preguntar antes (Ask first) | Nunca (Never) |
-|---|---|---|
+| --- | --- | --- |
 | Respetar contratos D1-D7 o escribir ADR nuevo | Añadir dependencias al `pyproject.toml` pineado | Commitear claves, `config/`, `db/`, `models/`, `venv/` |
 | Specs antes que código; commits atómicos Convención | Cambiar top_k por default o tamaño de chunk | Modificar `docs/UH.md`, `obsidian-workspace/.opencode/` (agents/commands/skills), `README.md`, `LICENSE` |
 | Validar entradas en el borde MCP (`add_source` rutas) | Añadir un nuevo MCP server al payload | Exponer el RAG por red (stdio local únicamente) |
@@ -102,7 +102,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 ## Índice de specs
 
 | Spec | Status | Alcance |
-|---|---|---|
+| --- | --- | --- |
 | [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved | Flujo CocoIndex: fuentes, chunking, PDF/Docling, Δ<30s, escala |
 | [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved | Contratos de tools, errores, latencia/token budget, config |
 | [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Proposed | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia |
@@ -117,7 +117,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 ## Log de decisiones
 
 | ADR | Título | Status |
-|---|---|---|
+| --- | --- | --- |
 | [ADR-001](specs/adr/adr-001-motor-rag-cocoindex.md) | Motor RAG CocoIndex (comparativa 5 candidatos) | Accepted 2026-10-21 |
 | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) | LanceDB embebido como almacén vectorial | Accepted 2026-10-21 |
 | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) | Distribución con cargo-dist + GitHub Releases | Accepted 2026-10-21 |

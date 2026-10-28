@@ -36,7 +36,7 @@ Tepochcalli necesita un motor RAG que monitoree `00-Resources/` de un vault de O
 ### 4.1 Comparativa de candidatos
 
 | Criterio | CocoIndex ✅ | LEANN | LightRAG | RAG-Anything | PageIndex |
-|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- |
 | Licencia conocida | Apache-2.0 | OSI | OSI | OSI | OSI |
 | Instalación | `pip install cocoindex` | pip | pip + servicio | pip (depende de LightRAG) | pip |
 | Indexación incremental (delta) | Sí (engine Rust + memo) | Sí (upsert) | Parcial | Parcial | N/A (sin índice) |

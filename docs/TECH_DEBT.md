@@ -1,4 +1,5 @@
 # Technical Debt Register — Tepochcalli v1
+
 **Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Active
 **Revisión de gate:** Phase 1 (2026-10-23) y Phase 2 (2026-10-27) — ver §Revisión Phase 1 y §Revisión Phase 2 más abajo.
 **Cobertura:** abre en Phase 0 y se actualiza en cada gate de [WORKFLOW.md](WORKFLOW.md).
@@ -7,7 +8,7 @@ Deuda conocida y aceptada al diseñar el sistema. Cada entrada: descripción, po
 coste si se ignora, y acción/oráculo para pagarla.
 
 | ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **TD-1** | **Autoría del flow + glue MCP**: `cocoindex-code` (el proyecto hermano) solo cubre búsqueda sobre código; **no existe RAG de vault listo** en el ecosistema — la capa entre CocoIndex y `tepochcalli-rag` (flow declarativo + handlers + token budget) es código propio inevitable | ADR-001, ADR-005 | El glue sin tests se rompe en cada bump de cocoindex; shadow de mantenimiento permanente | Tests de contrato + golden vault desde Phase 1-2; pineos estrictos (`uv.lock`); mantener la capa lo más fina posible (adaptadores, no lógica) |
 | **TD-2** | **Coste CPU de Docling por PDF grande** (medido 2026-10-22 en Phase 1: 30 páginas = **49–51 s** en caliente, ≈1,6–1,7 s/pág, RSS pico 2 048–2 189 MiB; en frío la carga de modelos domina: 29–37 s — **por encima** de la estimación original de spec-rag-engine, «30 págs ≈ 5-30 s») | ADR-001 (elección de pipeline CPU) | Deltas con PDFs grandes incumplen percepción del criterio "30s"; usuarios con 1k PDFs en lote inicial sufren primera indexación | Excluir PDFs grandes del presupuesto Δ (definición en spec-rag-engine; el bench M1 los excluye y los reporta aparte); progreso visible en `index_refresh`; **la cifra medida manda sobre la estimación de la spec** y vive aquí y en WORKFLOW §Phase 1 (M5); evaluar límite de tamaño/cache de parse en Phase 6 (aceptación E2E) |
 | **TD-3** | **Cambio de modelo de embeddings = re-index completo** (vector space distinto; prohibido mezclar dims) | ADR-006, spec-embeddings | El usuario que cambie modelo sin re-indexar obtiene resultados degradados o `INDEX_STALE_MODEL` | Detección automática por campo `model` + mensaje accionable; comando de conveniencia `tepochcalli reindex`; documentar en APPFLOW. **Resuelto en parte (2026-10-21, ADR-007):** D7.2 mueve el catálogo de modelos a `presets.toml` (datos, no UI del wizard) y D7.4 fija el swap como `tepochcalli reindex --confirm` con detección `E_MODEL_MISMATCH` + `rag_status`. **Estado Phase 1 (2026-10-23):** el campo `model` ya se escribe **por fila** (T6) — la detección de mismatch tiene su dato real; el mensaje/`E_MODEL_MISMATCH` llega con Phase 2-3 |
@@ -149,7 +150,7 @@ fichero; CR-6 es límite externo documentado; CR-7/CR-8 solo activan con escala 
 * **Revisión Phase 1 ejecutada:** 2026-10-23 (T12) — TD-1..TD-9 re-reviewadas arriba, TD-10
   añadida; ninguna subió a blocker. Pase de corrección 5-ejes (2026-10-23): TD-11 nueva
   (TOCTOU symlink, documentada en SECURITY); ninguna otra está abierta — la deuda nueva no
-  queda registrada (offsets_ref aditivo, pins de revisión, exit codes, probe de permisos) 
+  queda registrada (offsets_ref aditivo, pins de revisión, exit codes, probe de permisos)
   porque el remediador se aplicó en el mismo pase.
 * **Nota T9 (2026-10-27):** `.github/workflows/phase1.yml` conserva el nombre
   histórico de Phase 1; con el job `mcp` (Phase 2 T9 — gate `mypy flow+mcp` del

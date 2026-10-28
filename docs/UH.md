@@ -22,7 +22,7 @@ Tengo estas opciones como motor para indexar documentos, solo podemos tomar uno,
 - [Leann](https://github.com/StarTrail-org/LEANN)
 - [LightRAG](https://github.com/HKUDS/LightRAG)
 - [RAG-Anything](https://github.com/HKUDS/RAG-Anything)
-- [PageIndex](https://github.com/VectifyAI/PageIndex) 
+- [PageIndex](https://github.com/VectifyAI/PageIndex)
 
 Solo he leído la documentación de [CocoIndex](https://cocoindex.io/docs/), pero quería ver las demás opciones en caso de que fuera mejores (Lo documentaremos en una tabla de comparación y porque fue escogido dicho motor de indexación, en caso de que en el futuro cambiemos el motor, o lo migremos a otra tecnología)
 
@@ -142,7 +142,7 @@ graph TD
 
 Para las skills, necesitamos que cargues la skill `find-skills` para encontrar las skills mas apropiadas:
 
-- Research 
+- Research
 - Investigacion
 - OSINT de busqueda exhaustiva de información y recursos
 - Seleccion y evaluacion critica
@@ -166,7 +166,7 @@ Revisa que no halla skills redundantes o duplicadas.
 Utilizaremos un TUI en forma de instalador atomico y versionado para descargar el workspace de obsidian, en el cual incluirá todo lo mencionado anteriormente, desarrollado en Rust.
 Esto con el fin de no interferir con la meta-configuración del harness de desarrollo, tengo un proyecto con la misma arquitectura de instalación con un gestor de paquetes:
 
-https://github.com/Fisherk2/codice-opencode
+<https://github.com/Fisherk2/codice-opencode>
 
 En el, los archivos que se instalan están en un directorio llamado `template/`, nosotros haremos lo mismo, todo el contenido que este en `obsidian-workspace/` se instalara al usuario con los requisitos mencionados
 

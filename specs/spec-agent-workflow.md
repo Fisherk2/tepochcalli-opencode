@@ -39,7 +39,7 @@ Se adopta el workflow de UH.md como contrato del workspace. La auditoría de ski
 ### Comandos del workspace (9)
 
 | Comando | Fase metodológica | Descripción y propósito formal |
-|---|---|---|
+| --- | --- | --- |
 | `/rubric` | Definición | Genera la matriz de investigación: pregunta central, objetivos, alcance, criterios de inclusión/exclusión de fuentes y metodología a aplicar. |
 | `/research` | Recolección | Búsqueda exhaustiva de información en fuentes autorizadas; extrae datos, citas y contextos según la rúbrica. |
 | `/validate` | Evaluación crítica | Detecta contradicciones, sesgos, obsolescencia; verifica autoridad de fuentes; genera informe de calidad de datos. |
@@ -55,7 +55,7 @@ Se adopta el workflow de UH.md como contrato del workspace. La auditoría de ski
 Cada comando escribe en UNA única bandeja (mapeo TOTAL: los 9 comandos están asignados; y ÚNICO: ningún comando tiene dos bandejas de salida; leer a través de otras bandejas — p.ej. `/transform` lee `02-drafts/` y `03-citations/`— es normal y no cuenta como salida):
 
 | Bandeja | Dueño | Comandos |
-|---|---|---|
+| --- | --- | --- |
 | `00-Resources/` | usuario (el agente solo vía `add_source`) | ingesta; `/research` la lee vía `search` |
 | `01-tasks/` | Nezahualcóyotl | `/rubric`, `/synthesize` (plan, outline, todo) |
 | `01-tasks/research/` | **Pochteca** | `/research` (ver D9.3 — desviación documentada del UH) |
@@ -70,7 +70,7 @@ Cada comando escribe en UNA única bandeja (mapeo TOTAL: los 9 comandos están a
 ### Agentes primarios (5)
 
 | Agente | Rol | Comandos | Permisos (resumen D/manifest) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Itzamná** | Orquestador / interfaz del usuario | ninguno | Lectura/escritura de contexto: lee estado del workspace, enruta, NO ejecuta el pipeline |
 | **Nezahualcóyotl** | Arquitecto de investigación | `/rubric` `/synthesize` | Escritura solo de planificación (rúbricas, esquemas); sin web ni redacción final |
 | **Pochteca** | Explorador/recolección | `/research` | lectura total del workspace + navegación web + MCPs/lectores + escritura ÚNICAMENTE en `01-tasks/research/` (desviación documentada del UH, decisión usuario 2026-10-21 — ver párrafo siguiente) |
@@ -155,7 +155,7 @@ Inventario real: **208 skills** (listado completo al final). Las 14 categorías 
 ### Cobertura por categoría
 
 | # | Categoría (UH.md) | Skills que la cubren (existentes) | Estado |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | 1 | Research | deep-research, deep-research-swarm, research-lookup, research-literature, tooluniverse-literature-deep-research, scientific-problem-selection | ✅ cubierta (con duplicación) |
 | 2 | Investigación (ES) | mismas que #1; ninguna específica en español | ⚠️ parcial |
 | 3 | OSINT / búsqueda exhaustiva | multi-search-engine, parallel-web, exa-search, perplexity-search, wikipedia-search, patents-search, agent-browser, uspto-database, database-lookup | ✅ cubierta |
@@ -174,7 +174,7 @@ Inventario real: **208 skills** (listado completo al final). Las 14 categorías 
 ### Duplicados/redundancias a consolidar (propuesta /plan)
 
 | Familia | Skills | Acción recomendada |
-|---|---|---|
+| --- | --- | --- |
 | Office "oficial vs libre" | docx + docx-official · pptx + pptx-official · xlsx + xlsx-official | conservar la variante oficial; retirar la duplicada (misma función) |
 | PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | quedarse con 1–2 (proponer: `pdf` general + `pdf-processing-pro`); liteparse lo cubre el motor propio (Docling) |
 | Búsqueda de literatura ×8+ | literature, literature-search, literature-review, research-literature, academic-literature-search, paper-lookup, arxiv-search, biorxiv-search, medrxiv-search, pubmed-search, pubmed-database, openalex-database, bgpt-paper-search, paperzilla | consolidar a 2: un buscador general (research-lookup) + uno de preprints/biomed por dominio si el usuario lo pide; las de bases bio específicas son out-of-domain para el payload genérico |
@@ -197,9 +197,11 @@ Inventario real: **208 skills** (listado completo al final). Las 14 categorías 
 
 ### Inventario completo (208 — lectura directa de `obsidian-workspace/.opencode/skills/`, 2026-10-21)
 
+<!-- markdownlint-disable MD033 -->
 <details>
 <summary>Ver listado completo</summary>
 
 academic-literature-search · aeon · agent-browser · analytical-method-validation · anndata · arbor · arboreto · article-writing · arxiv-search · astropy · autoskill · benchling-integration · bgpt-paper-search · bids · biopython · biorxiv-database · biorxiv-search · brainstorming · bulk-rnaseq · cantera · cirq · citation-management · cobrapy · consciousness-council · dask · data-stats-analysis · data-transform · data-viz-plots · database-lookup · datalad · datamol · deep-research · deep-research-swarm · deepspot-m · deeptools · depmap · diffdock · doc-coauthoring · docx · docx-official · esm · etetoolkit · exa-search · excel-analysis · experimental-design · exploratory-data-analysis · fictiv · flowio · flowkit · fluidsim · folklore-variant-evidence · generate-image · geo-database · geomaster · geopandas · get-available-resources · gget · ginkgo-cloud-lab · gtars · gwas-database · histolab · hmdb-database · hugging-science · hypogenic · hypothesis-generation · idea-refine · imaging-data-commons · infographics · interview-me · iso-standards-readiness · lab-hardware-cad · labarchive-integration · lamindb · latex-posters · liteparse · literature · literature-review · literature-search · literature_to_hypothesis · mageck · markdown-mermaid-writing · market-research-reports · markitdown · matchms · matlab · matplotlib · medrxiv-search · modal · molecular-dynamics · molfeat · multi-search-engine · ncats-arax · networkx · neurokit2 · neuropixels-analysis · nextflow · nmrglue · nwb-conversion · obsidian-cli · obsidian-markdown · obsidian-vault · omero-integration · onekgpd · ontology-term-resolution · open-notebook · openalex-database · openpiv · opentrons-integration · optimize-for-gpu · pacsomatic · paper-2-web · paper-lookup · paperclip · paperzilla · parallel-web · patents-search · pathway-enrichment · pdb-database · pdf · pdf-anthropic · pdf-processing · pdf-processing-pro · peer-review · pennylane · perplexity-search · pi-agent · pkpd-modeling · plotly · polars · polars-bio · pptx · pptx-official · pptx-posters · primekg · primer-design · protocol-writing · protocolsio-integration · pubmed-database · pubmed-search · pufferlib · pybamm · pycalphad · pydeseq2 · pydicom · pyhealth · pylabrobot · pymatgen · pymc · pymoo · pyopenms · pysam · pytdc · pytorch-lightning · pyzotero · qiime2-amplicon · qiskit · qutip · relion · relsa-severity-assessment · research-grants · research-literature · research-lookup · review-writing · scanpy · scholar-evaluation · scientific-brainstorming · scientific-critical-thinking · scientific-manuscript · scientific-problem-selection · scientific-schematics · scientific-slides · scientific-visualization · scientific-writing · scikit-bio · scikit-learn · scikit-survival · scvelo · scvi-tools · seaborn · shap · simpy · stable-baselines3 · statistical-analysis · statistical-power · statsmodels · sympy · tamarind · tellurium · tiledbvcf · timesfm-forecasting · tooluniverse-literature-deep-research · torch-geometric · torchdrug · transformers · treatment-plans · umap-learn · uncertainty-and-units · usfiscaldata · uspto-database · vaex · venue-templates · what-if-oracle · wikipedia-search · writing-plans · writing-skills · xlsx · xlsx-official · zarr-python
 
 </details>
+<!-- markdownlint-enable MD033 -->

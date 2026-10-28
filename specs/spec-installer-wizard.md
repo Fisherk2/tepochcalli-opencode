@@ -68,7 +68,7 @@ fase 7** y termina con el checklist degraded. Un fallo de descarga o validación
 fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, fila 6).
 
 | # | Fase | Compensación en fallo |
-|---|---|---|
+| --- | --- | --- |
 | 1 | Detectar prereqs (Obsidian en rutas estándar por SO; `opencode` en PATH; memoria/disco) | sin cambios; guía de qué instalar |
 | 2 | Seleccionar destino del vault (ruta nueva o vault existente) | sin cambios |
 | 3 | Copiar payload (carpetas numeradas, `.opencode/` con agents/commands/skills, `AGENTS.md` del vault, `opencode.json` base, `00-Resources/` con muestras md+PDF) | borrar lo copiado en esta corrida (marca `.tepochcalli/.install-intent`) |
@@ -101,14 +101,14 @@ no solo para IDs custom.
 3. **Cómputo de badge por opción**, ratio = `rec_ram_gb` / RAM disponible:
 
 | Badge | Criterio (testeable) |
-|---|---|
+| --- | --- |
 | `recommended` | la opción cabe con ≥50% de margen (ratio ≤ 2/3 de la RAM disponible) |
 | `viable` | cabe, con margen bajo |
 | `no recomendado` | el requerimiento estimado excede la RAM disponible, **o** `gpu_recommended` && sin GPU detectada |
 
    Ejemplo (host de 4 GB de RAM, fila canónica para tests): MiniLM badge `recommended` (≈0.5 GB disk, ~0.9 GB est. RAM); `BAAI/bge-m3` badge `no recomendado` (≈2.3 GB disk, ~2.9 GB est. RAM).
 
-4. **Fallback:** si el sondeo falla (`/proc` ilegible, plataforma exótica) → usar valores declarados de `presets.toml`, **sin badge de veredicto**, y la instalación continúa normal — nunca un crash.
+1. **Fallback:** si el sondeo falla (`/proc` ilegible, plataforma exótica) → usar valores declarados de `presets.toml`, **sin badge de veredicto**, y la instalación continúa normal — nunca un crash.
 
 #### D8.3 — Advertir, nunca bloquear (locked)
 
@@ -218,6 +218,6 @@ activo (respuesta user-facing a "cambié de opinión / elegí mal"):
 ## References
 
 * Fisherk2/codice-opencode (modelo `template/` → instalación)
-* cargo-dist — https://opensource.axo.dev/cargo-dist/
-* uv — https://docs.astral.sh/uv/
+* cargo-dist — <https://opensource.axo.dev/cargo-dist/>
+* uv — <https://docs.astral.sh/uv/>
 * ADR-003 / ADR-004 / ADR-007 (paso embedder + re-entrada) / ADR-008 (transparencia hardware + swap atómico); docs/APPFLOW.md journeys d, e y f

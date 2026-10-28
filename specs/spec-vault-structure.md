@@ -67,7 +67,7 @@ Nota de convención: el nombre canónico de la fuente indexable es `00-Resources
 ### Mapa de propiedad y acciones permitidas (D9.1)
 
 | Carpeta | Dueño | Usuario puede | Agente puede |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `00-Resources/` | usuario (entrada única indexable) | leer · extraer · borrar · **depositar** · editar (anidamiento libre) | leer (vía `search` preferente); escribir SOLO por `add_source` con petición explícita |
 | `01-tasks/` · `02-drafts/` · `03-citations/` · `04-review/` · `05-outputs/` (bandejas del agente) | agente por comando (mapa D9.2 en specs/spec-agent-workflow.md) | leer · extraer · **borrar** (semántica de caché: regenerable) — NO depositar ni editar en sitio | escribir únicamente en su bandeja asignada; advertir ante archivos ajenos (no-contaminación) |
 | `10+`/`20+`/`30+` (biblioteca personal) | usuario | todo: leer · extraer · borrar · depositar · editar | solo lectura si el usuario lo pide; NUNCA escribe ahí (no indexada v1) |
@@ -92,7 +92,7 @@ Nota de convención: el nombre canónico de la fuente indexable es `00-Resources
 ### Estrategia gitignore
 
 | Ruta | ¿Commit? | Razón |
-|---|---|---|
+| --- | --- | --- |
 | `.tepochcalli/venv/`, `bin/`, `db/`, `models/` | ❌ | Artefactos regenerables, pesados, platform-dependent |
 | `.tepochcalli/config/` | ❌ | Puede contener claves API — nunca al repo ni al vault privado compartido (docs/SECURITY.md) |
 | `.tepochcalli/flow/`, `mcp/`, `pyproject.toml`, `uv.lock` | ✅ | Son **código fuente** versionado: el vault distribuido los instala; auditable |
