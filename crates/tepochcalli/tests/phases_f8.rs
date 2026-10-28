@@ -1,0 +1,482 @@
+//! F8 `mcp.servers` merge + `.bak` + portable command + `rag_status` e2e (T13).
+//!
+//! RED-first: every behavior here failed before
+//! `application::phase8::run_phase8` existed. Real `tempfile` vaults
+//! (D26: no FS port); fakes only (`RecordingProc`, which pins the exact
+//! program + argv + cwd + env — the same seam `phases_f7.rs` uses for the
+//! flow CLI). No model is ever downloaded: scripted `rag_status` payloads
+//! (spec literals) stand in for the venv, exactly like the T12 `FakeProc`
+//! stands in for `refresh` before the flow CLI existed.
+//!
+//! The last test is a REAL loopback (not a fake): it symlinks the repo dev
+//! venv into a `tempfile` vault and runs the unmodified `run_phase8`
+//! through `StdCommandRunner`, first bare (healthy `ok`, `rows: 0`) and
+//! then with `provider = "none"` (`degraded` + `E_NO_EMBEDDER`). Unix-only
+//! and skipped without the repo venv: a full `uv sync` per cargo run would
+//! be the T14/T18 matrix job, not a unit gate. The `ok`-with-rows>0 state
+//! (indexed vault) is covered by the Python e2e contract tests
+//! (`tests/e2e/test_mcp_contract.py`), which own the wire shape.
+
+#[allow(dead_code)]
+mod common;
+
+use std::cell::RefCell;
+use std::collections::VecDeque;
+use std::path::{Path, PathBuf};
+
+use tepochcalli::application::phase8::{
+    compensate_phase8, mcp_python_command_for, run_phase8, Phase8Report, RagHealth, MANAGED_RAG,
+    OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
+};
+use tepochcalli::domain::WizardError;
+use tepochcalli::ports::{CommandOutput, CommandRunner};
+
+fn tmp() -> tempfile::TempDir {
+    tempfile::tempdir().expect("tempdir for T13 fixtures")
+}
+
+/// Minimal user `opencode.json`: two unrelated servers, no managed keys.
+fn user_config() -> String {
+    "{\"mcp\":{\"servers\":{\
+     \"excel\":{\"type\":\"local\",\"command\":[\"uvx\",\"excel-mcp-server\",\"stdio\"],\"disabled\":true},\
+     \"jupyter\":{\"type\":\"local\",\"command\":[\"uvx\",\"mcp-jupyter-notebook\"],\"disabled\":true}}}\
+     ,\"model\":\"opencode/big-pickle\"}\n"
+        .to_string()
+}
+
+fn write_config(vault: &Path, body: &str) -> PathBuf {
+    let target = vault.join(OPENCODE_JSON);
+    std::fs::write(&target, body).expect("fixture opencode.json");
+    target
+}
+
+/// Venv interpreter fixture: F8 refuses to verify without it (same rule as
+/// F7 — no F5 on the vault means no spawn, typed error instead).
+fn venv_python(vault: &Path) -> PathBuf {
+    let python = vault
+        .join(".tepochcalli")
+        .join("venv")
+        .join("bin")
+        .join("python");
+    std::fs::create_dir_all(python.parent().expect("venv bin parent")).expect("venv fixture dir");
+    std::fs::write(&python, b"fake-python").expect("venv python fixture");
+    python
+}
+
+/// `CommandRunner` fake that records program + argv + cwd + env (pins the
+/// T13 contract: vault venv python, `-c` probe, cwd = vault,
+/// `TEPOCHCALLI_ROOT=.` — the exact entry F8 registers).
+type RecordedCall = (String, Vec<String>, PathBuf, Vec<(String, String)>);
+
+struct RecordingProc {
+    calls: RefCell<Vec<RecordedCall>>,
+    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
+}
+
+impl RecordingProc {
+    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
+        Self {
+            calls: RefCell::new(Vec::new()),
+            script: RefCell::new(script.into_iter().collect()),
+        }
+    }
+
+    fn calls(&self) -> Vec<RecordedCall> {
+        self.calls.borrow().clone()
+    }
+}
+
+impl CommandRunner for RecordingProc {
+    fn run(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &str)],
+    ) -> Result<CommandOutput, WizardError> {
+        self.calls.borrow_mut().push((
+            program.to_string(),
+            args.iter().map(ToString::to_string).collect(),
+            cwd.to_path_buf(),
+            env.iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        ));
+        self.script
+            .borrow_mut()
+            .pop_front()
+            .unwrap_or(Err(WizardError::Internal))
+    }
+}
+
+/// Spec-literal healthy payload (spec-mcp-server §rag_status, salida 1).
+fn rag_ok() -> Result<CommandOutput, WizardError> {
+    Ok(CommandOutput {
+        status: 0,
+        stdout: "{\"embedder\":{\"mode\":\"local\",\
+         \"model\":\"paraphrase-multilingual-MiniLM-L12-v2\",\"dims\":384,\"provider\":null},\
+         \"index\":{\"rows\":0,\"model_matches_config\":true,\"last_refresh\":null,\"db_size_bytes\":0},\
+         \"config\":{\"path\":\".tepochcalli/config/tepochcalli.toml\",\"valid\":true},\
+         \"health\":{\"state\":\"ok\",\"reason\":null,\"fix_hint\":null}}"
+            .to_string(),
+        stderr: String::new(),
+    })
+}
+
+/// Spec-literal degraded payload (salida 5, `provider = "none"`).
+fn rag_degraded() -> Result<CommandOutput, WizardError> {
+    Ok(CommandOutput {
+        status: 0,
+        stdout: "{\"embedder\":{\"mode\":\"none\",\"model\":null,\"dims\":null,\"provider\":null},\
+         \"index\":{\"rows\":0,\"model_matches_config\":true,\"last_refresh\":null,\"db_size_bytes\":0},\
+         \"config\":{\"path\":\".tepochcalli/config/tepochcalli.toml\",\"valid\":true},\
+         \"health\":{\"state\":\"degraded\",\"reason\":\"E_NO_EMBEDDER\",\
+         \"fix_hint\":\"Ejecuta `tepochcalli config embedder` y luego `index_refresh()`\"}}"
+            .to_string(),
+        stderr: String::new(),
+    })
+}
+
+fn occurrences(haystack: &str, needle: &str) -> usize {
+    haystack.matches(needle).count()
+}
+
+#[test]
+fn f8_backup_before_write_and_compensation_restores_byte_identical() {
+    let vault = tmp();
+    let original = user_config();
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    let report: Phase8Report =
+        run_phase8(&proc, vault.path()).expect("F8 must succeed on a user config");
+    assert!(report.changed, "new entry ⇒ changed");
+
+    // `.bak` exists BEFORE the merge and is byte-identical to the original.
+    let backup = std::fs::read(vault.path().join(OPENCODE_BAK)).expect(".bak must exist");
+    assert_eq!(backup, original.as_bytes(), ".bak must be byte-identical");
+
+    // Simulate a later failure: trash the merged file, compensate, compare.
+    std::fs::write(vault.path().join(OPENCODE_JSON), b"{\"trashed\":true}")
+        .expect("trash the merged file");
+    compensate_phase8(vault.path());
+    let restored =
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config must exist again");
+    assert_eq!(
+        restored,
+        original.as_bytes(),
+        "compensation restores byte-identical"
+    );
+    assert!(
+        !vault.path().join(OPENCODE_BAK).exists(),
+        "compensated run leaves no backup residue"
+    );
+}
+
+#[test]
+fn f8_preserves_unrelated_servers_and_manages_only_rag() {
+    let vault = tmp();
+    let original = user_config();
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    run_phase8(&proc, vault.path()).expect("F8 must succeed");
+
+    let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged config");
+    let doc: serde_json::Value = serde_json::from_str(&merged).expect("merged must parse");
+    // Unrelated servers survive with values and (disabled) flags intact.
+    assert_eq!(doc["mcp"]["servers"]["excel"]["disabled"], true);
+    assert_eq!(
+        doc["mcp"]["servers"]["excel"]["command"][0],
+        serde_json::Value::String("uvx".to_string())
+    );
+    assert_eq!(doc["mcp"]["servers"]["jupyter"]["disabled"], true);
+    assert_eq!(doc["model"], "opencode/big-pickle");
+    // Only the managed entry was added: the rest is structurally identical.
+    let mut current: serde_json::Value = serde_json::from_str(&merged).expect("re-parse");
+    let mut before: serde_json::Value = serde_json::from_str(&original).expect("fixture parses");
+    for key in [MANAGED_RAG, STALE_MARKITDOWN] {
+        current["mcp"]["servers"]
+            .as_object_mut()
+            .expect("servers")
+            .remove(key);
+        before["mcp"]["servers"]
+            .as_object_mut()
+            .expect("servers")
+            .remove(key);
+    }
+    assert_eq!(current, before, "conservative merge: the rest is untouched");
+    // The managed entry has the exact payload shape (D17: `python -m`, never a console script).
+    let entry = &doc["mcp"]["servers"][MANAGED_RAG];
+    assert_eq!(entry["type"], "local");
+    assert_eq!(entry["command"][1], "-m");
+    assert_eq!(entry["command"][2], "tepochcalli_mcp");
+    assert_eq!(entry["cwd"], ".");
+    assert_eq!(entry["environment"]["TEPOCHCALLI_ROOT"], ".");
+    assert_eq!(entry["disabled"], false);
+}
+
+#[test]
+fn f8_rewrites_only_when_different_second_run_is_noop() {
+    let vault = tmp();
+    // Stale form: console-script command instead of `python -m` (D17).
+    write_config(
+        vault.path(),
+        "{\"mcp\":{\"servers\":{\
+         \"tepochcalli-rag\":{\"type\":\"local\",\
+         \"command\":[\".tepochcalli/venv/bin/tepochcalli-mcp\"],\
+         \"cwd\":\".\",\"environment\":{\"TEPOCHCALLI_ROOT\":\".\"},\"disabled\":false}}}}",
+    );
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok(), rag_ok()]);
+
+    let first = run_phase8(&proc, vault.path()).expect("first F8 must succeed");
+    assert!(first.changed, "stale entry must be rewritten");
+    let after_first =
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("merged config exists");
+
+    let second = run_phase8(&proc, vault.path()).expect("second F8 must succeed");
+    assert!(!second.changed, "identical entry ⇒ no rewrite");
+    let after_second =
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config still exists");
+    assert_eq!(
+        after_first, after_second,
+        "no-op rerun ⇒ byte-identical file"
+    );
+    assert_eq!(
+        occurrences(&String::from_utf8_lossy(&after_second), MANAGED_RAG),
+        1,
+        "zero duplicate entries"
+    );
+}
+
+#[test]
+fn f8_removes_stale_markitdown_and_never_registers_it() {
+    let vault = tmp();
+    write_config(
+        vault.path(),
+        "{\"mcp\":{\"servers\":{\
+         \"excel\":{\"type\":\"local\",\"command\":[\"uvx\",\"x\"],\"disabled\":true},\
+         \"markitdown\":{\"type\":\"local\",\"command\":[\"uvx\",\"markitdown-mcp\"],\"disabled\":false}}}}",
+    );
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    assert!(
+        report.changed,
+        "removing the stale entry counts as a change"
+    );
+
+    let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged config");
+    assert_eq!(
+        occurrences(&merged, STALE_MARKITDOWN),
+        0,
+        "markitdown is gone (D19)"
+    );
+    assert_eq!(occurrences(&merged, MANAGED_RAG), 1);
+    assert!(
+        merged.contains("\"excel\""),
+        "unrelated servers survive the removal"
+    );
+}
+
+#[test]
+fn f8_venv_command_is_portable_by_os() {
+    // D20: POSIX vs Windows venv layout; `cfg!(windows)` picks at compile time.
+    assert_eq!(
+        mcp_python_command_for(false),
+        ".tepochcalli/venv/bin/python"
+    );
+    assert_eq!(
+        mcp_python_command_for(true),
+        ".tepochcalli/venv/Scripts/python.exe"
+    );
+}
+
+#[test]
+fn f8_write_is_atomic_and_legible() {
+    let vault = tmp();
+    write_config(vault.path(), &user_config());
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    run_phase8(&proc, vault.path()).expect("F8 must succeed");
+
+    assert!(
+        !vault.path().join("opencode.json.tmp").exists(),
+        "no temp file may leak from the atomic rename"
+    );
+    let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged config");
+    assert!(
+        merged.starts_with("{\n  \"mcp\""),
+        "legible 2-space form like the payload, got:\n{merged}"
+    );
+    assert!(merged.ends_with("}\n"), "POSIX trailing newline");
+}
+
+#[test]
+fn f8_probe_runs_venv_python_with_registered_cwd_and_env() {
+    let vault = tmp();
+    write_config(vault.path(), &user_config());
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    assert_eq!(report.health, RagHealth::Ok);
+
+    // Exactly one verification call, shaped like the registered entry.
+    let calls = proc.calls();
+    assert_eq!(calls.len(), 1, "one rag_status probe, got: {calls:?}");
+    let (program, args, cwd, env) = &calls[0];
+    assert!(
+        program.ends_with(".tepochcalli/venv/bin/python"),
+        "vault venv interpreter, got: {program}"
+    );
+    assert_eq!(args, &vec!["-c".to_string(), RAG_STATUS_PROBE.to_string()]);
+    assert_eq!(cwd, &vault.path().to_path_buf(), "cwd = vault");
+    assert!(
+        env.iter().any(|(k, v)| k == "TEPOCHCALLI_ROOT" && v == "."),
+        "contract env mirrors opencode.json, got: {env:?}"
+    );
+}
+
+#[test]
+fn f8_degraded_state_passes_with_fix_hint() {
+    let vault = tmp();
+    write_config(vault.path(), &user_config());
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_degraded()]);
+
+    let report = run_phase8(&proc, vault.path()).expect("degraded must still succeed");
+    assert_eq!(report.health, RagHealth::Degraded);
+    assert!(report.changed, "merge still applies in degraded installs");
+}
+
+#[test]
+fn f8_rag_status_violations_fail_safe_with_compensation() {
+    // Each payload violates the spec shape ⇒ `PhaseFailed`, and the merge
+    // is rolled back so the user file is byte-identical to the original.
+    let cases: &[(&str, &str)] = &[
+        ("garbage is not JSON", "not json at all"),
+        ("missing health block", "{\"embedder\":{\"mode\":\"local\"},\"index\":{},\"config\":{}}"),
+        ("unknown state", "{\"embedder\":{\"mode\":\"local\"},\"index\":{},\"config\":{},\"health\":{\"state\":\"maybe\",\"reason\":null,\"fix_hint\":null}}"),
+        ("degraded without reason", "{\"embedder\":{\"mode\":\"none\"},\"index\":{},\"config\":{},\"health\":{\"state\":\"degraded\",\"reason\":null,\"fix_hint\":null}}"),
+        ("degraded without fix_hint", "{\"embedder\":{\"mode\":\"none\"},\"index\":{},\"config\":{},\"health\":{\"state\":\"degraded\",\"reason\":\"E_NO_EMBEDDER\",\"fix_hint\":null}}"),
+        ("ok with stale reason", "{\"embedder\":{\"mode\":\"local\"},\"index\":{},\"config\":{},\"health\":{\"state\":\"ok\",\"reason\":\"E_NO_EMBEDDER\",\"fix_hint\":null}}"),
+        ("guard error envelope", "{\"error\":{\"code\":\"INTERNAL\",\"message\":\"boom\",\"details\":null}}"),
+        ("unknown embedder mode", "{\"embedder\":{\"mode\":\"remote\"},\"index\":{},\"config\":{},\"health\":{\"state\":\"ok\",\"reason\":null,\"fix_hint\":null}}"),
+    ];
+    for (name, stdout) in cases {
+        let vault = tmp();
+        let original = user_config();
+        write_config(vault.path(), &original);
+        venv_python(vault.path());
+        let proc = RecordingProc::scripted([Ok(CommandOutput {
+            status: 0,
+            stdout: (*stdout).to_string(),
+            stderr: String::new(),
+        })]);
+
+        let err = run_phase8(&proc, vault.path()).unwrap_err();
+        assert_eq!(err, WizardError::PhaseFailed, "case: {name}");
+        let current =
+            std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config must still exist");
+        assert_eq!(
+            current,
+            original.as_bytes(),
+            "case {name}: compensation restores byte-identical"
+        );
+    }
+
+    // Non-zero status (the venv python died) fails the same way.
+    let vault = tmp();
+    let original = user_config();
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let crashed = RecordingProc::scripted([Ok(CommandOutput {
+        status: 1,
+        stdout: String::new(),
+        stderr: "Traceback (most recent call last): ...".to_string(),
+    })]);
+    assert_eq!(
+        run_phase8(&crashed, vault.path()).expect_err("crashed probe must fail"),
+        WizardError::PhaseFailed
+    );
+    assert_eq!(
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config exists"),
+        original.as_bytes()
+    );
+}
+
+#[test]
+fn f8_missing_opencode_json_is_created_and_compensated() {
+    // F3 always lays the base, but a missing file must still install
+    // (recovery, not a crash); compensation removes exactly what F8 made.
+    let vault = tmp();
+    assert!(!vault.path().join(OPENCODE_JSON).exists());
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok(), rag_degraded()]);
+
+    let report = run_phase8(&proc, vault.path()).expect("missing file must be created");
+    assert!(report.changed);
+    let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("created");
+    assert_eq!(occurrences(&merged, MANAGED_RAG), 1);
+    assert!(
+        !vault.path().join(OPENCODE_BAK).exists(),
+        "nothing pre-existed ⇒ no backup to restore from"
+    );
+
+    compensate_phase8(vault.path());
+    assert!(
+        !vault.path().join(OPENCODE_JSON).exists(),
+        "compensation removes the file F8 created"
+    );
+}
+
+/// REAL loopback (unix + repo dev venv only): the unmodified `run_phase8`
+/// spawns the vault venv python and validates both spec states for real —
+/// bare vault ⇒ `ok` (`rows: 0`), then `provider = "none"` ⇒ `degraded` +
+/// `E_NO_EMBEDDER`, with the merge idempotent across the rerun.
+#[cfg(unix)]
+#[test]
+fn f8_real_venv_loopback_ok_then_degraded() {
+    use tepochcalli::adapters::StdCommandRunner;
+
+    let repo_venv = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../obsidian-workspace/.tepochcalli/venv");
+    let repo_python = repo_venv.join("bin/python");
+    if !repo_python.is_file() {
+        // Documented constraint: without the repo dev venv (T14/T18 matrix
+        // job does full `uv sync` runs) there is nothing real to loop back
+        // through — the scripted tests above own the shape.
+        return;
+    }
+    let vault = tmp();
+    let runtime = vault.path().join(".tepochcalli");
+    std::fs::create_dir_all(&runtime).expect("runtime dir");
+    std::os::unix::fs::symlink(&repo_venv, runtime.join("venv")).expect("venv symlink");
+    write_config(vault.path(), &user_config());
+    let proc = StdCommandRunner;
+
+    let first = run_phase8(&proc, vault.path()).expect("real ok loopback must succeed");
+    assert_eq!(first.health, RagHealth::Ok);
+    assert!(first.changed);
+    let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged");
+    assert_eq!(occurrences(&merged, MANAGED_RAG), 1);
+
+    std::fs::create_dir_all(runtime.join("config")).expect("config dir");
+    std::fs::write(
+        runtime.join("config/tepochcalli.toml"),
+        "[embedding]\nprovider = \"none\"\n",
+    )
+    .expect("none config");
+    let second = run_phase8(&proc, vault.path()).expect("real degraded loopback must succeed");
+    assert_eq!(second.health, RagHealth::Degraded);
+    assert!(!second.changed, "merge is idempotent across the rerun");
+    let merged_again =
+        std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged again");
+    assert_eq!(occurrences(&merged_again, MANAGED_RAG), 1);
+}

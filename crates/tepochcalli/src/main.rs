@@ -13,7 +13,7 @@ use tepochcalli::adapters::UreqHttpClient;
 use tepochcalli::adapters::{HeadlessUi, LocalPayload, StdCommandRunner, SysHostProbe, TtyUi};
 use tepochcalli::application::{
     check_prereqs, ensure_vault_dir, resolve_vault_dir, run_phase3, run_phase4, run_phase5,
-    run_phase6, run_phase7, Phase6Deps,
+    run_phase6, run_phase7, run_phase8, Phase6Deps,
 };
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::Ui;
@@ -263,9 +263,35 @@ fn run_install(
                                                 indexed.indexed,
                                                 indexed.elapsed_ms
                                             );
-                                            let _ =
-                                                writeln!(stdout, "{}", path.as_path().display());
-                                            0
+                                            // F8: merge `mcp.servers` (+ `.bak`)
+                                            // and verify `rag_status` end to end.
+                                            match run_phase8(&proc, path.as_path()) {
+                                                Ok(f8) => {
+                                                    let _ = writeln!(
+                                                        stderr,
+                                                        "mcp: tepochcalli-rag {} (rag_status={})",
+                                                        if f8.changed {
+                                                            "registered"
+                                                        } else {
+                                                            "up to date"
+                                                        },
+                                                        f8.health.as_str()
+                                                    );
+                                                    let _ = writeln!(
+                                                        stdout,
+                                                        "{}",
+                                                        path.as_path().display()
+                                                    );
+                                                    0
+                                                }
+                                                Err(err) => {
+                                                    let _ = writeln!(
+                                                        stderr,
+                                                        "install: phase F8 failed: {err}"
+                                                    );
+                                                    err.exit_code()
+                                                }
+                                            }
                                         }
                                         Err(err) => {
                                             let _ =

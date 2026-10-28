@@ -12,6 +12,7 @@ dialoguer = "0.12"
 tar = "0.4"
 zip = "2"
 flate2 = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"
 sysinfo = "0.36"
 thiserror = "2"

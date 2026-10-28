@@ -7,13 +7,16 @@ pub mod fetch;
 pub mod ports;
 
 pub use application::{
-    check_prereqs, check_prereqs_on, compensate_phase4, compensate_phase5, ensure_vault_dir,
-    is_supported_os, resolve_vault_dir, run_phase3, run_phase4, run_phase4_with, run_phase5,
-    run_phase6, run_phase7, tool_present_in, venv_python, Phase3Report, Phase4Report, Phase5Report,
-    Phase6Deps, Phase6Report, Phase7Report, PrereqReport, Provenance, DEFAULT_VAULT_DIR,
-    EMBEDDER_PATHS, IMPORT_CHECK, INSTALL_INTENT_PATH, MIN_DISK_FREE_GB, MIN_RAM_GB,
-    PLACEHOLDER_MD_NAME, PLACEHOLDER_PDF_NAME, RESOURCES_DIR, RUNTIME_DIR, SUPPORTED_OS,
-    UV_BIN_DIR, UV_MANAGED_PYTHON, UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR, VENV_DIR_NAME,
+    check_prereqs, check_prereqs_on, compensate_phase4, compensate_phase5, compensate_phase8,
+    ensure_vault_dir, is_supported_os, mcp_python_command, mcp_python_command_for,
+    resolve_vault_dir, run_phase3, run_phase4, run_phase4_with, run_phase5, run_phase6, run_phase7,
+    run_phase8, tool_present_in, venv_python, Phase3Report, Phase4Report, Phase5Report, Phase6Deps,
+    Phase6Report, Phase7Report, Phase8Report, PrereqReport, Provenance, RagHealth,
+    DEFAULT_VAULT_DIR, EMBEDDER_PATHS, IMPORT_CHECK, INSTALL_INTENT_PATH, MANAGED_RAG,
+    MIN_DISK_FREE_GB, MIN_RAM_GB, OPENCODE_BAK, OPENCODE_JSON, PLACEHOLDER_MD_NAME,
+    PLACEHOLDER_PDF_NAME, RAG_STATUS_PROBE, RESOURCES_DIR, RUNTIME_DIR, STALE_MARKITDOWN,
+    SUPPORTED_OS, UV_BIN_DIR, UV_MANAGED_PYTHON, UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR,
+    VENV_DIR_NAME,
 };
 
 pub use domain::{

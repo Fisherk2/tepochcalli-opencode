@@ -6,6 +6,7 @@
 pub mod embedder_menu;
 pub mod installer;
 pub mod phase7;
+pub mod phase8;
 
 pub use embedder_menu::{run_phase6, Phase6Deps, Phase6Report, Provenance, EMBEDDER_PATHS};
 pub use installer::{
@@ -17,3 +18,7 @@ pub use installer::{
     UV_BIN_DIR, UV_MANAGED_PYTHON, UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR, VENV_DIR_NAME,
 };
 pub use phase7::{run_phase7, Phase7Report};
+pub use phase8::{
+    compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
+    RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
+};
