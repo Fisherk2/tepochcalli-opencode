@@ -1,3 +1,4 @@
+pub mod adapters;
 pub mod archive;
 pub mod domain;
 pub mod fetch;

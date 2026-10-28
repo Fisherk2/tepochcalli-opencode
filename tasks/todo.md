@@ -40,7 +40,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: `cargo test` verde · el test de arquitectura **falla** si se añade `use std::fs` a `domain/` (se comprueba rompiéndolo a mano y revirtiendo)
   - Dep.: T3 · Tamaño: M
 
-- [ ] **T5 · Adapters reales: `std_proc`, `http`, `host` (sysinfo + probe de GPU)**
+- [x] **T5 · Adapters reales: `std_proc`, `http`, `host` (sysinfo + probe de GPU)**
   - Subagentes: `rust-engineer`, `platform-engineer` · Skills: `source-driven-development`, `error-handling-patterns`, `performance-analysis`
   - AC: (a) `CommandRunner` real ejecuta con `cwd` y `env` dados, captura stdout/stderr y el exit code, y **no** usa `shell = true` salvo que el comando lo exija explícitamente; (b) `HttpClient` real: GET con timeout, redirecciones limitadas y descarga a fichero con **verificación SHA-256** (falla si no coincide); (c) `HostProbe` real con `sysinfo`: RAM total/disponible y disco libre; (d) probe de GPU **opcional**: busca `nvidia-smi` y `rocm-smi` en el PATH; **ausencia = "no hay GPU", no es error**; (e) el sondeo **nunca** hace que la instalación crashee: si `sysinfo` falla, se devuelven valores `None` y el menú cae a los valores declarados de `presets.toml` **sin badge** (D8.2)
   - Verificar: tests unitarios con `FakeHost` para la lógica de badges (T10) · test de `HttpClient` con SHA-256 incorrecto ⇒ error tipado · `cargo clippy -D warnings` limpio

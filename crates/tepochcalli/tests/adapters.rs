@@ -1,0 +1,194 @@
+//! T5: real adapters behind the T4 ports (`std_proc`, `http`, `host`).
+//!
+//! Proc and HTTP tests run against the real OS / loopback only — no
+//! internet, no shell spawned by the adapter, no `unwrap` in `src/`.
+
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::path::PathBuf;
+
+use sha2::Digest as _;
+use tepochcalli::adapters::{find_tool_in, StdCommandRunner, SysHostProbe, UreqHttpClient};
+use tepochcalli::ports::{CommandRunner, HostProbe, HttpClient};
+use tepochcalli::WizardError;
+
+// --- `StdCommandRunner` (real `std::process`, no shell) ---
+
+#[cfg(unix)]
+#[test]
+fn proc_passes_env_and_captures_split_streams() {
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    // `sh` is the *explicit* child program here; the adapter itself never
+    // wraps anything in `sh -c` (AC-a: no shell unless the caller asks).
+    let out = runner
+        .run(
+            "sh",
+            &["-c", "echo $TEPOCHCALLI_PROBE; echo warn >&2"],
+            dir.path(),
+            &[("TEPOCHCALLI_PROBE", "hello-t5")],
+        )
+        .expect("sh runs");
+    assert_eq!(out.status, 0);
+    assert_eq!(out.stdout, "hello-t5\n");
+    assert_eq!(out.stderr, "warn\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn proc_reports_nonzero_exit_without_error() {
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = runner
+        .run("sh", &["-c", "exit 3"], dir.path(), &[])
+        .expect("exit code is data, not failure");
+    assert_eq!(out.status, 3);
+}
+
+#[test]
+fn proc_missing_binary_is_typed_error() {
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let err = runner
+        .run("tepochcalli-no-such-binary-t5", &[], dir.path(), &[])
+        .expect_err("spawn failure must surface typed");
+    assert_eq!(err, WizardError::PhaseFailed);
+}
+
+// --- `UreqHttpClient` (real HTTP over loopback only) ---
+
+/// Serve `body` once on 127.0.0.1; returns the URL to GET.
+fn serve_once(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind loopback");
+    let port = listener.local_addr().expect("local addr").port();
+    let handle = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept one conn");
+        let mut buf = vec![0u8; 4096];
+        let _ = stream.read(&mut buf); // request headers; content irrelevant
+        let header = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+            body.len()
+        );
+        stream.write_all(header.as_bytes()).expect("write header");
+        stream.write_all(&body).expect("write body");
+    });
+    (format!("http://127.0.0.1:{port}/asset"), handle)
+}
+
+fn sha256_hex(bytes: &[u8]) -> String {
+    format!("{:x}", sha2::Sha256::digest(bytes))
+}
+
+#[test]
+fn http_get_returns_served_bytes() {
+    let (url, handle) = serve_once(b"hello-adapter".to_vec());
+    let http = UreqHttpClient::new();
+    let got = http.get(&url).expect("loopback GET");
+    handle.join().expect("server thread");
+    assert_eq!(got, b"hello-adapter");
+}
+
+#[test]
+fn http_download_verifies_sha_and_writes_file() {
+    let body = b"uv-binary-bytes".to_vec();
+    let (url, handle) = serve_once(body.clone());
+    let http = UreqHttpClient::new();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let dest = dir.path().join("uv.bin");
+    http.download(&url, &dest, &sha256_hex(&body))
+        .expect("matching sha");
+    handle.join().expect("server thread");
+    assert_eq!(std::fs::read(&dest).expect("read back"), body);
+}
+
+#[test]
+fn http_download_wrong_sha_fails_and_leaves_no_file() {
+    let body = b"corrupt-me".to_vec();
+    let (url, handle) = serve_once(body);
+    let http = UreqHttpClient::new();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let dest = dir.path().join("uv.bin");
+    let err = http
+        .download(&url, &dest, &"0".repeat(64))
+        .expect_err("mismatch must fail typed");
+    handle.join().expect("server thread");
+    assert_eq!(err, WizardError::PayloadCorrupt);
+    assert!(!dest.exists(), "never leave a corrupt file");
+}
+
+#[test]
+fn http_bad_sha_format_fails_before_touching_disk() {
+    let http = UreqHttpClient::new();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let dest = dir.path().join("uv.bin");
+    // Unreachable host on purpose: `PayloadCorrupt` (not `NetDownload`)
+    // proves the hex is validated before any fetch.
+    let err = http
+        .download("http://127.0.0.1:9/unreachable", &dest, "not-hex")
+        .expect_err("bad hex must fail typed");
+    assert_eq!(err, WizardError::PayloadCorrupt);
+    assert!(!dest.exists());
+}
+
+#[test]
+fn http_refused_connection_is_net_error() {
+    // Bind then drop: guaranteed closed port, no network involved.
+    let port = TcpListener::bind("127.0.0.1:0")
+        .expect("bind")
+        .local_addr()
+        .expect("addr")
+        .port();
+    let http = UreqHttpClient::new();
+    let err = http
+        .get(&format!("http://127.0.0.1:{port}/"))
+        .expect_err("refused must fail typed");
+    assert_eq!(err, WizardError::NetDownload);
+}
+
+// --- `SysHostProbe` (real sysinfo; never crashes, AC-e) ---
+
+#[test]
+fn host_reports_sane_ram_and_disk() {
+    let probe = SysHostProbe;
+    let total = probe.ram_total_gb().expect("real machine has RAM");
+    assert!(total > 0.0, "total RAM must be positive, got {total}");
+    let avail = probe.ram_available_gb().expect("real machine has RAM");
+    assert!((0.0..=total).contains(&avail), "0 <= avail <= total");
+    let dir = tempfile::tempdir().expect("tempdir");
+    let free = probe
+        .disk_free_gb(dir.path())
+        .expect("tempdir lives on a real disk");
+    assert!(free > 0.0, "free disk must be positive, got {free}");
+}
+
+#[test]
+fn host_disk_probe_of_missing_path_does_not_panic() {
+    let probe = SysHostProbe;
+    // Either `None` or a value — the contract is "never crash" (AC-e).
+    let _ = probe.disk_free_gb(std::path::Path::new("/tepochcalli-no-such-dir-t5"));
+}
+
+#[test]
+fn host_gpu_probe_never_panics() {
+    let probe = SysHostProbe;
+    // `Some` on GPU machines, `None` elsewhere — both are correct (AC-d).
+    let _ = probe.gpu();
+}
+
+#[test]
+fn host_tool_search_finds_present_and_misses_absent() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    assert_eq!(
+        find_tool_in("tepochcalli-no-such-tool-t5", &[dir.path().to_path_buf()]),
+        None
+    );
+    let fake = dir.path().join("fake-smi-t5");
+    std::fs::write(&fake, b"#!/bin/sh\necho gpu\n").expect("write fake tool");
+    assert_eq!(
+        find_tool_in("fake-smi-t5", &[dir.path().to_path_buf()]),
+        Some(fake)
+    );
+    // PATH lookup wrapper honors real `PATH` (empty dir list ⇒ `None`).
+    let empty: Vec<PathBuf> = Vec::new();
+    assert_eq!(find_tool_in("sh", &empty), None);
+}

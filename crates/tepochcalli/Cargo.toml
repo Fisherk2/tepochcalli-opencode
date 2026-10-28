@@ -12,6 +12,7 @@ tar = "0.4"
 zip = "2"
 flate2 = "1"
 sha2 = "0.10"
+sysinfo = "0.36"
 thiserror = "2"
 ureq = "3"
 

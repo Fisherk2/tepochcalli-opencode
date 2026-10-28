@@ -2,8 +2,8 @@
 //! no third-party infra crates. Mirrors the Phase 1 Python guard
 //! (`tests/unit/test_architecture.py`).
 //!
-//! Fails if any `src/domain/*.rs` line opens a forbidden `use`, and fails if
-//! `src/adapters/` exists (T5 owns it).
+//! Fails if any `src/domain/*.rs` line opens a forbidden `use`.
+//! (T4 also asserted `src/adapters/` did not exist yet; T5 owns it now.)
 
 use std::path::PathBuf;
 
@@ -62,14 +62,5 @@ fn domain_has_no_infra_imports() {
         violations.is_empty(),
         "domain/ must stay pure (no I/O, adapters, or infra crates):\n{}",
         violations.join("\n")
-    );
-}
-
-#[test]
-fn adapters_dir_does_not_exist_yet() {
-    // T5 owns `src/adapters/`; T4 must not create it.
-    assert!(
-        !manifest_dir().join("src").join("adapters").exists(),
-        "src/adapters/ belongs to T5 and must not exist in T4"
     );
 }
