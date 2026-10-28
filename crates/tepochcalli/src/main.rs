@@ -2,8 +2,9 @@
 //!
 //! `install` runs F1→F2 for real (T7) + F3 payload merge (T8) + F4 `uv`
 //! bootstrap and F5 venv/`sync` (T9) + F6 embedder menu (T11) + F7 initial
-//! index (T12); every other subcommand is still a stub that exits 40
-//! (`WizardError::Internal` range, plan §5.4) until its task.
+//! index (T12); `config embedder` runs the D8.4 atomic swap (T16);
+//! `reindex --confirm` rebuilds the index (T17) and `uninstall` removes the
+//! runtime (T17).
 
 use std::io::IsTerminal;
 use std::path::Path;
@@ -17,17 +18,14 @@ use tepochcalli::application::failure::{
 use tepochcalli::application::{
     check_prereqs, compensate_phase6, ensure_vault_dir, guard_offline_before_touch, is_phase_done,
     mark_phase_done, payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3,
-    run_phase4, run_phase5, run_phase6, run_phase7, run_phase8, run_swap, Phase6Deps, Phase6Report,
-    SwapDeps, SwapOptions,
+    run_phase4, run_phase5, run_phase6, run_phase7, run_phase8, run_reindex, run_swap,
+    run_uninstall, Phase6Deps, Phase6Report, SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::failure::{failure_body, failure_title, redact};
 use tepochcalli::domain::{Phase, VaultPath, WizardError};
 use tepochcalli::ports::Ui;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-/// Marker every stub prints on stderr (graded contract — keep exact).
-const NOT_IMPLEMENTED: &str = "not yet implemented (T7+)";
 
 fn usage_top() -> &'static str {
     "Usage: tepochcalli <command> [options]\n\
@@ -68,6 +66,25 @@ fn usage_for(command: &str) -> String {
          --version  print the version\n"
             .to_string();
     }
+    if command == "reindex" {
+        return "Usage: tepochcalli reindex [options]\n\
+         \nOptions:\n  \
+         --confirm          mandatory: the rebuild is destructive (full re-index)\n  \
+         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --non-interactive  never prompt; a missing answer is a typed error\n  \
+         --help     print this help\n  \
+         --version  print the version\n"
+            .to_string();
+    }
+    if command == "uninstall" {
+        return "Usage: tepochcalli uninstall [options]\n\
+         \nOptions:\n  \
+         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --non-interactive  never prompt; a missing answer is a typed error\n  \
+         --help     print this help\n  \
+         --version  print the version\n"
+            .to_string();
+    }
     format!(
         "Usage: tepochcalli {command} [options]\n\
          \nOptions:\n  \
@@ -91,10 +108,28 @@ fn print_version(stdout: &mut dyn std::io::Write) {
     let _ = writeln!(stdout, "tepochcalli {VERSION}");
 }
 
-/// Stub for every unimplemented subcommand: stderr marker + exit 40.
-fn stub(stderr: &mut dyn std::io::Write, command: &str) -> u8 {
-    let _ = writeln!(stderr, "{command}: {NOT_IMPLEMENTED}");
-    WizardError::Internal.exit_code()
+/// T17 failure exit (reindex/uninstall): same T15 shape (panel on stderr +
+/// redacted log outside the vault), but the title/body carry the real command
+/// — never the install retry line, which would point at the wrong fix.
+fn report_maintenance_failure(
+    ui: &dyn Ui,
+    command: &str,
+    context: &str,
+    err: WizardError,
+    vault: Option<&Path>,
+) -> u8 {
+    let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
+    let secrets: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let log_path = log_path_in(&state_dir(), now_secs());
+    let title = format!("{command} failed");
+    let mut body = format!("cause: {context}: {err}\n");
+    if let Some(code) = err.e_star() {
+        body.push_str(&format!("code: {code}\n"));
+    }
+    body.push_str(&format!("log: {}\n", log_path.display()));
+    write_failure_log(&log_path, &redact(&format!("{title}\n{body}"), &secrets));
+    ui.panel(&title, &body);
+    err.exit_code()
 }
 
 fn unknown(stderr: &mut dyn std::io::Write, arg: &str) -> u8 {
@@ -655,6 +690,203 @@ fn run_config_embedder(
     }
 }
 
+/// `reindex` (T17): destructive full rebuild with the current model.
+/// `--confirm` is a usage gate, not a prompt: without it nothing is resolved,
+/// spawned or written — exit 2 with the reason on stderr.
+fn run_reindex_cmd(
+    args: Vec<&str>,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+) -> u8 {
+    let mut non_interactive = false;
+    let mut confirm = false;
+    let mut vault: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i] {
+            "--help" => {
+                print_help(stdout, Some("reindex"));
+                return 0;
+            }
+            "--version" => {
+                print_version(stdout);
+                return 0;
+            }
+            "--non-interactive" => non_interactive = true,
+            "--confirm" => confirm = true,
+            "--vault" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => vault = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "reindex: --vault needs a value");
+                        return 2;
+                    }
+                }
+            }
+            flag if flag.starts_with("--vault=") => {
+                vault = Some(flag["--vault=".len()..].to_string());
+            }
+            flag => {
+                let _ = writeln!(stderr, "reindex: unknown flag: {flag}");
+                return 2;
+            }
+        }
+        i += 1;
+    }
+    if !confirm {
+        let _ = writeln!(
+            stderr,
+            "reindex: nada que hacer sin --confirm — el re-index completo es destructivo \
+             (reconstruye el índice con el modelo actual). Re-ejecuta con `--confirm` para proceder."
+        );
+        return 2;
+    }
+    // T6 rule: no TTY means no prompts — fail fast instead of hanging.
+    if !non_interactive && !std::io::stdin().is_terminal() {
+        let _ = writeln!(
+            stderr,
+            "reindex: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
+        );
+        return WizardError::UserAborted.exit_code();
+    }
+    let ui: Box<dyn Ui> = if non_interactive {
+        // The flag (when given) answers the directory question in
+        // `resolve_vault_dir` without asking; an absent one surfaces as a
+        // typed `UserAborted` — never a guess, never stdin.
+        Box::new(HeadlessUi::new(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ))
+    } else {
+        Box::new(TtyUi)
+    };
+    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+        Ok(raw) => raw,
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "reindex",
+                "reindex: vault selection failed",
+                err,
+                None,
+            );
+        }
+    };
+    let path = Path::new(&raw);
+    match run_reindex(&StdCommandRunner, &*ui, path) {
+        Ok(report) => {
+            let _ = writeln!(
+                stdout,
+                "reindex: modelo {} · dims {} · indexed {} ({} ms)",
+                report.model,
+                report
+                    .dims
+                    .map(|dims| dims.to_string())
+                    .unwrap_or_else(|| "(sin dato)".to_string()),
+                report.indexed,
+                report.elapsed_ms
+            );
+            0
+        }
+        Err(err) => report_maintenance_failure(&*ui, "reindex", "reindex failed", err, Some(path)),
+    }
+}
+
+/// `uninstall` (T17): remove `.tepochcalli/` only. Notes, payload,
+/// `opencode.json`, `00-Resources/` and `.obsidian/` survive by construction
+/// (the orchestrator never enumerates them). Idempotent: a missing runtime is
+/// a no-op `Ok`, never an error.
+fn run_uninstall_cmd(
+    args: Vec<&str>,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+) -> u8 {
+    let mut non_interactive = false;
+    let mut vault: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i] {
+            "--help" => {
+                print_help(stdout, Some("uninstall"));
+                return 0;
+            }
+            "--version" => {
+                print_version(stdout);
+                return 0;
+            }
+            "--non-interactive" => non_interactive = true,
+            "--vault" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => vault = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "uninstall: --vault needs a value");
+                        return 2;
+                    }
+                }
+            }
+            flag if flag.starts_with("--vault=") => {
+                vault = Some(flag["--vault=".len()..].to_string());
+            }
+            flag => {
+                let _ = writeln!(stderr, "uninstall: unknown flag: {flag}");
+                return 2;
+            }
+        }
+        i += 1;
+    }
+    // T6 rule: no TTY means no prompts — fail fast instead of hanging.
+    if !non_interactive && !std::io::stdin().is_terminal() {
+        let _ = writeln!(
+            stderr,
+            "uninstall: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
+        );
+        return WizardError::UserAborted.exit_code();
+    }
+    let ui: Box<dyn Ui> = if non_interactive {
+        // Same contract as `reindex`: the flag answers, absence aborts typed.
+        Box::new(HeadlessUi::new(
+            Default::default(),
+            Default::default(),
+            Default::default(),
+        ))
+    } else {
+        Box::new(TtyUi)
+    };
+    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+        Ok(raw) => raw,
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "uninstall",
+                "uninstall: vault selection failed",
+                err,
+                None,
+            );
+        }
+    };
+    let path = Path::new(&raw);
+    match run_uninstall(path) {
+        Ok(report) => {
+            if report.removed {
+                let _ = writeln!(
+                    stdout,
+                    "uninstall: removed {}",
+                    path.join(".tepochcalli").display()
+                );
+            } else {
+                let _ = writeln!(stdout, "uninstall: nothing to remove (no .tepochcalli/)");
+            }
+            0
+        }
+        Err(err) => {
+            report_maintenance_failure(&*ui, "uninstall", "uninstall failed", err, Some(path))
+        }
+    }
+}
+
 /// Pure dispatch over argv (sans program name); returns the exit code.
 fn run(args: &[String], stdout: &mut dyn std::io::Write, stderr: &mut dyn std::io::Write) -> u8 {
     let mut it = args.iter().map(String::as_str);
@@ -672,21 +904,8 @@ fn run(args: &[String], stdout: &mut dyn std::io::Write, stderr: &mut dyn std::i
             0
         }
         "install" => run_install(it.collect(), stdout, stderr),
-        "reindex" | "uninstall" => match it.next() {
-            None => stub(stderr, first),
-            Some("--help") => {
-                print_help(stdout, Some(first));
-                0
-            }
-            Some("--version") => {
-                print_version(stdout);
-                0
-            }
-            Some(flag) => {
-                let _ = writeln!(stderr, "{first}: unknown flag: {flag}");
-                2
-            }
-        },
+        "reindex" => run_reindex_cmd(it.collect(), stdout, stderr),
+        "uninstall" => run_uninstall_cmd(it.collect(), stdout, stderr),
         "config" => match it.next() {
             None => bare_config(stderr),
             Some("--help") => {

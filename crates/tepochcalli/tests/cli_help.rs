@@ -1,5 +1,6 @@
 //! CLI surface tests (T3): `--help`/`--version` per subcommand,
-//! usage errors, and the T7+ "not yet implemented" stub behavior.
+//! usage errors, and the T17 ownership of `reindex`/`uninstall`
+//! (the old T7+ stubs are gone: each explains its own usage now).
 
 use std::process::{Command, Stdio};
 
@@ -68,20 +69,42 @@ fn config_without_subcommand_fails_with_usage() {
 }
 
 #[test]
-fn unimplemented_stubs_exit_40_with_stderr_marker() {
-    for args in [vec!["reindex"], vec!["uninstall"]] {
-        let out = bin().args(&args).output().expect("spawn binary");
-        assert_eq!(
-            out.status.code(),
-            Some(40),
-            "args {args:?} must exit 40 (E_INTERNAL range)"
-        );
-        let err = stderr_text(&out);
-        assert!(
-            err.contains("not yet implemented"),
-            "args {args:?} must print the stub marker on stderr, got:\n{err}"
-        );
-    }
+fn reindex_without_confirm_is_usage_error_not_stub() {
+    // T17: bare `reindex` is a usage error (exit 2), never the old stub.
+    // The `--confirm` gate runs before any TTY check, so no stdin setup is
+    // needed for a deterministic result.
+    let out = bin().arg("reindex").output().expect("spawn binary");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "bare `reindex` must exit 2 (needs --confirm)"
+    );
+    let err = stderr_text(&out);
+    assert!(
+        err.contains("--confirm"),
+        "bare `reindex` must explain the missing flag, got:\n{err}"
+    );
+    assert!(
+        !err.contains("not yet implemented"),
+        "the T7 stub is gone; T17 owns this subcommand"
+    );
+}
+
+#[test]
+fn uninstall_without_tty_is_typed_abort_not_stub() {
+    // T17: bare `uninstall` with no TTY is a typed abort (41), never a hang
+    // and never the old stub. `Stdio::null` keeps this deterministic with or
+    // without a terminal attached.
+    let out = bin()
+        .arg("uninstall")
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert_eq!(out.status.code(), Some(41));
+    assert!(
+        !stderr_text(&out).contains("not yet implemented"),
+        "the T7 stub is gone; T17 owns this subcommand"
+    );
 }
 
 #[test]

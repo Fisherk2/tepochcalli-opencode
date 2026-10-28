@@ -141,7 +141,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: test de la descarga interrumpida ⇒ hash de config/índice/modelo idéntico antes y después · test de éxito ⇒ modelo viejo ausente (y presente con `--keep-previous`) · test de servabilidad del índice viejo durante el reindex
   - Dep.: T15 · Tamaño: L
 
-- [ ] **T17 · `tepochcalli reindex --confirm` (TD-3) + `tepochcalli uninstall`**
+- [x] **T17 · `tepochcalli reindex --confirm` (TD-3) + `tepochcalli uninstall`**
   - Subagentes: `rust-engineer`, `test-engineer` · Skills: `test-driven-development`, `error-handling-patterns`
   - AC: (a) `reindex` exige `--confirm` **explícito** (sin él, no hace nada y explica por qué): borra el índice y lo reconstruye con el modelo actual, escribiendo `model` + `dims` en los metadatos; (b) detecta `E_MODEL_MISMATCH` (dims del modelo ≠ los del índice) y lo explica; (c) `uninstall --vault <ruta>` elimina `.tepochcalli/` (runtime: `venv/`, `bin/`, `db/`, `models/`, `config/`) y **deja** las notas, el payload y `opencode.json` del usuario; (d) `uninstall` **nunca** borra `00-Resources/` ni las notas; (e) ambos comandos soportan `--non-interactive`
   - Verificar: test de `reindex` sin `--confirm` ⇒ no hace nada · test de `uninstall` ⇒ `.tepochcalli/` ausente y notas intactas · **TD-3 cerrada** en `docs/TECH_DEBT.md`

@@ -164,4 +164,9 @@ fichero; CR-6 es límite externo documentado; CR-7/CR-8 solo activan con escala 
   deuda menor: renombrar en la siguiente tarea que toque CI.
 * **Deuda nueva de Phase 2 registrada:** ver §Deuda nueva en Phase 2 (R5, R6, D6-1…D6-6,
   F-T7-4, `FIX_OFFLINE_NO_CACHE`, fixture pre-T9) — TD-12 añadida a la tabla principal.
+* **Revisión Phase 3 ejecutada (T17, 2026-10-28):** TD-3 **cerrada** — el comando
+  `tepochcalli reindex --confirm` existe y es real (rebuild vía `refresh` del
+  venv + metadatos `model`/`dims` atómicos, detección `E_MODEL_MISMATCH` con
+  mensaje accionable, 13 tests en `crates/tepochcalli/tests/reindex_uninstall.rs`);
+  `tepochcalli uninstall` elimina solo `.tepochcalli/` y deja notas intactas.
 * Próxima revisión formal: cierre de Phase 6 (aceptación E2E).

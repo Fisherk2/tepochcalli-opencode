@@ -6,6 +6,7 @@
 pub mod embedder_menu;
 pub mod failure;
 pub mod installer;
+pub mod maintenance;
 pub mod phase7;
 pub mod phase8;
 pub mod swap;
@@ -25,6 +26,7 @@ pub use installer::{
     SUPPORTED_OS, UV_BIN_DIR, UV_MANAGED_PYTHON, UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR,
     VENV_DIR_NAME,
 };
+pub use maintenance::{run_reindex, run_uninstall, ReindexReport, UninstallReport};
 pub use phase7::{compensate_phase7, index_meta_path, run_phase7, Phase7Report};
 pub use phase8::{
     compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
