@@ -302,7 +302,10 @@ fn uv_binary_path(vault: &Path) -> PathBuf {
     runtime_dir(vault).join(UV_BIN_DIR).join(uv_binary_name())
 }
 
-fn venv_python(venv: &Path) -> PathBuf {
+/// Venv interpreter for gate subprocesses (F5 import check, F6 embed-check).
+/// Platform layout mirrors the MCP command F8 will register (D20).
+#[must_use]
+pub fn venv_python(venv: &Path) -> PathBuf {
     venv.join(if cfg!(windows) {
         "Scripts/python.exe"
     } else {

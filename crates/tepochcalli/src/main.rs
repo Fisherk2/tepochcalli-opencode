@@ -1,8 +1,9 @@
 //! `tepochcalli` entrypoint: hand-rolled argv dispatch (no clap until T6).
 //!
 //! `install` runs F1→F2 for real (T7) + F3 payload merge (T8) + F4 `uv`
-//! bootstrap and F5 venv/`sync` (T9); every other subcommand is still a stub
-//! that exits 40 (`WizardError::Internal` range, plan §5.4) until its task.
+//! bootstrap and F5 venv/`sync` (T9) + F6 embedder menu (T11); every other
+//! subcommand is still a stub that exits 40 (`WizardError::Internal` range,
+//! plan §5.4) until its task.
 
 use std::io::IsTerminal;
 use std::path::Path;
@@ -12,6 +13,7 @@ use tepochcalli::adapters::UreqHttpClient;
 use tepochcalli::adapters::{HeadlessUi, LocalPayload, StdCommandRunner, SysHostProbe, TtyUi};
 use tepochcalli::application::{
     check_prereqs, ensure_vault_dir, resolve_vault_dir, run_phase3, run_phase4, run_phase5,
+    run_phase6, Phase6Deps,
 };
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::Ui;
@@ -89,11 +91,12 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
 }
 
 /// `install` flag parsing (T6) + F1→F2 execution (T7) + F3 merge (T8) +
-/// F4 `uv` bootstrap and F5 venv/`sync` (T9):
+/// F4 `uv` bootstrap, F5 venv/`sync` (T9) and F6 embedder menu (T11):
 /// `--non-interactive`, `--skip-model`, `--vault <ruta>` and
 /// `--payload <ruta>` select the [`HeadlessUi`] answers (never stdin) vs.
 /// [`TtyUi`]; then F1 gates prereqs, F2 ensures the vault dir, F3 merges
-/// the payload, F4 installs the pinned `uv`, F5 syncs the venv. Without
+/// the payload, F4 installs the pinned `uv`, F5 syncs the venv, F6 picks
+/// the embedder (menu + gate + atomic config). Without
 /// `--payload` (and no release URL configured yet — T19 wires the asset)
 /// install stops here with exit 2 (CLI usage error, same class as `--vault`
 /// without a value).
@@ -229,8 +232,31 @@ fn run_install(
                     // when F5 fails (the total unwind is T14, not F5).
                     match run_phase5(&proc, path.as_path()) {
                         Ok(_) => {
-                            let _ = writeln!(stdout, "{}", path.as_path().display());
-                            0
+                            // F6: embedder menu + test-embed gate + atomic
+                            // config. `--skip-model` preselects path 5
+                            // (configure later, degraded, no index).
+                            let deps = Phase6Deps {
+                                ui: &*ui,
+                                host: &SysHostProbe,
+                                proc: &proc,
+                                http: &http,
+                            };
+                            match run_phase6(&deps, path.as_path()) {
+                                Ok(picked) => {
+                                    let _ = writeln!(
+                                        stderr,
+                                        "embedder: provider={} {}",
+                                        picked.provider,
+                                        picked.model.as_deref().unwrap_or("(none)")
+                                    );
+                                    let _ = writeln!(stdout, "{}", path.as_path().display());
+                                    0
+                                }
+                                Err(err) => {
+                                    let _ = writeln!(stderr, "install: phase F6 failed: {err}");
+                                    err.exit_code()
+                                }
+                            }
                         }
                         Err(err) => {
                             let _ = writeln!(stderr, "install: phase F5 failed: {err}");
