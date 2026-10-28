@@ -11,11 +11,15 @@ use std::process::ExitCode;
 
 use tepochcalli::adapters::UreqHttpClient;
 use tepochcalli::adapters::{HeadlessUi, LocalPayload, StdCommandRunner, SysHostProbe, TtyUi};
+use tepochcalli::application::failure::{
+    log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
+};
 use tepochcalli::application::{
     check_prereqs, compensate_phase6, ensure_vault_dir, guard_offline_before_touch, is_phase_done,
     mark_phase_done, payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3,
     run_phase4, run_phase5, run_phase6, run_phase7, run_phase8, Phase6Deps, Phase6Report,
 };
+use tepochcalli::domain::failure::{failure_body, failure_title, redact};
 use tepochcalli::domain::{Phase, VaultPath, WizardError};
 use tepochcalli::ports::Ui;
 
@@ -91,6 +95,29 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
     let _ = stderr.write_all(usage_top().as_bytes());
     let _ = writeln!(stderr, "Usage: tepochcalli config <embedder> [options]");
     2
+}
+
+/// Centralized install-failure exit (T15): best-effort log under the OS
+/// state dir (never the vault) + stderr panel via the `Ui` port. The typed
+/// exit code is returned unchanged; `context` keeps the historical one-line
+/// cause so existing diagnostics keep matching.
+fn report_failure(
+    ui: &dyn Ui,
+    phase: Option<Phase>,
+    context: &str,
+    err: WizardError,
+    vault: Option<&Path>,
+    extra_secrets: &[String],
+) -> u8 {
+    let mut owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
+    owned.extend(extra_secrets.iter().cloned());
+    let secrets: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let log_path = log_path_in(&state_dir(), now_secs());
+    let title = failure_title(phase);
+    let body = failure_body(context, phase, err, &log_path, &secrets);
+    write_failure_log(&log_path, &redact(&format!("{title}\n{body}"), &secrets));
+    ui.panel(&title, &body);
+    err.exit_code()
 }
 
 /// `install` flag parsing (T6) + F1→F2 execution (T7) + F3 merge (T8) +
@@ -182,8 +209,14 @@ fn run_install(
     let report = match check_prereqs(&SysHostProbe) {
         Ok(report) => report,
         Err(err) => {
-            let _ = writeln!(stderr, "install: prerequisites failed: {err}");
-            return err.exit_code();
+            return report_failure(
+                &*ui,
+                Some(Phase::F1),
+                "install: prerequisites failed",
+                err,
+                None,
+                &[],
+            );
         }
     };
     for (tool, found) in [
@@ -201,8 +234,14 @@ fn run_install(
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
         Err(err) => {
-            let _ = writeln!(stderr, "install: vault selection failed: {err}");
-            return err.exit_code();
+            return report_failure(
+                &*ui,
+                Some(Phase::F2),
+                "install: vault selection failed",
+                err,
+                None,
+                &[],
+            );
         }
     };
     // T14: offline pre-check BEFORE the vault is touched (exit 21, no writes).
@@ -212,19 +251,28 @@ fn run_install(
         {
             Ok(()) => {}
             Err(err) => {
-                let _ = writeln!(
-                    stderr,
-                    "install: offline without local payload/cache: {err}"
+                return report_failure(
+                    &*ui,
+                    Some(Phase::F2),
+                    "install: offline without local payload/cache",
+                    err,
+                    None,
+                    &[],
                 );
-                return err.exit_code();
             }
         }
     }
     let vault_path = match ensure_vault_dir(Path::new(&raw)) {
         Ok(path) => path,
         Err(err) => {
-            let _ = writeln!(stderr, "install: vault directory failed: {err}");
-            return err.exit_code();
+            return report_failure(
+                &*ui,
+                Some(Phase::F2),
+                "install: vault directory failed",
+                err,
+                None,
+                &[],
+            );
         }
     };
     mark_phase_done(vault_path.as_path(), Phase::F1);
@@ -256,6 +304,7 @@ fn run_f6_or_degraded(
     deps: &Phase6Deps<'_>,
     path: &VaultPath,
     offline: bool,
+    ui: &dyn Ui,
     stderr: &mut dyn std::io::Write,
 ) -> Result<Phase6Report, u8> {
     match run_phase6(deps, path.as_path()) {
@@ -271,8 +320,14 @@ fn run_f6_or_degraded(
                 || err == WizardError::Internal
                 || err == WizardError::OfflineNoCache
             {
-                let _ = writeln!(stderr, "install: phase F6 failed: {err}");
-                return Err(err.exit_code());
+                return Err(report_failure(
+                    ui,
+                    Some(Phase::F6),
+                    "install: phase F6 failed",
+                    err,
+                    Some(path.as_path()),
+                    &[],
+                ));
             }
             match compensate_phase6(path.as_path()) {
                 Ok(()) => {
@@ -283,10 +338,14 @@ fn run_f6_or_degraded(
                     );
                     Ok(Phase6Report::configure_later())
                 }
-                Err(comp_err) => {
-                    let _ = writeln!(stderr, "install: phase F6 failed: {comp_err}");
-                    Err(comp_err.exit_code())
-                }
+                Err(comp_err) => Err(report_failure(
+                    ui,
+                    Some(Phase::F6),
+                    "install: phase F6 failed",
+                    comp_err,
+                    Some(path.as_path()),
+                    &[],
+                )),
             }
         }
     }
@@ -321,8 +380,14 @@ fn run_phases(
                 report.skipped
             }
             Err(err) => {
-                let _ = writeln!(stderr, "install: phase F3 failed: {err}");
-                return err.exit_code();
+                return report_failure(
+                    ui,
+                    Some(Phase::F3),
+                    "install: phase F3 failed",
+                    err,
+                    Some(path.as_path()),
+                    &[],
+                );
             }
         }
     };
@@ -347,8 +412,14 @@ fn run_phases(
             }
             Err(err) => {
                 let err = offline_map(offline, err);
-                let _ = writeln!(stderr, "install: phase F4 failed: {err}");
-                return err.exit_code();
+                return report_failure(
+                    ui,
+                    Some(Phase::F4),
+                    "install: phase F4 failed",
+                    err,
+                    Some(path.as_path()),
+                    &[],
+                );
             }
         }
     }
@@ -361,8 +432,14 @@ fn run_phases(
             Ok(_) => mark_phase_done(path.as_path(), Phase::F5),
             Err(err) => {
                 let err = offline_map(offline, err);
-                let _ = writeln!(stderr, "install: phase F5 failed: {err}");
-                return err.exit_code();
+                return report_failure(
+                    ui,
+                    Some(Phase::F5),
+                    "install: phase F5 failed",
+                    err,
+                    Some(path.as_path()),
+                    &[],
+                );
             }
         }
     }
@@ -380,13 +457,13 @@ fn run_phases(
                 let _ = writeln!(stderr, "resume: F6 already done, skipping");
                 report
             }
-            None => match run_f6_or_degraded(&deps, path, offline, stderr) {
+            None => match run_f6_or_degraded(&deps, path, offline, ui, stderr) {
                 Ok(picked) => picked,
                 Err(code) => return code,
             },
         }
     } else {
-        match run_f6_or_degraded(&deps, path, offline, stderr) {
+        match run_f6_or_degraded(&deps, path, offline, ui, stderr) {
             Ok(picked) => picked,
             Err(code) => return code,
         }
@@ -413,8 +490,14 @@ fn run_phases(
             }
             Err(err) => {
                 let err = offline_map(offline, err);
-                let _ = writeln!(stderr, "install: phase F7 failed: {err}");
-                return err.exit_code();
+                return report_failure(
+                    ui,
+                    Some(Phase::F7),
+                    "install: phase F7 failed",
+                    err,
+                    Some(path.as_path()),
+                    &[],
+                );
             }
         }
     }
@@ -437,8 +520,14 @@ fn run_phases(
                 );
             }
             Err(err) => {
-                let _ = writeln!(stderr, "install: phase F8 failed: {err}");
-                return err.exit_code();
+                return report_failure(
+                    ui,
+                    Some(Phase::F8),
+                    "install: phase F8 failed",
+                    err,
+                    Some(path.as_path()),
+                    &[],
+                );
             }
         }
     }

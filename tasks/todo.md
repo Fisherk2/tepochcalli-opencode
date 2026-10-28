@@ -129,7 +129,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: 8 tests de fallo inducido (uno por fase) · test de `--resume` que corta la instalación en F5 y la reanuda · test de `--offline` sin caché ⇒ vault intacto · test de install ×2
   - Dep.: T13 · Tamaño: L
 
-- [ ] **T15 · UX de fallo: panel, log y códigos de salida**
+- [x] **T15 · UX de fallo: panel, log y códigos de salida**
   - Subagentes: `cli-developer` (lead), `technical-writer`, `security-auditor` · Skills: `error-handling-patterns`, `crafting-effective-readmes`, `security-and-hardening`
   - AC: (a) el fallo imprime un panel con **fase fallida**, **causa**, **comando de reintento** (`tepochcalli install --resume`) y **ruta del log**; (b) el log vive en `$XDG_STATE_HOME/tepochcalli/install-<ts>.log` (o `%LOCALAPPDATA%` en Windows) y **nunca** dentro del vault; (c) los códigos de salida respetan los rangos de la spec y el mapeo de §5.4 del plan; (d) **redacción**: la clave de la salida 4 nunca aparece en el log, en el panel ni en la salida de `opencode.json`; (e) el panel va a stderr y el resultado a stdout
   - Verificar: test que inyecta un error y comprueba el contenido del panel y del log · test de redacción con una clave falsa que **no** aparece en ningún artefacto · el log no está bajo el vault

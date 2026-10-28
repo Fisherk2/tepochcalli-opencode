@@ -4,6 +4,7 @@
 //! rule, same direction as `domain/`).
 
 pub mod embedder_menu;
+pub mod failure;
 pub mod installer;
 pub mod phase7;
 pub mod phase8;

@@ -5,6 +5,7 @@
 
 pub mod embedder;
 pub mod error;
+pub mod failure;
 pub mod outcome;
 pub mod phase;
 pub mod plan;
