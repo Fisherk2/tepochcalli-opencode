@@ -68,8 +68,8 @@ fn config_without_subcommand_fails_with_usage() {
 }
 
 #[test]
-fn unimplemented_install_exits_40_with_stderr_marker() {
-    for args in [vec!["install"], vec!["reindex"], vec!["uninstall"]] {
+fn unimplemented_stubs_exit_40_with_stderr_marker() {
+    for args in [vec!["reindex"], vec!["uninstall"]] {
         let out = bin().args(&args).output().expect("spawn binary");
         assert_eq!(
             out.status.code(),

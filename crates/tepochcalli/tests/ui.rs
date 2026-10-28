@@ -85,8 +85,9 @@ fn tty_ui_panel_renders_without_panicking_off_terminal() {
         .panel("E_PROBE", "probe body");
 }
 
-/// `install --non-interactive --skip-model` with stdin closed must terminate
-/// (stub exit 40 until T7+) instead of blocking on a prompt.
+/// `install --non-interactive --skip-model` with stdin closed and no `--vault`
+/// must terminate fast (exit 41: the headless UI cannot guess the vault dir)
+/// instead of blocking on a prompt.
 #[test]
 fn install_non_interactive_with_closed_stdin_terminates() {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -101,14 +102,15 @@ fn install_non_interactive_with_closed_stdin_terminates() {
     let out = rx
         .recv_timeout(Duration::from_secs(15))
         .expect("install --non-interactive --skip-model must not block on closed stdin");
-    assert_eq!(out.status.code(), Some(40));
+    assert_eq!(out.status.code(), Some(41));
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("not yet implemented"),
-        "stub marker must stay on stderr"
+        String::from_utf8_lossy(&out.stderr).contains("vault selection failed"),
+        "headless install without --vault must fail fast naming the vault, got:\n{}",
+        String::from_utf8_lossy(&out.stderr)
     );
 }
 
-/// Same, with an explicit `--vault`: still no stdin read, still stub exit 40.
+/// Same, with an explicit `--vault`: F1+F2 run for real, exit 0, no stdin read.
 #[test]
 fn install_non_interactive_with_vault_flag_terminates() {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -129,5 +131,5 @@ fn install_non_interactive_with_vault_flag_terminates() {
     let out = rx
         .recv_timeout(Duration::from_secs(15))
         .expect("install --non-interactive --vault must not block on closed stdin");
-    assert_eq!(out.status.code(), Some(40));
+    assert_eq!(out.status.code(), Some(0));
 }

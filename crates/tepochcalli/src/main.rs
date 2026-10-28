@@ -1,11 +1,14 @@
 //! `tepochcalli` entrypoint: hand-rolled argv dispatch (no clap until T6).
 //!
-//! T3 skeleton: only `--help`/`--version` work; every real subcommand is a
-//! stub that exits 40 (`WizardError::Internal` range, plan §5.4) until T7+.
+//! `install` runs F1→F2 for real (T7); every other subcommand is still a
+//! stub that exits 40 (`WizardError::Internal` range, plan §5.4) until its task.
 
+use std::io::IsTerminal;
+use std::path::Path;
 use std::process::ExitCode;
 
-use tepochcalli::adapters::{HeadlessUi, TtyUi};
+use tepochcalli::adapters::{HeadlessUi, SysHostProbe, TtyUi};
+use tepochcalli::application::{check_prereqs, ensure_vault_dir, resolve_vault_dir};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::Ui;
 
@@ -80,11 +83,10 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
     2
 }
 
-/// `install` flag parsing (T6): only `--non-interactive`, `--skip-model`
-/// and `--vault <ruta>` exist so far; the phases behind them land in T7+,
-/// so a parsed invocation still ends in the exit-40 stub. The `Ui` backend
-/// is chosen for real already: flags-derived [`HeadlessUi`] (never stdin)
-/// vs. [`TtyUi`].
+/// `install` flag parsing (T6) + F1→F2 execution (T7): `--non-interactive`,
+/// `--skip-model` and `--vault <ruta>` select the [`HeadlessUi`] answers
+/// (never stdin) vs. [`TtyUi`]; then F1 gates prereqs and F2 ensures the
+/// vault dir. T8+ extends the pipeline past F2 from this same function.
 fn run_install(
     args: Vec<&str>,
     stdout: &mut dyn std::io::Write,
@@ -126,13 +128,57 @@ fn run_install(
         }
         i += 1;
     }
-    // Backend choice is real; the install itself is still a T7+ stub.
-    let _ui: Box<dyn Ui> = if non_interactive {
-        Box::new(HeadlessUi::for_install(skip_model, vault))
+    // T6 rule: no TTY means no prompts — fail fast instead of hanging or
+    // resolving the default dir under an unintended cwd.
+    if !non_interactive && !std::io::stdin().is_terminal() {
+        let _ = writeln!(
+            stderr,
+            "install: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
+        );
+        return WizardError::UserAborted.exit_code();
+    }
+    let ui: Box<dyn Ui> = if non_interactive {
+        Box::new(HeadlessUi::for_install(skip_model, vault.clone()))
     } else {
         Box::new(TtyUi)
     };
-    stub(stderr, "install")
+    // F1: prerequisites (RAM/disk/platform gate; missing tools only warn).
+    let report = match check_prereqs(&SysHostProbe) {
+        Ok(report) => report,
+        Err(err) => {
+            let _ = writeln!(stderr, "install: prerequisites failed: {err}");
+            return err.exit_code();
+        }
+    };
+    for (tool, found) in [
+        ("obsidian", report.obsidian_found),
+        ("opencode", report.opencode_found),
+    ] {
+        if !found {
+            let _ = writeln!(
+                stderr,
+                "warning: `{tool}` not found in PATH (optional; continuing)"
+            );
+        }
+    }
+    // F2: vault directory (`--vault` wins; otherwise the Ui asks).
+    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+        Ok(raw) => raw,
+        Err(err) => {
+            let _ = writeln!(stderr, "install: vault selection failed: {err}");
+            return err.exit_code();
+        }
+    };
+    match ensure_vault_dir(Path::new(&raw)) {
+        Ok(path) => {
+            let _ = writeln!(stdout, "{}", path.as_path().display());
+            0
+        }
+        Err(err) => {
+            let _ = writeln!(stderr, "install: vault directory failed: {err}");
+            err.exit_code()
+        }
+    }
 }
 
 /// Pure dispatch over argv (sans program name); returns the exit code.

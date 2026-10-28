@@ -66,7 +66,7 @@ historial de git (`git show a070385:tasks/todo.md`).
 
 ## Sub-fase B — Las 8 fases (el camino de instalación)
 
-- [ ] **T7 · F1 detección de prerrequisitos + F2 directorio del vault**
+- [x] **T7 · F1 detección de prerrequisitos + F2 directorio del vault**
   - Subagentes: `rust-engineer`, `platform-engineer` · Skills: `error-handling-patterns`, `clean-code`
   - AC: (a) F1 comprueba SO/arquitectura soportados, RAM (≥ 8 GB) y disco libre (≥ 4 GB); (b) detecta **Obsidian** y **OpenCode V2** si están presentes y **solo avisa** si faltan (la spec los pone en *Non-Goals*: no se instalan); (c) RAM < 8 GB ⇒ **aborta** con mensaje de requisitos y exit code 10-19 (spec-embeddings: no se instala «mitad»); (d) F2 elige el directorio del vault: `--vault <ruta>` lo fija; sin flag, la TUI pregunta con un default sensato; (e) si el directorio ya existe ⇒ se **reutiliza** (idempotencia), nunca se borra ni se sobreescribe contenido; (f) F1 y F2 **no se compensan** (no tocaron nada del usuario)
   - Verificar: tests con `FakeHost` (RAM 4 GB ⇒ aborta con 10-19; RAM 16 GB ⇒ pasa) · `--vault` no interactivo · 2ª corrida detecta el vault existente
