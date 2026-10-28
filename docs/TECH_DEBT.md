@@ -111,6 +111,30 @@ quedaron cubiertas con tests de caracterización.
 | **Q-2** | El 95 % global tiene **4 puntos de margen** y todo lo que queda sin cubrir es de **Phase 1**: `flow/refresh_lock.py` **83 %** (30-32, 42-45, 70), `verify.py` **94 %** (111-116, 134→exit), `source.py` **96 %** (339, 352-353, 417), `app.py:383`, y `mcp/__main__.py` **91 %** (rama `24->exit`) | Medición 2026-10-27 (414 tests) | Cualquier línea nueva sin test en `mcp/` o `flow/` tumba el gate recién atado a `just ci` | Cubrir las ramas del lock (concurrencia real) y de `verify.py` (ligado a D6-3) en Phase 6 |
 | **Q-3** | El caso «`uri` inválida **y** `provider=none` a la vez» no tiene test explícito: la precedencia `VALIDATION_ERROR > E_NO_EMBEDDER` es estructural (orden de código), no afirmada | Fase verde del rito | Un reordenamiento futuro del handler podría invertir la precedencia sin que nada falle | Test de precedencia por pares cuando se toque `add_source` de nuevo (el patrón ya existe en `test_mcp_e_dialect.py`) |
 
+## Review /code-review Phase 2 (2026-10-27)
+
+Aplicados y verificados en rama `feat/workspace-obsidian` (commits 913a53b…b21e6af + e5fc8b4,
+docs): agregados O(1) del estado del índice y tabla rota ⇒ `INTERNAL` (ya no finge vacío);
+denylist SSRF en `validate_source_uri`; pin exclusivo `litellm<1.107.0` (GHSA-92x9-889m-jgmw);
+redacción de credenciales del URI; guard TOCTOU en `_write_atomic`; vault root resuelto;
+retirada la entrada `mcp.servers.markitdown` del payload; estimador de tokens con peso CJK.
+
+Lo que queda DEFERIDO de esa review (o no llegó a preguntarse), con razonamiento:
+
+| ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
+| --- | --- | --- | --- | --- |
+| **CR-1** | `_scrub` solo elimina la cadena EXACTA del secreto (`embedder.py:205-207`): sin encodings (URL-encode, escapes JSON de la librería en el mensaje de error) | Review Phase 2 | Un mensaje de litellm que encoda la clave (`sk%2Dx`) escapearía al log | Normalizar/codificar oscilaciones al avanzar el wrapper (`replace` por cada encoding conocido) — Phase 6 con la matriz de proveedores |
+| **CR-2** | `INDEXED_FIELDS` en `tools/add_source.py:60` es una tupla global sin `Final` | Review Phase 2 | Reasignación accidental en un refactor; mypy no avisa | `Final` al toucher de nuevo `add_source` (cambio de 1 token, no merece su propio pase) |
+| **CR-3** | Rename `_meta_seam` → `_index_meta` (`server.py:347`, docstring de `rag_status` consume ese nombre literal) | Review Phase 2 | Cosmético: nombre menos descriptivo de lo posible | Con la siguiente tarea que toque el wiring de `rag_status` |
+| **CR-4** | Shadowing `effective_top_k` (función `budget.effective_top_k` vs variable local `tools/search.py:102`) | Review Phase 2 | Confusión en lectura; sin bug real | Renombrar la variable en la próxima pasada sobre `search` |
+| **CR-5** | `.gitignore` PROPIO del directorio `obsidian-workspace/` (artefactos del payload): hoy el repo raíz cubre `venv/db/models/bin/config` desde arriba | Review Phase 2 (secops) | Si el payload se copia/mueve fuera del repo (wizard), el ignore deja de viajar con él | Crearlo al tocarse el layout del payload en Phase 4-5 (depende del wizard) |
+| **CR-6** | El SDK de MCP responde TIPOS inválidos de args con **texto libre** propio del transporte antes de llegar al handler (server.py:339 y los 4 `@server.tool`): violación del §Manejo de errores «nunca texto libre» imputable al SDK, no a nuestros payloads | Review Phase 2 | Un agente que manda `top_k: "fuerte"` ve texto del SDK en vez de `VALIDATION_ERROR` canónico | Documentado como LÍMITE del SDK (`mcp==2.3.0`); si la v2 publica validación de args canónica o un hook pre-handler, adoptarla — abierta ante upstream |
+| **CR-7** | `O_EXCL`/fd atómico ante escritura multiusuario (`_write_atomic` tiene guard TOCTOU single-user y depaso del rename) | Review Phase 2; cerrada la pierna single-user en el mismo pase (eje 5, commit 00e29bf) | El guard cubre la carrera como-error (jamás `ok:true` borrando); un sistema multiusuario real quisiera retry-transparente | Solo si llega el caso multi-usuario (misma puerta que TD-11/R5) |
+| **CR-8** | `index_meta` sigue pagando el walk recursivo `rglob` de `db/` para `db_size_bytes` (O(archivos) en disco, O(1) en filas ya logrado) | Review Phase 2 (eje 1) — los AGREGADOS del índice SÍ quedaron O(1) (`count_rows()`); el `rglob` puede porque la spec §rag_status pide `db/` ENTERO, no `stats` de LanceDB | `db_size_bytes` menor coste con 1k PDFs ya indexados (miles de ficheros de fragments en `db/`) | Proyectar el tamaño del `.tepochcalli/db` con `os.scandir` de 1 nivel o cachearlo por sesión cuando el AC de escala lo pida (Phase 6) |
+
+Ninguna asciende a blocker: CR-1..CR-5 son nominativas de una pasada futura sobre cada
+fichero; CR-6 es límite externo documentado; CR-7/CR-8 solo activan con escala real.
+
 ## Deuda no aceptada (evitada por diseño)
 
 * RAG desde cero (UH.md lo prohíbe explícitamente) → mitigado por ADR-001.
