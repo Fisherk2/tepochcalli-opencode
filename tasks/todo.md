@@ -72,7 +72,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: tests con `FakeHost` (RAM 4 GB ⇒ aborta con 10-19; RAM 16 GB ⇒ pasa) · `--vault` no interactivo · 2ª corrida detecta el vault existente
   - Dep.: T6 · Tamaño: M
 
-- [ ] **T8 · F3 extraer el payload + `.install-intent` + `00-Resources/` + placeholders**
+- [x] **T8 · F3 extraer el payload + `.install-intent` + `00-Resources/` + placeholders**
   - Subagentes: `rust-engineer` (lead), `security-auditor` · Skills: `security-and-hardening`, `test-driven-development`, `clean-code`
   - AC: (a) `PayloadSource` con dos adapters: `ReleasePayload` (asset `tepochcalli-workspace-<ver>.tar.gz` de la release + SHA-256) y `LocalPayload` (`--payload <ruta>`, para dev y tests); (b) la extracción **no sobreescribe** ningún fichero existente del usuario: los coincidentes se dejan intactos y se anotan como «ya estaba»; (c) **no toca** `.obsidian/` ni nada fuera del vault; (d) escribe `.tepochcalli/.install-intent` con la **lista exacta** de ficheros escritos (base de la compensación de F3); (e) crea `00-Resources/` con el **case exacto** que indexa el flow (`citation.py:32` → `00-Resources`) y deja 2 placeholders: 1 `.md` y 1 `.pdf` (D22) — el PDF va embebido en el crate (`include_bytes!`), no en el repo del payload; (f) el `.pdf` placeholder es un PDF válido y parseable por Docling; (g) **no** crea `02-drafts/`/`03-citations/`/`04-review/`/`05-outputs/` (eso es Phase 5, TD-8)
   - Verificar: test con `tempfile` y un payload fake que contiene un fichero que el usuario ya tiene ⇒ ese fichero queda **intacto** y el resto se copia · `.install-intent` coincide con lo escrito · Docling parsea el PDF placeholder

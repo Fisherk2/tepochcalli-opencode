@@ -1,14 +1,15 @@
 //! `tepochcalli` entrypoint: hand-rolled argv dispatch (no clap until T6).
 //!
-//! `install` runs F1→F2 for real (T7); every other subcommand is still a
-//! stub that exits 40 (`WizardError::Internal` range, plan §5.4) until its task.
+//! `install` runs F1→F2 for real (T7) + F3 payload merge (T8); every other
+//! subcommand is still a stub that exits 40 (`WizardError::Internal` range,
+//! plan §5.4) until its task.
 
 use std::io::IsTerminal;
 use std::path::Path;
 use std::process::ExitCode;
 
-use tepochcalli::adapters::{HeadlessUi, SysHostProbe, TtyUi};
-use tepochcalli::application::{check_prereqs, ensure_vault_dir, resolve_vault_dir};
+use tepochcalli::adapters::{HeadlessUi, LocalPayload, SysHostProbe, TtyUi};
+use tepochcalli::application::{check_prereqs, ensure_vault_dir, resolve_vault_dir, run_phase3};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::Ui;
 
@@ -38,6 +39,7 @@ fn usage_for(command: &str) -> String {
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --skip-model       preselect \"configure later\" (degraded, no index)\n  \
          --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --payload <ruta>   payload tree to merge (dev/tests; required until T19)\n  \
          --help     print this help\n  \
          --version  print the version\n"
             .to_string();
@@ -83,10 +85,13 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
     2
 }
 
-/// `install` flag parsing (T6) + F1→F2 execution (T7): `--non-interactive`,
-/// `--skip-model` and `--vault <ruta>` select the [`HeadlessUi`] answers
-/// (never stdin) vs. [`TtyUi`]; then F1 gates prereqs and F2 ensures the
-/// vault dir. T8+ extends the pipeline past F2 from this same function.
+/// `install` flag parsing (T6) + F1→F2 execution (T7) + F3 merge (T8):
+/// `--non-interactive`, `--skip-model`, `--vault <ruta>` and
+/// `--payload <ruta>` select the [`HeadlessUi`] answers (never stdin) vs.
+/// [`TtyUi`]; then F1 gates prereqs, F2 ensures the vault dir, F3 merges
+/// the payload. Without `--payload` (and no release URL configured yet —
+/// T19 wires the asset) install stops here with exit 2 (CLI usage error,
+/// same class as `--vault` without a value).
 fn run_install(
     args: Vec<&str>,
     stdout: &mut dyn std::io::Write,
@@ -95,6 +100,7 @@ fn run_install(
     let mut non_interactive = false;
     let mut skip_model = false;
     let mut vault: Option<String> = None;
+    let mut payload: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
         match args[i] {
@@ -118,8 +124,21 @@ fn run_install(
                     }
                 }
             }
+            "--payload" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => payload = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "install: --payload needs a value");
+                        return 2;
+                    }
+                }
+            }
             flag if flag.starts_with("--vault=") => {
                 vault = Some(flag["--vault=".len()..].to_string());
+            }
+            flag if flag.starts_with("--payload=") => {
+                payload = Some(flag["--payload=".len()..].to_string());
             }
             flag => {
                 let _ = writeln!(stderr, "install: unknown flag: {flag}");
@@ -171,8 +190,32 @@ fn run_install(
     };
     match ensure_vault_dir(Path::new(&raw)) {
         Ok(path) => {
-            let _ = writeln!(stdout, "{}", path.as_path().display());
-            0
+            // F3: merge the payload without overwrite (placeholders + intent).
+            let Some(payload_dir) = payload.filter(|p| !p.trim().is_empty()) else {
+                let _ = writeln!(
+                    stderr,
+                    "install: no payload source: pass --payload <ruta> \
+                     (local tree for dev/tests); the versioned release asset lands in T19"
+                );
+                return 2;
+            };
+            match run_phase3(&LocalPayload::new(Path::new(&payload_dir)), path.as_path()) {
+                Ok(report) => {
+                    for already in &report.skipped {
+                        let _ = writeln!(
+                            stderr,
+                            "warning: ya estaba (sin cambios): {}",
+                            already.display()
+                        );
+                    }
+                    let _ = writeln!(stdout, "{}", path.as_path().display());
+                    0
+                }
+                Err(err) => {
+                    let _ = writeln!(stderr, "install: phase F3 failed: {err}");
+                    err.exit_code()
+                }
+            }
         }
         Err(err) => {
             let _ = writeln!(stderr, "install: vault directory failed: {err}");

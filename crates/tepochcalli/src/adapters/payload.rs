@@ -1,0 +1,222 @@
+//! F3 payload adapters (T8): [`LocalPayload`] copies a dev/test tree,
+//! [`ReleasePayload`] fetches the versioned asset with SHA-256 and extracts
+//! it. Both merge WITHOUT overwrite and never write outside the vault.
+//!
+//! Second Writing-Outside-Dir surface after T2 (`archive.rs`): the merge
+//! itself is join-checked against the canonical vault, and payload symlinks
+//! are never followed — only regular files are copied as plain files.
+
+use std::fs;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
+
+use crate::archive::extract_tar_gz;
+use crate::domain::WizardError;
+use crate::ports::{HttpClient, MergeReport, PayloadSource};
+
+use super::http::UreqHttpClient;
+
+/// `.obsidian/` never crosses the merge, in either direction (user settings
+/// win unconditionally; a payload copy would clobber them).
+const OBSIDIAN_DIR: &str = ".obsidian";
+/// Scratch dir for release extraction, inside the vault so no cross-device
+/// move is needed; removed after the merge (best-effort).
+const STAGE_DIR: &str = ".tepochcalli/.payload-stage";
+
+/// T19 wires the real asset; until then this URL fails closed (unfetchable).
+pub const RELEASE_ASSET_URL_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSET_URL";
+/// T19 wires the real checksum; until then nothing can match it.
+pub const RELEASE_ASSET_SHA256_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSET_SHA256";
+
+/// Copies a local dir tree — `--payload <ruta>`, for dev and tests.
+#[derive(Debug, Clone)]
+pub struct LocalPayload {
+    src: PathBuf,
+}
+
+impl LocalPayload {
+    /// Serve copies of the tree under `src` (checked at merge time).
+    #[must_use]
+    pub fn new(src: &Path) -> Self {
+        Self {
+            src: src.to_path_buf(),
+        }
+    }
+}
+
+impl PayloadSource for LocalPayload {
+    fn materialize(&self, dest: &Path) -> Result<Vec<PathBuf>, WizardError> {
+        Ok(merge_tree(&self.src, dest)?.written)
+    }
+
+    fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
+        merge_tree(&self.src, dest)
+    }
+}
+
+/// Fetches `tepochcalli-workspace-<ver>.tar.gz` with SHA-256 verification
+/// (URL + checksum are constructor inputs; T19 supplies the real values).
+#[derive(Debug, Clone)]
+pub struct ReleasePayload {
+    url: String,
+    expected_sha256: String,
+}
+
+impl ReleasePayload {
+    /// Fetch `url`, fail unless its SHA-256 matches `expected_sha256`.
+    #[must_use]
+    pub fn new(url: &str, expected_sha256: &str) -> Self {
+        Self {
+            url: url.to_string(),
+            expected_sha256: expected_sha256.to_string(),
+        }
+    }
+
+    /// Placeholder until T19 wires the real asset: fails closed on use
+    /// (the URL is unfetchable and the SHA matches nothing).
+    #[must_use]
+    pub fn placeholder() -> Self {
+        Self::new(
+            RELEASE_ASSET_URL_PLACEHOLDER,
+            RELEASE_ASSET_SHA256_PLACEHOLDER,
+        )
+    }
+
+    /// `false` until T19 configures the real asset URL + checksum.
+    #[must_use]
+    pub fn is_configured(&self) -> bool {
+        self.url != RELEASE_ASSET_URL_PLACEHOLDER
+            && self.expected_sha256 != RELEASE_ASSET_SHA256_PLACEHOLDER
+    }
+
+    fn stage_and_merge(&self, stage: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
+        let asset = stage.join("asset.tar.gz");
+        UreqHttpClient::new().download(&self.url, &asset, &self.expected_sha256)?;
+        let file = fs::File::open(&asset).map_err(|_| WizardError::PayloadCorrupt)?;
+        let extract_outcome = extract_tar_gz(file, stage).map_err(|_| WizardError::PayloadCorrupt);
+        // The asset file itself must not be merged into the vault.
+        let _ = fs::remove_file(&asset);
+        extract_outcome?;
+        let report = merge_tree(stage, dest)?;
+        // Best-effort: residue is harmless (T14 resume clears it).
+        let _ = fs::remove_dir_all(stage);
+        Ok(report)
+    }
+}
+
+impl PayloadSource for ReleasePayload {
+    fn materialize(&self, dest: &Path) -> Result<Vec<PathBuf>, WizardError> {
+        Ok(self.materialize_report(dest)?.written)
+    }
+
+    fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
+        // Stage inside the vault: download (SHA-gated) → extract → merge →
+        // remove stage, so a corrupt asset never touches the user's tree.
+        // Any failure removes the stage again: rejection leaves the vault
+        // exactly as it was (two-phase guarantee, same as `archive.rs`).
+        let stage = dest.join(STAGE_DIR);
+        reset_dir(&stage)?;
+        let outcome = self.stage_and_merge(&stage, dest);
+        if outcome.is_err() {
+            let _ = fs::remove_dir_all(&stage);
+            // Drop the runtime dir too if nothing else claimed it
+            // (`remove_dir` only succeeds when empty — user files are safe).
+            if let Some(parent) = stage.parent() {
+                let _ = fs::remove_dir(parent);
+            }
+        }
+        outcome
+    }
+}
+
+/// Empty `dir`, creating it (an interrupted F3 may leave a stale stage).
+fn reset_dir(dir: &Path) -> Result<(), WizardError> {
+    match fs::remove_dir_all(dir) {
+        Ok(()) => {}
+        Err(e) if e.kind() == ErrorKind::NotFound => {}
+        Err(_) => return Err(WizardError::PermissionDenied),
+    }
+    fs::create_dir_all(dir).map_err(|_| WizardError::PermissionDenied)
+}
+
+fn map_io(error: std::io::Error) -> WizardError {
+    if error.kind() == ErrorKind::PermissionDenied {
+        WizardError::PermissionDenied
+    } else {
+        WizardError::DiskFull
+    }
+}
+
+/// Join `rel` onto the canonical vault `root`; escape (defense-in-depth —
+/// `rel` comes from a real walk so `..` cannot occur) is `PayloadCorrupt`.
+fn join_checked(root: &Path, rel: &Path) -> Result<PathBuf, WizardError> {
+    let target = root.join(rel);
+    if target.starts_with(root) {
+        Ok(target)
+    } else {
+        Err(WizardError::PayloadCorrupt)
+    }
+}
+
+/// Merge the tree at `src` into `dest` without overwrite: pre-existing files
+/// stay byte-intact (recorded in `skipped`), `.obsidian/` and symlinks never
+/// cross, and every target is join-checked against the canonical `dest`.
+// shortcut: unlinkable entries (sockets, fifos, devices) are skipped, never
+// materialized; T14 owns the richer compensation policy.
+pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
+    fs::create_dir_all(dest).map_err(map_io)?;
+    // Canonicalize once: every target below is checked against this root.
+    let root = dest
+        .canonicalize()
+        .map_err(|_| WizardError::PermissionDenied)?;
+    let mut report = MergeReport::default();
+    let mut stack = vec![src.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        // Unreadable source (bad `--payload`, corrupt stage) is `PayloadCorrupt`,
+        // same convention as the `FakePayload` T4 fake.
+        let entries = fs::read_dir(&dir).map_err(|_| WizardError::PayloadCorrupt)?;
+        for entry in entries {
+            let entry = entry.map_err(|_| WizardError::PayloadCorrupt)?;
+            let rel = entry
+                .path()
+                .strip_prefix(src)
+                .map_err(|_| WizardError::PayloadCorrupt)?
+                .to_path_buf();
+            if rel
+                .components()
+                .next()
+                .is_some_and(|c| c.as_os_str() == OBSIDIAN_DIR)
+            {
+                continue; // whole subtree skipped: its dirs are never pushed
+            }
+            let kind = entry.file_type().map_err(|_| WizardError::PayloadCorrupt)?;
+            if kind.is_symlink() {
+                report.skipped.push(root.join(&rel));
+                continue;
+            }
+            if kind.is_dir() {
+                let target = join_checked(&root, &rel)?;
+                fs::create_dir_all(&target).map_err(map_io)?;
+                stack.push(entry.path());
+                continue;
+            }
+            if kind.is_file() {
+                let target = join_checked(&root, &rel)?;
+                if target.exists() {
+                    report.skipped.push(target);
+                } else {
+                    if let Some(parent) = target.parent() {
+                        fs::create_dir_all(parent).map_err(map_io)?;
+                    }
+                    fs::copy(entry.path(), &target).map_err(map_io)?;
+                    report.written.push(target);
+                }
+                continue;
+            }
+            report.skipped.push(root.join(&rel));
+        }
+    }
+    report.written.sort();
+    report.skipped.sort();
+    Ok(report)
+}

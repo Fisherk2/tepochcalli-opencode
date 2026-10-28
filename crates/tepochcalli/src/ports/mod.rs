@@ -13,6 +13,6 @@ pub mod ui;
 
 pub use host::{GpuInfo, HostProbe};
 pub use net::HttpClient;
-pub use payload::PayloadSource;
+pub use payload::{MergeReport, PayloadSource};
 pub use proc::{CommandOutput, CommandRunner};
 pub use ui::Ui;

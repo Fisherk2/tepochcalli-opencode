@@ -5,10 +5,15 @@
 
 pub mod host;
 pub mod http;
+pub mod payload;
 pub mod std_proc;
 pub mod ui;
 
 pub use host::{find_tool_in, SysHostProbe};
 pub use http::UreqHttpClient;
+pub use payload::{
+    merge_tree, LocalPayload, ReleasePayload, RELEASE_ASSET_SHA256_PLACEHOLDER,
+    RELEASE_ASSET_URL_PLACEHOLDER,
+};
 pub use std_proc::StdCommandRunner;
 pub use ui::{HeadlessUi, TtyUi};

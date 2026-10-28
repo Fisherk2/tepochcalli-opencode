@@ -155,12 +155,18 @@ fn vault_path_through_file_fails_typed() {
 fn install_non_interactive_vault_runs_f1_f2_for_real() {
     let dir = tmp();
     let target = dir.path().join("tepochcalli-vault");
+    // T8: install runs F3 after F2, so it needs a payload tree (empty here:
+    // F3 still writes the placeholders + intent).
+    let payload = dir.path().join("payload");
+    std::fs::create_dir_all(&payload).expect("payload fixture dir");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
         .args([
             "install",
             "--non-interactive",
             "--vault",
             target.to_str().expect("utf8 tmp"),
+            "--payload",
+            payload.to_str().expect("utf8 tmp"),
         ])
         .output()
         .expect("spawn install");
@@ -171,6 +177,17 @@ fn install_non_interactive_vault_runs_f1_f2_for_real() {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(target.is_dir(), "F2 must create the vault dir for real");
+    assert!(
+        target.join("00-Resources").join("ejemplo.md").is_file(),
+        "F3 must leave the markdown placeholder"
+    );
+    assert!(
+        target
+            .join(".tepochcalli")
+            .join(".install-intent")
+            .is_file(),
+        "F3 must write the intent file"
+    );
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains(target.to_str().expect("utf8 tmp")),

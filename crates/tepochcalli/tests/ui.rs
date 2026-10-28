@@ -110,9 +110,12 @@ fn install_non_interactive_with_closed_stdin_terminates() {
     );
 }
 
-/// Same, with an explicit `--vault`: F1+F2 run for real, exit 0, no stdin read.
+/// Same, with explicit `--vault` + `--payload`: F1→F3 run for real,
+/// exit 0, no stdin read.
 #[test]
 fn install_non_interactive_with_vault_flag_terminates() {
+    // T8: F3 needs a payload tree; an empty dir still yields placeholders.
+    let payload = tempfile::tempdir().expect("payload fixture dir");
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let out = bin()
@@ -122,6 +125,8 @@ fn install_non_interactive_with_vault_flag_terminates() {
                 "--skip-model",
                 "--vault",
                 "/tmp/tepochcalli-t6-probe",
+                "--payload",
+                payload.path().to_str().expect("utf8 tmp"),
             ])
             .stdin(Stdio::null())
             .output()
