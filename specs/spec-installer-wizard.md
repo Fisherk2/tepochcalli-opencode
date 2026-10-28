@@ -1,6 +1,6 @@
 # Spec: Wizard de instalación (TUI Rust atomico y versionado)
 
-* **Status:** Proposed
+* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)

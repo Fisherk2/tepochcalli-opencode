@@ -173,7 +173,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: `dist build` genera los installers · el smoke de T18 usa el payload **local** (no red) · test de la regla one-version (la versión del payload solicitada == la del binario) · checksum corrupto ⇒ fallo limpio
   - Dep.: T18 · Tamaño: M
 
-- [ ] **T20 · Documentación + CHANGELOG + FTR Phase 3 → Phase 4**
+- [x] **T20 · Documentación + CHANGELOG + FTR Phase 3 → Phase 4**
   - Subagentes: `technical-writer` (lead), `code-reviewer` · Skills: `documentation-and-adrs`, `changelog-generate`, `crafting-effective-readmes`
   - AC: (a) `docs/APPFLOW.md` journeys d, e, f actualizados con el comportamiento real (instalación completa, salida 5, swap); (b) `docs/TECH_DEBT.md`: **R6 cerrada** (T9), **TD-3 cerrada** (T17), y **deuda nueva** registrada: «CI y release nunca ejecutados» (M6), «Windows fuera de la matrix» (D-b), «spec del wizard sin probar contra el gate de Phase 6»; (c) `CHANGELOG.md` con la entrada de Phase 3 (`changelog-generate`); (d) `specs/spec-installer-wizard.md` pasa a **Approved** (con el FTR del usuario) y `SPEC.md`/`docs/WORKFLOW.md` reflejan Phase 3 completada y Phase 4 liberado; (e) `docs/WORKFLOW.md` §1: estado de Phase 3 → completada con fecha; (f) **el FTR registra explícitamente lo NO verificado**: la matrix CI no se ejecutó, no hay release publicada, Windows no se probó
   - Verificar: `just md-lint` verde · `just quality` + `just rust-ci` verdes · la sección «no verificado» del FTR está escrita (no vacía)

@@ -59,14 +59,26 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
 ## 5. Journey (d) — primer arranque con wizard
 
 1. Usuario (VM/host limpio): `curl -L https://github.com/Fisherk2/…/install.sh | sh`
-   (o `cargo binstall tepochcalli`).
-2. Ejecuta `tepochcalli` → TUI: bienvenida → detección de prereqs (Obsidian, OpenCode V2;
-   si falta algo: instrucciones y salida limpia).
-3. Elige/crea directorio del vault → el wizard materializa el payload (carpetas numeradas,
-   `.opencode/`, `opencode.json`, `AGENTS.md`, muestras en `00-Resources/`).
-4. Barra de progreso por fases: bootstrap `uv` → `uv venv` + `uv sync` (1-2GB wheels,
-   requiere internet) → descarga MiniLM (~470MB) → indexación inicial de muestras →
-   merge/validación de `mcp.servers`.
+   (o `cargo binstall tepochcalli`). El instalador descarga el binario de la release,
+   verifica su SHA-256 y lo ejecuta — inspecciona el script antes de ejecutarlo.
+2. Ejecuta `tepochcalli install` → TUI line-based (`dialoguer`, sin TTY con
+   `--non-interactive`): detección de prereqs F1 (SO/arch, RAM ≥ 8 GB, disco ≥ 4 GB;
+   Obsidian y OpenCode V2 solo se detectan, no se instalan) → F2 elige/crea el
+   directorio del vault (reutiliza si existe, nunca borra).
+3. F3 extrae el payload versionado (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`,
+   asset de la misma release — **regla one-version**: el binario v0.3.x instala siempre
+   el payload v0.3.x, nunca un `latest` suelto) con merge sin sobreescribir
+   (lo existente queda intacto y se anota), sin tocar `.obsidian/`; crea `00-Resources/`
+   con 2 placeholders (1 `.md` + 1 `.pdf` válido) y escribe `.install-intent`.
+4. F4 bootstrap de `uv` en `.tepochcalli/bin/` (SHA-256 verificado, sin scripts remotos)
+   → F5 `uv venv` + `uv sync --frozen` en `.tepochcalli/venv/` → F6 menú
+   "Embedding provider" (5 salidas, default
+   `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado; cada fila con
+   💾/🧠/🎮 y etiqueta `medido`/`estimado`/`declarado` + badges; gate test-embed con
+   RSS pico medido) → F7 indexa `00-Resources/` vía `python -m tepochcalli_flow`
+   (chunks + `model`/`dims` en metadatos; 2.ª corrida ⇒ `indexed: 0`) → F8 merge
+   conservador de `mcp.servers` (con `.bak`, comando portable por SO, sin registrar
+   `markitdown`, verificación `rag_status`).
 5. Fin: "abre Obsidian en `<ruta>`, ejecuta `opencode`, prueba /rubric". El usuario NO
    instaló Python/Node ni tecleó comandos de dependencias.
 6. Smoke: usuario añade una nota a `00-Resources/` → journey (b) funciona.
@@ -80,15 +92,24 @@ reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedde
 ## 6. Journey (e) — fallo y recuperación
 
 1. Caída de red durante fase 5 (venv sync): el wizard detecta fallo, **rollback compensado**
-   (`rm -rf .tepochcalli/venv/`), panel rojo con: fase, causa, comando de reintento
-   (`tepochcalli install --resume`), ruta de log (fuera del vault).
-2. Usuario restaura red → `--resume` reutiliza fases previas válidas (bin/, payload) → completa.
-3. Fallo de fase 8 (merge opencode.json): se revierte desde `.bak`; el vault ya instalado es
-   usable sin MCP hasta reintentar.
-4. Usuario borra el runtime a mano o `tepochcalli uninstall --vault <ruta>` → vault vuelve a
-   estado pre-instalación; sus notas intactas.
-5. Índice corrupto (ej. copia de vault entre plataformas): `search` → INTERNAL/INDEX_* con
-   guía "borra .tepochcalli/db/ y index_refresh()"; reconstrucción desde fuentes (índice derivado).
+   (`rm -rf .tepochcalli/venv/`), panel en stderr con: fase fallida, causa, comando de
+   reintento (`tepochcalli install --resume`) y ruta del log — el log vive en
+   `$XDG_STATE_HOME/tepochcalli/install-<ts>.log` (o `%LOCALAPPDATA%` en Windows),
+   **nunca** dentro del vault; códigos de salida por rangos (10-19 prereqs, 20-29
+   red — `E_OFFLINE_NO_CACHE` = exit 21 —, 30-39 validación, 40+ interno).
+   La clave de API de la salida 4 nunca aparece en log, panel ni `opencode.json`.
+2. Usuario restaura red → `--resume` reanuda desde la fase correcta (artefactos +
+   marker `.tepochcalli/.install-state`), sin re-descargar lo ya válido → completa.
+   `--offline` sin caché ⇒ fallo limpio `E_OFFLINE_NO_CACHE` **antes** de tocar el vault.
+3. Fallo de fase 8 (merge opencode.json): se revierte desde `.bak` byte a byte; el vault ya instalado es
+   usable sin MCP hasta reintentar. La compensación de F6 cae a **salida 5**
+   (instalación COMPLETA degradada), no a "instalación fallida".
+4. Usuario borra el runtime a mano o `tepochcalli uninstall --vault <ruta>` → `.tepochcalli/`
+   eliminado (runtime: `venv/`, `bin/`, `db/`, `models/`, `config/`); notas, payload y
+   `opencode.json` intactos — `00-Resources/` nunca se borra.
+5. Índice corrupto o cambio de modelo: `tepochcalli reindex --confirm` borra y reconstruye
+   con el modelo actual (sin `--confirm` no hace nada); `E_MODEL_MISMATCH` explica el
+   desajuste dims del modelo vs índice.
 
 Regla maestra de journeys e): **ningún fallo pierde datos del usuario** — solo artefactos
 derivados/installables se deshacen. Ver diagrama de fases en
@@ -100,10 +121,10 @@ Síntomas típicos: índice lento o con picos de memoria en un host de 4 GB (se 
 `no recomendado` de `BAAI/bge-m3`), o simplemente "cambié de opinión" tras la instalación.
 
 1. Usuario (terminal, fuera de Obsidian): `tepochcalli config embedder`.
-2. El wizard muestra el estado actual (model, dims, filas del índice, tamaño de db — lectura local con forma `rag_status`) y el menú D7.1 con transparencia D8.1 (💾 disk · 🧠 RAM · 🎮 GPU, etiquetado `medido`/`estimado`/`declarado`) y badges D8.2.
-3. Usuario elige el nuevo embedder → advertencia explícita: re-index completo requerido (LanceDB no puede mezclar dims), tiempo estimado; confirma con `--confirm`.
-4. Descarga + gate test-embed (RSS medido) + re-index con el índice viejo **siguiendo servible** (las `search` del agente responden contra las filas viejas durante todo el proceso).
-5. Éxito → conmutación atómica de config + metadatos; el modelo viejo se purga de `models/` (auto-GC; `--keep-previous` lo conserva). El workspace NO se reinstaló.
+2. El wizard muestra el estado actual (modelo, dims, filas, tamaño de db — lectura local con forma `rag_status`) y el menú D7.1 con transparencia D8.1 (💾 disk · 🧠 RAM · 🎮 GPU, etiquetado `medido`/`estimado`/`declarado`) y badges D8.2.
+3. Usuario elige el nuevo embedder → advertencia explícita: re-index completo requerido (LanceDB no puede mezclar dims), tiempo estimado; confirma con `--confirm` obligatorio (sin él no hace nada).
+4. Descarga + gate test-embed (RSS pico medido por el flow Python, D25) + re-index con el índice viejo **siguiendo servible** (las `search` del agente responden contra las filas viejas durante todo el proceso).
+5. Éxito → conmutación atómica de `config.model` + metadatos; el modelo viejo se purga de `models/` (auto-GC; `--keep-previous` lo conserva). Fallo en cualquier paso → rollback con cambio de estado cero (config, índice y modelo idénticos). El workspace NO se reinstaló.
 
 ```mermaid
 flowchart TD
@@ -118,8 +139,9 @@ flowchart TD
     ATOMIC --> OK["Búsqueda sobre el nuevo embedder; sin reinstalar el workspace"]
 ```
 
-Variante de higiene (P2): `tepochcalli models list` / `tepochcalli models prune` para inventariar
-y limpiar caches de modelos huérfanos tras varios swaps.
+Variante de higiene (futura, no existe en v1): `tepochcalli models list` /
+`tepochcalli models prune` para inventariar y limpiar caches de modelos huérfanos
+tras varios swaps.
 
 ## 8. Mapa de navegación del vault (referencia rápida del usuario)
 

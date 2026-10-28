@@ -1,6 +1,6 @@
 # Implementation Plan — Tepochcalli v1
 
-**Date:** 2026-10-21 (rev. 5 — estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
+**Date:** 2026-10-21 (rev. 5 — estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
@@ -18,7 +18,7 @@
 | 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e |
 | 6 | E2E Acceptance | Validar los 7 criterios de UH.md sobre sistema completo | Aceptación: tabla §6.3 toda verde en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 
-> **Estado (2026-10-28):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) listo para planificar**; el resto de fases sin arrancar. GitHub Actions nunca ha corrido (M6 de Phase 1) — **no se declara CI verde**.
+> **Estado (2026-10-28):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4); **Phase 4 (blueprint) liberada**; el resto de fases sin arrancar. GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
 
 ## 2. Phase Breakdown
 
@@ -66,12 +66,13 @@
 
 ### Phase 3 — Wizard
 
-* **Estado (2026-10-28): LISTO PARA PLANIFICAR.** Predecesoras Phase 1 (2026-10-23) y Phase 2 (2026-10-28) completadas y estables; FTR Phase 2→3 aprobado 2026-10-27 (§4).
+* **Estado (2026-10-28): COMPLETADA.** T1-T20 ejecutados; CP-A (6/6), CP-B (6/6), CP-C (6/6) y CP-D (6/6) cerrados con el FTR; **FTR Phase 3→4 verde y aprobado 2026-10-28** (§4). T19 entrega el asset del payload + regla one-version; T20 cierra la documentación (APPFLOW journeys d/e/f, TECH_DEBT, CHANGELOG, spec → Approved).
+* Entregado: crate Rust `tepochcalli` + cargo-dist (ADR-003) ejecutando las 8 fases atómicas con rollback/`--resume`/`--offline`/`--skip-model` — el menú embedder es la fase 6 (no añade una 9ª fase; spec-installer-wizard §Fases). Semántica `--skip-model` = salida-5 degraded (ADR-007 D7.1-5), NO `INDEX_EMPTY`.
 * Objetivo: crate Rust `tepochcalli` + cargo-dist (ADR-003) ejecutando las 8 fases atómicas con rollback/`--resume`/`--offline`/`--skip-model` — el menú embedder es la fase 6 (no añade una 9ª fase; spec-installer-wizard §Fases). Semántica `--skip-model` = salida-5 degraded (ADR-007 D7.1-5), NO `INDEX_EMPTY`.
 * Tareas clave: fases con execute/compensate; merge conservador de `opencode.json` con `.bak`; UX TUI; matriz CI multi-OS; release `v*` de prueba; paso Embedding provider D7.1 (5 salidas, default `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado); `presets.toml` embebido vía `include_str!` (D7.2); portero test-embed con RSS medido para todo camino local (D8.1); detección de host `sysinfo` + probe `nvidia-smi`/`rocm-smi` con badges `recommended`/`viable`/`no recomendado` (D8.2; fixture: host 4GB → fila `BAAI/bge-m3` badge `no recomendado` PERO seleccionable — warn-never-block D8.3); flujo degraded salida-5 (instalación COMPLETA sin fase 7 + checklist de re-entrada); swap atómico D8.4 (`tepochcalli config embedder` / `tepochcalli reindex --confirm` / `--keep-previous` / auto-GC del modelo viejo; fracaso inducido → cero cambio de estado). **Nota:** el merge conservador de `opencode.json` **NO debe copiar la entrada `markitdown` standalone** (retirada del payload en `ee26073`; la conversión es en proceso vía `add_source`, [spec-markitdown](../specs/spec-markitdown.md) §Config) — política reforzada por `tests/unit/test_opencode_payload_registration.py`.
 * Dependencias: Phase 1+2 estables (el wizard los invoca); payload base de Phase 5 puede solaparse; el blueprint de Phase 4 (diseño) corre en paralelo sin depender del wizard.
 * Métricas: VM limpia → instalado en 1 comando; fallo inducido en cada fase → compensación correcta; 2 corridas → sin duplicados; VM limpia con salida-5 → vault completo + RAG degraded + checklist re-entrada; swap fixture: índice viejo servable durante reindex; modelo viejo purgado solo tras éxito.
-* Gate: release tag de test con assets + `install.sh` funcionando en las 3 plataformas; incluye paths 1-5 del menú embedder en la matrix CI.
+* Gate: FTR Phase 3→4 **ejecutado 2026-10-28 con checklist verde y aprobación de usuario concedida (§4): gate de fase EJECUTADO Y EN VERDE**, Phase 4 liberada. Salvedad honesta: la release tag de test con assets y el `install.sh` en las 3 plataformas **no se ejecutaron** (M6/D-b/F-T20 en `docs/TECH_DEBT.md`) — el gate aprueba lo implementado y testeado en local, no lo desplegado.
 
 ### Phase 4 — Diseño del agent workflow (blueprint)
 
@@ -193,6 +194,26 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 * **Enmiendas cerradas en este gate** (autorizadas por el usuario el 2026-10-27): `spec-installer-wizard` §config (console script → `python -m`, D17 — evitaba que Phase 3 leyera config vieja), `spec-mcp-server` §Security (el «salvo `file:` explícito» contradecía **D16**) y §Testing (la latencia se **mide** en el bench local, no se asserta en CI — regla anti-flake).
 * **Efecto del gate:** `spec-mcp-server.md` y `spec-markitdown.md` → **Approved** en el índice de [SPEC.md](../SPEC.md) (metadatos actualizados en ambos archivos). **Aprobación de usuario concedida el 2026-10-27**: Phase 2 completada, **Phase 3 (wizard) liberada**.
 * **Cierre posterior al FTR — rito de calidad y gate final (2026-10-27/28):** `/code-simplification` (veredicto «nada que simplificar», 1 commit de comentario `761c83d`) + `/code-review` multieje (5 ejes: 3 APPROVE + 2 REQUEST CHANGES) → **9 fixes atómicos aplicados** (`d68f978`..`b21e6af`) y deuda CR-1..CR-8 en [TECH_DEBT.md](TECH_DEBT.md) (`28e3a1f`). Gate final **`just ci` verde 2026-10-28**: cobertura **98 %** (`fail_under=95`), bench-smoke **Δ 976 ms < 10 000 ms PASS**, lint/fmt/typecheck/suites en verde. **M6 intacto: GitHub Actions sigue sin haber corrido — no se declara CI verde.**
+
+**FTR Phase 3→4 — ejecutado 2026-10-28 (T20), checklist verde** (artefacto: wizard completo + docs de cierre; gate Phase 3→Phase 4):
+
+* **Las 8 fases verificadas en local** (T7-T13): F1 prereqs (RAM < 8 GB ⇒ aborta 10-19) · F2 vault reutilizado sin borrar · F3 merge sin sobreescribir + `.install-intent` + `00-Resources/` canónico con 2 placeholders (PDF válido parseable por Docling) · F4 `uv` en `.tepochcalli/bin/` con SHA-256, sin scripts remotos · F5 venv en `.tepochcalli/venv/` + `uv sync --frozen`, `import tepochcalli_mcp.tools.search` OK (**R6 cerrada**) · F6 menú 5 salidas con default `paraphrase-multilingual-MiniLM-L12-v2`, gate test-embed con RSS medido, config atómica, clave solo en `tepochcalli.toml` · F7 `python -m tepochcalli_flow` (`refresh`, `embed-check`), 2.ª corrida ⇒ `indexed: 0`, salida 5 omite F7 · F8 merge conservador con `.bak`, comando portable por SO, sin `markitdown`, `rag_status` e2e en ambos estados, idempotencia sin duplicados.
+* **Atomicidad y post-instalación verificadas** (T14-T17): fallo inducido en las 8 fases ⇒ compensación correcta, 0 datos del usuario perdidos · `--resume` por artefactos + marker · `--offline` sin caché ⇒ `E_OFFLINE_NO_CACHE` (exit 21) antes de tocar el vault · swap D8.4 con índice viejo servible, rollback byte-idéntico, auto-GC del modelo viejo · `reindex --confirm` y `uninstall` reales (**TD-3 cerrada**).
+* **Distribución escrita y revisada, no ejecutada** (T18/T19): `dist.toml` (5 targets, shell+powershell), `release.yml` + `phase3.yml` revisados a mano, recipes `just` nuevas, installers de referencia + regla one-version con SHA-256 — todo sin correr (deuda M6/D-b).
+* **Efecto del gate:** `spec-installer-wizard.md` → **Approved** en el índice de [SPEC.md](../SPEC.md) (metadatos actualizados en el archivo). **Aprobación de usuario concedida el 2026-10-28**: Phase 3 completada, **Phase 4 (blueprint) liberada**.
+* **Lo NO verificado** (registro explícito, deuda M6/D-b/F-T20 en [TECH_DEBT.md](TECH_DEBT.md)):
+  1. La matrix CI (`phase3.yml`: ubuntu+macos + smoke path-5) **nunca se ejecutó** — `cargo test`/`rust-ci` solo corrieron en local; no se declara «CI verde».
+  2. **No hay release publicada**: `release.yml` nunca corrió, no existe ningún asset `tepochcalli-workspace-<ver>.tar.gz` real ni installers generados por `dist`; la regla one-version solo está probada con payload local.
+  3. **Windows sin probar**: target compilado pero fuera de la matriz; `install.ps1`, `venv/Scripts/python.exe` y el smoke path-5 nunca se ejecutaron en Windows.
+  4. `just rust-ci` **no está verde en este sandbox** (2026-10-28): `rust-fmt` +
+  `cargo clippy -D warnings` verdes; `cargo test`: 13 targets en verde pero
+  `phases_f1f2::install_non_interactive_vault_runs_f1_f2_for_real` FALLA — F4
+  reporta `DiskFull` (exit 30) en vez del 42 esperado porque la descarga real de
+  `uv` choca con la red bloqueada (58 GB libres: no es un disco lleno real, sino
+  un error de red mal clasificado — no investigado, fuera del alcance de T20);
+  el fail-fast de cargo dejó los tests `ui` (timeouts de 15 s) sin ejecutar.
+  Independiente de T20 (esta tarea solo toca docs, nada embebido en el crate);
+  no se intentó corregirlo — queda como no-verificado aquí.
 
 ## 5. Risk Management
 
