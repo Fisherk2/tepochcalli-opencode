@@ -5,7 +5,9 @@
 
 use std::process::ExitCode;
 
+use tepochcalli::adapters::{HeadlessUi, TtyUi};
 use tepochcalli::domain::WizardError;
+use tepochcalli::ports::Ui;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -27,6 +29,16 @@ fn usage_top() -> &'static str {
 }
 
 fn usage_for(command: &str) -> String {
+    if command == "install" {
+        return "Usage: tepochcalli install [options]\n\
+         \nOptions:\n  \
+         --non-interactive  never prompt; a missing answer is a typed error\n  \
+         --skip-model       preselect \"configure later\" (degraded, no index)\n  \
+         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --help     print this help\n  \
+         --version  print the version\n"
+            .to_string();
+    }
     format!(
         "Usage: tepochcalli {command} [options]\n\
          \nOptions:\n  \
@@ -68,6 +80,61 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
     2
 }
 
+/// `install` flag parsing (T6): only `--non-interactive`, `--skip-model`
+/// and `--vault <ruta>` exist so far; the phases behind them land in T7+,
+/// so a parsed invocation still ends in the exit-40 stub. The `Ui` backend
+/// is chosen for real already: flags-derived [`HeadlessUi`] (never stdin)
+/// vs. [`TtyUi`].
+fn run_install(
+    args: Vec<&str>,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+) -> u8 {
+    let mut non_interactive = false;
+    let mut skip_model = false;
+    let mut vault: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i] {
+            "--help" => {
+                print_help(stdout, Some("install"));
+                return 0;
+            }
+            "--version" => {
+                print_version(stdout);
+                return 0;
+            }
+            "--non-interactive" => non_interactive = true,
+            "--skip-model" => skip_model = true,
+            "--vault" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => vault = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "install: --vault needs a value");
+                        return 2;
+                    }
+                }
+            }
+            flag if flag.starts_with("--vault=") => {
+                vault = Some(flag["--vault=".len()..].to_string());
+            }
+            flag => {
+                let _ = writeln!(stderr, "install: unknown flag: {flag}");
+                return 2;
+            }
+        }
+        i += 1;
+    }
+    // Backend choice is real; the install itself is still a T7+ stub.
+    let _ui: Box<dyn Ui> = if non_interactive {
+        Box::new(HeadlessUi::for_install(skip_model, vault))
+    } else {
+        Box::new(TtyUi)
+    };
+    stub(stderr, "install")
+}
+
 /// Pure dispatch over argv (sans program name); returns the exit code.
 fn run(args: &[String], stdout: &mut dyn std::io::Write, stderr: &mut dyn std::io::Write) -> u8 {
     let mut it = args.iter().map(String::as_str);
@@ -84,7 +151,8 @@ fn run(args: &[String], stdout: &mut dyn std::io::Write, stderr: &mut dyn std::i
             print_version(stdout);
             0
         }
-        "install" | "reindex" | "uninstall" => match it.next() {
+        "install" => run_install(it.collect(), stdout, stderr),
+        "reindex" | "uninstall" => match it.next() {
             None => stub(stderr, first),
             Some("--help") => {
                 print_help(stdout, Some(first));

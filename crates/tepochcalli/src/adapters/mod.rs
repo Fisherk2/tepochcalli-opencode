@@ -6,7 +6,9 @@
 pub mod host;
 pub mod http;
 pub mod std_proc;
+pub mod ui;
 
 pub use host::{find_tool_in, SysHostProbe};
 pub use http::UreqHttpClient;
 pub use std_proc::StdCommandRunner;
+pub use ui::{HeadlessUi, TtyUi};

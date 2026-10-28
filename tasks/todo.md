@@ -46,7 +46,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: tests unitarios con `FakeHost` para la lógica de badges (T10) · test de `HttpClient` con SHA-256 incorrecto ⇒ error tipado · `cargo clippy -D warnings` limpio
   - Dep.: T4 · Tamaño: M
 
-- [ ] **T6 · UI: `TtyUi` (dialoguer) + `HeadlessUi` (`--non-interactive`)**
+- [x] **T6 · UI: `TtyUi` (dialoguer) + `HeadlessUi` (`--non-interactive`)**
   - Subagentes: `cli-developer` (lead), `rust-engineer` · Skills: `clean-code`, `test-driven-development`, `crafting-effective-readmes`
   - AC: (a) `TtyUi` implementa `Ui` sobre `dialoguer`: `Select` con default preseleccionado, `Input` para texto, `Confirm` para confirmaciones; (b) `HeadlessUi` lee las respuestas de flags (`--skip-model`, `--non-interactive`) y **falla con error tipado** si le falta una respuesta (nunca adivina); (c) la TUI **nunca** se usa cuando no hay TTY: `--non-interactive` es obligatorio en CI; (d) los mensajes van a **stderr** y el resultado a stdout (para que el pipeline sea parseable); (e) el `panel` de error se renderiza en color cuando la salida es un terminal y en texto plano cuando no
   - Verificar: test con `ScriptedUi` que recorre el menú completo sin TTY · `tepochcalli install --non-interactive --skip-model` no intenta leer de stdin
