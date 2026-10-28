@@ -116,6 +116,52 @@ quality: lint fmt-check typecheck test
 # un gate que nadie ejecuta no es un gate). Ciclo corto sin cobertura: `just quality`.
 ci: sync lint fmt-check typecheck coverage bench-smoke
 
+# --- Rust wizard (Phase 3, T18): nada de `cargo` crudo fuera de estas recipes ---
+# `crate_dir` + `cd ... &&`: mismo patrón que `flow_dir` arriba (una línea
+# por receta, porque `just` no conserva `cd` entre líneas).
+crate_dir := "crates/tepochcalli"
+
+# Formato del wizard (falla si algo habría que reescribir).
+rust-fmt:
+    cd {{crate_dir}} && cargo fmt --check
+
+# Clippy estricto sobre lib + bins + tests (falla con el primer warning).
+rust-lint:
+    cd {{crate_dir}} && cargo clippy --locked --all-targets -- -D warnings
+
+# Suite del wizard (cubre los 5 caminos del menú con fakes, sin red).
+rust-test:
+    cd {{crate_dir}} && cargo test --locked
+
+# Gate Rust local: espejo del job `rust` de `.github/workflows/phase3.yml`.
+rust-ci: rust-fmt rust-lint rust-test
+
+# Smoke local del instalador (path 5: `--skip-model`, sin descargar modelos
+# de 470 MB; la red solo se usa para `uv` y `uv sync`). Espejo del job
+# `smoke` de `phase3.yml` con el payload local del repo.
+wizard-smoke:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    work="$(mktemp -d)"
+    trap 'rm -rf -- "${work}"' EXIT
+    payload="${work}/payload/.tepochcalli"
+    vault="${work}/vault"
+    mkdir -p "${payload}"
+    cp obsidian-workspace/.tepochcalli/pyproject.toml \
+        obsidian-workspace/.tepochcalli/uv.lock \
+        "${payload}/"
+    cp -r obsidian-workspace/.tepochcalli/flow \
+        obsidian-workspace/.tepochcalli/mcp \
+        "${payload}/"
+    cargo run --locked --manifest-path crates/tepochcalli/Cargo.toml -- install \
+        --non-interactive --skip-model \
+        --vault "${vault}" \
+        --payload "${work}/payload"
+    test -f "${vault}/00-Resources/ejemplo.md"
+    test -f "${vault}/00-Resources/ejemplo.pdf"
+    grep -q '"tepochcalli-rag"' "${vault}/opencode.json"
+    echo "wizard-smoke OK: path-5 instalado y verificado (vault efímero ya borrado)"
+
 # DESTRUCTIVO: borra caches locales y cualquier `.venv` accidental (creado por un
 # `uv` invocado a mano sin UV_PROJECT_ENVIRONMENT); no toca fuentes ni `venv/`.
 clean:
