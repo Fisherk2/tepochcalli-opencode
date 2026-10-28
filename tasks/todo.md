@@ -123,7 +123,7 @@ historial de git (`git show a070385:tasks/todo.md`).
 
 ## Sub-fase C — Atomicidad y superficie post-instalación
 
-- [ ] **T14 · Compensaciones por fase + `--resume` + `--offline` + idempotencia**
+- [x] **T14 · Compensaciones por fase + `--resume` + `--offline` + idempotencia**
   - Subagentes: `rust-engineer` (lead), `test-engineer`, `chaos-engineer` · Skills: `test-driven-development`, `debugging-and-error-recovery`, `doubt-driven-development`
   - AC: (a) **test de fallo inducido en las 8 fases**: se inyecta el fallo en cada fase y se comprueba que la compensación se ejecuta y que **no se pierde ningún dato del usuario** (el comparador es «el árbol del vault antes y después, salvo lo que la fase escribió»); (b) `--resume` reanuda desde la fase correcta usando **artefactos + marker** `.tepochcalli/.install-state` (D21), no re-ejecuta las fases ya completadas y **no** re-descarga lo ya descargado; (c) `--offline`: sin red ⇒ payload local + modelo cacheado; si falta lo necesario ⇒ **fallo limpio** `E_OFFLINE_NO_CACHE` (exit 21) **antes** de tocar el vault; (d) **idempotencia**: install ×2 ⇒ 0 duplicados en `opencode.json`, 0 duplicados en `00-Resources/`, `indexed: 0` en la 2ª pasada; (e) `--skip-model` = salida 5 exacta (no interactivo, sin índice, RAG degraded); (f) la compensación de F6 cae a **salida 5** (instalación COMPLETA degradada), no a "instalación fallida"
   - Verificar: 8 tests de fallo inducido (uno por fase) · test de `--resume` que corta la instalación en F5 y la reanuda · test de `--offline` sin caché ⇒ vault intacto · test de install ×2

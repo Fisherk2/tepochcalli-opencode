@@ -6,7 +6,7 @@
 //! (`venv python -m tepochcalli_flow embed-check --model <id>` returning
 //! `{ok,…}`) is implemented by the flow in T12 — here `FakeProc` stands in.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::config::{badge_for, parse_presets, Preset};
 use crate::domain::{Badge, EmbedderChoice, WizardError};
@@ -536,13 +536,72 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
 
 fn finish_later(vault: &Path) -> Result<Phase6Report, WizardError> {
     write_config(vault, &none_config())?;
-    Ok(Phase6Report {
-        choice: EmbedderChoice::ConfigureLater,
-        provider: "none".to_string(),
-        model: None,
+    Ok(Phase6Report::configure_later())
+}
+
+impl Phase6Report {
+    /// Path-5 report (degraded, no embedder): the exact value `finish_later`
+    /// writes, reused by the T14 F6 compensation and `--resume` reconstruction.
+    #[must_use]
+    pub fn configure_later() -> Self {
+        Self {
+            choice: EmbedderChoice::ConfigureLater,
+            provider: "none".to_string(),
+            model: None,
+            dims: None,
+            rss_peak_bytes: None,
+        }
+    }
+}
+
+/// Vault-absolute config path (single source for the T14 artifact check).
+#[must_use]
+pub fn config_path(vault: &Path) -> PathBuf {
+    vault.join(RUNTIME_DIR).join(CONFIG_DIR).join(CONFIG_FILE)
+}
+
+/// Rebuild the F6 report from an existing config (for `--resume`: skip the
+/// menu, keep the recorded provider/model). `None` when no config exists.
+#[must_use]
+pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
+    let body = std::fs::read_to_string(config_path(vault)).ok()?;
+    let provider = config_value(&body, "provider")?;
+    if provider == "none" {
+        return Some(Phase6Report::configure_later());
+    }
+    let model = config_value(&body, "model");
+    let choice = match provider.as_str() {
+        "litellm" => EmbedderChoice::ExternalApi,
+        _ => EmbedderChoice::PresetDefault,
+    };
+    Some(Phase6Report {
+        choice,
+        provider,
+        model,
         dims: None,
         rss_peak_bytes: None,
     })
+}
+
+/// Minimal `key = "value"` reader for the wizard-written config (the file is
+/// always produced by `write_config` above, never hand-edited TOML).
+fn config_value(body: &str, key: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let rest = line
+            .trim()
+            .strip_prefix(key)?
+            .trim_start()
+            .strip_prefix('=')?;
+        let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
+        Some(value.to_string())
+    })
+}
+
+/// F6 compensation (T14): fall back to salida 5 — a COMPLETE degraded
+/// install (`provider = "none"`), never a failed one. Only the config is
+/// written; `models/`, `db/` and user files are untouched.
+pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
+    write_config(vault, &none_config())
 }
 
 #[cfg(test)]

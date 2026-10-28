@@ -14,7 +14,7 @@
 //! `ModelInvalid`, anything else unparseable to `PhaseFailed` — never an
 //! `Ok` report built on garbage.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::domain::WizardError;
 use crate::ports::CommandRunner;
@@ -183,6 +183,21 @@ fn parse_refresh(body: &str) -> Result<RefreshParsed, WizardError> {
 
 fn json_escape(raw: &str) -> String {
     raw.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
+/// Vault-absolute metadata sidecar path (T14 artifact check + compensation).
+#[must_use]
+pub fn index_meta_path(vault: &Path) -> PathBuf {
+    vault.join(RUNTIME_DIR).join(DB_DIR).join(INDEX_META_FILE)
+}
+
+/// F7 compensation (T14): remove the metadata sidecar (+ its temp). The index
+/// dir itself stays when other passes wrote it; placeholders and user files
+/// are never touched; missing files are a no-op.
+pub fn compensate_phase7(vault: &Path) {
+    let meta = index_meta_path(vault);
+    let _ = std::fs::remove_file(&meta);
+    let _ = std::fs::remove_file(meta.with_extension("json.tmp"));
 }
 
 /// Temp file + rename: a failed write never leaves half a sidecar, and an

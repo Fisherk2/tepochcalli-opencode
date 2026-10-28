@@ -225,6 +225,17 @@ fn write_intent(vault: &Path, written: &[PathBuf]) -> Result<(), WizardError> {
         .iter()
         .map(|p| intent_line(&root, p))
         .collect::<Result<_, _>>()?;
+    // Idempotence (T14): a rerun writes nothing new, but the intent must
+    // stay the cumulative record — union with the previous listing so a
+    // second pass never blanks what the first pass wrote.
+    if let Ok(previous) = std::fs::read_to_string(vault.join(INSTALL_INTENT_PATH)) {
+        for line in previous.lines() {
+            let trimmed = line.trim().to_string();
+            if !trimmed.is_empty() && !lines.contains(&trimmed) {
+                lines.push(trimmed);
+            }
+        }
+    }
     lines.sort();
     let dir = vault.join(".tepochcalli");
     std::fs::create_dir_all(&dir).map_err(|_| WizardError::PermissionDenied)?;
@@ -509,4 +520,172 @@ pub fn run_phase5(proc: &dyn CommandRunner, vault: &Path) -> Result<Phase5Report
 /// `config/` are never touched; missing dirs are a no-op.
 pub fn compensate_phase5(vault: &Path) {
     let _ = std::fs::remove_dir_all(runtime_dir(vault).join(VENV_DIR_NAME));
+}
+
+// --- T14: install state, compensation of F3/F6/F7, offline guard ---
+
+use crate::domain::Phase;
+
+/// Marker listing completed phases (`F3`.. one per line); D21 resolves
+/// `--resume` as artifacts + this marker, never a re-download.
+pub const INSTALL_STATE_PATH: &str = ".tepochcalli/.install-state";
+/// Config sidecar the F6 artifact check reads (source of truth lives in
+/// `embedder_menu`; this literal only avoids a cross-module import).
+const CONFIG_REL_PATH: &str = "config/tepochcalli.toml";
+/// F7 sidecar the resume check reads (source of truth lives in `phase7`).
+const INDEX_META_REL_PATH: &str = "db/index-meta.json";
+/// F8 entry the resume check looks for in `opencode.json`.
+const MANAGED_RAG_KEY: &str = "tepochcalli-rag";
+
+/// F1 compensation: no-op — F1 never writes (T7).
+pub fn compensate_phase1(_vault: &Path) {}
+
+/// F2 compensation: no-op — F2 reuses the dir, never wipes (T7).
+pub fn compensate_phase2(_vault: &Path) {}
+
+/// F3 compensation: remove exactly the files `.install-intent` lists, then
+/// the intent file itself. Pre-existing user files were never listed, so
+/// they survive; missing entries are a no-op.
+pub fn compensate_phase3(vault: &Path) {
+    let intent = vault.join(INSTALL_INTENT_PATH);
+    let body = std::fs::read_to_string(&intent).unwrap_or_default();
+    for line in body.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let mut target = vault.to_path_buf();
+        for part in trimmed.split('/') {
+            if part.is_empty() || part == "." || part == ".." {
+                continue;
+            }
+            target.push(part);
+        }
+        let _ = std::fs::remove_file(&target);
+    }
+    let _ = std::fs::remove_file(&intent);
+}
+
+/// Record `phase` as done in the marker (idempotent: no duplicate lines).
+pub fn mark_phase_done(vault: &Path, phase: Phase) {
+    let state = vault.join(INSTALL_STATE_PATH);
+    if let Some(parent) = state.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let mut done = completed_from_marker(vault);
+    if !done.contains(&phase) {
+        done.push(phase);
+        done.sort_by_key(|phase: &Phase| phase.order_index());
+        let mut body = String::new();
+        for phase in &done {
+            body.push_str(phase.name());
+            body.push('\n');
+        }
+        let _ = std::fs::write(&state, body);
+    }
+}
+
+/// Phases the marker file records (never fails: missing file ⇒ empty).
+fn completed_from_marker(vault: &Path) -> Vec<Phase> {
+    let body = std::fs::read_to_string(vault.join(INSTALL_STATE_PATH)).unwrap_or_default();
+    let mut out = Vec::new();
+    for line in body.lines() {
+        let phase = match line.trim() {
+            "F1" => Phase::F1,
+            "F2" => Phase::F2,
+            "F3" => Phase::F3,
+            "F4" => Phase::F4,
+            "F5" => Phase::F5,
+            "F6" => Phase::F6,
+            "F7" => Phase::F7,
+            "F8" => Phase::F8,
+            _ => continue,
+        };
+        if !out.contains(&phase) {
+            out.push(phase);
+        }
+    }
+    out
+}
+
+fn venv_python_candidates(vault: &Path) -> [PathBuf; 2] {
+    let runtime = runtime_dir(vault);
+    [
+        runtime.join(VENV_DIR_NAME).join("bin/python"),
+        runtime.join(VENV_DIR_NAME).join("Scripts/python.exe"),
+    ]
+}
+
+/// Artifact check per phase (D21: resume deduces from artifacts, the marker
+/// only covers what leaves no file behind). F1 has no artifact — it always
+/// re-runs (cheap, side-effect free).
+fn phase_artifact_done(vault: &Path, phase: Phase) -> bool {
+    match phase {
+        Phase::F1 => false,
+        Phase::F2 => vault.is_dir(),
+        Phase::F3 => vault.join(INSTALL_INTENT_PATH).is_file(),
+        Phase::F4 => {
+            let runtime = runtime_dir(vault);
+            runtime.join(UV_BIN_DIR).join("uv").is_file()
+                || runtime.join(UV_BIN_DIR).join("uv.exe").is_file()
+        }
+        Phase::F5 => venv_python_candidates(vault)
+            .iter()
+            .any(|candidate| candidate.is_file()),
+        Phase::F6 => runtime_dir(vault).join(CONFIG_REL_PATH).is_file(),
+        Phase::F7 => {
+            if runtime_dir(vault).join(INDEX_META_REL_PATH).is_file() {
+                return true;
+            }
+            // Path 5 leaves no index by design: config `none` ⇒ F7 is done.
+            std::fs::read_to_string(runtime_dir(vault).join(CONFIG_REL_PATH))
+                .is_ok_and(|body| body.contains("provider = \"none\""))
+        }
+        Phase::F8 => std::fs::read_to_string(vault.join("opencode.json"))
+            .is_ok_and(|body| body.contains(MANAGED_RAG_KEY)),
+    }
+}
+
+/// Marker ∪ artifacts, in execution order: what `--resume` may skip.
+#[must_use]
+pub fn completed_phases(vault: &Path) -> Vec<Phase> {
+    let mut done = completed_from_marker(vault);
+    for phase in Phase::all() {
+        if !done.contains(&phase) && phase_artifact_done(vault, phase) {
+            done.push(phase);
+        }
+    }
+    done.sort_by_key(|phase: &Phase| phase.order_index());
+    done
+}
+
+/// `true` when `--resume` may skip `phase` (marker says so or its artifacts
+/// are in place — never a re-download of what is already there).
+#[must_use]
+pub fn is_phase_done(vault: &Path, phase: Phase) -> bool {
+    completed_from_marker(vault).contains(&phase) || phase_artifact_done(vault, phase)
+}
+
+/// Offline pre-check, BEFORE the vault is touched: without a local payload
+/// and a usable cache there is nothing to install from, so fail clean with
+/// `E_OFFLINE_NO_CACHE` (exit 21) instead of half-writing the vault.
+pub fn guard_offline_before_touch(
+    offline: bool,
+    payload_local_ready: bool,
+    cache_ready: bool,
+) -> Result<(), WizardError> {
+    if offline && !(payload_local_ready && cache_ready) {
+        return Err(WizardError::OfflineNoCache);
+    }
+    Ok(())
+}
+
+/// `true` when `flag` points at an existing local payload tree
+/// (`--payload <ruta>` for dev/tests; the T19 release asset is the online path).
+#[must_use]
+pub fn payload_local_ready(flag: Option<&str>) -> bool {
+    match flag {
+        Some(raw) if !raw.trim().is_empty() => Path::new(raw.trim()).is_dir(),
+        _ => false,
+    }
 }
