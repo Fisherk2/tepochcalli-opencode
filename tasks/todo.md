@@ -135,7 +135,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - Verificar: test que inyecta un error y comprueba el contenido del panel y del log · test de redacción con una clave falsa que **no** aparece en ningún artefacto · el log no está bajo el vault
   - Dep.: T14 · Tamaño: M
 
-- [ ] **T16 · Swap atómico D8.4 (`tepochcalli config embedder`)**
+- [x] **T16 · Swap atómico D8.4 (`tepochcalli config embedder`)**
   - Subagentes: `rust-engineer` (lead), `test-engineer`, `security-auditor` · Skills: `test-driven-development`, `doubt-driven-development`, `clean-ddd-hexagonal`
   - AC: (a) los 6 pasos de D8.4 en orden: mostrar estado actual (modelo, dims, filas, tamaño de db, forma de `rag_status`) → elegir embedder (mismo menú + badges) → **advertencia** de re-index completo (LanceDB no mezcla dims) + tiempo estimado + `--confirm` obligatorio → descarga + gate test-embed (RSS medido) + re-index → **conmutación atómica** de `config.model` + metadatos → **auto-GC** del modelo viejo; (b) durante todo el proceso, **el índice viejo sigue servable** (se consulta y responde); (c) `--keep-previous` desactiva el auto-GC; (d) fallo en **cualquier** paso ⇒ rollback con **cambio de estado cero** (config, índice y modelo idénticos byte a byte); (e) tras el éxito, el modelo viejo se purga de `.tepochcalli/models/`
   - Verificar: test de la descarga interrumpida ⇒ hash de config/índice/modelo idéntico antes y después · test de éxito ⇒ modelo viejo ausente (y presente con `--keep-previous`) · test de servabilidad del índice viejo durante el reindex

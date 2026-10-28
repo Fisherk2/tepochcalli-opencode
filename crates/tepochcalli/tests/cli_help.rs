@@ -1,7 +1,7 @@
 //! CLI surface tests (T3): `--help`/`--version` per subcommand,
 //! usage errors, and the T7+ "not yet implemented" stub behavior.
 
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 fn bin() -> Command {
     Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
@@ -85,15 +85,44 @@ fn unimplemented_stubs_exit_40_with_stderr_marker() {
 }
 
 #[test]
-fn config_embedder_stub_exits_40_with_marker() {
+fn config_embedder_is_implemented_not_a_stub() {
+    // T16: `--help` documents the real swap flags (no T3 stub marker).
     let out = bin()
-        .args(["config", "embedder"])
+        .args(["config", "embedder", "--help"])
         .output()
         .expect("spawn binary");
-    assert_eq!(out.status.code(), Some(40));
-    let err = stderr_text(&out);
+    assert_eq!(out.status.code(), Some(0));
+    let text = stdout_text(&out);
+    for flag in [
+        "--vault",
+        "--non-interactive",
+        "--confirm",
+        "--keep-previous",
+    ] {
+        assert!(text.contains(flag), "help must document `{flag}`:\n{text}");
+    }
+    // No TTY + no `--non-interactive` ⇒ typed abort (41), never a hang and
+    // never the old stub. `Stdio::null` keeps this deterministic with or
+    // without a terminal attached.
+    let out = bin()
+        .args(["config", "embedder"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert_eq!(out.status.code(), Some(41));
     assert!(
-        err.contains("not yet implemented"),
-        "must print the stub marker on stderr, got:\n{err}"
+        !stderr_text(&out).contains("not yet implemented"),
+        "the stub is gone; T16 owns this subcommand"
+    );
+    // `--non-interactive` without `--vault` ⇒ typed failure (missing answer
+    // is never guessed), still on the failure-panel path.
+    let out = bin()
+        .args(["config", "embedder", "--non-interactive", "--confirm"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert!(
+        out.status.code().unwrap_or(0) != 0,
+        "`--non-interactive` without `--vault` must fail, not hang"
     );
 }

@@ -8,6 +8,7 @@ pub mod failure;
 pub mod installer;
 pub mod phase7;
 pub mod phase8;
+pub mod swap;
 
 pub use embedder_menu::{
     compensate_phase6, config_path, read_completed_report, run_phase6, Phase6Deps, Phase6Report,
@@ -29,3 +30,4 @@ pub use phase8::{
     compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
     RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
 };
+pub use swap::{run_swap, SwapDeps, SwapOptions, SwapReport};

@@ -17,7 +17,8 @@ use tepochcalli::application::failure::{
 use tepochcalli::application::{
     check_prereqs, compensate_phase6, ensure_vault_dir, guard_offline_before_touch, is_phase_done,
     mark_phase_done, payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3,
-    run_phase4, run_phase5, run_phase6, run_phase7, run_phase8, Phase6Deps, Phase6Report,
+    run_phase4, run_phase5, run_phase6, run_phase7, run_phase8, run_swap, Phase6Deps, Phase6Report,
+    SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::failure::{failure_body, failure_title, redact};
 use tepochcalli::domain::{Phase, VaultPath, WizardError};
@@ -52,6 +53,17 @@ fn usage_for(command: &str) -> String {
          --payload <ruta>   payload tree to merge (dev/tests; required until T19)\
           --resume           skip phases already done (artifacts + .install-state)\
           --offline          no network: local payload + cached model only\n  \
+         --help     print this help\n  \
+         --version  print the version\n"
+            .to_string();
+    }
+    if command == "config embedder" {
+        return "Usage: tepochcalli config embedder [options]\n\
+         \nOptions:\n  \
+         --vault <ruta>      vault directory (asked interactively if omitted)\n  \
+         --non-interactive  never prompt; a missing answer is a typed error\n  \
+         --confirm          mandatory: the swap rebuilds the whole index\n  \
+         --keep-previous    retain the previous model cache (no auto-GC)\n  \
          --help     print this help\n  \
          --version  print the version\n"
             .to_string();
@@ -535,6 +547,114 @@ fn run_phases(
     0
 }
 
+/// `config embedder` (T16, D8.4): six-step atomic swap on an installed vault —
+/// current-state display, same D7.1 menu, `--confirm` warning, gate + reindex,
+/// atomic config/metadata switch, auto-GC unless `--keep-previous`.
+fn run_config_embedder(
+    args: Vec<&str>,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+) -> u8 {
+    let mut non_interactive = false;
+    let mut confirm = false;
+    let mut keep_previous = false;
+    let mut vault: Option<String> = None;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i] {
+            "--help" => {
+                print_help(stdout, Some("config embedder"));
+                return 0;
+            }
+            "--version" => {
+                print_version(stdout);
+                return 0;
+            }
+            "--non-interactive" => non_interactive = true,
+            "--confirm" => confirm = true,
+            "--keep-previous" => keep_previous = true,
+            "--vault" => {
+                i += 1;
+                match args.get(i) {
+                    Some(value) => vault = Some((*value).to_string()),
+                    None => {
+                        let _ = writeln!(stderr, "config embedder: --vault needs a value");
+                        return 2;
+                    }
+                }
+            }
+            flag if flag.starts_with("--vault=") => {
+                vault = Some(flag["--vault=".len()..].to_string());
+            }
+            flag => {
+                let _ = writeln!(stderr, "config embedder: unknown flag: {flag}");
+                return 2;
+            }
+        }
+        i += 1;
+    }
+    // T6 rule: no TTY means no prompts — fail fast instead of hanging.
+    if !non_interactive && !std::io::stdin().is_terminal() {
+        let _ = writeln!(
+            stderr,
+            "config embedder: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
+        );
+        return WizardError::UserAborted.exit_code();
+    }
+    let ui: Box<dyn Ui> = if non_interactive {
+        // Non-interactive answers: MiniLM row (same default as the TUI) and
+        // no scripted vault (must come from `--vault`, never a guess).
+        Box::new(HeadlessUi::new(
+            vec![0].into(),
+            std::collections::VecDeque::new(),
+            std::collections::VecDeque::new(),
+        ))
+    } else {
+        Box::new(TtyUi)
+    };
+    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+        Ok(raw) => raw,
+        Err(err) => {
+            return report_failure(
+                &*ui,
+                None,
+                "config embedder: vault selection failed",
+                err,
+                None,
+                &[],
+            );
+        }
+    };
+    let path = Path::new(&raw);
+    let http = UreqHttpClient::new();
+    let proc = StdCommandRunner;
+    let deps = SwapDeps {
+        ui: &*ui,
+        host: &SysHostProbe,
+        proc: &proc,
+        http: &http,
+    };
+    let opts = SwapOptions {
+        confirm,
+        keep_previous,
+    };
+    match run_swap(&deps, path, &opts) {
+        Ok(report) => {
+            let _ = writeln!(
+                stdout,
+                "embedder: {} (dims {})",
+                report.model,
+                report
+                    .dims
+                    .map(|dims| dims.to_string())
+                    .unwrap_or_else(|| "(sin dato)".to_string())
+            );
+            0
+        }
+        Err(err) => report_failure(&*ui, None, "config embedder failed", err, Some(path), &[]),
+    }
+}
+
 /// Pure dispatch over argv (sans program name); returns the exit code.
 fn run(args: &[String], stdout: &mut dyn std::io::Write, stderr: &mut dyn std::io::Write) -> u8 {
     let mut it = args.iter().map(String::as_str);
@@ -577,21 +697,7 @@ fn run(args: &[String], stdout: &mut dyn std::io::Write, stderr: &mut dyn std::i
                 print_version(stdout);
                 0
             }
-            Some("embedder") => match it.next() {
-                None => stub(stderr, "config embedder"),
-                Some("--help") => {
-                    print_help(stdout, Some("config embedder"));
-                    0
-                }
-                Some("--version") => {
-                    print_version(stdout);
-                    0
-                }
-                Some(flag) => {
-                    let _ = writeln!(stderr, "config embedder: unknown flag: {flag}");
-                    2
-                }
-            },
+            Some("embedder") => run_config_embedder(it.collect(), stdout, stderr),
             Some(sub) => {
                 let _ = writeln!(stderr, "config: unknown subcommand: {sub}");
                 bare_config(stderr)
