@@ -28,7 +28,7 @@ historial de git (`git show a070385:tasks/todo.md`).
   - 📌 **Omen mayor OM-1**: un instalador que escribe en el vault del usuario es un extractor de archivos Writing-Outside-Dir. Este AC bloquea F3 y F4: no se avanza a verde sin él.
   - Dep.: T1 · Tamaño: M
 
-- [ ] **T3 · Esqueleto del crate: `Cargo.toml`, CLI y dominio**
+- [x] **T3 · Esqueleto del crate: `Cargo.toml`, CLI y dominio**
   - Subagentes: `rust-engineer` (lead), `cli-developer` · Skills: `clean-ddd-hexagonal`, `design-patterns`, `solid`, `error-handling-patterns`
   - AC: (a) `crates/tepochcalli/Cargo.toml` con `name = "tepochcalli"`, `edition = "2021"`, binario `tepochcalli`; (b) `src/domain/` con `Phase` (F1..F8), `PhaseState`, `InstallPlan`, `VaultPath`, `EmbedderChoice`, `Badge`, `ResourceFacts`, `InstallOutcome` (`Ok` | `Degraded`), `WizardError` y `ExitCode`; (c) `ExitCode` respeta los rangos de la spec (0 · 10-19 · 20-29 · 30-39 · 40+) con el mapeo de §5.4 del plan; (d) `src/main.rs` con subcomandos `install`, `config embedder`, `reindex`, `uninstall` y `--help`/`--version` por subcomando; (e) `domain/` **no** importa nada de `adapters/` ni crates de infra (se comprueba en T4); (f) versionado semver del crate alineado con la release del payload (regla one-version)
   - Verificar: `cargo build`, `cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` verdes · `tepochcalli --help` y `tepochcalli install --help` imprimen uso legible
