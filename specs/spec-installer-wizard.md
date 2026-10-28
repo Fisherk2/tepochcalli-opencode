@@ -80,6 +80,7 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 
 * La fase 1 no puede "deshacerse"; las fases 3-8 crean solo artefactos propios → la compensación es puramente de archivos bajo rutas del runtime/payload de esta corrida. Nunca se tocan `.obsidian/` ni archivos previos del usuario (la merge del payload omite existentes salvo plantillas gestionadas).
 * Si la fase 8 detecta una entrada `tepochcalli-rag` previa, la valida (comando apunta al venv actual) y solo la reescribe si difiere, conservando las demás servers del usuario.
+* **Contenido inicial de `00-Resources/` (D22):** la fase 3 crea `00-Resources/` con el case exacto que indexa el flow y deja 2 placeholders — 1 `.md` y 1 `.pdf` válido y parseable por Docling — para que la fase 7 siempre tenga qué indexar.
 * **Semántica de rollback del provider (D7.1):** si la descarga o el gate test-embed de la fase 6 fallan tras el reintento, el wizard **cae a la salida 5 en vez de abortar**: el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config.
 
 ### Transparencia de hardware y detección de host en el paso embedder (D8.1-D8.3/ADR-008)
@@ -139,16 +140,19 @@ activo (respuesta user-facing a "cambié de opinión / elegí mal"):
       "cwd": ".",
       "environment": { "TEPOCHCALLI_ROOT": "." },
       "disabled": false
-    },
-    "markitdown": {
-      "type": "local",
-      "command": [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"],
-      "disabled": false
     }
 } } }
 ```
 
+La única entrada gestionada es `tepochcalli-rag` (D19): la fase 8 **no registra `mcp.servers.markitdown`** — la conversión a Markdown es **en proceso** vía `add_source` (librería `markitdown`, no server standalone), retirada del payload en `ee26073` y reforzada por `tests/unit/test_opencode_payload_registration.py` (`MANAGED_KEYS`). Si el vault del usuario trae una entrada `markitdown` previa, la fase 8 la elimina.
+
+El comando del MCP se **genera por SO** (D20): `.tepochcalli/venv/bin/python` en POSIX y `.tepochcalli/venv/Scripts/python.exe` en Windows, con `-m tepochcalli_mcp` en ambos casos (D17: forma `python -m`, nunca console script).
+
 (Snippet canónico y justificación del venv en vez de `uvx`: spec-markitdown §config.)
+
+### TUI (D23)
+
+El wizard usa una TUI line-based con `dialoguer` (`Select` con default preseleccionado, `Input` para texto, `Confirm` para confirmaciones) — no `ratatui` full-screen. La TUI **nunca** se usa sin TTY: el modo `--non-interactive` es obligatorio en CI y falla con error tipado si le falta una respuesta.
 
 ### Flags
 
@@ -213,7 +217,7 @@ activo (respuesta user-facing a "cambié de opinión / elegí mal"):
 
 ## Open Questions
 
-* ¿`--resume` guarda el estado de fase en `bin/.install-state` o deduce por artefactos presentes? (propuesta: deducir + marker)
+Ninguna pendiente. Resuelta (D21): `--resume` **deduce por artefactos presentes + marker `.tepochcalli/.install-state`** — no guarda el estado de fase en `bin/.install-state`; reusa artefactos válidos y reanuda desde la primera fase incompleta.
 
 ## References
 
