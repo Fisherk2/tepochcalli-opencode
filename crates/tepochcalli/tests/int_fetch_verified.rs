@@ -6,7 +6,7 @@ use std::net::TcpListener;
 use std::thread;
 
 use sha2::{Digest, Sha256};
-use tepochcalli::fetch::{fetch_verified, make_executable, run_version, FetchError};
+use tepochcalli::adapters::fetch::{fetch_verified, make_executable, run_version, FetchError};
 
 fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))

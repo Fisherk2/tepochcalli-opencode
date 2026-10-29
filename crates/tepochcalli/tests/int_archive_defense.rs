@@ -8,7 +8,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 
 use flate2::write::GzEncoder;
-use tepochcalli::archive::{extract_tar_gz, extract_zip, ArchiveError};
+use tepochcalli::adapters::archive::{extract_tar_gz, extract_zip, ArchiveError};
 
 // --- archive builders (in-memory, malicious by construction) ---
 

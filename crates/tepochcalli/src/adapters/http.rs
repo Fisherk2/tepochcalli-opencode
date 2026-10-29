@@ -1,7 +1,7 @@
 //! Real [`crate::ports::HttpClient`] over `ureq`.
 //!
 //! Single-implementation rule (T9): the verified download lives in
-//! [`crate::fetch::fetch_verified`] (T2 spike, pinned by
+//! [`crate::adapters::fetch::fetch_verified`] (T2 spike, pinned by
 //! `tests/fetch_verified.rs`); this adapter only maps its [`FetchError`]
 //! to [`WizardError`]. `get` stays here — `fetch` has no equivalent.
 
@@ -9,8 +9,8 @@ use std::io::{ErrorKind, Read as _};
 use std::path::Path;
 use std::time::Duration;
 
+use crate::adapters::fetch::{fetch_verified, FetchError};
 use crate::domain::WizardError;
-use crate::fetch::{fetch_verified, FetchError};
 use crate::ports::HttpClient;
 
 /// GET timeout for every request (payloads, `uv` binary, HF estimates).
@@ -128,8 +128,8 @@ mod tests {
     //! user-facing exit code, so a mislabelled branch is a wrong diagnosis.
 
     use super::map_fetch_error;
+    use crate::adapters::fetch::FetchError;
     use crate::domain::WizardError;
-    use crate::fetch::FetchError;
     use std::io::ErrorKind;
 
     fn io_error(kind: ErrorKind) -> FetchError {

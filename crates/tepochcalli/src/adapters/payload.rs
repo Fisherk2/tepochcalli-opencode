@@ -10,7 +10,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
-use crate::archive::extract_tar_gz;
+use crate::adapters::archive::extract_tar_gz;
 use crate::domain::WizardError;
 use crate::ports::{HttpClient, MergeReport, PayloadSource};
 

@@ -8,6 +8,12 @@
 //! Also guards the test tier (`tests_layout_uses_tier_prefix` and friends):
 //! the tier is readable from the filename, so a misfiled target fails here
 //! instead of a reviewer's memory.
+//!
+//! `application_has_no_infra_imports` (L3-1): tras el git mv de
+//! `archive.rs`/`fetch.rs` a `src/adapters/`, la capa de aplicación ya solo
+//! puede alcanzar la infra vía el módulo `adapters` — nunca `use
+//! crate::archive|fetch` (módulos que ya no existen) ni los crates de infra
+//! (`ureq`, `tar`, `zip`, `flate2`) por su cuenta.
 
 use std::path::{Path, PathBuf};
 
@@ -128,6 +134,49 @@ fn int_tests_do_not_spawn_a_process() {
         offenders.is_empty(),
         "int_*.rs must stay in-process; these spawn a process — file them as e2e_*:\n{}",
         offenders.join("\n")
+    );
+}
+
+#[test]
+fn application_has_no_infra_imports() {
+    // `src/application/` monta los puertos y puede importar `adapters`
+    // (composition-root parcial: installer usa los extractores movidos),
+    // pero los módulos de infra y sus crates quedan detrás de `crate::adapters`.
+    let dir = manifest_dir().join("src").join("application");
+    let files = std::fs::read_dir(&dir)
+        .expect("src/application must exist")
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| p.extension().is_some_and(|e| e == "rs"))
+        .collect::<Vec<_>>();
+    assert!(!files.is_empty(), "src/application must contain .rs files");
+
+    const FORBIDDEN: &[&str] = &[
+        "use crate::archive",
+        "use crate::fetch",
+        "use ureq",
+        "use tar",
+        "use zip",
+        "use flate2",
+    ];
+    let mut violations = Vec::new();
+    for file in &files {
+        let src = std::fs::read_to_string(file).expect("application file readable");
+        for (n, line) in src.lines().enumerate() {
+            let trimmed = line.trim_start();
+            if FORBIDDEN.iter().any(|p| trimmed.starts_with(p)) {
+                violations.push(format!(
+                    "{}:{}: infra import escapes `adapters`: {}",
+                    file.display(),
+                    n + 1,
+                    trimmed
+                ));
+            }
+        }
+    }
+    assert!(
+        violations.is_empty(),
+        "application/ no import lamenaje infra directamente:\n{}",
+        violations.join("\n")
     );
 }
 

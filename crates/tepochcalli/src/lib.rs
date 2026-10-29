@@ -1,9 +1,7 @@
 pub mod adapters;
 pub mod application;
-pub mod archive;
 pub mod config;
 pub mod domain;
-pub mod fetch;
 pub mod ports;
 
 pub use application::{

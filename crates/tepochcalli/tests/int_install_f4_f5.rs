@@ -17,11 +17,11 @@ use std::path::{Path, PathBuf};
 
 use common::{FakeHttp, FakeProc};
 use sha2::{Digest as _, Sha256};
+use tepochcalli::adapters::fetch::{self, UvAsset};
 use tepochcalli::adapters::{StdCommandRunner, UreqHttpClient};
 use tepochcalli::application::installer::{
     compensate_phase4, compensate_phase5, run_phase4, run_phase4_with, run_phase5,
 };
-use tepochcalli::fetch::{self, UvAsset};
 use tepochcalli::ports::{CommandOutput, CommandRunner};
 use tepochcalli::WizardError;
 

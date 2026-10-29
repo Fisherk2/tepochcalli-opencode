@@ -3,6 +3,8 @@
 //! Each adapter maps its failures to [`crate::domain::WizardError`] with
 //! `map_err` — no `unwrap`/`expect` in this tree.
 
+pub mod archive;
+pub mod fetch;
 pub mod host;
 pub mod http;
 pub mod payload;

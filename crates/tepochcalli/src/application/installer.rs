@@ -15,9 +15,9 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::archive::{extract_tar_gz, extract_zip};
+use crate::adapters::archive::{extract_tar_gz, extract_zip};
+use crate::adapters::fetch::{self, UvAsset};
 use crate::domain::{VaultPath, WizardError};
-use crate::fetch::{self, UvAsset};
 use crate::ports::{
     CommandOutput, CommandRunner, HostProbe, HttpClient, MergeReport, PayloadSource, Ui,
 };

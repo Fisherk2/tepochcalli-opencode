@@ -181,8 +181,8 @@ fn f3_compensation_removes_written_and_keeps_user_files() {
 
 #[test]
 fn f4_f5_failures_compensate_without_touching_user_data() {
+    use tepochcalli::adapters::fetch::{self};
     use tepochcalli::application::installer::{compensate_phase4, compensate_phase5, run_phase5};
-    use tepochcalli::fetch::{self};
 
     let vault = tmp();
     write(&vault.path().join("notes.md"), "# user research\n");
