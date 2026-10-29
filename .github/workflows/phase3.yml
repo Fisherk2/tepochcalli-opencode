@@ -74,6 +74,30 @@ jobs:
         working-directory: crates/tepochcalli
         run: cargo test --locked
 
+  # Los dos flujos que descargan de verdad viven tras `#[ignore]` (F4 baja el
+  # asset de `uv`; el de F1-F5 baja además un CPython gestionado y muere en
+  # `uv sync` porque el payload fixture está vacío): sin este job no se
+  # ejercitan en ningún sitio. Solo ubuntu, y sin `sync` del proyecto real
+  # (torch ~1 GB ya lo cubre `smoke`).
+  network:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Instala la toolchain Rust pineada
+        run: |
+          set -euo pipefail
+          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
+          rustup default "${RUST_TOOLCHAIN}"
+
+      - name: cargo test -- --ignored (red real: uv + CPython gestionado)
+        working-directory: crates/tepochcalli
+        run: cargo test --locked -- --ignored
+
   # Path 5 de punta a punta: VM limpia (sin Python ni Node) → install con
   # payload local → vault con `00-Resources/` + `mcp.servers` válido.
   smoke:
