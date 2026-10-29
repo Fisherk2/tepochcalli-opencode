@@ -153,8 +153,9 @@ jobs:
   # (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`, con `<ver>` =
   # `version` de `crates/tepochcalli/Cargo.toml`). El binario lo descarga con
   # verificación de checksum (`ReleasePayload::for_current_version`); el
-  # árbol empaquetado es el mismo que usa el smoke de `phase3.yml`
-  # (`pyproject.toml` + `uv.lock` + `flow/` + `mcp/` bajo `.tepochcalli/`).
+  # árbol empaquetado es el template COMPLETO `obsidian-workspace/` (raíz del
+  # tar = contenido del vault: `AGENTS.md`, `opencode.json`, `.opencode/`,
+  # bandejas y `.tepochcalli/`), no solo el runtime Python.
   global:
     needs: build
     runs-on: ubuntu-latest
@@ -182,28 +183,79 @@ jobs:
         run: cargo dist build --artifacts=global
 
       # T19: asset versionado del payload + sidecar SHA-256 (one-version).
-      # El árbol es el mismo que el smoke local (`phase3.yml` + Justfile
-      # `wizard-smoke`): `pyproject.toml` + `uv.lock` + `flow/` + `mcp/`.
+      # El payload es el template COMPLETO (`obsidian-workspace/`) con la raíz
+      # del tar = contenido del vault, para que extraerlo en un directorio de
+      # vault reproduzca `<vault>/AGENTS.md`, `<vault>/opencode.json`, etc.
+      # F3 (`installer.rs`) funde este árbol en el vault y crea `00-Resources/`
+      # + sus 2 placeholders por su cuenta (D22): esa carpeta NO viaja aquí.
+      # Exclusiones = solo artefactos de runtime/desarrollo (spec-vault-
+      # structure §gitignore): nunca se publican `venv/ db/ models/ bin/
+      # config/`, caches de Python ni `target/`.
       - name: Empaqueta el payload versionado (+ sha256)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
           asset="tepochcalli-workspace-${version}.tar.gz"
-          stage="${RUNNER_TEMP}/payload-stage"
-          rm -rf "${stage}"
-          mkdir -p "${stage}/.tepochcalli"
-          cp obsidian-workspace/.tepochcalli/pyproject.toml \
-            obsidian-workspace/.tepochcalli/uv.lock \
-            "${stage}/.tepochcalli/"
-          cp -r obsidian-workspace/.tepochcalli/flow \
-            obsidian-workspace/.tepochcalli/mcp \
-            "${stage}/.tepochcalli/"
-          tar -czf "${RUNNER_TEMP}/${asset}" -C "${stage}" .tepochcalli
+          tar -czf "${RUNNER_TEMP}/${asset}" -C obsidian-workspace \
+            --exclude='./.obsidian' \
+            --exclude='./.tepochcalli/venv' \
+            --exclude='./.tepochcalli/db' \
+            --exclude='./.tepochcalli/models' \
+            --exclude='./.tepochcalli/bin' \
+            --exclude='./.tepochcalli/config' \
+            --exclude='./.tepochcalli/.venv' \
+            --exclude='./.tepochcalli/.uv-stage' \
+            --exclude='./.tepochcalli/.payload-stage' \
+            --exclude='./.tepochcalli/.install-intent' \
+            --exclude='./.tepochcalli/.coverage' \
+            --exclude='./.tepochcalli/.mypy_cache' \
+            --exclude='./.tepochcalli/.pytest_cache' \
+            --exclude='./.tepochcalli/.ruff_cache' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='target' \
+            --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner \
+            .
           (cd "${RUNNER_TEMP}" && sha256sum "${asset}" > "${asset}.sha256")
           (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
-          gh release upload "${TAG}" "${RUNNER_TEMP}/${asset}" "${RUNNER_TEMP}/${asset}.sha256" --clobber
+          echo "PAYLOAD_ASSET=${asset}" >> "${GITHUB_ENV}"
+
+      # Guarda de contenido: un payload hueco falla la release en vez de
+      # publicarse (el merge de F3 no puede inventar el workflow de agentes).
+      # Las entradas usan el prefijo `./` que imprime `tar -tzf` para
+      # `-C obsidian-workspace .`; las de directorio terminan en `/`.
+      - name: Verifica el contenido del payload
+        run: |
+          set -euo pipefail
+          listing="${RUNNER_TEMP}/payload-listing.txt"
+          tar -tzf "${RUNNER_TEMP}/${PAYLOAD_ASSET}" > "${listing}"
+          for path in \
+            './AGENTS.md' \
+            './opencode.json' \
+            './01-tasks/' \
+            './.opencode/agents/' \
+            './.opencode/commands/' \
+            './.opencode/skills/' \
+            './.tepochcalli/pyproject.toml' \
+            './.tepochcalli/uv.lock' \
+            './.tepochcalli/flow/' \
+            './.tepochcalli/mcp/'; do
+            grep -qx -- "${path}" "${listing}" \
+              || { echo "::error::payload sin ${path} (${PAYLOAD_ASSET})"; exit 1; }
+          done
+          if grep -qE '(^\./)\.tepochcalli/(venv|db|models|bin|config)/' "${listing}"; then
+            echo "::error::payload con artefactos de runtime (${PAYLOAD_ASSET})"
+            exit 1
+          fi
+          echo "payload OK: $(wc -l < "${listing}") entradas en ${PAYLOAD_ASSET}"
+
+      - name: Sube el payload al draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" "${RUNNER_TEMP}/${PAYLOAD_ASSET}" \
+            "${RUNNER_TEMP}/${PAYLOAD_ASSET}.sha256" --clobber
 
       - name: Sube los installers al draft release
         env:
