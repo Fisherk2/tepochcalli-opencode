@@ -108,6 +108,51 @@ fn uninstall_without_tty_is_typed_abort_not_stub() {
 }
 
 #[test]
+fn empty_payload_override_values_are_a_usage_error_not_a_network_install() {
+    // GAP 7: `--payload-url "$URL"` with an empty `$URL` (or `--payload ""`)
+    // used to be filtered out as "flag absent", so the install silently fell
+    // through to the versioned release asset — a network install born of a
+    // shell typo. Empty must be a usage error (exit 2) instead.
+    //
+    // Mechanism proving "no HTTP client was ever constructed": the release
+    // base points at a dead loopback port, so any fall-through can only end in
+    // a network exit (20) or a typed failure — never 2 with this message. The
+    // client is built later, inside `run_phases`, after F1/F2.
+    let dir = tempfile::tempdir().expect("tempdir");
+    let vault = dir.path().join("v");
+    let vault = vault.to_str().expect("utf8 tmp");
+    for (flag, args) in [
+        ("--payload-url", vec!["--payload-url="]),
+        ("--payload-url", vec!["--payload-url", ""]),
+        ("--payload-sha256", vec!["--payload-sha256="]),
+        ("--payload-sha256", vec!["--payload-sha256", ""]),
+        ("--payload", vec!["--payload="]),
+        ("--payload", vec!["--payload", ""]),
+    ] {
+        let out = bin()
+            .args(["install", "--non-interactive", "--vault", vault])
+            .args(&args)
+            .env("TEPOCHCALLI_RELEASE_BASE_URL", "http://127.0.0.1:9")
+            .output()
+            .expect("spawn install");
+        let err = stderr_text(&out);
+        assert_eq!(
+            out.status.code(),
+            Some(2),
+            "args {args:?} must be a usage error, stderr:\n{err}"
+        );
+        assert!(
+            err.contains(flag),
+            "the failure must name `{flag}` for {args:?}, got:\n{err}"
+        );
+        assert!(
+            err.contains("empty"),
+            "the failure must say the value is empty for {args:?}, got:\n{err}"
+        );
+    }
+}
+
+#[test]
 fn config_embedder_is_implemented_not_a_stub() {
     // T16: `--help` documents the real swap flags (no T3 stub marker).
     let out = bin()

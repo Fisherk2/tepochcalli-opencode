@@ -37,6 +37,9 @@ pub const RELEASE_ASSET_SHA256_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSE
 pub const PAYLOAD_RELEASE_REPO: &str = "Fisherk2/tepochcalli-opencode";
 /// Asset stem: the published file is `{stem}-<ver>.tar.gz` + `.sha256`.
 pub const PAYLOAD_ASSET_STEM: &str = "tepochcalli-workspace";
+/// Release-base override: the same env var `installers/install.sh` documents
+/// for mirrors and loopback tests.
+pub const ENV_RELEASE_BASE_URL: &str = "TEPOCHCALLI_RELEASE_BASE_URL";
 
 /// Release tag carrying the payload for `version` (canonical form; the
 /// workflow publishes under this tag — see `release.yml`).
@@ -57,16 +60,45 @@ pub fn payload_checksum_name(version: &str) -> String {
     format!("{}.sha256", payload_asset_name(version))
 }
 
+/// Release base URL for the payload assets: GitHub's download dir for
+/// [`PAYLOAD_RELEASE_REPO`]'s tags, or the `TEPOCHCALLI_RELEASE_BASE_URL`
+/// override (empty/blank counts as unset, like `install.sh`'s `[ -n ]`).
+///
+/// A plain-`http` base is allowed here and only here: loopback mirrors have no
+/// TLS certificate, and the trust gate is the SHA-256 sidecar, never the
+/// transport. The default stays `https` and never `latest`.
+// shortcut: the scheme allowlist is `ureq`'s (http/https); a `file:` base
+// cannot read local files — upgrade only if a non-http transport is added.
+#[must_use]
+pub fn release_base_url_from(env: Option<&str>) -> String {
+    match env.map(str::trim) {
+        Some(base) if !base.is_empty() => base.trim_end_matches('/').to_string(),
+        _ => format!("https://github.com/{PAYLOAD_RELEASE_REPO}/releases/download"),
+    }
+}
+
+/// [`release_base_url_from`] reading the real environment.
+#[must_use]
+pub fn release_base_url() -> String {
+    release_base_url_from(std::env::var(ENV_RELEASE_BASE_URL).ok().as_deref())
+}
+
+/// Download URL of the versioned payload asset under `base` (pure).
+#[must_use]
+pub fn payload_asset_url_from(base: &str, version: &str) -> String {
+    format!(
+        "{}/{}/{}",
+        base.trim_end_matches('/'),
+        payload_release_tag(version),
+        payload_asset_name(version)
+    )
+}
+
 /// Download URL of the versioned payload asset (pinned to `version`,
 /// never `latest` — T19 AC-c, one-version rule).
 #[must_use]
 pub fn payload_asset_url(version: &str) -> String {
-    format!(
-        "https://github.com/{}/releases/download/{}/{}",
-        PAYLOAD_RELEASE_REPO,
-        payload_release_tag(version),
-        payload_asset_name(version)
-    )
+    payload_asset_url_from(&release_base_url(), version)
 }
 
 /// Download URL of the asset's SHA-256 sidecar.

@@ -271,15 +271,31 @@ fn run_install(
         }
         i += 1;
     }
-    // Payload source validation (usage errors, exit 2 — no network touched):
-    // `--payload` (local tree) conflicts with the URL override, and the
+    // Payload source validation (usage errors, exit 2 — no network touched).
+    // First: an EMPTY value is a typo, not an absent flag. Filtering it out
+    // used to turn `--payload-url "$URL"` with an empty `$URL` into a silent
+    // release-asset download (network), so it fails here — before any HTTP
+    // client exists.
+    for (flag, value) in [
+        ("--payload", &payload),
+        ("--payload-url", &payload_url),
+        ("--payload-sha256", &payload_sha256),
+    ] {
+        if value.as_deref().is_some_and(|v| v.trim().is_empty()) {
+            let _ = writeln!(
+                stderr,
+                "install: {flag} got an empty value (a shell variable that expanded to \
+                 nothing?); pass a real value, or drop the flag"
+            );
+            return 2;
+        }
+    }
+    // Then: `--payload` (local tree) conflicts with the URL override, and the
     // override needs both halves (URL + SHA-256) or neither.
-    let payload_dir = payload.filter(|p| !p.trim().is_empty());
-    let has_override = payload_url.as_ref().is_some_and(|u| !u.trim().is_empty())
-        || payload_sha256
-            .as_ref()
-            .is_some_and(|s| !s.trim().is_empty());
-    if payload_dir.is_some() && has_override {
+    let payload_dir = payload;
+    let url_override = payload_url;
+    let sha_override = payload_sha256;
+    if payload_dir.is_some() && (url_override.is_some() || sha_override.is_some()) {
         let _ = writeln!(
             stderr,
             "install: --payload conflicts with --payload-url/--payload-sha256 \
@@ -287,8 +303,6 @@ fn run_install(
         );
         return 2;
     }
-    let url_override = payload_url.filter(|u| !u.trim().is_empty());
-    let sha_override = payload_sha256.filter(|s| !s.trim().is_empty());
     if url_override.is_some() != sha_override.is_some() {
         let _ = writeln!(
             stderr,
