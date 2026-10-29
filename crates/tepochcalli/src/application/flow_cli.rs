@@ -18,6 +18,15 @@ use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 /// reuses it).
 const MODELS_DIR: &str = "models";
 
+/// Plazos de subprocess (L3-6): el gate mide RSS de un embed (generoso:
+/// descarga de modelo incluida, 300 s); el refresh reconstruye el índice
+/// sobre vaults grandes (900 s); el probe `rag_status` de F8 es una llamada
+/// local (120 s). Un cuelgue de infarto se mata tipado, nunca cuelga el
+/// instalador.
+pub(super) const GATE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(300);
+pub(super) const REFRESH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(900);
+pub(super) const PROBE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(120);
+
 /// Run the vault venv interpreter with its model-cache sandbox and the
 /// caller's argv. A vault without the interpreter means F5 never ran: typed
 /// `Internal`, never a spawn attempt. A non-zero child status is
@@ -28,6 +37,7 @@ pub(super) fn run_flow_cli(
     args: &[&str],
     extra_env: &[(&str, &str)],
     token: Option<&str>,
+    timeout: std::time::Duration,
 ) -> Result<CommandOutput, WizardError> {
     // shortcut: a vault without the venv interpreter means F5 never ran;
     // same class as F5's missing-`uv` check (typed, never a spawn attempt).
@@ -51,7 +61,7 @@ pub(super) fn run_flow_cli(
         // UI/log surfaces; a generic env-scrubber is T15 scope).
         env.push(("HF_TOKEN", secret));
     }
-    let out = proc.run(&program, args, vault, &env)?;
+    let out = proc.run_with_timeout(&program, args, vault, &env, timeout)?;
     if out.status != 0 {
         return Err(WizardError::PhaseFailed);
     }
@@ -135,6 +145,7 @@ mod tests {
             &["-m", "tepochcalli_flow", "refresh"],
             &[],
             Some("hf-secret"),
+            REFRESH_TIMEOUT,
         );
         let got = match got {
             Ok(out) => out,
@@ -188,7 +199,14 @@ mod tests {
         };
         let proc = proc_with(VecDeque::from(vec![Ok(out())]));
         assert_eq!(
-            run_flow_cli(&proc, vault.path(), &["-m", "tepochcalli_flow"], &[], None),
+            run_flow_cli(
+                &proc,
+                vault.path(),
+                &["-m", "tepochcalli_flow"],
+                &[],
+                None,
+                REFRESH_TIMEOUT,
+            ),
             Err(WizardError::Internal)
         );
         assert!(proc.calls.borrow().is_empty(), "no spawn sin venv");
@@ -212,7 +230,8 @@ mod tests {
                 vault.path(),
                 &["-c", "probe"],
                 &[("TEPOCHCALLI_ROOT", ".")],
-                None
+                None,
+                PROBE_TIMEOUT,
             ),
             Err(WizardError::PhaseFailed)
         );

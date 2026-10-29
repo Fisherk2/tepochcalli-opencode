@@ -652,6 +652,7 @@ fn run_gate(
         &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
         &[],
         token,
+        super::flow_cli::GATE_TIMEOUT,
     )?;
     parse_gate(&out.stdout)
 }
@@ -666,6 +667,7 @@ fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<u64, WizardErro
         &["-m", GATE_MODULE, REFRESH_SUBCOMMAND],
         &[],
         None,
+        super::flow_cli::REFRESH_TIMEOUT,
     )?;
     parse_refresh(&out.stdout)
 }

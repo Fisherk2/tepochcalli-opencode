@@ -1,6 +1,7 @@
 //! `CommandRunner`: run a subprocess with explicit `cwd` + `env`.
 
 use std::path::Path;
+use std::time::Duration;
 
 use crate::domain::WizardError;
 
@@ -26,4 +27,19 @@ pub trait CommandRunner {
         cwd: &Path,
         env: &[(&str, &str)],
     ) -> Result<CommandOutput, WizardError>;
+
+    /// Run with a plazo duro (L3-6): un hijo colgado es KILLED y el resultado
+    /// es el `PhaseFailed` tipado — nunca un instalador colgado eterno.
+    /// Default = sin deadline: los spawns sin riesgo de hang quedan como están.
+    fn run_with_timeout(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &str)],
+        timeout: Duration,
+    ) -> Result<CommandOutput, WizardError> {
+        let _ = timeout;
+        self.run(program, args, cwd, env)
+    }
 }

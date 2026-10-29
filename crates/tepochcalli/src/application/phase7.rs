@@ -73,6 +73,7 @@ pub fn run_phase7(
         &["-m", REFRESH_MODULE, REFRESH_SUBCOMMAND],
         &[],
         None,
+        super::flow_cli::REFRESH_TIMEOUT,
     )?;
     match parse_refresh(&out.stdout)? {
         RefreshParsed::Refused => Err(WizardError::ModelInvalid),

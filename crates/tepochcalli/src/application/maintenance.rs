@@ -183,6 +183,7 @@ fn run_gate(proc: &dyn CommandRunner, vault: &Path, model: &str) -> Result<GateO
         &["-m", FLOW_MODULE, GATE_SUBCOMMAND, "--model", model],
         &[],
         None,
+        super::flow_cli::GATE_TIMEOUT,
     )?;
     parse_gate(&out.stdout)
 }
@@ -204,6 +205,7 @@ fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<Refreshed, Wiza
         &["-m", FLOW_MODULE, REFRESH_SUBCOMMAND],
         &[],
         None,
+        super::flow_cli::REFRESH_TIMEOUT,
     )?;
     parse_refresh(&out.stdout)
 }

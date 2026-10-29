@@ -411,14 +411,20 @@ pub(super) fn set_user_private(path: &Path) -> Result<(), WizardError> {
 
 /// Run `program` with explicit argv + cwd + env; any non-zero status is a
 /// compensated phase failure (exit codes, never text, cross the boundary).
+/// Plazo de los spawns de F5 (L3-6): `uv python install` / `venv` /
+/// `sync --frozen` son red + despaíquete; 600 s los guarda de colgados
+/// (kill typed `PhaseFailed`, un instalación que no deja de colgar).
+const F5_SYNC_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(600);
+
 fn run_checked(
     proc: &dyn CommandRunner,
     program: &str,
     args: &[&str],
     cwd: &Path,
     env: &[(&str, &str)],
+    timeout: std::time::Duration,
 ) -> Result<CommandOutput, WizardError> {
-    let out = proc.run(program, args, cwd, env)?;
+    let out = proc.run_with_timeout(program, args, cwd, env, timeout)?;
     if out.status == 0 {
         Ok(out)
     } else {
@@ -448,7 +454,13 @@ fn install_uv(
     // Best-effort: the asset was verified, residue is harmless.
     let _ = std::fs::remove_dir_all(&stage);
     let program = target.to_str().ok_or(WizardError::Internal)?.to_string();
-    let out = proc.run(&program, &["--version"], vault, &[])?;
+    let out = proc.run_with_timeout(
+        &program,
+        &["--version"],
+        vault,
+        &[],
+        std::time::Duration::from_secs(120),
+    )?;
     if out.status != 0 {
         return Err(WizardError::PayloadCorrupt);
     }
@@ -512,12 +524,34 @@ fn sync_project(
         &["python", "install", UV_MANAGED_PYTHON],
         project,
         &env,
+        F5_SYNC_TIMEOUT,
     )?;
-    run_checked(proc, program, &["venv", VENV_DIR_NAME], project, &env)?;
-    run_checked(proc, program, &["sync", "--frozen"], project, &env)?;
+    run_checked(
+        proc,
+        program,
+        &["venv", VENV_DIR_NAME],
+        project,
+        &env,
+        F5_SYNC_TIMEOUT,
+    )?;
+    run_checked(
+        proc,
+        program,
+        &["sync", "--frozen"],
+        project,
+        &env,
+        F5_SYNC_TIMEOUT,
+    )?;
     let python = venv_python(venv);
     let interpreter = python.to_str().ok_or(WizardError::Internal)?;
-    run_checked(proc, interpreter, &["-c", IMPORT_CHECK], project, &[])?;
+    run_checked(
+        proc,
+        interpreter,
+        &["-c", IMPORT_CHECK],
+        project,
+        &[],
+        F5_SYNC_TIMEOUT,
+    )?;
     Ok(Phase5Report {
         venv: venv.to_path_buf(),
     })

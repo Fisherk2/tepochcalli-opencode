@@ -289,6 +289,48 @@ fn merge_tree_skips_symlinks_real_and_dangling() {
     );
 }
 
+/// L3-6: plazo de subprocess con kill — un hijo colgado muere tipado
+/// (`PhaseFailed`) dentro del plazo, y sus pipes se apagan con él.
+#[test]
+fn run_with_timeout_kills_a_hanging_child_in_deadline() {
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let started = std::time::Instant::now();
+    let err = runner
+        .run_with_timeout(
+            "sh",
+            &["-c", "sleep 30"],
+            dir.path(),
+            &[],
+            std::time::Duration::from_millis(500),
+        )
+        .expect_err("un hijo colgado debe perder el plazo");
+    assert_eq!(err, WizardError::PhaseFailed);
+    assert!(
+        started.elapsed() < std::time::Duration::from_secs(10),
+        "kill dentro de plazo (pasados {:?})",
+        started.elapsed()
+    );
+}
+
+/// L3-6: la vía feliz conserva el output — el plazo no roba lo capturado.
+#[test]
+fn run_with_timeout_returns_output_of_prompt_children() {
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = runner
+        .run_with_timeout(
+            "sh",
+            &["-c", "echo hola-plazo"],
+            dir.path(),
+            &[],
+            std::time::Duration::from_secs(10),
+        )
+        .expect("hijo ágil dentro del plazo");
+    assert_eq!(out.status, 0);
+    assert_eq!(out.stdout, "hola-plazo\n");
+}
+
 #[test]
 fn host_tool_search_accepts_the_windows_exe_twin() {
     let dir = tempfile::tempdir().expect("tempdir");

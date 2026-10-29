@@ -293,6 +293,7 @@ fn run_gate(
         &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
         &[],
         token,
+        super::flow_cli::GATE_TIMEOUT,
     )?;
     parse_gate(&out.stdout)
 }

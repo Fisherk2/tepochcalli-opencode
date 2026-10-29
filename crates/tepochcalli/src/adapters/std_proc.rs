@@ -5,6 +5,7 @@
 
 use std::path::Path;
 use std::process::Command;
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::domain::WizardError;
 use crate::ports::{CommandOutput, CommandRunner};
@@ -33,5 +34,91 @@ impl CommandRunner for StdCommandRunner {
             stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
         })
+    }
+
+    /// Run with deadline (L3-6): pipes drained by a dedicated reader, the
+    /// child polled by a watcher; past the plazo the parent KILLS the
+    /// child (no orphan writes) and returns `PhaseFailed`. Los demas spawns
+    /// sin hang plausible quedan en `run` (default del port).
+    fn run_with_timeout(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &str)],
+        timeout: std::time::Duration,
+    ) -> Result<CommandOutput, WizardError> {
+        let mut child = Command::new(program)
+            .args(args)
+            .current_dir(cwd)
+            .envs(env.iter().copied())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped())
+            .spawn()
+            .map_err(|_| WizardError::PhaseFailed)?;
+        let stdout_pipe = child.stdout.take();
+        let stderr_pipe = child.stderr.take();
+        let child = Arc::new(Mutex::new(child));
+
+        // Lector: drena stdout y stderr (EOF al morir el hijo, natural o
+        // killed). Abandonado pasar el plazo — los buffers nueno fugan.
+        let (text_tx, text_rx) = mpsc::channel::<(String, String)>();
+        std::thread::spawn(move || {
+            let mut out = String::new();
+            let mut err = String::new();
+            if let Some(mut pipe) = stdout_pipe {
+                use std::io::Read as _;
+                let _ = pipe.read_to_string(&mut out);
+            }
+            if let Some(mut pipe) = stderr_pipe {
+                use std::io::Read as _;
+                let _ = pipe.read_to_string(&mut err);
+            }
+            let _ = text_tx.send((out, err));
+        });
+
+        // Watcher: sondea el status con el lock tomado en ráfagas (so el
+        // padreNavLink puede tomar el lock para kill pasa del plazo).
+        let (status_tx, status_rx) = mpsc::channel::<i32>();
+        let slot_for_watcher = Arc::clone(&child);
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            let verdict = match slot_for_watcher.lock() {
+                Ok(mut guard) => guard
+                    .try_wait()
+                    .unwrap_or_default(),
+                Err(_) => return,
+            };
+            if let Some(status) = verdict {
+                // El padre pudo vencer el plazo y soltar el canal: send(si llega)
+                // falla y salimos — ningun thread queda eterno.
+                if status_tx.send(status.code().unwrap_or(-1)).is_err() {
+                    return;
+                }
+            }
+        });
+
+        match status_rx.recv_timeout(timeout) {
+            Ok(status) => {
+                // El plazo del text_rx no re-verdicta: sin texto, vacíos.
+                let (stdout, stderr) = text_rx
+                    .recv_timeout(timeout)
+                    .unwrap_or_else(|_| (String::new(), String::new()));
+                Ok(CommandOutput {
+                    status,
+                    stdout,
+                    stderr,
+                })
+            }
+            Err(_) => {
+                // Plazo vencido con el hijo vivo: kill; las ráfagas cortas del
+                // watcher permiten tomar el lock al padre.
+                if let Ok(mut guard) = child.lock() {
+                    let _ = guard.kill();
+                    let _ = guard.wait();
+                }
+                Err(WizardError::PhaseFailed)
+            }
+        }
     }
 }
