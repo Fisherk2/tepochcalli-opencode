@@ -229,3 +229,30 @@ flowchart LR
 * Docling — <https://github.com/docling-project/docling>
 * LanceDB — <https://lancedb.github.io/lancedb/>
 * ADR-001 / ADR-002 / ADR-004 / ADR-006 (specs/adr/)
+
+## Anexo A — Alternativas externas consultadas (2026-10-28)
+
+> Anexo informativo, no normativo — no altera las secciones anteriores ni el status Approved. Origen: análisis externo 2026-10-28. Registra veredictos ya tomados para no repetir la investigación; toda adopción futura exige ADR nuevo (nunca re-editar un ADR Accepted).
+
+### A) opendataloader-pdf — <https://github.com/opendataloader-project/opendataloader-pdf>
+
+* **Qué es:** parser PDF→Markdown/JSON/HTML (motor local Java, orden de lectura XY-Cut++, bounding boxes por elemento) + modo `hybrid` cuyo backend **es literalmente Docling** (`docling-fast`; el extra `[hybrid]` instala docling + docling-serve; el OCR — EasyOCR/Tesseract/RapidOCR — corre vía ese backend, no en el modo local).
+* **Veredicto: VIGILAR — no adoptar.** Frente a markitdown gana (markitdown no emite headings; su OCR es plugin LLM Vision de pago), pero **el PDF no pasa por markitdown en nuestro flujo** (spec-markitdown §Cadena de fallback: `.pdf` → Docling), lo que hace la comparación irrelevante aquí. Frente a Docling: en el benchmark del propio proyecto **Docling gana accuracy de headings (0.824 vs 0.821)** — la métrica que alimenta nuestras citas (F1) —; y adoptarlo exige **Java 11+ en el host** (viola ADR-003/ADR-004: el investigador no instala nada) y **servidor en puerto 5002** (viola la regla sin demonios/puertos de ADR-002/ADR-005). Sus ventajas reales (bounding boxes, anti prompt-injection) no las consume ningún requisito de docs/UH.md.
+* **Revisit trigger:** benchmark replicado por terceros, o si se activa OCR v1 para PDFs escaneados (hoy `do_ocr=False` en `tepochcalli_flow/parsers.py`, §Non-Goals) y Docling nativo con `do_ocr=True` se queda corto.
+* **Coste de adopción registrado:** ADR nuevo + cambio de §Ruta PDF + reindex completo (los offsets F1 cambian) + revalidación de benches M1/M2 y golden-vault.
+
+### B) PixelRAG — <https://github.com/StarTrail-org/PixelRAG>
+
+* **Qué es:** framework de **RAG visual** (paper PIXELRAG, Berkeley SkyLab — misma org que LEANN): renderiza páginas/PDF a **tiles JPEG** (Chromium headless) y recupera con embedding VLM `Qwen3-VL-2B`; índice FAISS/Qdrant + FastAPI con puerto. **No es un scraper y NO produce markdown** (su único texto es `innerText` opcional plano, sin headings).
+* **Veredicto: DESCARTAR como dependencia; vigilar solo la idea (captura visual).** La vía `add_source`→markitdown ya cubre URL→markdown; su salida JPEG no es indexable por CocoIndex + MiniLM; es un **segundo stack RAG** que choca con ADR-001/ADR-002 (CocoIndex+LanceDB), ADR-005 (puertos/daemon) y ADR-006 (VLM vs MiniLM CPU, $0). Único gap que destapa: **rendering JS** (markitdown no ejecuta JS) — si algún día duele, vía ADR de herramienta focalizada captura→markdown, no PixelRAG.
+* **Revisit trigger:** caso de uso "tabla/gráfico que el markdown pierde" o SPA pesada problemática → ADR nuevo de captura puntual.
+
+### C) book-to-skill — <https://github.com/virgiliojr94/book-to-skill>
+
+* **Qué es:** skill instalable (`~/.agents/skills/`) que destila libros → skill (`SKILL.md` + `chapters/`): extracción determinista (modo *technical* → **Docling**, ya nuestro parser PDF — valida ADR-001) + síntesis con LLM (~$1/libro); filosofía *"extract structure, never raw text"* — **tira el texto crudo**, sin índice vectorial ni citas offset-level.
+* **Veredicto: NO INSTALAR.** (1) Gate: `obsidian-workspace/.opencode/` congelado hasta el blueprint de Phase 4 (spec-payload-vault). (2) Redundante: el vault ya tiene el skill `markitdown/` y el producto convierte vía `add_source`. (3) Choca con el criterio 5 de docs/UH.md: la destilación elimina el original y produce síntesis sin citas verificables.
+* **Revisit trigger:** si el usuario pide un workflow de "destilación de libros en síntesis reutilizables" → decisión de blueprint en Phase 4, no instalación casual.
+
+### D) Cross-reference — opendraft
+
+`opendraft` (<https://github.com/federicodeponte/opendraft>) se consultó por su workflow (no por motor): sus hallazgos ya viven en specs/spec-payload-vault.md / specs/spec-agent-workflow.md (§Origen de las enmiendas 2026-10-28) y docs/TECH_DEBT.md TD-13…TD-16 — ver esos documentos, no duplicarlos aquí.
