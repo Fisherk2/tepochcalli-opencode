@@ -128,6 +128,16 @@ impl Ui for TapUi {
             .ok_or(WizardError::UserAborted)
     }
 
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        self.captured
+            .borrow_mut()
+            .push(format!("SECRET INPUT {prompt}"));
+        self.inputs
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
     fn panel(&self, title: &str, body: &str) {
         self.captured
             .borrow_mut()

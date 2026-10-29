@@ -265,6 +265,16 @@ impl Ui for TapUi {
             .ok_or(WizardError::UserAborted)
     }
 
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        self.panels
+            .borrow_mut()
+            .push(("SECRET INPUT".to_string(), prompt.to_string()));
+        self.inputs
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
     fn panel(&self, title: &str, body: &str) {
         self.panels
             .borrow_mut()
@@ -913,11 +923,32 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
     assert_eq!(report.dims, None, "el externo no tiene dims medidas");
     assert_eq!(report.health, RagHealth::Ok);
 
-    // (b) la clave nunca sale por la UI (títulos, cuerpos ni prompts).
+    // (b) la clave nunca sale por la UI (títulos, cuerpos ni prompts), y el
+    // prompt en sí va por el canal sin eco (L2-7): la entrada de la API key
+    // se registra como SECRET INPUT, no como INPUT.
     let visible = format!("{}\n{}", ui.titles().join("\n"), ui.bodies().join("\n"));
     assert!(
         !visible.contains(FAKE_KEY),
         "la clave nunca puede aparecer en un panel (títulos/cuerpos/prompts)"
+    );
+    let secret_prompts = ui
+        .bodies()
+        .iter()
+        .enumerate()
+        .filter(|(index, _)| ui.titles()[*index].contains("SECRET INPUT"))
+        .map(|(_, body)| body.clone())
+        .collect::<Vec<_>>();
+    assert!(
+        secret_prompts
+            .iter()
+            .any(|body| body.contains("API key")),
+        "el prompt de la API key debe ir por el canal sin eco (SECRET INPUT), prompts: {secret_prompts:?}"
+    );
+    assert!(
+        !ui.titles()
+            .iter()
+            .any(|t| t.starts_with("INPUT") && t.contains("API key")),
+        "el prompt de la API key no puede ir por el canal con eco"
     );
 
     // (c) sin gate de dims: el externo no descarga; el re-index sí corre y

@@ -17,6 +17,9 @@ pub trait Ui {
     ) -> Result<usize, WizardError>;
     /// Free-text answer; `default` is used when the user enters nothing.
     fn input(&self, prompt: &str, default: Option<&str>) -> Result<String, WizardError>;
+    /// Secret answer (api_key/HF_TOKEN): never echoed back on a terminal
+    /// (L2-7). Headless rotates the same queue as `input` (scripted).
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError>;
     /// Informational/error block (failure UX panel in T15).
     fn panel(&self, title: &str, body: &str);
 }

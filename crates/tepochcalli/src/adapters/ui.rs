@@ -43,6 +43,14 @@ impl Ui for TtyUi {
         asked.interact_text().map_err(|_| WizardError::UserAborted)
     }
 
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        // Password::interact no repite el secreto en el terminal (L2-7).
+        dialoguer::Password::new()
+            .with_prompt(prompt)
+            .interact()
+            .map_err(|_| WizardError::UserAborted)
+    }
+
     fn panel(&self, title: &str, body: &str) {
         render_panel(title, body);
     }
@@ -99,6 +107,14 @@ impl Ui for HeadlessUi {
     fn input(&self, _prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
         // The offered `default` is deliberately ignored: without a scripted
         // answer there is nothing to fall back to, and guessing is forbidden.
+        self.inputs
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
+    fn input_secret(&self, _prompt: &str) -> Result<String, WizardError> {
+        // Misma cola que `input`: un script no distingue eco.
         self.inputs
             .borrow_mut()
             .pop_front()

@@ -22,8 +22,8 @@ use crate::domain::{EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
 use super::embedder_menu::{
-    ask_non_empty, build_options, config_path, external_config, local_config, none_config,
-    parse_hf_metadata, Phase6Report, Provenance, EMBEDDER_PATHS,
+    ask_non_empty, ask_secret_non_empty, build_options, config_path, external_config, local_config,
+    none_config, parse_hf_metadata, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
@@ -369,7 +369,7 @@ fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>)
             // in a panel, log or file — same redaction rule as T11g).
             let raw = deps
                 .ui
-                .input("HF_TOKEN (opcional, solo para esta descarga)", None)?;
+                .input_secret("HF_TOKEN (opcional, solo para esta descarga)")?;
             let token = raw.trim().to_string();
             if token.is_empty() {
                 return Ok((report_for(id), None));
@@ -385,9 +385,11 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
         deps.ui,
         "Modelo externo (p. ej. openai/text-embedding-3-small)",
     )?;
-    // shortcut: the key is asked but never echoed; a mistyped key surfaces as
-    // E_API_AUTH at first embed (same edge-table rule as T11 path 4).
-    let api_key = ask_non_empty(deps.ui, "API key (solo se guarda en config gitignored)")?;
+    // shortcut: the key is asked WITHOUT echo (input_secret, L2-7 — the
+    // comment "never echoed" is now literally true); a mistyped key
+    // surfaces as E_API_AUTH at first embed (same edge-table rule as T11
+    // path 4).
+    let api_key = ask_secret_non_empty(deps.ui, "API key (solo se guarda en config gitignored)")?;
     Ok(Phase6Report {
         provider: "litellm".to_string(),
         model: Some(format!("{model}\u{0}{api_key}")),

@@ -191,6 +191,22 @@ pub(super) fn ask_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardE
     }
 }
 
+/// `ask_non_empty` sin eco: clave/token via `input_secret` (L2-7). La clave
+/// no puede volver a cero en un terminal (headless o real).
+pub(super) fn ask_secret_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardError> {
+    loop {
+        let raw = ui.input_secret(prompt)?;
+        let value = raw.trim().to_string();
+        if !value.is_empty() {
+            return Ok(value);
+        }
+        ui.panel(
+            "Falta un dato",
+            "El valor no puede estar vacío; pulsa Ctrl-C para volver al menú.",
+        );
+    }
+}
+
 /// Header line of `[embedding]` configs this wizard writes — provenance is
 /// caller-specific and stays byte-identical per artifact (trazabilidad):
 /// install paths carry the F6 blurb, the swap path the D8.4 one. The whole
@@ -431,7 +447,7 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
             );
             let raw = deps
                 .ui
-                .input("HF_TOKEN (opcional, solo para esta descarga)", None)?;
+                .input_secret("HF_TOKEN (opcional, solo para esta descarga)")?;
             let value = raw.trim().to_string();
             token = if value.is_empty() { None } else { Some(value) };
         }
@@ -469,7 +485,7 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
     // shortcut: no provider-wide key check exists; a mistyped key surfaces as
     // E_API_AUTH at first embed (spec-embeddings edge table). Re-ask loop is
     // the retry-without-continuing the spec asks for.
-    let api_key = ask_non_empty(deps.ui, "API key (solo se guarda en config gitignored)")?;
+    let api_key = ask_secret_non_empty(deps.ui, "API key (solo se guarda en config gitignored)")?;
     write_config(
         vault,
         &external_config(F6_EXTERNAL_HEADER, &model, &api_key),

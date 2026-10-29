@@ -142,6 +142,10 @@ impl Ui for TapUi {
         Err(WizardError::UserAborted)
     }
 
+    fn input_secret(&self, _prompt: &str) -> Result<String, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
     fn panel(&self, title: &str, body: &str) {
         self.panels
             .borrow_mut()

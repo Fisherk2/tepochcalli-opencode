@@ -190,5 +190,14 @@ impl Ui for ScriptedUi {
             .ok_or(WizardError::UserAborted)
     }
 
+    fn input_secret(&self, _prompt: &str) -> Result<String, WizardError> {
+        // Misma cola que `input`: el script no especifica eco.
+        self.script
+            .borrow_mut()
+            .inputs
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
     fn panel(&self, _title: &str, _body: &str) {}
 }
