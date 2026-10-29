@@ -6,6 +6,7 @@
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
+use std::thread;
 
 use sha2::Digest as _;
 use tepochcalli::adapters::{find_tool_in, StdCommandRunner, SysHostProbe, UreqHttpClient};
@@ -142,6 +143,37 @@ fn http_refused_connection_is_net_error() {
     let err = http
         .get(&format!("http://127.0.0.1:{port}/"))
         .expect_err("refused must fail typed");
+    assert_eq!(err, WizardError::NetDownload);
+}
+
+/// L2-2: un servidor de loopback que vert >1 MiB pierde el cap del `get` —
+/// error tipado `NetDownload`, abortando la lectura (nunca OOM: solo casos
+/// reales arman el buffer).
+#[test]
+fn http_get_aborts_beyond_the_1mib_cap() {
+    let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+    let addr = listener.local_addr().expect("addr").to_string();
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().expect("accept");
+        let mut req = vec![0u8; 4096];
+        let _ = stream.read(&mut req);
+        // Sin Content-Length (HTTP/1.0): EOF manda; el server vete más Millas
+        // del cap para forzar el abort, no para paginar al cliente.
+        stream
+            .write_all(b"HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n")
+            .expect("head");
+        let chunk = [0u8; 4096];
+        for _ in 0..1024 {
+            // 4 MiB de zeros: 4x el cap, todo por loopback.
+            if stream.write_all(&chunk).is_err() {
+                break; // el cliente abortó al vencer el cap: es lo esperado
+            }
+        }
+    });
+    let http = UreqHttpClient::new();
+    let err = http
+        .get(&format!("http://{addr}/big"))
+        .expect_err("un cuerpo >1 MiB debe perder el cap");
     assert_eq!(err, WizardError::NetDownload);
 }
 

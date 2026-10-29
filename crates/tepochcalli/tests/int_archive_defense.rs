@@ -4,7 +4,7 @@
 //! Plus one positive test per format: valid nested archives extract fine.
 
 use std::fs;
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::Path;
 
 use flate2::write::GzEncoder;
@@ -233,6 +233,81 @@ fn zip_rejects_dotdot_prefix_member() {
     let data = zip_bytes(&[("sub/../../evil.txt", Member::File("pwned"))]);
     let err = extract_zip(std::io::Cursor::new(&data[..]), dir.path()).unwrap_err();
     assert!(is_rejection(&err), "unexpected: {err:?}");
+    assert_dest_intact(&dir);
+}
+
+// --- bomb guards (L2-2/L2-9): member cap y cap total ---
+
+/// Reader que emite `total` bytes de ceros sin materializarlos nunca en
+/// memoria: el archive viaja comprimido (pocas KB) y el descompresor va en
+/// stream; el cap aborta sin componer una asignación del tamaño del cap.
+struct Zeros(u64);
+
+impl Read for Zeros {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        if self.0 == 0 {
+            return Ok(0);
+        }
+        let n = buf.len().min(self.0 as usize);
+        buf[..n].fill(0);
+        self.0 -= n as u64;
+        Ok(n)
+    }
+}
+
+/// tar.gz con cada `(name, size)` como entrada de archivo de `size` bytes
+/// reales de ceros (el header declara esa size — mentira grande, no suave).
+fn bomb_gz(members: &[(String, u64)]) -> Vec<u8> {
+    let enc = GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    let mut builder = tar::Builder::new(enc);
+    for (name, size) in members {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(*size);
+        header.set_mode(0o600);
+        header.set_cksum();
+        builder
+            .append_data(&mut header, name.as_str(), Zeros(*size))
+            .unwrap();
+    }
+    builder.into_inner().unwrap().finish().unwrap()
+}
+
+/// Un miembro de > cap (512 MiB) aborta con `TooLarge` y el destino queda
+/// intacto (la extracción valida TODO antes de escribir nada).
+const MEMBER_OVER_CAP: u64 = 513 * 1024 * 1024;
+
+#[test]
+fn tar_gz_rejects_a_member_beyond_the_cap_before_any_write() {
+    let dir = intact_dest();
+    let data = bomb_gz(&[("bomb.bin".to_string(), MEMBER_OVER_CAP)]);
+    let err = extract_tar_gz(data.as_slice(), dir.path()).unwrap_err();
+    assert!(
+        matches!(err, ArchiveError::TooLarge { .. }),
+        "expected TooLarge, got: {err:?}"
+    );
+    assert_dest_intact(&dir);
+}
+
+/// Defense-in-depth del total (L2-9): miembros legales por el cap
+/// individual (4x511 MiB + 5 MiB) suman > 2 GiB y el archive entero aborta
+/// con `TooLarge` — cada uno por debajo del cap por miembro.
+#[test]
+fn tar_gz_rejects_a_total_beyond_the_cap() {
+    let dir = intact_dest();
+    const UNDER_MEMBER_CAP: u64 = 511 * 1024 * 1024;
+    let members = [
+        ("a.bin".to_string(), UNDER_MEMBER_CAP),
+        ("b.bin".to_string(), UNDER_MEMBER_CAP),
+        ("c.bin".to_string(), UNDER_MEMBER_CAP),
+        ("d.bin".to_string(), UNDER_MEMBER_CAP),
+        ("e.bin".to_string(), 5 * 1024 * 1024),
+    ];
+    let data = bomb_gz(&members);
+    let err = extract_tar_gz(data.as_slice(), dir.path()).unwrap_err();
+    assert!(
+        matches!(err, ArchiveError::TooLarge { .. }),
+        "expected TooLarge, got: {err:?}"
+    );
     assert_dest_intact(&dir);
 }
 

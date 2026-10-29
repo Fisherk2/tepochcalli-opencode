@@ -926,19 +926,22 @@ mod tests {
     fn stage_config_leaves_the_staged_config_user_private() {
         use std::os::unix::fs::PermissionsExt;
         let vault = temp_vault();
-        std::fs::create_dir_all(vault.path().join(RUNTIME_DIR).join("config"))
-            .expect("fixture config dir");
-        stage_config(vault.path(), &picked_local()).expect("stage_config");
-        let mode = std::fs::metadata(
-            vault
-                .path()
-                .join(RUNTIME_DIR)
-                .join("config")
-                .join(CONFIG_SWAP_SUFFIX),
-        )
-        .expect("staged")
-        .permissions()
-        .mode();
+        let config_dir = vault.path().join(RUNTIME_DIR).join("config");
+        if let Err(err) = std::fs::create_dir_all(&config_dir) {
+            panic!("fixture config dir: {err}");
+        }
+        if let Err(err) = stage_config(vault.path(), &picked_local()) {
+            panic!("stage_config: {err:?}");
+        }
+        let staged = vault
+            .path()
+            .join(RUNTIME_DIR)
+            .join("config")
+            .join(CONFIG_SWAP_SUFFIX);
+        let Ok(meta) = std::fs::metadata(&staged) else {
+            panic!("el staging debe existir tras stage_config");
+        };
+        let mode = meta.permissions().mode();
         assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
     }
 

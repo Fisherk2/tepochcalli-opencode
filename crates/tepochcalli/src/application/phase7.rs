@@ -232,11 +232,13 @@ mod tests {
         let Ok(vault) = tempfile::tempdir() else {
             panic!("tempdir");
         };
-        write_index_meta(vault.path(), Some("org/model"), Some(384)).expect("write_index_meta");
-        let mode = std::fs::metadata(index_meta_path(vault.path()))
-            .expect("sidecar")
-            .permissions()
-            .mode();
+        if let Err(err) = write_index_meta(vault.path(), Some("org/model"), Some(384)) {
+            panic!("write_index_meta: {err:?}");
+        }
+        let Ok(meta) = std::fs::metadata(index_meta_path(vault.path())) else {
+            panic!("el sidecar debe existir tras write_index_meta");
+        };
+        let mode = meta.permissions().mode();
         assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
     }
 }

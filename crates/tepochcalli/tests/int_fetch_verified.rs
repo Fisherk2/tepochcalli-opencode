@@ -121,3 +121,31 @@ fn make_executable_then_version_runs() {
     let out = run_version(&fake).unwrap();
     assert!(out.contains("uv 0.9.0"), "unexpected output: {out}");
 }
+
+/// L2-2: un servidor de loopback que vierte un stream >2 GiB vence el cap
+/// del transfer (nunca OOM: la lectura aborta por chunks al vencer el cap) —
+/// `PayloadCorrupt` vía `TooLarge` (asset hostil, no transporte).
+#[test]
+fn fetch_verified_aborts_beyond_the_2gib_cap() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let addr = listener.local_addr().unwrap().to_string();
+    thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut req = vec![0u8; 4096];
+        let _ = stream.read(&mut req);
+        stream
+            .write_all(b"HTTP/1.0 200 OK\r\nConnection: close\r\n\r\n")
+            .unwrap();
+        let chunk = vec![0u8; 1 << 20]; // 1 MiB por write; 2 GiB + margen
+        for _ in 0..2200 {
+            if stream.write_all(&chunk).is_err() {
+                break; // cliente abortó al vencer el cap: esperado
+            }
+        }
+    });
+    let dir = tempfile::tempdir().unwrap();
+    let dest = dir.path().join("uv.tar.gz");
+    let err = fetch_verified(&format!("http://{addr}/big"), &dest, &"0".repeat(64)).unwrap_err();
+    assert!(matches!(err, FetchError::TooLarge { .. }), "{err:?}");
+    assert!(!dest.exists(), "nada llega a disco tras el abort");
+}

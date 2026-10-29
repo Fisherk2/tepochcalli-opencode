@@ -653,11 +653,13 @@ mod tests {
         let Ok(vault) = tempfile::tempdir() else {
             panic!("tempdir");
         };
-        write_config(vault.path(), "[embedding]\nprovider = \"litellm\"\n").expect("write_config");
-        let mode = std::fs::metadata(config_path(vault.path()))
-            .expect("config")
-            .permissions()
-            .mode();
+        if let Err(err) = write_config(vault.path(), "[embedding]\nprovider = \"litellm\"\n") {
+            panic!("write_config: {err:?}");
+        }
+        let Ok(meta) = std::fs::metadata(config_path(vault.path())) else {
+            panic!("config debe existir tras write_config");
+        };
+        let mode = meta.permissions().mode();
         assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
     }
 }

@@ -12,6 +12,9 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ArchiveError {
+    /// Bomba (L2-2): un miembro/total supera el cap defensivo.
+    #[error("decompression bomb guard: member {member} exceeds the extraction cap")]
+    TooLarge { member: String },
     #[error("member escapes destination: {member}")]
     Traversal { member: String },
     #[error("absolute member path rejected: {member}")]
@@ -131,13 +134,38 @@ enum Action {
     Hardlink(PathBuf, PathBuf),
 }
 
+/// Cap por miembro: un header mints sobre `size` y no dicta la asignación.
+/// Los payloads reales (uv, workspace) tienen miembros de decenas de MB;
+/// 512 MiB deja margen x10 por cannon.
+const MAX_MEMBER_BYTES: u64 = 512 * 1024 * 1024;
+/// Cap del total extraído (defense-in-depth, L2-9): 2 GiB por corrida.
+const MAX_TOTAL_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+
 /// Cap for a single member's in-memory buffer: a corrupt `size` header must
 /// not dictate allocation (decompression-bomb guard).
 const MAX_BUFFER_PREALLOC: u64 = 8 * 1024 * 1024;
 
-fn buffered_read<R: Read>(mut reader: R, hint: u64) -> io::Result<Vec<u8>> {
+/// Cap de RAM: chunked read con abort al vencer el cap (un miembro mayor no
+/// compone una asignación del tamaño del cap); el chequeo de quedan-bytes es
+/// el `buf.len() > cap` posterior (take no se come el excedente).
+fn buffered_read<R: Read>(reader: R, hint: u64, member: &str) -> Result<Vec<u8>, ArchiveError> {
     let mut buf = Vec::with_capacity(hint.min(MAX_BUFFER_PREALLOC) as usize);
-    reader.read_to_end(&mut buf)?;
+    let mut limited = reader.take(MAX_MEMBER_BYTES + 1);
+    let mut chunk = [0u8; 1 << 16];
+    loop {
+        let n = limited.read(&mut chunk)?;
+        if n == 0 {
+            break;
+        }
+        // Check de sobre-salto ANTES de extender: el buffer nunca llega al
+        // cap en la rama de ataque (nunca OOM por cabecera mentirosa).
+        if buf.len() as u64 + n as u64 > MAX_MEMBER_BYTES {
+            return Err(ArchiveError::TooLarge {
+                member: member.to_string(),
+            });
+        }
+        buf.extend_from_slice(&chunk[..n]);
+    }
     Ok(buf)
 }
 
@@ -180,6 +208,7 @@ pub fn extract_tar_gz<R: Read>(reader: R, dest: &Path) -> Result<(), ArchiveErro
     let gz = flate2::read::GzDecoder::new(reader);
     let mut archive = tar::Archive::new(gz);
     let mut actions = Vec::new();
+    let mut total_bytes = 0u64;
     for entry in archive.entries()? {
         let mut entry = entry?;
         let raw = entry.path()?.into_owned();
@@ -194,7 +223,13 @@ pub fn extract_tar_gz<R: Read>(reader: R, dest: &Path) -> Result<(), ArchiveErro
                 return Err(ArchiveError::BadName);
             }
             let size = entry.header().size()?;
-            let bytes = buffered_read(&mut entry, size)?;
+            let bytes = buffered_read(&mut entry, size, raw_str)?;
+            total_bytes += bytes.len() as u64;
+            if total_bytes > MAX_TOTAL_BYTES {
+                return Err(ArchiveError::TooLarge {
+                    member: raw_str.to_string(),
+                });
+            }
             actions.push(Action::File(out, bytes));
         } else if kind.is_symlink() {
             let target = entry.link_name()?.ok_or(ArchiveError::BadName)?;
@@ -224,6 +259,7 @@ pub fn extract_tar_gz<R: Read>(reader: R, dest: &Path) -> Result<(), ArchiveErro
 pub fn extract_zip<R: Read + Seek>(reader: R, dest: &Path) -> Result<(), ArchiveError> {
     let mut archive = zip::ZipArchive::new(reader)?;
     let mut actions = Vec::new();
+    let mut total_bytes = 0u64;
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
         let name = file.name().to_string();
@@ -248,7 +284,13 @@ pub fn extract_zip<R: Read + Seek>(reader: R, dest: &Path) -> Result<(), Archive
                 return Err(ArchiveError::BadName);
             }
             let size = file.size();
-            let bytes = buffered_read(&mut file, size)?;
+            let bytes = buffered_read(&mut file, size, &name)?;
+            total_bytes += bytes.len() as u64;
+            if total_bytes > MAX_TOTAL_BYTES {
+                return Err(ArchiveError::TooLarge {
+                    member: name.clone(),
+                });
+            }
             actions.push(Action::File(out, bytes));
         }
     }

@@ -49,12 +49,19 @@ impl UreqHttpClient {
             .get(url)
             .call()
             .map_err(|_| WizardError::NetDownload)?;
+        // Cap RAM (L2-2): sidecar/HF metadata son respuestas de KB; un
+        // servidor malicioso no dicta la asignación. 1 MiB ⇒ margen x10.
+        const MAX_FETCH_BYTES: u64 = 1024 * 1024;
         let mut bytes = Vec::new();
         response
             .body_mut()
             .as_reader()
+            .take(MAX_FETCH_BYTES + 1)
             .read_to_end(&mut bytes)
             .map_err(|_| WizardError::NetDownload)?;
+        if bytes.len() as u64 > MAX_FETCH_BYTES {
+            return Err(WizardError::NetDownload);
+        }
         Ok(bytes)
     }
 }
@@ -73,6 +80,8 @@ fn map_fetch_error(error: FetchError) -> WizardError {
         FetchError::ChecksumMismatch { .. } | FetchError::BadChecksumFormat => {
             WizardError::PayloadCorrupt
         }
+        // Activo del servidor hostil, no del usuario: mismo código de asset.
+        FetchError::TooLarge { .. } => WizardError::PayloadCorrupt,
         FetchError::Http(_) => WizardError::NetDownload,
         FetchError::Io(e) => map_io_error(&e),
         // Unreachable on the download path (`--version` runs via the
