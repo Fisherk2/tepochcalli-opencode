@@ -29,7 +29,8 @@ use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
 use super::text::{
-    config_value, json_bool, json_escape, json_string, json_u32, json_u64, or_fallback,
+    config_value, is_plausible_hf_id, json_bool, json_escape, json_string, json_u32, json_u64,
+    or_fallback,
 };
 
 /// Header lines of the swap-written `[embedding]` configs (D8.4): identical
@@ -325,6 +326,13 @@ fn pending_local(preset: &Preset) -> Phase6Report {
 
 fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), WizardError> {
     let id = ask_non_empty(deps.ui, "HuggingFace model id")?;
+    if !is_plausible_hf_id(&id) {
+        deps.ui.panel(
+            "E_MODEL_INVALID",
+            "Ese ID no es plausible como modelo de HuggingFace; el swap se aborta sin escribir nada.",
+        );
+        return Err(WizardError::ModelInvalid);
+    }
     let report_for = |model: String| Phase6Report {
         provider: "local".to_string(),
         model: Some(model),

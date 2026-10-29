@@ -98,6 +98,30 @@ pub(crate) fn provider_is_none(body: &str) -> bool {
     config_value(body, "provider").as_deref() == Some("none")
 }
 
+/// `true` cuando `raw` es plausible como id de modelo de HuggingFace
+/// (`org/model`, o modelo escueto): segmentos no vacíos de [A-Za-z0-9._-],
+/// sin empezar por `-`, sin `?`/`#`/control, longitud ≤ 96. Puerta de borde
+/// ANTES de la API/gate: un id hostil (`../evilo`, `x\ny`) ni consulta.
+///
+/// No es validación de HF: el gate sigue siendo ground truth; esto solo
+/// cierra el margen del transporte (URLs → `HF_API_BASE{id}`).
+pub(crate) fn is_plausible_hf_id(raw: &str) -> bool {
+    let plausible_segment = |segment: &str| {
+        !segment.is_empty()
+            && !segment.starts_with('-')
+            && !segment.ends_with('-')
+            && segment
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '.' | '_'))
+            && segment != "."
+            && segment != ".."
+    };
+    raw.len() <= 96
+        && !raw.is_empty()
+        && raw.split('/').count() <= 2
+        && raw.split('/').all(plausible_segment)
+}
+
 /// Display of an optional measured figure: present ⇒ value, absent ⇒ the
 /// shared "(sin dato)" placeholder (swap, reindex and the two CLI flags).
 ///
@@ -180,6 +204,23 @@ mod tests {
     }
 
     // ---- provider_is_none: chequeo único de la ruta 5 --------------------
+
+    // ---- is_plausible_hf_id: puerta de borde del id libre ----------------
+
+    #[test]
+    fn plausible_hf_id_table() {
+        // Passes.
+        assert!(is_plausible_hf_id("org2/model-x"));
+        assert!(is_plausible_hf_id("BAAI/bge-m3"));
+        assert!(is_plausible_hf_id("sentence-transformers/paraphrase_1.0"));
+        assert!(is_plausible_hf_id("all_MiniLM"));
+        // Fails.
+        for bad in [
+            "../evilo", "a?b", "x\ny", "-out", "out-", "", "a/b/c", "sp ace",
+        ] {
+            assert!(!is_plausible_hf_id(bad), "{bad:?} no puede pasar la puerta");
+        }
+    }
 
     #[test]
     fn provider_is_none_flags_only_the_none_provider() {

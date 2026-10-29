@@ -14,8 +14,8 @@ use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::text::{
-    config_value, json_bool, json_raw, json_string, json_u32, json_u64, provider_is_none,
-    toml_escape,
+    config_value, is_plausible_hf_id, json_bool, json_raw, json_string, json_u32, json_u64,
+    provider_is_none, toml_escape,
 };
 
 /// Menu order = UI index contract (D7.1, ADR-007).
@@ -403,6 +403,9 @@ fn finish_local(
 
 fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, WizardError> {
     let id = ask_non_empty(deps.ui, "HuggingFace model id")?;
+    if !is_plausible_hf_id(&id) {
+        return Err(WizardError::ModelInvalid);
+    }
     let estimate = match deps.http.get(&format!("{HF_API_BASE}{id}")) {
         Ok(body) => Some(parse_hf_metadata(&body)),
         Err(_) => None,
