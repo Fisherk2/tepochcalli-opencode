@@ -19,19 +19,47 @@ const TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_REDIRECTS: u32 = 10;
 
 /// [`HttpClient`] over `ureq` with timeout and bounded redirects.
+/// `https_only` (L4-2): http solo se admite en loopback o cuando el caller
+/// autorizó el mirror no-TLS; lo demás es rechazo temprano tipo `NetDownload`.
 #[derive(Debug, Clone)]
 pub struct UreqHttpClient {
     timeout: Duration,
     max_redirects: u32,
+    https_only: bool,
 }
 
 impl UreqHttpClient {
-    /// Client with the house defaults (120 s timeout, 10 redirects).
+    /// Client with the house defaults (120 s timeout, 10 redirects, https only).
     #[must_use]
     pub fn new() -> Self {
         Self {
             timeout: TIMEOUT,
             max_redirects: MAX_REDIRECTS,
+            https_only: true,
+        }
+    }
+
+    /// `https_only = false` ⇒ mirror http no-loopback autorizado por TUI.
+    #[must_use]
+    pub fn with_https_only(https_only: bool) -> Self {
+        Self {
+            https_only,
+            ..Self::new()
+        }
+    }
+
+    /// Rechazo temprano del esquema (guard del L4-2): https vale siempre;
+    /// http vale en loopback o con la autorización del mirror.
+    fn transport_allowed(&self, url: &str) -> Result<(), WizardError> {
+        let scheme = url
+            .split_once("://")
+            .map(|(scheme, _)| scheme.to_ascii_lowercase());
+        match scheme.as_deref() {
+            Some("https") => Ok(()),
+            Some("http") if !self.https_only || crate::adapters::payload::is_loopback_base(url) => {
+                Ok(())
+            }
+            _ => Err(WizardError::NetDownload),
         }
     }
 
@@ -44,6 +72,7 @@ impl UreqHttpClient {
     }
 
     fn fetch_bytes(&self, url: &str) -> Result<Vec<u8>, WizardError> {
+        self.transport_allowed(url)?;
         let mut response = self
             .agent()
             .get(url)
@@ -114,10 +143,12 @@ fn map_io_error(error: &std::io::Error) -> WizardError {
 
 impl HttpClient for UreqHttpClient {
     fn get(&self, url: &str) -> Result<Vec<u8>, WizardError> {
+        self.transport_allowed(url)?;
         self.fetch_bytes(url)
     }
 
     fn download(&self, url: &str, dest: &Path, expected_sha256: &str) -> Result<(), WizardError> {
+        self.transport_allowed(url)?;
         fetch_verified(url, dest, expected_sha256).map_err(map_fetch_error)
     }
 }
@@ -127,7 +158,7 @@ mod tests {
     //! Tier 1: this mapping is the only place a transport failure becomes a
     //! user-facing exit code, so a mislabelled branch is a wrong diagnosis.
 
-    use super::map_fetch_error;
+    use super::{map_fetch_error, UreqHttpClient};
     use crate::adapters::fetch::FetchError;
     use crate::domain::WizardError;
     use std::io::ErrorKind;
@@ -200,6 +231,34 @@ mod tests {
         assert_eq!(
             map_fetch_error(io_error(ErrorKind::InvalidData)),
             WizardError::DiskFull
+        );
+    }
+
+    /// L4-2 guard: https siempre; http loopback siempre; http no-loopback
+    /// solo con el mirror autorizado.
+    #[test]
+    fn transport_guard_allows_https_and_loopback_http_only() {
+        assert_eq!(
+            UreqHttpClient::new().transport_allowed("https://mirror.test/x"),
+            Ok(())
+        );
+        assert_eq!(
+            UreqHttpClient::new().transport_allowed("http://127.0.0.1:9/x"),
+            Ok(())
+        );
+        assert_eq!(
+            UreqHttpClient::new().transport_allowed("http://localhost:9/x"),
+            Ok(())
+        );
+        assert_eq!(
+            UreqHttpClient::new().transport_allowed("http://mirror-public.test/x"),
+            Err(WizardError::NetDownload),
+            "http no-loopback sin autorización"
+        );
+        assert_eq!(
+            UreqHttpClient::with_https_only(false).transport_allowed("http://mirror-public.test/x"),
+            Ok(()),
+            "con mirror autorizado el transporte http vale"
         );
     }
 

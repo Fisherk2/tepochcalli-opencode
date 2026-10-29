@@ -12,8 +12,8 @@ use std::process::ExitCode;
 
 use tepochcalli::adapters::UreqHttpClient;
 use tepochcalli::adapters::{
-    fetch_release_payload, HeadlessUi, LocalPayload, ReleasePayload, StdCommandRunner,
-    SysHostProbe, TtyUi,
+    fetch_release_payload, mirror_http_non_loopback, release_base_url, HeadlessUi, LocalPayload,
+    ReleasePayload, StdCommandRunner, SysHostProbe, TtyUi,
 };
 use tepochcalli::application::failure::{
     log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
@@ -425,6 +425,7 @@ fn run_install(
         sha_override,
         resume,
         offline,
+        non_interactive,
         &*ui,
         stdout,
         stderr,
@@ -509,13 +510,66 @@ fn run_phases(
     payload_sha256: Option<String>,
     resume: bool,
     offline: bool,
+    non_interactive: bool,
     ui: &dyn Ui,
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
+    // L4-2 security del mirror: la rama release (sin `--payload`/override)
+    // con base http NO-loopback exige consentimiento TUI en interactivo y
+    // es fallo tipado en non-interactive. Decidido antes de tocar transporte.
+    let release_path = payload_dir.is_none() && payload_url.is_none();
+    let base = if release_path {
+        release_base_url()
+    } else {
+        String::new()
+    };
+    let mirror_http = release_path && mirror_http_non_loopback(&base);
+    if mirror_http {
+        if non_interactive {
+            let _ = writeln!(
+                stderr,
+                "install: mirror http no-loopback ({base}) exige transporte sin TLS; \
+                 en --non-interactive no hay confirmación posible"
+            );
+            return report_failure(
+                ui,
+                Some(Phase::F3),
+                "install: mirror http sin consentimiento",
+                WizardError::UserAborted,
+                Some(path.as_path()),
+            );
+        }
+        // Sin respuesta clara (Esc/Ctrl-C): abortar — nunca confiar.
+        let choice = ui
+            .select(
+                "Mirror http (sin TLS) detectado",
+                &[
+                    "Abortar (recomendado)",
+                    "Confiar en este mirror para esta instalación",
+                ],
+                0,
+            )
+            .unwrap_or_default();
+        if choice != 1 {
+            let _ = writeln!(stderr, "install: el mirror http non-loopback se rechazó");
+            return report_failure(
+                ui,
+                Some(Phase::F3),
+                "install: mirror http rechazado por el usuario",
+                WizardError::UserAborted,
+                Some(path.as_path()),
+            );
+        }
+        let _ = writeln!(
+            stderr,
+            "payload: mirror http autorizado por el usuario: {base}"
+        );
+    }
     // The HTTP client lives before F3 now: the online payload source (T19)
-    // needs it, the local one ignores it.
-    let http = UreqHttpClient::new();
+    // needs it, the local one ignores it. L4-2: https_only salvo mirror
+    // http autorizado (el guard del client deja pasar loopback siempre).
+    let http = UreqHttpClient::with_https_only(!mirror_http);
     // F3: merge the payload without overwrite (placeholders + intent).
     // Source priority: `--payload` (local tree, dev/tests) →
     // `--payload-url` + `--payload-sha256` (override, dev/tests) →

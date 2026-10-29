@@ -14,10 +14,11 @@ use std::net::TcpListener;
 
 use common::FakeHttp;
 use sha2::{Digest as _, Sha256};
+use tepochcalli::adapters::release_payload_from_sidecar;
 use tepochcalli::adapters::{
-    fetch_release_payload, payload_asset_name, payload_asset_url, payload_checksum_name,
-    payload_checksum_url, payload_release_tag, release_payload_from_sidecar, ReleasePayload,
-    PAYLOAD_ASSET_STEM,
+    fetch_release_payload, is_loopback_base, mirror_http_non_loopback, payload_asset_name,
+    payload_asset_url, payload_checksum_name, payload_checksum_url, payload_release_tag,
+    sidecar_url_for, ReleasePayload, PAYLOAD_ASSET_STEM, PAYLOAD_RELEASE_REPO,
 };
 use tepochcalli::WizardError;
 
@@ -136,6 +137,43 @@ fn fetch_release_payload_unknown_sidecar_is_net_error() {
         fetch_release_payload(&http, "9.9.9-test").expect_err("unknown sidecar"),
         WizardError::NetDownload
     );
+}
+
+/// L4-2: el sidecar va SIEMPRE del origin oficial salvo base loopback —
+/// un mirror (même https) no puede aliñar el hash que decide la confianza.
+#[test]
+fn sidecar_url_is_official_for_any_non_loopback_base() {
+    let version = "9.9.9-test";
+    let official = format!(
+        "https://github.com/{PAYLOAD_RELEASE_REPO}/releases/download/{}/{}.sha256",
+        payload_release_tag(version),
+        payload_asset_name(version)
+    );
+    for base in [
+        "https://mirror-public.test/dl",
+        "http://mirror-public.test/dl",
+    ] {
+        assert_eq!(sidecar_url_for(base, version), official, "base: {base}");
+    }
+    // La seam loopback (dev/tests) sigue resolviendo localmente.
+    assert_eq!(
+        sidecar_url_for("http://127.0.0.1:9/dl", version),
+        "http://127.0.0.1:9/dl/tepochcalli-v9.9.9-test/tepochcalli-workspace-9.9.9-test.tar.gz.sha256"
+    );
+}
+
+/// L4-2: clasificación de host — loopback (127/::1/localhost) y mirror
+/// http no-loopback.
+#[test]
+fn loopback_and_mirror_classification() {
+    assert!(is_loopback_base("http://127.0.0.1:9/dl"));
+    assert!(is_loopback_base("http://localhost:1234/dl"));
+    assert!(is_loopback_base("https://[::1]/dl"));
+    assert!(!is_loopback_base("https://github.com/x"));
+    assert!(!is_loopback_base("http://mirror-public.test/x"));
+    assert!(mirror_http_non_loopback("http://mirror-public.test/x"));
+    assert!(!mirror_http_non_loopback("https://mirror-public.test/x"));
+    assert!(!mirror_http_non_loopback("http://127.0.0.1:9/x"));
 }
 
 #[test]

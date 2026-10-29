@@ -98,6 +98,37 @@ pub fn payload_checksum_url(version: &str) -> String {
     format!("{}.sha256", payload_asset_url(version))
 }
 
+/// Host de una URL form: `scheme://host[:port]/path`. Devuelve `""` cuando
+/// no lo sabe parsear (los callers tratan lo desconocido como NO loopback).
+fn host_of(url: &str) -> String {
+    let rest = url.split_once("://").map(|(_, rest)| rest).unwrap_or(url);
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    // IPv6 entre corchetes antes del split de port; bare host, port fuera.
+    if let Some(stripped) = authority.strip_prefix('[') {
+        return stripped.split(']').next().unwrap_or_default().to_string();
+    }
+    authority.split(':').next().unwrap_or_default().to_string()
+}
+
+/// `true` cuando el host de `url` es loopback (127.x/::1/localhost):
+/// la única familia http PermitSpool sin confirmación (dev/tests — el
+/// operador es el propio mirror).
+#[must_use]
+pub fn is_loopback_base(url: &str) -> bool {
+    matches!(host_of(url).as_str(), "127.0.0.1" | "::1" | "localhost")
+        || host_of(url).ends_with(".localhost")
+}
+
+/// `true` cuando la base pide http sin ser loopback: exigirá sesame
+/// TUI antes del transporte (L4-2).
+#[must_use]
+pub fn mirror_http_non_loopback(url: &str) -> bool {
+    url.split_once("://")
+        .map(|(scheme, _)| scheme.eq_ignore_ascii_case("http"))
+        .unwrap_or(false)
+        && !is_loopback_base(url)
+}
+
 /// First token of a `sha256sum` sidecar; anything else is `PayloadCorrupt`
 /// (clean failure, exit 32 — never a partial install).
 pub fn parse_sha256_sidecar(sidecar: &[u8]) -> Result<String, WizardError> {
@@ -224,12 +255,33 @@ pub fn release_payload_from_sidecar(
 /// One-version online source: fetch the `<asset>.sha256` sidecar for
 /// `version`, then download the asset SHA-gated. Unknown sidecar URL is
 /// `NetDownload`; a bad sidecar or a SHA mismatch is `PayloadCorrupt`.
+///
+/// L4-2: el sidecar VA SIEMPRE del origin oficial de GitHub — un mirror
+/// no puede aliñar el hash que decide la confianza (solo roerce el
+/// transporte). La seam loopback queda (dev/tests: el mismo operador).
 pub fn fetch_release_payload(
     http: &dyn HttpClient,
     version: &str,
 ) -> Result<ReleasePayload, WizardError> {
-    let sidecar = http.get(&payload_checksum_url(version))?;
+    let base = release_base_url();
+    let sidecar = http.get(&sidecar_url_for(&base, version))?;
     release_payload_from_sidecar(version, &sidecar)
+}
+
+/// URL del sidecar SHA-256 para la base de release `base` (L4-2): SIEMPRE
+/// del origin oficial de GitHub salvo base loopback (dev/tests — el mirror
+/// no puede aliñar el hash que decide la confianza).
+#[must_use]
+pub fn sidecar_url_for(base: &str, version: &str) -> String {
+    if is_loopback_base(base) {
+        format!("{}.sha256", payload_asset_url_from(base, version))
+    } else {
+        format!(
+            "https://github.com/{PAYLOAD_RELEASE_REPO}/releases/download/{}/{}.sha256",
+            payload_release_tag(version),
+            payload_asset_name(version)
+        )
+    }
 }
 
 /// Empty `dir`, creating it (an interrupted F3 may leave a stale stage).

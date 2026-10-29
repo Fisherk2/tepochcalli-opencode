@@ -595,3 +595,35 @@ fn install_half_url_override_is_usage_error() {
         );
     }
 }
+
+/// L4-2: un mirror http NO-loopback en `--non-interactive` es fallo tipado
+/// ANTES de cualquier transporte (no hay confirmación posible). El dominio
+/// ficticio nunca se contacta: el veto va antes del HTTP client.
+#[test]
+fn install_non_interactive_rejects_http_mirror_without_confirmation() {
+    let dir = tmp();
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--vault",
+            dir.path().join("v").to_str().expect("utf8 tmp"),
+        ])
+        .env(
+            "TEPOCHCALLI_RELEASE_BASE_URL",
+            "http://mirror-public.test/dl",
+        )
+        .output()
+        .expect("spawn install");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(41),
+        "no-conseguir confirmación es UserAborted, stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("mirror"),
+        "el fallo debe nombrar el mirror, got:\n{stderr}"
+    );
+    // Y no hay descarga: el sandbox del transporte detiene la URL ajena.
+}

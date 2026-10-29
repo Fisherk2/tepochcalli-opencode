@@ -14,9 +14,10 @@ pub mod ui;
 pub use host::{find_tool_in, SysHostProbe};
 pub use http::UreqHttpClient;
 pub use payload::{
-    fetch_release_payload, merge_tree, parse_sha256_sidecar, payload_asset_name, payload_asset_url,
-    payload_checksum_name, payload_checksum_url, payload_release_tag, release_payload_from_sidecar,
-    LocalPayload, ReleasePayload, PAYLOAD_ASSET_STEM, PAYLOAD_RELEASE_REPO,
+    fetch_release_payload, is_loopback_base, merge_tree, mirror_http_non_loopback,
+    parse_sha256_sidecar, payload_asset_name, payload_asset_url, payload_checksum_name,
+    payload_checksum_url, payload_release_tag, release_base_url, release_payload_from_sidecar,
+    sidecar_url_for, LocalPayload, ReleasePayload, PAYLOAD_ASSET_STEM, PAYLOAD_RELEASE_REPO,
 };
 pub use std_proc::StdCommandRunner;
 pub use ui::{HeadlessUi, TtyUi};
