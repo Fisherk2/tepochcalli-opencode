@@ -9,11 +9,11 @@
 //! model cache unless `--keep-previous`.
 //!
 //! Single-responsibility orchestrator over ports only — never `adapters/`.
-//! The live index stays servable throughout: replacement artifacts are staged
-//! on `.swap` temp paths and go live only via rename after the replacement
-//! report is complete; any failure restores config/index/models byte-identical
-//! (the index and model caches are never touched before the commit, so their
-//! restore is trivially a no-op).
+//! C1 (D7.3): la config ELEGIDA escribe VIVA (via tmp+rename) ANTES del
+//! gate/refresh — el refresh reconstruye ya con el nuevo embedder — y el
+//! commit final conmuta SOLO el index-meta. El índice (los ficheros de db/)
+//! no se toca antes del commit, así cualquier fallo se arrolla con el
+//! snapshot byte-identical (rollback + temps fuera, cero estado).
 
 use std::path::{Path, PathBuf};
 
@@ -23,7 +23,7 @@ use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
 use super::embedder_menu::{
     ask_non_empty, ask_secret_non_empty, build_options, config_path, external_config, local_config,
-    none_config, parse_hf_metadata, Phase6Report, Provenance, EMBEDDER_PATHS,
+    none_config, parse_hf_metadata, write_config, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
@@ -51,8 +51,7 @@ const REFRESH_SUBCOMMAND: &str = "refresh";
 /// HF API base for the free-id pre-check (D8.1; the gate stays ground truth).
 const HF_API_BASE: &str = "https://huggingface.co/api/models/";
 const BYTES_PER_MB: f64 = 1_000_000.0;
-/// Staged (not yet live) replacements: renamed into place only on success.
-const CONFIG_SWAP_SUFFIX: &str = "tepochcalli.toml.swap";
+/// Staged sidecar (not yet live): renamed into place only on success.
 const META_SWAP_SUFFIX: &str = "index-meta.json.swap";
 
 /// Los cuatro collaborators que el swap pide prestados (ports; ellos hacen
@@ -156,10 +155,11 @@ pub fn run_swap(
         );
         return Err(WizardError::UserAborted);
     }
-    // Stage the replacement config (live config untouched until the commit;
-    // E1-S3): a stage failure shares the same abort — rollback a los bytes
-    // previos y temps fuera — igual que el resto de ramas de fallo.
-    if let Err(err) = stage_config(vault, &picked) {
+    // C1 (D7.3): la config ELEGIDA queda VIVA (tmp+rename, mismo tramo del
+    // write_config de F6) ANTES del gate/refresh — el refresh reconstruye ya
+    // con el nuevo embedder. La guarda E1-S3: un fallo aquí comparte el mismo
+    // abort del resto de ramas (rollback a los bytes previos del snapshot).
+    if let Err(err) = write_config(vault, &picked_config_body(&picked)) {
         abort_swap(vault, &before);
         return Err(err);
     }
@@ -170,7 +170,7 @@ pub fn run_swap(
             Err(err)
         }
         Ok(partial) => {
-            if commit(vault, &picked, &before).is_err() {
+            if commit_meta(vault, &picked).is_err() {
                 abort_swap(vault, &before);
                 return Err(WizardError::PermissionDenied);
             }
@@ -398,19 +398,6 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
     })
 }
 
-/// Stage the replacement config on a `.swap` temp path: the live config is
-/// untouched until the commit renames this into place.
-fn stage_config(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> {
-    // shortcut: every fs failure maps to `PermissionDenied` (T7 convention).
-    let dir = vault.join(RUNTIME_DIR).join("config");
-    std::fs::create_dir_all(&dir).map_err(|_| WizardError::PermissionDenied)?;
-    let body = picked_config_body(picked);
-    let staged = dir.join(CONFIG_SWAP_SUFFIX);
-    std::fs::write(&staged, body).map_err(|_| WizardError::PermissionDenied)?;
-    set_user_private(&staged)?;
-    Ok(())
-}
-
 /// The arm of both failure branches: live bytes back to the snapshot first
 /// (rollback), then the staged temps go away — zero-state, in that order.
 fn abort_swap(vault: &Path, before: &Snapshot) {
@@ -507,26 +494,15 @@ fn download_gate_and_reindex(
     })
 }
 
-/// Step 5: atomic switch — staged config + staged metadata go live via rename
-/// in the same dir (same filesystem). Only called after the replacement index
-/// and its report are complete. A failed metadata rename puts the previous
-/// config bytes back itself (absent stays absent): a half-commit never leaves
-/// the caller with a config that describes an index it does not have.
-fn commit(vault: &Path, picked: &Phase6Report, before: &Snapshot) -> Result<(), WizardError> {
+/// Step 5: conmutar SOLO el sidecar (C1: la config ya vive desde antes del
+/// refresh). La meta staged via rename en el mismo dir. A meta-rename fallido
+/// el caller clama el abortSwap (config al snapshot, temps fuera).
+fn commit_meta(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention).
-    let config_live = config_path(vault);
-    let staged_config = vault
-        .join(RUNTIME_DIR)
-        .join("config")
-        .join(CONFIG_SWAP_SUFFIX);
-    std::fs::rename(&staged_config, &config_live).map_err(|_| WizardError::PermissionDenied)?;
     if picked.provider != "none" {
         let meta_live = index_meta_path(vault);
         let staged_meta = vault.join(RUNTIME_DIR).join("db").join(META_SWAP_SUFFIX);
-        if let Err(err) = std::fs::rename(&staged_meta, &meta_live) {
-            restore_or_remove(&config_live, before.config.as_deref());
-            return Err(map_fs_err(err));
-        }
+        std::fs::rename(&staged_meta, &meta_live).map_err(map_fs_err)?;
     }
     Ok(())
 }
@@ -619,12 +595,6 @@ fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
 }
 
 fn cleanup_staged(vault: &Path) {
-    let _ = std::fs::remove_file(
-        vault
-            .join(RUNTIME_DIR)
-            .join("config")
-            .join(CONFIG_SWAP_SUFFIX),
-    );
     let _ = std::fs::remove_file(vault.join(RUNTIME_DIR).join("db").join(META_SWAP_SUFFIX));
     let _ = std::fs::remove_file(config_path(vault).with_extension("toml.tmp"));
     let _ = std::fs::remove_file(index_meta_path(vault).with_extension("json.tmp"));
@@ -889,12 +859,6 @@ mod tests {
             }
         }
         if let Err(err) = std::fs::write(
-            runtime.join("config").join(CONFIG_SWAP_SUFFIX),
-            b"staged-config",
-        ) {
-            panic!("fixture staged config: {err}");
-        }
-        if let Err(err) = std::fs::write(
             runtime.join("db").join(META_SWAP_SUFFIX),
             b"{\"model\":\"m\",\"dims\":1}\n",
         ) {
@@ -910,64 +874,26 @@ mod tests {
         vault
     }
 
+    /// C1: el commit solo conmuta la meta. Un rename de meta que falla
+    /// devuelve el tipado y NO toca la config viva (el rollback es labor del
+    /// caller via abort_swap — más arriba en run_swap).
     #[test]
-    fn failed_commit_restores_the_previous_config_bytes() {
-        let previous: &[u8] = b"# previa\n[embedding]\nprovider = \"none\"\n";
+    fn failed_meta_commit_types_the_failure_and_leaves_the_live_config() {
+        let previous: &[u8] = b"# previa\n[embedding]\nprovider = \"local\"\n";
         let vault = vault_with_failing_meta_rename(Some(previous));
-        let before = snapshot(vault.path());
         assert_eq!(
-            commit(vault.path(), &picked_local(), &before),
+            commit_meta(vault.path(), &picked_local()),
             Err(WizardError::PermissionDenied)
         );
         assert_eq!(
             std::fs::read(config_path(vault.path())).ok().as_deref(),
             Some(previous),
-            "un commit fallido deja los bytes previos, no un fichero borrado"
+            "el commit_meta no toca la config viva"
         );
         assert_eq!(
             std::fs::read(index_meta_path(vault.path()).join("marker")).ok(),
             Some(b"sidecar-ilegible".to_vec()),
             "el rollback no destruye lo que no conmutó"
-        );
-    }
-
-    /// El staging `.swap` lleva el modelo (y la clave de la ruta 4) en
-    /// claro: usuario-privado aunque la umask sea abierta (L2-1).
-    #[cfg(unix)]
-    #[test]
-    fn stage_config_leaves_the_staged_config_user_private() {
-        use std::os::unix::fs::PermissionsExt;
-        let vault = temp_vault();
-        let config_dir = vault.path().join(RUNTIME_DIR).join("config");
-        if let Err(err) = std::fs::create_dir_all(&config_dir) {
-            panic!("fixture config dir: {err}");
-        }
-        if let Err(err) = stage_config(vault.path(), &picked_local()) {
-            panic!("stage_config: {err:?}");
-        }
-        let staged = vault
-            .path()
-            .join(RUNTIME_DIR)
-            .join("config")
-            .join(CONFIG_SWAP_SUFFIX);
-        let Ok(meta) = std::fs::metadata(&staged) else {
-            panic!("el staging debe existir tras stage_config");
-        };
-        let mode = meta.permissions().mode();
-        assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
-    }
-
-    #[test]
-    fn failed_commit_leaves_an_absent_config_absent() {
-        let vault = vault_with_failing_meta_rename(None);
-        let before = snapshot(vault.path());
-        assert_eq!(
-            commit(vault.path(), &picked_local(), &before),
-            Err(WizardError::PermissionDenied)
-        );
-        assert!(
-            !config_path(vault.path()).exists(),
-            "config ausente antes del commit debe seguir ausente"
         );
     }
 }

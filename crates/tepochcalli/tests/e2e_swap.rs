@@ -569,16 +569,21 @@ fn _db_size_probe(vault: &Path) -> PathBuf {
     vault.join(".tepochcalli").join("db").join("chunks.lance")
 }
 
-/// Live-file snapshot the mid-flight check compares against.
-type LiveSnapshot = (PathBuf, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
+/// Live-file snapshot the mid-flight check compares against. El campo 2
+/// (config) es el FRAGMENTO que la config viva debe contener en cada spawn
+/// (C1: la config elegida vive antes del gate/refresh).
+type LiveSnapshot = (PathBuf, String, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
 
 /// `CommandRunner` fake that proves the D8.4 servability invariant mid-flight:
-/// every proc call (gate, refresh) runs while the live config, sidecar, index
-/// and model cache are still byte-identical to the pre-swap snapshot. A swap
-/// that switched config early or rebuilt the live db in place fails here.
+/// every proc call (gate, refresh) runs while the live sidecar, index and
+/// model cache are still byte-identical to the pre-swap snapshot, y la config
+/// viva ya lleva el nuevo embedder (captura + assert, pin del auditor).
+/// A swap que reconstruyera la db viva in place falla aquí.
 struct CheckingProc {
     script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
     expected: RefCell<Option<LiveSnapshot>>,
+    /// C1: la config viva capturada EN CADA spawn (gate/refresh).
+    config_seen: RefCell<Vec<String>>,
 }
 
 impl CheckingProc {
@@ -586,13 +591,18 @@ impl CheckingProc {
         Self {
             script: RefCell::new(script.into_iter().collect()),
             expected: RefCell::new(None),
+            config_seen: RefCell::new(Vec::new()),
         }
+    }
+
+    fn configs_seen(&self) -> Vec<String> {
+        self.config_seen.borrow().clone()
     }
 
     fn expect_live(
         &self,
         vault: &Path,
-        config: &[u8],
+        config_fragment: &str,
         meta: &[u8],
         index: &[u8],
         model: &[u8],
@@ -600,7 +610,7 @@ impl CheckingProc {
     ) {
         *self.expected.borrow_mut() = Some((
             vault.to_path_buf(),
-            config.to_vec(),
+            config_fragment.to_string(),
             meta.to_vec(),
             index.to_vec(),
             model.to_vec(),
@@ -618,14 +628,18 @@ impl CommandRunner for CheckingProc {
         _env: &[(&str, &str)],
     ) -> Result<CommandOutput, WizardError> {
         let guard = self.expected.borrow();
-        let (vault, config, meta, index, model, decoy) =
+        let (vault, config_fragment, meta, index, model, decoy) =
             guard.as_ref().expect("expect_live must be armed first");
         let rt = vault.join(".tepochcalli");
-        assert_eq!(
-            std::fs::read(rt.join("config").join("tepochcalli.toml"))
-                .expect("live config readable"),
-            *config,
-            "la config viva no se toca durante el reemplazo"
+        // C1: la config viva YA lleva el nuevo embedder durante el
+        // gate/refresh — captura por spawn (pin del auditor).
+        let live_config_bytes = std::fs::read(rt.join("config").join("tepochcalli.toml"))
+            .expect("live config readable");
+        let live_config = String::from_utf8_lossy(&live_config_bytes).into_owned();
+        self.config_seen.borrow_mut().push(live_config.clone());
+        assert!(
+            live_config.contains(config_fragment),
+            "la config viva en el spawn debe llevar el nuevo embedder, got:\n{live_config}"
         );
         assert_eq!(
             std::fs::read(rt.join("db").join("index-meta.json")).expect("live meta readable"),
@@ -665,15 +679,29 @@ impl CommandRunner for CheckingProc {
 #[test]
 fn swap_live_files_untouched_while_replacement_runs() {
     let vault = installed_vault();
-    let (config, meta, index, model, decoy) = snapshot(vault.path());
+    let (_, meta, index, model, decoy) = snapshot(vault.path());
     let ui = TapUi::new(vec![1], vec![]);
     let host = host_16gb();
     let proc = CheckingProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
-    proc.expect_live(vault.path(), &config, &meta, &index, &model, &decoy);
+    proc.expect_live(vault.path(), NEW_MODEL, &meta, &index, &model, &decoy);
     let http = empty_http();
 
     run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
         .expect("el swap debe triunfar con el índice viejo servable");
+
+    // Pin del auditor (C1): la config capturada EN EL SPAWN del refresh
+    // (segunda llamada) ya lleva el modelo nuevo; la vieja ya no está.
+    let captured = proc.configs_seen();
+    assert_eq!(captured.len(), 2, "gate + refresh, dos spawns");
+    assert!(
+        captured[1].contains(NEW_MODEL),
+        "el spawn del refresh ve la config viva con el nuevo modelo, got:\n{}",
+        captured[1]
+    );
+    assert!(
+        !captured[1].contains(OLD_MODEL),
+        "la config vieja ya no está mientras el refresh corre"
+    );
 }
 
 #[test]
@@ -1027,22 +1055,21 @@ fn external_api_swap_with_empty_key_is_refused_before_writing() {
     no_stray_temps(vault.path());
 }
 
-/// E1-S3: un sabotaje del staging (`tepochcalli.toml.swap` ocupado por un
-/// directorio ⇒ `fs::write` falla) comparte el mismo abort del resto de
-/// ramas: rollback a los bytes previos y cero estado,
-/// jamás un half-swap. El dir saboteador sobrevive por construcción de la
-/// fixture (`remove_file` no borra dirs); el resto de temporales no queda.
+/// E1-S3 (C1): un sabotaje de la escritura VIVA de la config (el `.tmp`
+/// ocupado por un directorio ⇒ rename falla) comparte el mismo abort del
+/// resto de ramas: rollback a los bytes previos y cero estado, jamás un
+/// half-swap.
 #[test]
-fn swap_stage_failure_rolls_back_to_zero_state_like_the_other_branches() {
+fn swap_live_config_write_failure_rolls_back_to_zero_state_like_the_other_branches() {
     let vault = installed_vault();
     let rt = vault.path().join(".tepochcalli");
-    std::fs::create_dir(rt.join("config").join("tepochcalli.toml.swap"))
-        .expect("sabotaje del staging");
+    std::fs::create_dir(rt.join("config").join("tepochcalli.toml.tmp"))
+        .expect("sabotaje del staging .tmp");
     let before = snapshot(vault.path());
     let ui = TapUi::new(vec![0], vec![]);
     let host = host_16gb();
     // Guion vacío: si el swap intentara gate/refresh, fallaría con Internal
-    // y delataría que el staged-office failure no abortó a tiempo.
+    // y delataría que un write-config fallido no abortó a tiempo.
     let proc = RecordingProc::scripted([]);
     let http = empty_http();
 
@@ -1055,9 +1082,10 @@ fn swap_stage_failure_rolls_back_to_zero_state_like_the_other_branches() {
         "un stage que falla no llega a ningún spawn, argv: {:?}",
         proc.argv()
     );
+    // El dir saboteador sobrevive por construcción (`remove_file` no borra
+    // dirs); los demás temporales no quedan.
     for candidate in [
-        rt.join("config").join("tepochcalli.toml.tmp"),
-        rt.join("db").join("index-meta.json.tmp"),
+        rt.join("db").join("index-meta.json").with_extension("tmp"),
         rt.join("db").join("index-meta.json.swap"),
     ] {
         assert!(

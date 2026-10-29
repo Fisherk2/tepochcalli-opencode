@@ -253,7 +253,7 @@ pub(super) fn none_config(header: &str) -> String {
 /// preexisting config stays byte-identical unless the gate passed. Ambas
 /// ramas de fallo limpian el `.tmp` best-effort (L2-5): el vacío no queda
 /// como residuo del config dir (usuario lo ve en Obsidian).
-fn write_config(vault: &Path, body: &str) -> Result<(), WizardError> {
+pub(super) fn write_config(vault: &Path, body: &str) -> Result<(), WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
     // T15 refines the panel).
     let dir = vault.join(RUNTIME_DIR).join(CONFIG_DIR);
