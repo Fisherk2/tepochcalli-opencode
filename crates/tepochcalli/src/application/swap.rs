@@ -1,7 +1,7 @@
 //! D8.4 atomic embedder swap (T16): `tepochcalli config embedder` on a vault
 //! that already has an embedder.
 //!
-//! Six steps in order: (1) current-state display (model, dims, rows, db size,
+//! Six steps in order: (1) current-state display (model, dims, db usage,
 //! `rag_status` shape); (2) the same D7.1 menu with D8.1 figures and D8.2
 //! badges; (3) explicit full-reindex warning + time estimate with mandatory
 //! `--confirm`; (4) new-model download + test-embed gate (measured RSS) then
@@ -109,22 +109,26 @@ struct CurrentState {
     provider: Option<String>,
     model: Option<String>,
     dims: Option<u32>,
-    rows: u64,
+    /// Ficheros de datos bajo `db/` (`db_usage`); no son filas del índice.
+    db_file_count: u64,
     db_bytes: u64,
 }
 
 impl CurrentState {
     fn describe(&self) -> String {
         let (state, mode): (String, String) = match self.provider.as_deref() {
-            Some(provider @ ("local" | "litellm")) => ("ok".to_string(), provider.to_string()),
+            Some("local") => ("ok".to_string(), "local".to_string()),
+            // Contrato real de phase8 (§rag_status): el provider interno es
+            // `litellm`, el modo público es `api`.
+            Some("litellm") => ("ok".to_string(), "api".to_string()),
             _ => ("degraded".to_string(), "none".to_string()),
         };
         format!(
-            "model: {}\ndims: {}\nfilas del índice: {}\ntamaño de db: {} bytes\n\
+            "model: {}\ndims: {}\nficheros en db/: {}\ntamaño de db: {} bytes\n\
              rag_status: {{\"state\":\"{state}\",\"mode\":\"{mode}\"}}",
             self.model.as_deref().unwrap_or("(sin configurar)"),
             or_fallback(self.dims),
-            self.rows,
+            self.db_file_count,
             self.db_bytes,
         )
     }
@@ -232,12 +236,12 @@ fn snapshot(vault: &Path) -> Snapshot {
 fn current_state(vault: &Path) -> CurrentState {
     let raw_config = std::fs::read_to_string(config_path(vault)).unwrap_or_default();
     let raw_meta = std::fs::read_to_string(index_meta_path(vault)).unwrap_or_default();
-    let (rows, db_bytes) = db_usage(vault);
+    let (db_file_count, db_bytes) = db_usage(vault);
     CurrentState {
         provider: config_value(&raw_config, "provider"),
         model: config_value(&raw_config, "model").or_else(|| json_string(&raw_meta, "model")),
         dims: json_u32(&raw_meta, "dims"),
-        rows,
+        db_file_count,
         db_bytes,
     }
 }
@@ -245,7 +249,7 @@ fn current_state(vault: &Path) -> CurrentState {
 /// File count + byte size of the live db dir (missing dir ⇒ zeros, e.g. a
 /// degraded vault that never indexed).
 fn db_usage(vault: &Path) -> (u64, u64) {
-    let mut rows = 0u64;
+    let mut file_count = 0u64;
     let mut bytes = 0u64;
     let entries = match std::fs::read_dir(vault.join(RUNTIME_DIR).join("db")) {
         Ok(entries) => entries,
@@ -254,12 +258,12 @@ fn db_usage(vault: &Path) -> (u64, u64) {
     for entry in entries.flatten() {
         if let Ok(meta) = entry.metadata() {
             if meta.is_file() {
-                rows += 1;
+                file_count += 1;
                 bytes += meta.len();
             }
         }
     }
-    (rows, bytes)
+    (file_count, bytes)
 }
 
 /// ≈2 s per MB of live index, at least 1 s (display-only figure, D8.1).
@@ -274,13 +278,13 @@ fn warning(picked: &Phase6Report, current: &CurrentState) -> String {
     let name = name.split_once('\u{0}').map_or(name, |(model, _)| model);
     format!(
         "El swap a {} exige un re-index COMPLETO (LanceDB no mezcla dimensiones).\n\
-         Tiempo estimado: ≈{} s (índice actual: {} filas, {} bytes).\n\
+         Tiempo estimado: ≈{} s (ficheros en db/: {}, {} bytes).\n\
          Durante el proceso el índice viejo sigue servable; al triunfar, config y \
          metadatos conmutan atómicamente y el modelo anterior se purga de models/.\n\
          Requiere --confirm explícito.",
         name,
         estimate_secs(current.db_bytes),
-        current.rows,
+        current.db_file_count,
         current.db_bytes,
     )
 }
@@ -460,7 +464,7 @@ fn download_gate_and_reindex(
             model: String::new(),
             dims: None,
             rss_peak_bytes: None,
-            rows: current.rows,
+            rows: current.db_file_count,
         });
     };
     let (model_name, _api_key) = model
@@ -786,7 +790,7 @@ mod tests {
             provider: Some("local".to_string()),
             model: Some("viejo".to_string()),
             dims: Some(384),
-            rows: 7,
+            db_file_count: 7,
             db_bytes: 4_000_000,
         };
         let text = warning(&picked, &current);
@@ -799,7 +803,7 @@ mod tests {
             "got:\n{text}"
         );
         assert!(text.contains("≈8 s"), "4MB ⇒ 8 s, got:\n{text}");
-        assert!(text.contains("7 filas"), "got:\n{text}");
+        assert!(text.contains("ficheros en db/: 7"), "got:\n{text}");
     }
 
     // ---- model cache GC --------------------------------------------------
