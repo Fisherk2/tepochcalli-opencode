@@ -22,6 +22,10 @@ use crate::ports::{
     CommandOutput, CommandRunner, HostProbe, HttpClient, MergeReport, PayloadSource, Ui,
 };
 
+use super::embedder_menu::config_path;
+use super::phase7::index_meta_path;
+use super::text::provider_is_none;
+
 /// Minimum machine RAM in GiB (below aborts, exit 10 — never half-installs).
 pub const MIN_RAM_GB: f64 = 8.0;
 /// Minimum free disk in GiB at the probe path (below aborts, exit 11).
@@ -530,11 +534,6 @@ use crate::domain::Phase;
 /// Marker listing completed phases (`F3`.. one per line); D21 resolves
 /// `--resume` as artifacts + this marker, never a re-download.
 pub const INSTALL_STATE_PATH: &str = ".tepochcalli/.install-state";
-/// Config sidecar the F6 artifact check reads (source of truth lives in
-/// `embedder_menu`; this literal only avoids a cross-module import).
-const CONFIG_REL_PATH: &str = "config/tepochcalli.toml";
-/// F7 sidecar the resume check reads (source of truth lives in `phase7`).
-const INDEX_META_REL_PATH: &str = "db/index-meta.json";
 /// F8 entry the resume check looks for in `opencode.json`.
 const MANAGED_RAG_KEY: &str = "tepochcalli-rag";
 
@@ -633,14 +632,13 @@ fn phase_artifact_done(vault: &Path, phase: Phase) -> bool {
         Phase::F5 => venv_python_candidates(vault)
             .iter()
             .any(|candidate| candidate.is_file()),
-        Phase::F6 => runtime_dir(vault).join(CONFIG_REL_PATH).is_file(),
+        Phase::F6 => config_path(vault).is_file(),
         Phase::F7 => {
-            if runtime_dir(vault).join(INDEX_META_REL_PATH).is_file() {
+            if index_meta_path(vault).is_file() {
                 return true;
             }
             // Path 5 leaves no index by design: config `none` ⇒ F7 is done.
-            std::fs::read_to_string(runtime_dir(vault).join(CONFIG_REL_PATH))
-                .is_ok_and(|body| body.contains("provider = \"none\""))
+            std::fs::read_to_string(config_path(vault)).is_ok_and(|body| provider_is_none(&body))
         }
         Phase::F8 => std::fs::read_to_string(vault.join("opencode.json"))
             .is_ok_and(|body| body.contains(MANAGED_RAG_KEY)),

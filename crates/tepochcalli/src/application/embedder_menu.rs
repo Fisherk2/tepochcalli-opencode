@@ -14,7 +14,8 @@ use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
 use super::installer::RUNTIME_DIR;
 use super::text::{
-    config_value, json_bool, json_raw, json_string, json_u32, json_u64, toml_escape,
+    config_value, json_bool, json_raw, json_string, json_u32, json_u64, provider_is_none,
+    toml_escape,
 };
 
 /// Menu order = UI index contract (D7.1, ADR-007).
@@ -500,10 +501,10 @@ pub fn config_path(vault: &Path) -> PathBuf {
 #[must_use]
 pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
     let body = std::fs::read_to_string(config_path(vault)).ok()?;
-    let provider = config_value(&body, "provider")?;
-    if provider == "none" {
+    if provider_is_none(&body) {
         return Some(Phase6Report::configure_later());
     }
+    let provider = config_value(&body, "provider")?;
     let model = config_value(&body, "model");
     Some(Phase6Report {
         provider,

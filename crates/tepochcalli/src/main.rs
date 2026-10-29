@@ -116,9 +116,10 @@ fn print_version(stdout: &mut dyn std::io::Write) {
     let _ = writeln!(stdout, "tepochcalli {VERSION}");
 }
 
-/// T17 failure exit (reindex/uninstall): same T15 shape (panel on stderr +
-/// redacted log outside the vault), but the title/body carry the real command
-/// — never the install retry line, which would point at the wrong fix.
+/// T17 failure exit (reindex/uninstall): same shared `report()` shape
+/// (panel on stderr + redacted log outside the vault), but the title/body
+/// carry the real command — never the install retry line, which would point
+/// at the wrong fix.
 fn report_maintenance_failure(
     ui: &dyn Ui,
     command: &str,
@@ -127,7 +128,6 @@ fn report_maintenance_failure(
     vault: Option<&Path>,
 ) -> u8 {
     let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
-    let secrets: Vec<&str> = owned.iter().map(String::as_str).collect();
     let log_path = log_path_in(&state_dir(), now_secs());
     let title = format!("{command} failed");
     let mut body = format!("cause: {context}: {err}\n");
@@ -135,9 +135,7 @@ fn report_maintenance_failure(
         body.push_str(&format!("code: {code}\n"));
     }
     body.push_str(&format!("log: {}\n", log_path.display()));
-    write_failure_log(&log_path, &redact(&format!("{title}\n{body}"), &secrets));
-    ui.panel(&title, &body);
-    err.exit_code()
+    report(ui, &title, body, &owned, err.exit_code())
 }
 
 fn unknown(stderr: &mut dyn std::io::Write, arg: &str) -> u8 {
@@ -152,10 +150,21 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
     2
 }
 
-/// Centralized install-failure exit (T15): best-effort log under the OS
-/// state dir (never the vault) + stderr panel via the `Ui` port. The typed
-/// exit code is returned unchanged; `context` keeps the historical one-line
-/// cause so existing diagnostics keep matching.
+/// Shared T15/T17 failure exit (S-3): best-effort redacted log under the OS
+/// state dir (never the vault) + redacted stderr panel via the `Ui` port.
+/// `title`/`body` arrive composed by the caller (install keeps the graded
+/// `failure_title/failure_body` shapes; maintenance names its own command
+/// and carries no install retry line); the typed exit code is returned
+/// unchanged.
+fn report(ui: &dyn Ui, title: &str, body: String, secrets: &[String], code: u8) -> u8 {
+    let masked: Vec<&str> = secrets.iter().map(String::as_str).collect();
+    let log_path = log_path_in(&state_dir(), now_secs());
+    write_failure_log(&log_path, &redact(&format!("{title}\n{body}"), &masked));
+    ui.panel(title, &redact(&body, &masked));
+    code
+}
+
+/// Centralized install-failure exit (T15): log + `failure_*` panel shape.
 fn report_failure(
     ui: &dyn Ui,
     phase: Option<Phase>,
@@ -163,16 +172,12 @@ fn report_failure(
     err: WizardError,
     vault: Option<&Path>,
 ) -> u8 {
-    // shortcuts: los secretos a borrar viven en la config del vault (T15);
-    // ningún caller de esta ruta añade un secreto extra a mano.
     let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
-    let secrets: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let masked: Vec<&str> = owned.iter().map(String::as_str).collect();
     let log_path = log_path_in(&state_dir(), now_secs());
     let title = failure_title(phase);
-    let body = failure_body(context, phase, err, &log_path, &secrets);
-    write_failure_log(&log_path, &redact(&format!("{title}\n{body}"), &secrets));
-    ui.panel(&title, &body);
-    err.exit_code()
+    let body = failure_body(context, phase, err, &log_path, &masked);
+    report(ui, &title, body, &owned, err.exit_code())
 }
 
 /// `install` flag parsing (T6) + F1→F2 execution (T7) + F3 merge (T8) +

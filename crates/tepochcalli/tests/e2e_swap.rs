@@ -996,6 +996,47 @@ fn external_api_swap_with_empty_key_is_refused_before_writing() {
     no_stray_temps(vault.path());
 }
 
+/// E1-S3: un sabotaje del staging (`tepochcalli.toml.swap` ocupado por un
+/// directorio ⇒ `fs::write` falla) comparte el mismo abort del resto de
+/// ramas: rollback a los bytes previos y cero estado,
+/// jamás un half-swap. El dir saboteador sobrevive por construcción de la
+/// fixture (`remove_file` no borra dirs); el resto de temporales no queda.
+#[test]
+fn swap_stage_failure_rolls_back_to_zero_state_like_the_other_branches() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    std::fs::create_dir(rt.join("config").join("tepochcalli.toml.swap"))
+        .expect("sabotaje del staging");
+    let before = snapshot(vault.path());
+    let ui = TapUi::new(vec![0], vec![]);
+    let host = host_16gb();
+    // Guion vacío: si el swap intentara gate/refresh, fallaría con Internal
+    // y delataría que el staged-office failure no abortó a tiempo.
+    let proc = RecordingProc::scripted([]);
+    let http = empty_http();
+
+    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect_err("el staging saboteado debe abortar el swap");
+    assert_eq!(err, WizardError::PermissionDenied);
+    assert_byte_identical(vault.path(), &before);
+    assert!(
+        proc.calls().is_empty(),
+        "un stage que falla no llega a ningún spawn, argv: {:?}",
+        proc.argv()
+    );
+    for candidate in [
+        rt.join("config").join("tepochcalli.toml.tmp"),
+        rt.join("db").join("index-meta.json.tmp"),
+        rt.join("db").join("index-meta.json.swap"),
+    ] {
+        assert!(
+            !candidate.exists(),
+            "temporal fugado: {}",
+            candidate.display()
+        );
+    }
+}
+
 /// GAP 3: «Configurar después» (índice 4) nunca se ejercitaba en el swap.
 ///
 /// Estado que deja, pineado explícitamente: **no** hay gate ni refresh (el

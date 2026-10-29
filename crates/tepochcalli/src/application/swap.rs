@@ -155,8 +155,13 @@ pub fn run_swap(
         );
         return Err(WizardError::UserAborted);
     }
-    // Stage the replacement config (live config untouched until the commit).
-    stage_config(vault, &picked)?;
+    // Stage the replacement config (live config untouched until the commit;
+    // E1-S3): a stage failure shares the same abort — rollback a los bytes
+    // previos y temps fuera — igual que el resto de ramas de fallo.
+    if let Err(err) = stage_config(vault, &picked) {
+        abort_swap(vault, &before);
+        return Err(err);
+    }
     let outcome = download_gate_and_reindex(deps, vault, &picked, token.as_deref(), &current);
     match outcome {
         Err(err) => {

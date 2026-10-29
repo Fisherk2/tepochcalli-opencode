@@ -90,6 +90,14 @@ pub(crate) fn json_escape(raw: &str) -> String {
     raw.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// `true` cuando el cuerpo de config pide la ruta 5 degradada
+/// (`provider = "none"`). Fuente única del chequeo: `--resume` (artefacto
+/// F7), el branch del panel de `reindex` y `read_completed_report` (vuelve a
+/// armar el reporte de salida 5 desde la config escrita).
+pub(crate) fn provider_is_none(body: &str) -> bool {
+    config_value(body, "provider").as_deref() == Some("none")
+}
+
 /// Display of an optional measured figure: present ⇒ value, absent ⇒ the
 /// shared "(sin dato)" placeholder (swap, reindex and the two CLI flags).
 ///
@@ -169,6 +177,20 @@ mod tests {
 
         // Un valor vacío es `Some("")`: el consumidor decide si es ausencia.
         assert_eq!(config_value("model = \"\"\n", "model").as_deref(), Some(""));
+    }
+
+    // ---- provider_is_none: chequeo único de la ruta 5 --------------------
+
+    #[test]
+    fn provider_is_none_flags_only_the_none_provider() {
+        // Formas reales que las tres escritoras del wizard producen: F6/swap
+        // camino 5 (none), camino 1 (local) y camino 4 (litellm) — y un
+        // cuerpo sin la clave (config ajena o corrupta) no es exit 5.
+        assert!(provider_is_none("[embedding]\nprovider = \"none\"\n"));
+        assert!(!provider_is_none("[embedding]\nprovider = \"local\"\n"));
+        assert!(!provider_is_none("[embedding]\nprovider = \"litellm\"\n"));
+        assert!(!provider_is_none(""));
+        assert!(!provider_is_none("[embedding]\nmodel = \"x\"\n"));
     }
 
     // ---- JSON readers ----------------------------------------------------

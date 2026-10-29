@@ -17,7 +17,9 @@ use super::embedder_menu::config_path;
 use super::flow_cli::run_flow_cli;
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::{index_meta_path, write_index_meta};
-use super::text::{config_value, json_bool, json_string, json_u32, json_u64, or_fallback};
+use super::text::{
+    config_value, json_bool, json_string, json_u32, json_u64, or_fallback, provider_is_none,
+};
 
 /// Flow CLI module invoked through the venv interpreter (D24, T12 contract).
 const FLOW_MODULE: &str = "tepochcalli_flow";
@@ -70,7 +72,7 @@ pub fn run_reindex(
     ) {
         (Some(provider), Some(model)) if provider != "none" => (provider, model),
         _ => {
-            if raw_config.contains("provider = \"none\"") {
+            if provider_is_none(&raw_config) {
                 ui.panel(
                     "Sin embedder",
                     "Este vault no tiene embedder configurado (instalación degraded: provider = \"none\"). \
