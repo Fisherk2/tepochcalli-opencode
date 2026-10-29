@@ -637,32 +637,71 @@ fn venv_python_candidates(vault: &Path) -> [PathBuf; 2] {
     ]
 }
 
-/// Artifact check per phase (D21: resume deduces from artifacts, the marker
-/// only covers what leaves no file behind). F1 has no artifact — it always
-/// re-runs (cheap, side-effect free).
-fn phase_artifact_done(vault: &Path, phase: Phase) -> bool {
+/// Verdict of the artifact check for one phase: `Done` skips (el artefacto
+/// corrobora), `Indeterminate` defers to the marker (no decidible), `Missing`
+/// FUERZA el re-run (L3-3: lo borrado se re-instala; el marker solo no salta).
+enum ArtifactProbe {
+    Done,
+    Indeterminate,
+    Missing,
+}
+
+/// Artifact check per phase (D21 + L3-3). F1/F2 have no artifact
+/// (Indeterminate: the marker mandates). F8 distinguishes "el fichero no
+/// existe" (Missing) de un JSON ilegible (Indeterminate).
+fn phase_artifact_probe(vault: &Path, phase: Phase) -> ArtifactProbe {
     match phase {
-        Phase::F1 => false,
-        Phase::F2 => vault.is_dir(),
-        Phase::F3 => vault.join(INSTALL_INTENT_PATH).is_file(),
+        Phase::F1 | Phase::F2 => ArtifactProbe::Indeterminate,
+        Phase::F3 => {
+            if vault.join(INSTALL_INTENT_PATH).is_file() {
+                ArtifactProbe::Done
+            } else {
+                ArtifactProbe::Missing
+            }
+        }
         Phase::F4 => {
             let runtime = runtime_dir(vault);
-            runtime.join(UV_BIN_DIR).join("uv").is_file()
-                || runtime.join(UV_BIN_DIR).join("uv.exe").is_file()
+            let uv_present = runtime.join(UV_BIN_DIR).join("uv").is_file()
+                || runtime.join(UV_BIN_DIR).join("uv.exe").is_file();
+            if uv_present {
+                ArtifactProbe::Done
+            } else {
+                ArtifactProbe::Missing
+            }
         }
-        Phase::F5 => venv_python_candidates(vault)
-            .iter()
-            .any(|candidate| candidate.is_file()),
-        Phase::F6 => config_path(vault).is_file(),
+        Phase::F5 => {
+            if venv_python_candidates(vault)
+                .iter()
+                .any(|candidate| candidate.is_file())
+            {
+                ArtifactProbe::Done
+            } else {
+                ArtifactProbe::Missing
+            }
+        }
+        Phase::F6 => {
+            if config_path(vault).is_file() {
+                ArtifactProbe::Done
+            } else {
+                ArtifactProbe::Missing
+            }
+        }
         Phase::F7 => {
             if index_meta_path(vault).is_file() {
-                return true;
+                return ArtifactProbe::Done;
             }
             // Path 5 leaves no index by design: config `none` ⇒ F7 is done.
-            std::fs::read_to_string(config_path(vault)).is_ok_and(|body| provider_is_none(&body))
+            match std::fs::read_to_string(config_path(vault)) {
+                Ok(body) if provider_is_none(&body) => ArtifactProbe::Done,
+                _ => ArtifactProbe::Missing,
+            }
         }
-        Phase::F8 => std::fs::read_to_string(vault.join("opencode.json"))
-            .is_ok_and(|body| body.contains(MANAGED_RAG_KEY)),
+        Phase::F8 => match std::fs::read_to_string(vault.join("opencode.json")) {
+            Ok(body) if body.contains(MANAGED_RAG_KEY) => ArtifactProbe::Done,
+            Ok(_) => ArtifactProbe::Missing,
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => ArtifactProbe::Missing,
+            Err(_) => ArtifactProbe::Indeterminate,
+        },
     }
 }
 
@@ -671,7 +710,9 @@ fn phase_artifact_done(vault: &Path, phase: Phase) -> bool {
 pub fn completed_phases(vault: &Path) -> Vec<Phase> {
     let mut done = completed_from_marker(vault);
     for phase in Phase::all() {
-        if !done.contains(&phase) && phase_artifact_done(vault, phase) {
+        if !done.contains(&phase)
+            && matches!(phase_artifact_probe(vault, phase), ArtifactProbe::Done)
+        {
             done.push(phase);
         }
     }
@@ -679,11 +720,19 @@ pub fn completed_phases(vault: &Path) -> Vec<Phase> {
     done
 }
 
-/// `true` when `--resume` may skip `phase` (marker says so or its artifacts
-/// are in place — never a re-download of what is already there).
+/// `true` when `--resume` may skip `phase` (L3-3 artifact-first):
+/// - F1/F2 solo marker (sin artefacto que chequear).
+/// - F3..F8: el artefacto presente salta; si el chequeo es indeterminable
+///   manda el marker; si el artefacto falta NO hay skip (el marker ya no
+///   oculta una fase cuyo producto se borró).
 #[must_use]
 pub fn is_phase_done(vault: &Path, phase: Phase) -> bool {
-    completed_from_marker(vault).contains(&phase) || phase_artifact_done(vault, phase)
+    let marker = completed_from_marker(vault).contains(&phase);
+    match phase_artifact_probe(vault, phase) {
+        ArtifactProbe::Done => true,
+        ArtifactProbe::Indeterminate => marker,
+        ArtifactProbe::Missing => false,
+    }
 }
 
 /// Offline pre-check, BEFORE the vault is touched: without a local payload

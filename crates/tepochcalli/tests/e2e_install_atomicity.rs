@@ -373,10 +373,22 @@ fn resume_deduces_completed_phases_and_skips_them() {
         "intent artifact ⇒ F3 done"
     );
 
-    // Marker round-trips: F4 recorded once, still done after reload.
+    // Marker round-trips (L3-3 artifact-first): el marker YA NO salta una
+    // fase sin artefacto — lo borrado se re-instala (reparación). Con el
+    // artefacto presente sí salta.
     assert!(!is_phase_done(vault.path(), Phase::F4));
     mark_phase_done(vault.path(), Phase::F4);
-    assert!(is_phase_done(vault.path(), Phase::F4));
+    assert!(
+        !is_phase_done(vault.path(), Phase::F4),
+        "marker F4 sin binario uv ⇒ Missing ⇒ repaso (reparación)"
+    );
+    let uv_bin = vault.path().join(".tepochcalli").join("bin").join("uv");
+    std::fs::create_dir_all(uv_bin.parent().expect("bin parent")).expect("bin dir");
+    std::fs::write(&uv_bin, b"fake-uv").expect("uv artifact fixture");
+    assert!(
+        is_phase_done(vault.path(), Phase::F4),
+        "uv presente ⊕ marker F4 ⇒ skip fiable"
+    );
     // Idempotent marker: no duplicate lines.
     mark_phase_done(vault.path(), Phase::F4);
     let body =
@@ -387,7 +399,21 @@ fn resume_deduces_completed_phases_and_skips_them() {
         "marker must not duplicate, got:\n{body}"
     );
 
-    // Full-artifact vault reads as done for F5/F6/F8 without any marker.
+    // Reparación F5: marker F5 + venv borrado ⇒ Missing ⇒ re-run.
+    mark_phase_done(vault.path(), Phase::F5);
+    venv_python(vault.path());
+    assert!(
+        is_phase_done(vault.path(), Phase::F5),
+        "venv presente ⇒ F5 done"
+    );
+    std::fs::remove_dir_all(vault.path().join(".tepochcalli").join("venv"))
+        .expect("sabotaje: venv borrado");
+    assert!(
+        !is_phase_done(vault.path(), Phase::F5),
+        "venv borrado + marker F5 ⇒ se re-instala, el marker no oculta"
+    );
+
+    // Full-artifact vault reads as done for F6/F8 without any marker.
     venv_python(vault.path());
     write(
         &vault
@@ -532,6 +558,105 @@ fn skip_model_writes_path5_config_without_spawning() {
 }
 
 // --- CLI surface: --resume / --offline flags exist ---
+
+/// L3-3 e2e: un vault con F3..F8 marcados done donde el venv (artefacto F5)
+/// fue borrado — `install --resume` vuelve a ejecutar F5 (la reparación) —
+/// mientras que el mismo vault con venv presente salta F4/F5 y termina 0.
+/// El uv del fixture es fake: F4 solo se saltea (nada lo ejecuta cuando
+/// artefacto ⊕ marker), y el re-run de F5 falla tipado con el fake — eso es
+/// lo que pinta el pin del re-intento.
+#[test]
+fn resume_reruns_phases_whose_artifact_was_deleted() {
+    let dir = tmp();
+    let payload = dir.path().join("payload-t14");
+    std::fs::create_dir_all(&payload).expect("payload dir (local source, no network)");
+    write(&payload.join("keep.md"), "# payload\n");
+    let vault = dir.path().join("v-t14");
+    let rt = vault.join(".tepochcalli");
+    std::fs::create_dir_all(rt.join("config")).expect("runtime config dir");
+    write(
+        &vault.join(".tepochcalli").join(".install-intent"),
+        "keep.md\n",
+    );
+    write(
+        &vault.join(".tepochcalli").join(".install-state"),
+        "F1\nF2\nF3\nF4\nF5\nF6\nF7\nF8\n",
+    );
+    let uv_bin = rt.join("bin").join("uv");
+    std::fs::create_dir_all(rt.join("bin")).expect("bin dir");
+    std::fs::write(&uv_bin, b"fake-uv").expect("uv artifact fixture");
+    write(
+        &rt.join("config").join("tepochcalli.toml"),
+        "[embedding]\nprovider = \"none\"\n",
+    );
+    write(
+        &vault.join("opencode.json"),
+        "{\"mcp\":{\"servers\":{\"tepochcalli-rag\":{}}}}",
+    );
+
+    let cmd = |bin_exists: bool| {
+        if bin_exists {
+            std::fs::create_dir_all(rt.join("venv").join("bin")).expect("venv fixture");
+            std::fs::write(
+                rt.join("venv").join("bin").join("python"),
+                b"#!/bin/sh\nexit 0\n",
+            )
+            .expect("venv python fixture");
+        } else {
+            let _ = std::fs::remove_dir_all(rt.join("venv"));
+        }
+        std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+            .args([
+                "install",
+                "--non-interactive",
+                "--resume",
+                "--skip-model",
+                "--vault",
+                vault.to_str().expect("utf8 tmp"),
+                "--payload",
+                payload.to_str().expect("utf8 tmp"),
+            ])
+            .output()
+            .expect("spawn install --resume")
+    };
+
+    // Sin venv: F4 se saltea (artefacto ⊕ marker), F5 SE RE-INTENTA y muere
+    // tipado con el vô fake — el marker ya no lo oculta.
+    let out = cmd(false);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(42), "stderr:\n{stderr}");
+    assert!(
+        stderr.contains("resume: F4 already done"),
+        "uv cached salta F4, got:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("resume: F5 already done"),
+        "el marker NO puede ocultar el venv borrado, got:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("install: phase F5 failed"),
+        "F5 se re-intenta (reparación), got:\n{stderr}"
+    );
+
+    // Con venv devuelto: F5 vuelve a saltar y el resume termina limpio (0),
+    // imprimiendo la ruta del vault.
+    let out = cmd(true);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("resume: F5 already done"),
+        "venv presente ⇒ F5 salta, got:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains(vault.to_str().expect("utf8")),
+        "el exit 0 imprime la ruta del vault",
+    );
+}
 
 #[test]
 fn install_help_documents_resume_and_offline() {
