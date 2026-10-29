@@ -234,7 +234,9 @@ pub(super) fn none_config(header: &str) -> String {
 }
 
 /// Temp file + rename: a failed write never leaves half a config, and a
-/// preexisting config stays byte-identical unless the gate passed.
+/// preexisting config stays byte-identical unless the gate passed. Ambas
+/// ramas de fallo limpian el `.tmp` best-effort (L2-5): el vacío no queda
+/// como residuo del config dir (usuario lo ve en Obsidian).
 fn write_config(vault: &Path, body: &str) -> Result<(), WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
     // T15 refines the panel).
@@ -243,8 +245,13 @@ fn write_config(vault: &Path, body: &str) -> Result<(), WizardError> {
     let tmp = dir.join(format!("{CONFIG_FILE}.tmp"));
     std::fs::write(&tmp, body).map_err(|_| WizardError::PermissionDenied)?;
     set_user_private(&tmp)?;
-    std::fs::rename(&tmp, dir.join(CONFIG_FILE)).map_err(|_| WizardError::PermissionDenied)?;
-    Ok(())
+    match std::fs::rename(&tmp, dir.join(CONFIG_FILE)) {
+        Ok(()) => Ok(()),
+        Err(_) => {
+            let _ = std::fs::remove_file(&tmp);
+            Err(WizardError::PermissionDenied)
+        }
+    }
 }
 
 /// Gate success payload (T12 programs the flow CLI against this shape).
@@ -645,6 +652,28 @@ mod tests {
     fn hf_metadata_marks_auto_gated_repos() {
         assert!(parse_hf_metadata(br#"{"gated":"auto","tags":["text-generation"]}"#).gated);
         assert!(parse_hf_metadata(br#"{"gated":"manual","tags":["text-generation"]}"#).gated);
+    }
+
+    /// L2-5: un rename que falla (destino ocupado por un dir) limpia el
+    /// `.tmp` best-effort — el config dir no queda con residuo.
+    #[test]
+    fn failed_rename_cleans_the_config_tmp() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let live = config_path(vault.path());
+        if let Err(err) = std::fs::create_dir_all(&live) {
+            panic!("sabotage: live config como dir: {err}");
+        }
+        assert_eq!(
+            write_config(vault.path(), "[embedding]\nprovider = \"local\"\n"),
+            Err(crate::domain::WizardError::PermissionDenied)
+        );
+        let tmp = live.with_extension("tmp");
+        assert!(
+            !tmp.exists(),
+            "el .tmp debe quedarse limpio tras el fallo, no como residuo"
+        );
     }
 
     /// La config lleva la clave de la ruta 4 en claro: usuario-privado
