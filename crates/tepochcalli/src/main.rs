@@ -21,10 +21,10 @@ use tepochcalli::application::failure::{
 use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
     check_prereqs, compensate_phase3, compensate_phase6, compensate_phase7, ensure_vault_dir,
-    guard_offline_before_touch, is_phase_done, mark_phase_done, payload_local_ready,
-    read_completed_report, resolve_vault_dir, run_phase3, run_phase4, run_phase5, run_phase6,
-    run_phase7, run_phase8, run_reindex, run_swap, run_uninstall, Phase6Deps, Phase6Report,
-    SwapDeps, SwapOptions,
+    guard_offline_before_touch, is_phase_done, litellm_config_present, mark_phase_done,
+    payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3, run_phase4,
+    run_phase5, run_phase6, run_phase7, run_phase8, run_reindex, run_swap, run_uninstall,
+    Phase6Deps, Phase6Report, SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::failure::{failure_body, failure_title, redact};
 use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
@@ -379,12 +379,18 @@ fn run_install(
         }
     };
     // T14: offline pre-check BEFORE the vault is touched (exit 21, no writes).
+    // D7.3 (L3-5): los brazos válidos son — payload local + cache (o litellm
+    // config, que no necesita modelo local), o un resume cuyo payload ya está
+    // local (F3 resuelta por artefacto: nada se re-descarga).
     if offline {
-        let cache_ready = skip_model || models_cached(Path::new(&raw));
+        let vault = Path::new(&raw);
+        let cache_ready = skip_model || models_cached(vault) || litellm_config_present(vault);
+        let resume_payload_local = resume && is_phase_done(vault, Phase::F3);
         match guard_offline_before_touch(
             true,
             payload_local_ready(payload_dir.as_deref()),
             cache_ready,
+            resume_payload_local,
         ) {
             Ok(()) => {}
             Err(err) => {
@@ -514,28 +520,39 @@ fn run_phases(
     // Source priority: `--payload` (local tree, dev/tests) →
     // `--payload-url` + `--payload-sha256` (override, dev/tests) →
     // the versioned release asset for this binary (one-version rule).
+    // L3-5: bajo `--resume` con F3 resuelta por artefacto el payload ya está
+    // local — ni guard ni fetch de red; es el mismo brazo del guard offline.
+    let resume_covers_payload = resume && is_phase_done(path.as_path(), Phase::F3);
     let online: Option<ReleasePayload> = match (&payload_url, &payload_sha256) {
         (Some(url), Some(sha)) => Some(ReleasePayload::new(url, sha)),
-        (None, None) if payload_dir.is_none() => match fetch_release_payload(&http, VERSION) {
-            Ok(release) => {
-                let _ = writeln!(
-                    stderr,
-                    "payload: release asset {} (one-version {})",
-                    release.url(),
-                    VERSION
-                );
-                Some(release)
+        (None, None) if payload_dir.is_none() => {
+            if resume_covers_payload {
+                // Payload ya local (F3 por artefacto): ninguna red en un resume.
+                None
+            } else {
+                match fetch_release_payload(&http, VERSION) {
+                    Ok(release) => {
+                        let _ = writeln!(
+                            stderr,
+                            "payload: release asset {} (one-version {})",
+                            release.url(),
+                            VERSION
+                        );
+                        Some(release)
+                    }
+                    Err(err) => {
+                        return report_failure(
+                            ui,
+                            Some(Phase::F3),
+                            "install: phase F3 failed",
+                            offline_map(offline, err),
+                            Some(path.as_path()),
+                        );
+                    }
+                }
             }
-            Err(err) => {
-                return report_failure(
-                    ui,
-                    Some(Phase::F3),
-                    "install: phase F3 failed",
-                    offline_map(offline, err),
-                    Some(path.as_path()),
-                );
-            }
-        },
+        }
+        // `--payload` local tree: source lives in the F3 branch, not online.
         (None, None) => None,
         // Unreachable: `run_install` rejects a half override with exit 2.
         _ => return 2,

@@ -523,6 +523,17 @@ pub fn config_path(vault: &Path) -> PathBuf {
     vault.join(RUNTIME_DIR).join(CONFIG_DIR).join(CONFIG_FILE)
 }
 
+/// `true` cuando la config del vault delega el embedding en un API externo
+/// (provider = "litellm"): brazo D7.3 del guard offline (L3-5) — esa
+/// configuración no necesita modelos locales. Best-effort: config ausente
+/// o ilegible ⇒ false (el guard cae en los demás brazos).
+#[must_use]
+pub fn litellm_config_present(vault: &Path) -> bool {
+    std::fs::read_to_string(config_path(vault))
+        .map(|body| config_value(&body, "provider").as_deref() == Some("litellm"))
+        .unwrap_or(false)
+}
+
 /// Rebuild the F6 report from an existing config (for `--resume`: skip the
 /// menu, keep the recorded provider/model). `None` when no config exists.
 #[must_use]

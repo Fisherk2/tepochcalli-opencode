@@ -437,8 +437,9 @@ fn resume_deduces_completed_phases_and_skips_them() {
 
 #[test]
 fn offline_without_local_payload_fails_clean_before_touch() {
-    // No local payload and no cache ⇒ E_OFFLINE_NO_CACHE (exit 21), vault untouched.
-    let err = guard_offline_before_touch(true, false, false).expect_err("must fail offline");
+    // No local payload, no cache and no resume-cover ⇒ E_OFFLINE_NO_CACHE
+    // (exit 21), vault untouched.
+    let err = guard_offline_before_touch(true, false, false, false).expect_err("must fail offline");
     assert_eq!(err, WizardError::OfflineNoCache);
     assert_eq!(err.exit_code(), 21);
     assert_eq!(err.e_star(), Some("E_OFFLINE_NO_CACHE"));
@@ -447,9 +448,17 @@ fn offline_without_local_payload_fails_clean_before_touch() {
 #[test]
 fn offline_with_local_payload_and_skip_model_passes_guard() {
     // Local payload + path 5 (no model download) ⇒ offline install proceeds.
-    guard_offline_before_touch(true, true, true).expect("cached offline must pass");
+    guard_offline_before_touch(true, true, true, false).expect("cached offline must pass");
     // Online never triggers the offline error.
-    guard_offline_before_touch(false, false, false).expect("online must pass");
+    guard_offline_before_touch(false, false, false, false).expect("online must pass");
+}
+
+/// L3-5 OR-arm: un resume cuyo payload ya está local (F3 artefacto) pasa el
+/// guard aunque ni payload flag ni models cache existan.
+#[test]
+fn offline_resume_with_local_payload_from_f3_passes_guard() {
+    guard_offline_before_touch(true, false, false, true)
+        .expect("resume cuyo payload ya está local debe pasar");
 }
 
 // --- idempotence: install x2, zero dupes ---
@@ -656,6 +665,91 @@ fn resume_reruns_phases_whose_artifact_was_deleted() {
     assert!(
         String::from_utf8_lossy(&out.stdout).contains(vault.to_str().expect("utf8")),
         "el exit 0 imprime la ruta del vault",
+    );
+}
+
+// --- CLI surface: --resume / --offline flags exist ---
+
+/// L3-5: `--offline --resume` sobre un vault con config litellm (sin
+/// models/ y sin payload flag) NO cae en exit 21: el brazo D7.3 —
+/// provider externo no necesita modelo local — más el resume que ya no
+/// re-pide el payload (F3 por artefacto). Termina 0 con todo saltando.
+#[test]
+fn offline_resume_with_litellm_config_does_not_veto() {
+    let dir = tmp();
+    let vault = dir.path().join("v-t14b");
+    let rt = vault.join(".tepochcalli");
+    std::fs::create_dir_all(rt.join("config")).expect("config dir");
+    std::fs::create_dir_all(rt.join("db")).expect("db dir");
+    std::fs::create_dir_all(rt.join("bin")).expect("bin dir");
+    std::fs::create_dir_all(rt.join("venv").join("bin")).expect("venv bin dir");
+    std::fs::write(rt.join("bin").join("uv"), b"fake-uv").expect("uv artifact");
+    std::fs::write(
+        rt.join("venv").join("bin").join("python"),
+        b"#!/bin/sh\nexit 0\n",
+    )
+    .expect("venv artifact");
+    std::fs::write(
+        vault.join(".tepochcalli").join(".install-intent"),
+        "AGENTS.md\n",
+    )
+    .expect("intent artifact");
+    std::fs::write(
+        rt.join("config").join("tepochcalli.toml"),
+        "\n[embedding]\nprovider = \"litellm\"\nmodel = \"openai/emb\"\napi_key = \"sk-fake\"\n",
+    )
+    .expect("config artifact");
+    std::fs::write(
+        rt.join("db").join("index-meta.json"),
+        b"{\"model\":\"openai/emb\",\"dims\":null}\n",
+    )
+    .expect("meta artifact");
+    std::fs::write(
+        vault.join("opencode.json"),
+        b"{\"mcp\": {\"servers\": {\"tepochcalli-rag\": {}}}}\n",
+    )
+    .expect("f8 artifact");
+    assert!(!rt.join("models").exists(), "el pin exige models/ ausente");
+
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--offline",
+            "--resume",
+            "--vault",
+            vault.to_str().expect("utf8 tmp"),
+        ])
+        .output()
+        .expect("spawn install offline");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "el brazo litellm+resume no puede caer en 21, stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("resume: F3 already done"),
+        "F3 por artefacto, got:\n{stderr}"
+    );
+
+    // Control: sin --resume el fetch del payload apunta a un loopback muerto:
+    // OfflineNoCache determinista (fallo limpio, nada escrito).
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--offline",
+            "--vault",
+            vault.to_str().expect("utf8 tmp"),
+        ])
+        .env("TEPOCHCALLI_RELEASE_BASE_URL", "http://127.0.0.1:9")
+        .output()
+        .expect("spawn install offline sin resume");
+    assert_eq!(
+        out.status.code(),
+        Some(21),
+        "sin resume no salta F3; fetch imposible offline corta",
     );
 }
 

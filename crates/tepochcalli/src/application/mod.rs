@@ -13,8 +13,8 @@ pub mod phase8;
 pub mod swap;
 pub mod text;
 pub use embedder_menu::{
-    compensate_phase6, config_path, read_completed_report, run_phase6, Phase6Deps, Phase6Report,
-    Provenance, EMBEDDER_PATHS,
+    compensate_phase6, config_path, litellm_config_present, read_completed_report, run_phase6,
+    Phase6Deps, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
 pub use installer::{
     check_prereqs, check_prereqs_on, compensate_phase1, compensate_phase2, compensate_phase3,
