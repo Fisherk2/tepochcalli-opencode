@@ -35,10 +35,10 @@ fn usage_top() -> &'static str {
     "Usage: tepochcalli <command> [options]\n\
      \n\
      Commands:\n  \
-     install            install a vault (T7+)\n  \
-     config embedder    pick the embedding provider (T11+/T16)\n  \
-     reindex            rebuild the index (T17)\n  \
-     uninstall          remove the runtime (T17)\n\
+     install            install a vault\n  \
+     config embedder    pick the embedding provider\n  \
+     reindex            rebuild the index\n  \
+     uninstall          remove the runtime\n\
      \n\
      Options:\n  \
      --help     print this help\n  \
@@ -57,8 +57,8 @@ fn usage_for(command: &str) -> String {
          --payload-url <url>   override the release asset URL (dev/tests;\n  \
          needs --payload-sha256)\n  \
          --payload-sha256 <hex>  expected SHA-256 for --payload-url\n  \
-          --resume           skip phases already done (artifacts + .install-state)\
-          --offline          no network: local payload + cached model only\n  \
+         --resume           skip phases already done (artifacts + .install-state)\n  \
+         --offline          no network: local payload + cached model only\n  \
          --help     print this help\n  \
          --version  print the version\n"
             .to_string();
