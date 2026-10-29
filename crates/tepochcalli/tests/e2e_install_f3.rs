@@ -434,6 +434,65 @@ fn release_payload_rejects_traversal_member() {
     );
 }
 
+/// L3-2: un F3 que falla (payload ilegible) corre su compensador ANTES del
+/// panel — cero residuo: ni `.install-intent`, ni `00-Resources/`, ni
+/// placeholders. El `.install-state` queda con F1/F2 (fases previas reales).
+#[test]
+fn install_f3_failure_compensates_before_the_panel() {
+    let dir = tmp();
+    let payload = dir.path().join("payload");
+    std::fs::create_dir_all(&payload).expect("payload dir");
+    let broken = payload.join("secret.md");
+    std::fs::write(
+        &broken,
+        b"# unreadable
+",
+    )
+    .expect("fixture");
+    // chmod 000: fs::copy no puede leer el origen (EACCES, determinista).
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(&broken, std::fs::Permissions::from_mode(0o000))
+        .expect("chmod 000 fixture");
+
+    let vault = dir.path().join("vault");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--vault",
+            vault.to_str().expect("utf8 tmp"),
+            "--payload",
+            payload.to_str().expect("utf8 tmp"),
+        ])
+        .output()
+        .expect("spawn install");
+    assert_eq!(
+        out.status.code(),
+        Some(i32::from(WizardError::PermissionDenied.exit_code())),
+        "stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&out.stderr).contains("install: phase F3 failed"),
+        "el panel debe nombrar la fase, got:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        !vault.join(".tepochcalli").join(".install-intent").exists(),
+        "la compensación de F3 no deja intent suelto"
+    );
+    assert!(
+        !vault.join("00-Resources").exists(),
+        "cero residuo de placeholders tras el fallo compensado"
+    );
+    let state = std::fs::read_to_string(vault.join(".tepochcalli").join(".install-state"))
+        .unwrap_or_default();
+    assert!(
+        !state.lines().any(|line| line.trim() == "F3"),
+        "un F3 fallado no se marca done: {state}"
+    );
+}
+
 #[test]
 fn install_help_mentions_payload_flag() {
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))

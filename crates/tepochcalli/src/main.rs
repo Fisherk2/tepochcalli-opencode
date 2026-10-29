@@ -20,10 +20,11 @@ use tepochcalli::application::failure::{
 };
 use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
-    check_prereqs, compensate_phase6, ensure_vault_dir, guard_offline_before_touch, is_phase_done,
-    mark_phase_done, payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3,
-    run_phase4, run_phase5, run_phase6, run_phase7, run_phase8, run_reindex, run_swap,
-    run_uninstall, Phase6Deps, Phase6Report, SwapDeps, SwapOptions,
+    check_prereqs, compensate_phase3, compensate_phase6, compensate_phase7, ensure_vault_dir,
+    guard_offline_before_touch, is_phase_done, mark_phase_done, payload_local_ready,
+    read_completed_report, resolve_vault_dir, run_phase3, run_phase4, run_phase5, run_phase6,
+    run_phase7, run_phase8, run_reindex, run_swap, run_uninstall, Phase6Deps, Phase6Report,
+    SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::failure::{failure_body, failure_title, redact};
 use tepochcalli::domain::{Phase, VaultPath, WizardError};
@@ -545,6 +546,9 @@ fn run_phases(
                 report.skipped
             }
             Err(err) => {
+                // L3-2: wiring del compensador antes del panel — un F3 que
+                // falló a mitad deja el vault como al entrar, sin intent.
+                compensate_phase3(path.as_path());
                 return report_failure(
                     ui,
                     Some(Phase::F3),
@@ -651,6 +655,9 @@ fn run_phases(
             }
             Err(err) => {
                 let err = offline_map(offline, err);
+                // L3-2: wiring del compensador antes del panel — el sidecar
+                // y su temp fuera; el índice queda sin metadatos huérfanos.
+                compensate_phase7(path.as_path());
                 return report_failure(
                     ui,
                     Some(Phase::F7),
