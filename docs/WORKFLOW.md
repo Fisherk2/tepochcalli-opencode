@@ -206,7 +206,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
   2. **No hay release publicada**: `release.yml` nunca corrió, no existe ningún asset `tepochcalli-workspace-<ver>.tar.gz` real ni installers generados por `dist`; la regla one-version solo está probada con payload local.
   3. **Windows sin probar**: target compilado pero fuera de la matriz; `install.ps1`, `venv/Scripts/python.exe` y el smoke path-5 nunca se ejecutaron en Windows.
   4. `just rust-ci` **verde en local desde 2026-10-28 (rito `/test` posterior al FTR)**: `rust-fmt` y
-  `cargo clippy -D warnings` limpios, y `cargo test` con **291 passed, 0 failed, 2 ignored**.
+  `cargo clippy -D warnings` limpios, y `cargo test` con **289 passed, 0 failed, 2 ignored** (los dos menos que en 2026-10-28 son tests-helper duplicados que murieron al consolidar los lectores en `application/text.rs`, TD-18 pagado — cobertura única, no menor).
   Los dos tests que dependían de red dejaron de mentir: F4 ya no reporta `DiskFull` cuando la
   red está caída (`map_fetch_error` clasifica los `io::ErrorKind` de transporte como
   `NetDownload`, con tabla unit en el adaptador) y los dos flujos reales que descargan `uv` y un
