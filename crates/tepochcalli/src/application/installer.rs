@@ -91,13 +91,6 @@ pub fn tool_present_in(name: &str, dirs: &[PathBuf]) -> bool {
     crate::adapters::find_tool_in(name, dirs).is_some()
 }
 
-fn path_dirs() -> Vec<PathBuf> {
-    match std::env::var_os("PATH") {
-        Some(paths) => std::env::split_paths(&paths).collect(),
-        None => Vec::new(),
-    }
-}
-
 fn check_ram(host: &dyn HostProbe) -> Result<Option<f64>, WizardError> {
     // shortcut: probe failure passes — a gate must not abort on unknown data (T10 refines UX).
     let ram = host.ram_total_gb().or_else(|| host.ram_available_gb());
@@ -115,32 +108,29 @@ fn check_disk(host: &dyn HostProbe, at: &Path) -> Result<Option<f64>, WizardErro
     Ok(free)
 }
 
-/// F1 with explicit seams (OS value + disk probe path) for `FakeHost` tests.
+/// F1 with explicit seams (OS value + disk probe path + PATH dirs) for
+/// `FakeHost` tests (S-4/L4-5): los dirs vienen del caller (`main` pasa la
+/// lectura real de `PATH` vía `adapters::host::path_dirs`) — la misma lista
+/// alimenta el chequeo de obsidian/opencode y, en el adapter, la sonda GPU
+/// cross-OS (una única fuente del `PATH`).
 pub fn check_prereqs_on(
     host: &dyn HostProbe,
     os: &str,
     disk_probe_path: &Path,
+    path_dirs: &[PathBuf],
 ) -> Result<PrereqReport, WizardError> {
     if !is_supported_os(os) {
         return Err(WizardError::PrereqPlatform);
     }
     let ram_gb = check_ram(host)?;
     let disk_free_gb = check_disk(host, disk_probe_path)?;
-    let dirs = path_dirs();
     Ok(PrereqReport {
         os: os.to_string(),
         ram_gb,
         disk_free_gb,
-        obsidian_found: tool_present_in(OBSIDIAN_TOOL, &dirs),
-        opencode_found: tool_present_in(OPENCODE_TOOL, &dirs),
+        obsidian_found: tool_present_in(OBSIDIAN_TOOL, path_dirs),
+        opencode_found: tool_present_in(OPENCODE_TOOL, path_dirs),
     })
-}
-
-/// F1 against the real OS, probing free disk at the caller cwd (the vault is
-/// unknown until F2, so F1 cannot probe it yet).
-pub fn check_prereqs(host: &dyn HostProbe) -> Result<PrereqReport, WizardError> {
-    let cwd = std::env::current_dir().map_err(|_| WizardError::PermissionDenied)?;
-    check_prereqs_on(host, std::env::consts::OS, &cwd)
 }
 
 /// F2 choice: `--vault` wins; otherwise the Ui asks (default preselected).

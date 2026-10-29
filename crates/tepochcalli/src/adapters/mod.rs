@@ -11,7 +11,7 @@ pub mod payload;
 pub mod std_proc;
 pub mod ui;
 
-pub use host::{find_tool_in, SysHostProbe};
+pub use host::{find_tool_in, path_dirs, SysHostProbe};
 pub use http::UreqHttpClient;
 pub use payload::{
     fetch_release_payload, is_loopback_base, merge_tree, mirror_http_non_loopback,

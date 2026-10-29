@@ -12,15 +12,15 @@ use std::process::ExitCode;
 
 use tepochcalli::adapters::UreqHttpClient;
 use tepochcalli::adapters::{
-    fetch_release_payload, mirror_http_non_loopback, release_base_url, HeadlessUi, LocalPayload,
-    ReleasePayload, StdCommandRunner, SysHostProbe, TtyUi,
+    fetch_release_payload, mirror_http_non_loopback, path_dirs, release_base_url, HeadlessUi,
+    LocalPayload, ReleasePayload, StdCommandRunner, SysHostProbe, TtyUi,
 };
 use tepochcalli::application::failure::{
     log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
 };
 use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
-    check_prereqs, compensate_phase3, compensate_phase6, compensate_phase7, ensure_vault_dir,
+    check_prereqs_on, compensate_phase3, compensate_phase6, compensate_phase7, ensure_vault_dir,
     guard_offline_before_touch, is_phase_done, litellm_config_present, mark_phase_done,
     payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3, run_phase4,
     run_phase5, run_phase6, run_phase7, run_phase8, run_reindex, run_swap, run_uninstall,
@@ -343,18 +343,33 @@ fn run_install(
         Box::new(TtyUi)
     };
     // F1: prerequisites (RAM/disk/platform gate; missing tools only warn).
-    let report = match check_prereqs(&SysHostProbe) {
-        Ok(report) => report,
-        Err(err) => {
+    // L4-5 (S-4): las path_dirs reales llegan del adapter — main es el caller
+    // del composition-edge; la sonda GPU comparte la misma fuente de `PATH`.
+    let disk_cwd = match std::env::current_dir() {
+        Ok(cwd) => cwd,
+        Err(_) => {
             return report_failure(
                 &*ui,
                 Some(Phase::F1),
                 "install: prerequisites failed",
-                err,
+                WizardError::PermissionDenied,
                 None,
-            );
+            )
         }
     };
+    let report =
+        match check_prereqs_on(&SysHostProbe, std::env::consts::OS, &disk_cwd, &path_dirs()) {
+            Ok(report) => report,
+            Err(err) => {
+                return report_failure(
+                    &*ui,
+                    Some(Phase::F1),
+                    "install: prerequisites failed",
+                    err,
+                    None,
+                );
+            }
+        };
     for (tool, found) in [
         ("obsidian", report.obsidian_found),
         ("opencode", report.opencode_found),

@@ -114,6 +114,7 @@ fn f1_f2_failures_touch_no_user_data() {
         &FakeHost::new(Some(4.0), Some(4.0), Some(100.0), None),
         "linux",
         dir.path(),
+        &[],
     )
     .expect_err("4 GB must abort F1");
     assert_eq!(err, WizardError::PrereqRam);

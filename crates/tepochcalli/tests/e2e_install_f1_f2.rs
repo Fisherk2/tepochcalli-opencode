@@ -26,7 +26,7 @@ fn tmp() -> tempfile::TempDir {
 #[test]
 fn ram_4gb_aborts_with_code_10() {
     let dir = tmp();
-    let err = check_prereqs_on(&host(4.0, 100.0), "linux", dir.path())
+    let err = check_prereqs_on(&host(4.0, 100.0), "linux", dir.path(), &[])
         .expect_err("4 GB RAM must abort the install");
     assert_eq!(err, WizardError::PrereqRam);
     assert_eq!(err.exit_code(), 10);
@@ -35,15 +35,15 @@ fn ram_4gb_aborts_with_code_10() {
 #[test]
 fn ram_16gb_passes_prereqs() {
     let dir = tmp();
-    let report =
-        check_prereqs_on(&host(16.0, 100.0), "linux", dir.path()).expect("16 GB RAM must pass F1");
+    let report = check_prereqs_on(&host(16.0, 100.0), "linux", dir.path(), &[])
+        .expect("16 GB RAM must pass F1");
     assert_eq!(report.os, "linux");
 }
 
 #[test]
 fn insufficient_disk_aborts_with_code_11() {
     let dir = tmp();
-    let err = check_prereqs_on(&host(16.0, 2.5), "linux", dir.path())
+    let err = check_prereqs_on(&host(16.0, 2.5), "linux", dir.path(), &[])
         .expect_err("2.5 GB free disk must abort the install");
     assert_eq!(err, WizardError::PrereqDisk);
     assert_eq!(err.exit_code(), 11);
@@ -53,7 +53,7 @@ fn insufficient_disk_aborts_with_code_11() {
 fn unsupported_platform_aborts_with_code_12() {
     let dir = tmp();
     for os in ["freebsd", "plan9", ""] {
-        let err = check_prereqs_on(&host(16.0, 100.0), os, dir.path())
+        let err = check_prereqs_on(&host(16.0, 100.0), os, dir.path(), &[])
             .expect_err("unknown OS must abort the install");
         assert_eq!(err, WizardError::PrereqPlatform, "os={os}");
         assert_eq!(err.exit_code(), 12, "os={os}");
@@ -65,7 +65,8 @@ fn supported_platforms_pass() {
     let dir = tmp();
     for os in ["linux", "macos", "windows"] {
         assert!(is_supported_os(os), "os={os}");
-        check_prereqs_on(&host(16.0, 100.0), os, dir.path()).expect("supported OS must pass F1");
+        check_prereqs_on(&host(16.0, 100.0), os, dir.path(), &[])
+            .expect("supported OS must pass F1");
     }
     assert!(!is_supported_os("freebsd"));
 }
@@ -74,7 +75,7 @@ fn supported_platforms_pass() {
 fn missing_optional_tools_never_fail_prereqs() {
     // `obsidian`/`opencode` detection is best-effort: absence only warns.
     let dir = tmp();
-    check_prereqs_on(&host(16.0, 100.0), "linux", dir.path())
+    check_prereqs_on(&host(16.0, 100.0), "linux", dir.path(), &[])
         .expect("missing optional tools must not fail F1");
 }
 

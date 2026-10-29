@@ -49,7 +49,11 @@ pub fn find_tool_in(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
     })
 }
 
-fn path_dirs() -> Vec<PathBuf> {
+/// Los dirs reales del `PATH` del proceso (S-4/L4-5): única fuente para el
+/// chequeo de prereqs (obsidian/opencode desde `main`) y para la sonda GPU
+/// cross-OS (`gpu()` del probe).
+#[must_use]
+pub fn path_dirs() -> Vec<PathBuf> {
     std::env::var_os("PATH")
         .map(|paths| std::env::split_paths(&paths).collect())
         .unwrap_or_default()
