@@ -68,6 +68,25 @@ def _truncate_for_budget(results: list[Chunk], max_tokens: int = 1600) -> list[C
 * Códigos de salida del §UX de fallo como constantes nombradas (`EXIT_NETWORK_*`).
 * `thiserror` para errores del wizard; nada de `unwrap()` en rutas de usuario.
 
+### Pirámide de tests del wizard (qué vive dónde)
+
+No hay carpetas `unit/ integration/ e2e/` bajo `crates/tepochcalli/tests/` y no debe haberlas:
+Cargo solo compila `tests/*.rs` y `tests/<dir>/main.rs`, así que una subcarpeta sin `main.rs`
+se ignora en silencio y una con `main.rs` funde todo el bucket en un único binario de test
+(adiós a `cargo test --test swap`). El nivel se elige por **ubicación**, no por carpeta:
+
+| Nivel | Ubicación | Qué va ahí | Ejemplos vivos |
+| --- | --- | --- | --- |
+| Unit | `src/<módulo>.rs` → `#[cfg(test)] mod tests` | lógica pura o privada: parsers, escaping, estimadores, mapeos de error, menús con fakes | `src/application/embedder_menu.rs` |
+| Integration | `crates/tepochcalli/tests/<área>.rs` | orquestadores de `application/` y adapters contra puertos falsos o `tempfile` (API pública) | `swap.rs`, `ports.rs`, `adapters.rs`, `domain_units.rs`, `embedder_presets.rs` |
+| E2E | mismo directorio, ficheros que lanzan el binario (`bin()`/`Command`) | contrato de CLI: flags, códigos de salida, panel de fallo, workflows de fases | `ui.rs`, `cli_help.rs`, `failure_ux.rs`, `phases_*.rs`, `reindex_uninstall.rs`, `installers.rs` |
+| Soporte | `tests/common/` | helpers compartidos (no es un target: `mod common;` en cada fichero) | `tests/common/` |
+
+Regla al añadir un test: si no necesita disco ni procesos, va como `#[cfg(test)]` en `src/`;
+si necesita ficheros o red falsa, `tests/<área>.rs`; si necesita el binario, e2e con `bin()`.
+Un fichero nuevo de `tests/` es una **capacidad** nueva de Cargo (un target más): nombra por
+área de comportamiento (`swap`, `reindex_uninstall`), nunca por nivel (`integration`).
+
 ## Nomenclatura de archivos y docs
 
 | Constructo | Convención | Ejemplo |
