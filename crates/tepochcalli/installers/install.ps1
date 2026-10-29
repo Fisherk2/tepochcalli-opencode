@@ -32,8 +32,12 @@ $ErrorActionPreference = "Stop"
 $App = "tepochcalli"
 $Repo = "Fisherk2/tepochcalli-opencode"
 $Target = "x86_64-pc-windows-msvc"
+# Seam for tests/mirrors: override the release base URL; unset keeps the real one.
+$BaseOverride = $env:TEPOCHCALLI_RELEASE_BASE_URL
 
-if ($Tag -eq "latest") {
+if ($BaseOverride) {
+    $Base = $BaseOverride
+} elseif ($Tag -eq "latest") {
     $Base = "https://github.com/$Repo/releases/latest/download"
 } else {
     $Base = "https://github.com/$Repo/releases/download/$Tag"

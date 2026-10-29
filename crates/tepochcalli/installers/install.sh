@@ -28,6 +28,8 @@ set -eu
 APP="tepochcalli"
 REPO="Fisherk2/tepochcalli-opencode"
 TAG="${1:-latest}"
+# Seam for tests/mirrors: override the release base URL; unset keeps the real one.
+BASE_URL="${TEPOCHCALLI_RELEASE_BASE_URL:-}"
 
 usage() {
     echo "usage: install.sh [tag] [-- inspect-first: read this script before running it]" >&2
@@ -64,6 +66,14 @@ sha256_of() {
     fi
 }
 
+fetch() {
+    # https pins the protocol; a non-https override (loopback mirror) cannot be pinned.
+    case "$1" in
+        https://*) curl --proto '=https' --tlsv1.2 -fsSL "$1" -o "$2" ;;
+        *) curl -fsSL "$1" -o "$2" ;;
+    esac
+}
+
 main() {
     need curl
     need tar
@@ -71,7 +81,9 @@ main() {
     # `$1` (when present) is the release tag; the rest forwards to the binary.
     if [ $# -gt 0 ]; then shift; fi
     target="$(detect_target)"
-    if [ "${TAG}" = "latest" ]; then
+    if [ -n "${BASE_URL}" ]; then
+        base="${BASE_URL}"
+    elif [ "${TAG}" = "latest" ]; then
         base="https://github.com/${REPO}/releases/latest/download"
     else
         base="https://github.com/${REPO}/releases/download/${TAG}"
@@ -81,8 +93,8 @@ main() {
     # shortcut: no trap on pre-POSIX `mktemp -d` failures; the dir is empty
     # until the verified extract below, and residue is inert.
     echo "install.sh: downloading ${archive} (${TAG})…" >&2
-    curl --proto '=https' --tlsv1.2 -fsSL "${base}/${archive}" -o "${work}/${archive}"
-    curl --proto '=https' --tlsv1.2 -fsSL "${base}/${archive}.sha256" -o "${work}/${archive}.sha256"
+    fetch "${base}/${archive}" "${work}/${archive}"
+    fetch "${base}/${archive}.sha256" "${work}/${archive}.sha256"
     # The sidecar is `sha256sum` format (`<hex>  <filename>`); compare the
     # hash only (the filename inside may carry a different prefix).
     expected="$(awk '{print $1}' "${work}/${archive}.sha256")"
