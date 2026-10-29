@@ -7,10 +7,13 @@
 
 | Área | Toolchain | Comandos (recetas del Justfile raíz) |
 | --- | --- | --- |
-| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `just lint-fix` · `just fmt` · `just typecheck` · `just test` |
-| Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | comandos crudos de cargo (sin receta hasta Phase 3, cuando el crate exista — ver §Convenciones Rust) |
+| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `just python-lint-fix` · `just python-fmt` · `just python-typecheck` · `just python-test` |
+| Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | `just rust-fmt` · `just rust-lint` · `just rust-test` · `just rust-ci` |
 | Docs | markdownlint (reglas desactivadas: líneas largas en MD) | `just md-lint` |
 | Commits | Conventional Commits manuales (hook a decisión en Phase 1) | ver §Commits |
+
+`just quality` y `just ci` cubren los dos lenguajes; las recetas `just python-*` / `just rust-*`
+tocan uno solo.
 
 Python se ejecuta SIEMPRE vía recetas de `just`: el Justfile exporta `UV_PROJECT_ENVIRONMENT=venv`
 (quirk uv 0.12.9: sin esa var, uv crea un `.venv` paralelo con deriva impredecible). Un `uv` crudo

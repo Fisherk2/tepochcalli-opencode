@@ -42,8 +42,9 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `.tepochcalli/flow/` y `.tepochcalli/mcp/`; nada de lógica de negocio en `opencode.json`.
 * El portero de comandos es el Justfile (raíz): **lanzar comandos vía recetas `just`, nunca
   crudos** — `just typecheck` es el gate mypy strict sobre `flow/`, `just quality` el gate
-  táctico, y `just ci` el gate completo (sync → lint → fmt-check → typecheck → coverage →
-  bench-smoke; `coverage` impone `fail_under = 95` sobre `flow` + `mcp`).
+  táctico, y `just ci` el gate completo (python-sync → lint → fmt-check → typecheck →
+  coverage → bench-smoke → rust-ci; `coverage` impone `fail_under = 95` sobre `flow` + `mcp`).
+  Las recetas `python-*` / `rust-*` tocan un solo lenguaje; las unprefixed reparten a ambos.
 * Rust (wizard): `cargo fmt` + `cargo clippy -D warnings`; fases del instalador como
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).
 * Nomenclatura: specs `specs/spec-<kebab>.md`; ADRs `specs/adr/adr-NNN-<kebab>.md`; commits
@@ -84,7 +85,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 
 * [ ] Docs en español con términos exactos de D1-D6 (`tepochcalli-rag`, `.tepochcalli/`, `paraphrase-multilingual-MiniLM-L12-v2`, `cocoindex`, `markitdown-mcp`).
 * [ ] Si toqué un contrato (tools, config, layout): actualizo la spec correspondiente Y, si es decisión, escribo ADR.
-* [ ] Gate táctico verde: `just quality` (o `just ci` completo antes de integrar).
+* [ ] Gate táctico verde: `just quality` (o `just ci` completo antes de integrar) — ambos cubren Python y Rust.
 * [ ] Bloques mermaid válidos (sin paréntesis sin comillas en labels de nodo).
 * [ ] `git status --short` muestra solo mis archivos intencionados; nada de `venv/db/models`.
 * [ ] Commit atómico Conventional Commits ≤72 cols con trailer `Co-Authored-By`.
