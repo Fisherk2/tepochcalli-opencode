@@ -63,7 +63,7 @@ El flow lee `[embedding]` de `tepochcalli.toml`: `provider = "local"` (default) 
 ### Upgrade path (config, no código)
 
 * `BAAI/bge-m3` (1024 dims, GPU recomendada): cambiar `model` en `[embedding]` → ejecutar re-index completo → refresh. Documentado para usuarios con hardware.
-* API externa (OpenAI/Voyage/Cohere/etc. vía LiteLLM): `provider = "litellm"`, `model = "openai/text-embedding-3-small"` (ejemplo), clave vía `api_key_env = "TEPOCHCALLI_EMBED_API_KEY"` referenciada por opencode.json con `{env:TEPOCHCALLI_EMBED_API_KEY}` o en `tepochcalli.toml` (gitignored). Coste: la indexación consume API tokens — advertencia visible en docs y en el wizard si se activa.
+* API externa (OpenAI/Voyage/Cohere/etc. vía LiteLLM): `provider = "litellm"`, `model = "openai/text-embedding-3-small"` (ejemplo). La clave tiene dos fuentes, resueltas en un solo sitio (`EmbeddingConfig.resolve_api_key()`, flow y MCP comparten la regla): la variable de entorno nombrada por `api_key_env = "TEPOCHCALLI_EMBED_API_KEY"` — referenciable desde opencode.json con `{env:TEPOCHCALLI_EMBED_API_KEY}` — o la clave literal `api_key = "sk-…"` que el wizard escribe en `tepochcalli.toml` (gitignored). **Precedencia: la env var gana**; el fichero es el fallback. Coste: la indexación consume API tokens — advertencia visible en docs y en el wizard si se activa.
 
 ### Selección de provider en instalación (D7 — ADR-007)
 
@@ -158,7 +158,8 @@ Para CUALQUIER id de HF (preset o libre), el wizard consulta la API pública ANT
 Las salidas 2-3 aceptan `HF_TOKEN` opcional para modelos gated: se usa solo durante la corrida
 del wizard (env del proceso de descarga) y **nunca** se loggea ni se persiste sin que el usuario
 lo pida explícitamente. La API key de la salida 4 sí se persiste, solo en
-`.tepochcalli/config/tepochcalli.toml` (gitignored).
+`.tepochcalli/config/tepochcalli.toml` (gitignored) bajo `[embedding].api_key`, y el motor la
+resuelve con precedencia env-var > fichero (§Upgrade path); el flow y el MCP comparten esa regla.
 
 #### Matriz de edge cases (D7)
 
@@ -186,6 +187,7 @@ device = "cpu"                # device explícito para SentenceTransformerEmbedd
 # provider = "litellm"
 # model = "openai/text-embedding-3-small"
 # api_key_env = "TEPOCHCALLI_EMBED_API_KEY"
+# api_key = "sk-..."          # alternativa LITERAL a api_key_env (gitignored); la env var gana si existe
 # provider = "none"           # D15: sin embedder — RAG en modo degraded (E_NO_EMBEDDER) hasta `tepochcalli config embedder`
 
 [chunking]
