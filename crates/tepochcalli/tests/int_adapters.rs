@@ -225,6 +225,70 @@ fn host_tool_search_finds_present_and_misses_absent() {
     assert_eq!(find_tool_in("sh", &empty), None);
 }
 
+/// L2-8: symlinks del payload (reales y colgantes) NUNCA cruzan el merge —
+/// skipped tampoco nada escrito fuera del vault. symlink_metadata lee la
+/// entrada sin seguir el enlace, así que el colgante no muere en el
+/// branch file/copy por error.
+#[cfg(unix)]
+#[test]
+fn merge_tree_skips_symlinks_real_and_dangling() {
+    use std::os::unix::fs::symlink;
+    use tepochcalli::adapters::LocalPayload;
+    use tepochcalli::ports::PayloadSource;
+
+    let src = tempfile::tempdir().expect("src tempdir");
+    let dest = tempfile::tempdir().expect("dest tempdir");
+    std::fs::write(src.path().join("note.md"), "# real file").expect("fixture file");
+    // Real: apunta FUERA del vault.
+    let outside = dest.path().join("outside-target.txt");
+    std::fs::write(&outside, b"outside bytes").expect("outside fixture");
+    symlink(&outside, src.path().join("real-link")).expect("real symlink");
+    // Colgante: el destino no existe en ningún lado.
+    symlink(
+        src.path().join("does-not-exist.md"),
+        src.path().join("dangling-link"),
+    )
+    .expect("dangling symlink");
+
+    let report = LocalPayload::new(src.path())
+        .materialize_report(dest.path())
+        .expect("el merge no puede fallar por un symlink");
+
+    let written_names: Vec<String> = report
+        .written
+        .iter()
+        .map(|p| {
+            p.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+        .collect();
+    let skipped_names: Vec<String> = report
+        .skipped
+        .iter()
+        .map(|p| {
+            p.file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        })
+        .collect();
+    assert!(
+        !written_names.iter().any(|n| n.contains("link")),
+        "ningún symlink cruza el merge, escritos: {written_names:?}"
+    );
+    assert!(written_names.iter().any(|n| n == "note.md"));
+    assert!(
+        skipped_names.iter().any(|n| n == "real-link")
+            && skipped_names.iter().any(|n| n == "dangling-link"),
+        "ambos enlaces quedan en skip, skipped: {skipped_names:?}"
+    );
+    // El outside-target sigue con sus bytes originales (nada lo tocó).
+    assert_eq!(
+        std::fs::read(&outside).expect("outside intact"),
+        b"outside bytes"
+    );
+}
+
 #[test]
 fn host_tool_search_accepts_the_windows_exe_twin() {
     let dir = tempfile::tempdir().expect("tempdir");

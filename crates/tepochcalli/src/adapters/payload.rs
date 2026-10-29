@@ -297,7 +297,13 @@ pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
             {
                 continue; // whole subtree skipped: its dirs are never pushed
             }
-            let kind = entry.file_type().map_err(|_| WizardError::PayloadCorrupt)?;
+            // Lectura de la entrada SIN seguir enlaces (fs::symlink_metadata
+            // bajo el path de la entrada): un symlink colgante llega aquí
+            // como entrada y va por la rama de skip — nunca como "file" que
+            // copy debería materializar, jamás fuera del vault (L2-8).
+            let kind = std::fs::symlink_metadata(entry.path())
+                .map_err(|_| WizardError::PayloadCorrupt)?
+                .file_type();
             if kind.is_symlink() {
                 report.skipped.push(root.join(&rel));
                 continue;
