@@ -376,7 +376,10 @@ fn release_payload_materializes_over_loopback() {
     let release = ReleasePayload::new(&url, &sha256_hex(&asset));
 
     let vault = tmp();
-    let written = release.materialize(vault.path()).expect("loopback asset");
+    let written = release
+        .materialize_report(vault.path())
+        .expect("loopback asset")
+        .written;
 
     handle.join().expect("server thread");
     assert_eq!(
@@ -397,7 +400,7 @@ fn release_payload_corrupt_sha_leaves_dest_intact() {
 
     let vault = tmp();
     let err = release
-        .materialize(vault.path())
+        .materialize_report(vault.path())
         .expect_err("SHA mismatch must fail typed");
 
     handle.join().expect("server thread");
@@ -420,7 +423,7 @@ fn release_payload_rejects_traversal_member() {
 
     let vault = tmp();
     let err = release
-        .materialize(vault.path())
+        .materialize_report(vault.path())
         .expect_err("traversal member must fail typed");
 
     handle.join().expect("server thread");

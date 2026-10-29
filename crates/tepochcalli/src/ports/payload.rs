@@ -15,17 +15,9 @@ pub struct MergeReport {
 }
 
 /// Materializes the workspace payload (`ReleasePayload` vs `LocalPayload`
-/// in T8). Returns exactly the files written (basis of `.install-intent`).
+/// in T8). Returns exactly written + skipped (pre-existing user files,
+/// `.obsidian/`, symlinks) — basis of `.install-intent`.
 pub trait PayloadSource {
-    /// Copy/extract the payload under `dest`; return the files written.
-    fn materialize(&self, dest: &Path) -> Result<Vec<PathBuf>, WizardError>;
-
     /// Copy/extract the payload under `dest`; return written + skipped.
-    /// The default reports everything as written (fakes with no merge).
-    fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
-        Ok(MergeReport {
-            written: self.materialize(dest)?,
-            skipped: Vec::new(),
-        })
-    }
+    fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError>;
 }

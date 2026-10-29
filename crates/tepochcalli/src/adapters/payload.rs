@@ -23,15 +23,6 @@ const OBSIDIAN_DIR: &str = ".obsidian";
 /// move is needed; removed after the merge (best-effort).
 const STAGE_DIR: &str = ".tepochcalli/.payload-stage";
 
-/// T19 wires the real asset; until then this URL fails closed (unfetchable).
-/// T19: still the fail-closed sentinel — the real asset comes from
-/// [`payload_asset_url`] (one-version rule), never from this constant.
-pub const RELEASE_ASSET_URL_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSET_URL";
-/// T19 wires the real checksum; until then nothing can match it.
-/// T19: still the fail-closed sentinel — the real checksum comes from the
-/// `<asset>.sha256` sidecar via [`fetch_release_payload`], never from here.
-pub const RELEASE_ASSET_SHA256_PLACEHOLDER: &str = "PLACEHOLDER_T19_RELEASE_ASSET_SHA256";
-
 /// Release repo hosting the versioned payload asset (one-version rule: the
 /// binary never follows a floating `latest` — it asks for its own version).
 pub const PAYLOAD_RELEASE_REPO: &str = "Fisherk2/tepochcalli-opencode";
@@ -138,10 +129,6 @@ impl LocalPayload {
 }
 
 impl PayloadSource for LocalPayload {
-    fn materialize(&self, dest: &Path) -> Result<Vec<PathBuf>, WizardError> {
-        Ok(merge_tree(&self.src, dest)?.written)
-    }
-
     fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
         merge_tree(&self.src, dest)
     }
@@ -186,23 +173,6 @@ impl ReleasePayload {
         &self.url
     }
 
-    /// Fail-closed sentinel (T8): the URL is unfetchable and the SHA matches
-    /// nothing. The real asset comes from [`for_current_version`](Self::for_current_version).
-    #[must_use]
-    pub fn placeholder() -> Self {
-        Self::new(
-            RELEASE_ASSET_URL_PLACEHOLDER,
-            RELEASE_ASSET_SHA256_PLACEHOLDER,
-        )
-    }
-
-    /// `true` unless this is the fail-closed [`placeholder`](Self::placeholder).
-    #[must_use]
-    pub fn is_configured(&self) -> bool {
-        self.url != RELEASE_ASSET_URL_PLACEHOLDER
-            && self.expected_sha256 != RELEASE_ASSET_SHA256_PLACEHOLDER
-    }
-
     fn stage_and_merge(&self, stage: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
         let asset = stage.join("asset.tar.gz");
         UreqHttpClient::new().download(&self.url, &asset, &self.expected_sha256)?;
@@ -219,10 +189,6 @@ impl ReleasePayload {
 }
 
 impl PayloadSource for ReleasePayload {
-    fn materialize(&self, dest: &Path) -> Result<Vec<PathBuf>, WizardError> {
-        Ok(self.materialize_report(dest)?.written)
-    }
-
     fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
         // Stage inside the vault: download (SHA-gated) → extract → merge →
         // remove stage, so a corrupt asset never touches the user's tree.

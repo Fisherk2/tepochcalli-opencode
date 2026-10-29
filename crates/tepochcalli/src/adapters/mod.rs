@@ -15,7 +15,6 @@ pub use payload::{
     fetch_release_payload, merge_tree, parse_sha256_sidecar, payload_asset_name, payload_asset_url,
     payload_checksum_name, payload_checksum_url, payload_release_tag, release_payload_from_sidecar,
     LocalPayload, ReleasePayload, PAYLOAD_ASSET_STEM, PAYLOAD_RELEASE_REPO,
-    RELEASE_ASSET_SHA256_PLACEHOLDER, RELEASE_ASSET_URL_PLACEHOLDER,
 };
 pub use std_proc::StdCommandRunner;
 pub use ui::{HeadlessUi, TtyUi};

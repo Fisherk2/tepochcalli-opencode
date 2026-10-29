@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
 use tepochcalli::ports::{
-    CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, PayloadSource, Ui,
+    CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, MergeReport, PayloadSource, Ui,
 };
 use tepochcalli::WizardError;
 
@@ -128,7 +128,7 @@ impl FakePayload {
 }
 
 impl PayloadSource for FakePayload {
-    fn materialize(&self, dest: &Path) -> Result<Vec<PathBuf>, WizardError> {
+    fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
         let mut written = Vec::new();
         let entries = std::fs::read_dir(&self.src).map_err(|_| WizardError::PayloadCorrupt)?;
         for entry in entries {
@@ -138,7 +138,10 @@ impl PayloadSource for FakePayload {
             std::fs::copy(entry.path(), &target).map_err(|_| WizardError::DiskFull)?;
             written.push(target);
         }
-        Ok(written)
+        Ok(MergeReport {
+            written,
+            skipped: Vec::new(),
+        })
     }
 }
 

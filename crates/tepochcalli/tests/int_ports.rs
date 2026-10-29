@@ -100,7 +100,10 @@ fn payload_materializes_fixture_files() {
     std::fs::write(src.path().join("a.md"), "# hi").expect("fixture write");
     let fake = common::FakePayload::new(src.path());
     let dest = tempfile::tempdir().expect("dest tempdir");
-    let written = fake.materialize(dest.path()).expect("materialize");
+    let written = fake
+        .materialize_report(dest.path())
+        .expect("materialize")
+        .written;
     assert_eq!(written.len(), 1);
     assert_eq!(
         std::fs::read_to_string(dest.path().join("a.md")).expect("read back"),

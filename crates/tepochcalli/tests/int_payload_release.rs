@@ -65,8 +65,6 @@ fn requested_payload_version_equals_binary_version() {
     let release = ReleasePayload::for_current_version(&"0".repeat(64));
     assert_eq!(release.url(), payload_asset_url(version));
     assert!(release.url().contains(version));
-    assert!(release.is_configured());
-    assert!(!ReleasePayload::placeholder().is_configured());
 }
 
 #[test]
@@ -129,7 +127,6 @@ fn fetch_release_payload_resolves_sha_from_sidecar() {
 
     let release = fetch_release_payload(&http, version).expect("sidecar resolves");
     assert_eq!(release.url(), asset);
-    assert!(release.is_configured());
 }
 
 #[test]
@@ -211,10 +208,12 @@ fn sidecar_built_payload_materializes_over_loopback() {
     // Same bytes, same SHA over loopback: the URL is transport, the checksum
     // is trust — so the loopback copy verifies exactly like the release one.
     let release = ReleasePayload::new(&url, &hex);
-    assert!(release.is_configured());
 
     let vault = tempfile::tempdir().expect("tempdir");
-    let written = release.materialize(vault.path()).expect("loopback asset");
+    let written = release
+        .materialize_report(vault.path())
+        .expect("loopback asset")
+        .written;
     handle.join().expect("server thread");
     assert_eq!(
         std::fs::read_to_string(vault.path().join("notes.md")).expect("read back"),
