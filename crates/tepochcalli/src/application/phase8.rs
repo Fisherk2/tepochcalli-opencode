@@ -24,6 +24,7 @@ use crate::domain::WizardError;
 use crate::ports::CommandRunner;
 
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::text::json_raw;
 
 /// The only `mcp.servers` key F8 owns (spec-installer-wizard §Merge, D19).
 pub const MANAGED_RAG: &str = "tepochcalli-rag";
@@ -160,30 +161,6 @@ fn atomic_write(target: &Path, body: &[u8]) -> Result<(), WizardError> {
     })
 }
 
-/// Minimal readers for the one-line `rag_status` payload (same hand-rolled
-/// shape as the F6 gate and F7 refresh parsers: flat top-level keys).
-fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{key}\"");
-    let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
-    let value = after_key.trim_start().strip_prefix(':')?.trim_start();
-    if let Some(quoted) = value.strip_prefix('"') {
-        let mut end = None;
-        let mut escaped = false;
-        for (i, c) in quoted.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                end = Some(i);
-                break;
-            }
-        }
-        return end.map(|i| &quoted[..i]);
-    }
-    Some(value.split([',', '}']).next().unwrap_or_default().trim())
-}
-
 /// The four frozen `rag_status` blocks plus the health semantics of
 /// spec-mcp-server §rag_status: `degraded` needs an `E_*` reason and a
 /// non-empty `fix_hint`; `ok` needs both null; a guard error envelope is a
@@ -307,12 +284,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn json_raw_keeps_whitespace_inside_quotes() {
-        // Quoted content is data: `rag_status` must report the model id
-        // byte-for-byte, never trimmed (same shape as the other four readers).
-        let body = "{\"model\":\"  padded  \",\"ok\": true}";
-        assert_eq!(json_raw(body, "model"), Some("  padded  "));
-        assert_eq!(json_raw(body, "ok"), Some("true"));
-        assert_eq!(json_raw(body, "missing"), None);
+    fn parse_rag_status_rejects_error_envelopes() {
+        // El envoltorio de error del guard es un fallo de handler, nunca un
+        // veredicto de salud (cubre el `json_raw` compartido en el camino).
+        assert_eq!(
+            parse_rag_status(r#"{"error":"E_X","reason":"boom"}"#),
+            Err(WizardError::PhaseFailed)
+        );
     }
 }

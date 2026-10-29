@@ -16,6 +16,7 @@ use crate::ports::{CommandRunner, Ui};
 use super::embedder_menu::config_path;
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::index_meta_path;
+use super::text::{config_value, json_bool, json_escape, json_string, json_u32, json_u64};
 
 /// Flow CLI module invoked through the venv interpreter (D24, T12 contract).
 const FLOW_MODULE: &str = "tepochcalli_flow";
@@ -255,70 +256,6 @@ fn write_index_meta(vault: &Path, model: &str, dims: Option<u32>) -> Result<(), 
     Ok(())
 }
 
-/// Minimal `key = "value"` reader for the wizard-written config (the file is
-/// always produced by the F6 writer, never hand-edited TOML). Undoes the
-/// writer's escaping (`\"` first, then `\\`) so the model reads back exact.
-fn config_value(body: &str, key: &str) -> Option<String> {
-    body.lines().find_map(|line| {
-        let rest = line
-            .trim()
-            .strip_prefix(key)?
-            .trim_start()
-            .strip_prefix('=')?;
-        let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        Some(value.replace("\\\"", "\"").replace("\\\\", "\\"))
-    })
-}
-
-/// Minimal JSON readers for the one-line flow contracts (same hand-rolled
-/// shape as the F6 gate and F7 refresh parsers).
-fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{key}\"");
-    let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
-    let value = after_key.trim_start().strip_prefix(':')?.trim_start();
-    if let Some(quoted) = value.strip_prefix('"') {
-        // No trim inside the quotes: that whitespace is part of the value.
-        let mut end = None;
-        let mut escaped = false;
-        for (i, c) in quoted.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                end = Some(i);
-                break;
-            }
-        }
-        return end.map(|i| &quoted[..i]);
-    }
-    Some(value.split([',', '}']).next().unwrap_or_default().trim())
-}
-
-fn json_bool(body: &str, key: &str) -> Option<bool> {
-    match json_raw(body, key)? {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn json_u64(body: &str, key: &str) -> Option<u64> {
-    json_raw(body, key)?.parse().ok()
-}
-
-fn json_u32(body: &str, key: &str) -> Option<u32> {
-    json_raw(body, key)?.parse().ok()
-}
-
-fn json_string(body: &str, key: &str) -> Option<String> {
-    json_raw(body, key).map(|raw| raw.replace("\\\"", "\"").replace("\\\\", "\\"))
-}
-
-fn json_escape(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
     match json_bool(body, "ok") {
         Some(true) => Ok(GateOk {
@@ -353,38 +290,12 @@ fn parse_refresh(body: &str) -> Result<Refreshed, WizardError> {
 mod tests {
     use super::*;
 
-    const RAW: &str = "modelo \"con comillas\" y \\ barra";
-
-    #[test]
-    fn config_value_unescapes_what_the_writer_escaped() {
-        let body = format!(
-            "[embedding]\nprovider = \"local\"\nmodel = \"{}\"\n",
-            RAW.replace('\\', "\\\\").replace('"', "\\\"")
-        );
-        assert_eq!(
-            config_value(&body, "model").as_deref(),
-            Some(RAW),
-            "leer la config debe devolver el id original, got:\n{body}"
-        );
-        assert_eq!(config_value(&body, "provider").as_deref(), Some("local"));
-        assert_eq!(config_value(&body, "api_key"), None);
-    }
-
     #[test]
     fn config_value_returns_some_empty_for_an_empty_value() {
         // Divergencia deliberada con `failure::config_value` (que devuelve
-        // `None`): aquí el valor es el modelo/provider, no un secreto a borrar.
+        // `None` via filter): aquí el valor es el modelo/provider, no un
+        // secreto a borrar.
         assert_eq!(config_value("model = \"\"\n", "model").as_deref(), Some(""));
-    }
-
-    #[test]
-    fn json_escape_round_trips_through_json_string() {
-        let body = format!("{{\"model\":\"{}\"}}", json_escape(RAW));
-        assert_eq!(json_string(&body, "model").as_deref(), Some(RAW));
-        assert_eq!(
-            json_string("{\"model\":null}", "model").as_deref(),
-            Some("null")
-        );
     }
 
     #[test]

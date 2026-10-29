@@ -21,6 +21,7 @@ use crate::ports::CommandRunner;
 
 use super::embedder_menu::Phase6Report;
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::text::{json_bool, json_escape, json_u64};
 
 /// Flow CLI module invoked through the venv interpreter (D24).
 const REFRESH_MODULE: &str = "tepochcalli_flow";
@@ -126,43 +127,6 @@ enum RefreshParsed {
     Refused,
 }
 
-/// Minimal JSON readers for the one-line CLI contract (same hand-rolled
-/// shape as the F6 gate parser: flat object, no nesting expected).
-fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{key}\"");
-    let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
-    let value = after_key.trim_start().strip_prefix(':')?.trim_start();
-    if let Some(quoted) = value.strip_prefix('"') {
-        // No trim inside the quotes: that whitespace is part of the value.
-        let mut end = None;
-        let mut escaped = false;
-        for (i, c) in quoted.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                end = Some(i);
-                break;
-            }
-        }
-        return end.map(|i| &quoted[..i]);
-    }
-    Some(value.split([',', '}']).next().unwrap_or_default().trim())
-}
-
-fn json_bool(body: &str, key: &str) -> Option<bool> {
-    match json_raw(body, key)? {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn json_u64(body: &str, key: &str) -> Option<u64> {
-    json_raw(body, key)?.parse().ok()
-}
-
 fn parse_refresh(body: &str) -> Result<RefreshParsed, WizardError> {
     if json_bool(body, "ok") == Some(false) {
         return Ok(RefreshParsed::Refused);
@@ -181,10 +145,6 @@ fn parse_refresh(body: &str) -> Result<RefreshParsed, WizardError> {
         }),
         _ => Err(WizardError::PhaseFailed),
     }
-}
-
-fn json_escape(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
 /// Vault-absolute metadata sidecar path (T14 artifact check + compensation).
@@ -228,16 +188,8 @@ fn write_index_meta(
 
 #[cfg(test)]
 mod tests {
+    use super::super::text::{json_raw, json_u64};
     use super::*;
-
-    #[test]
-    fn json_raw_keeps_whitespace_inside_quotes_and_trims_bare_values() {
-        let body = "{\"model\":\"  padded  \",\"n\": 7 }";
-        assert_eq!(json_raw(body, "model"), Some("  padded  "));
-        assert_eq!(json_u64(body, "n"), Some(7));
-        assert_eq!(json_bool(body, "n"), None, "un número no es un bool");
-        assert_eq!(json_raw(body, "missing"), None);
-    }
 
     #[test]
     fn parse_refresh_maps_the_three_verdicts() {

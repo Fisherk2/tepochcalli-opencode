@@ -13,6 +13,9 @@ use crate::domain::{Badge, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::text::{
+    config_value, json_bool, json_raw, json_string, json_u32, json_u64, toml_escape,
+};
 
 /// Menu order = UI index contract (D7.1, ADR-007).
 ///
@@ -198,10 +201,6 @@ fn ask_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardError> {
     }
 }
 
-fn toml_escape(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 fn local_config(model: &str) -> String {
     format!(
         "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
@@ -288,49 +287,6 @@ fn run_gate(
         return Err(WizardError::PhaseFailed);
     }
     parse_gate(&out.stdout)
-}
-
-fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{key}\"");
-    let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
-    let value = after_key.trim_start().strip_prefix(':')?.trim_start();
-    if let Some(quoted) = value.strip_prefix('"') {
-        // No trim inside the quotes: that whitespace is part of the value.
-        let mut end = None;
-        let mut escaped = false;
-        for (i, c) in quoted.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                end = Some(i);
-                break;
-            }
-        }
-        return end.map(|i| &quoted[..i]);
-    }
-    Some(value.split([',', '}']).next().unwrap_or_default().trim())
-}
-
-fn json_bool(body: &str, key: &str) -> Option<bool> {
-    match json_raw(body, key)? {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn json_u64(body: &str, key: &str) -> Option<u64> {
-    json_raw(body, key)?.parse().ok()
-}
-
-fn json_u32(body: &str, key: &str) -> Option<u32> {
-    json_raw(body, key)?.parse().ok()
-}
-
-fn json_string(body: &str, key: &str) -> Option<String> {
-    json_raw(body, key).map(|raw| raw.replace("\\\"", "\"").replace("\\\\", "\\"))
 }
 
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
@@ -584,21 +540,6 @@ pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
     })
 }
 
-/// Minimal `key = "value"` reader for the wizard-written config (the file is
-/// always produced by `write_config` above, never hand-edited TOML). Undoes
-/// [`toml_escape`]'s escaping (`\"` first, then `\\`).
-fn config_value(body: &str, key: &str) -> Option<String> {
-    body.lines().find_map(|line| {
-        let rest = line
-            .trim()
-            .strip_prefix(key)?
-            .trim_start()
-            .strip_prefix('=')?;
-        let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        Some(value.replace("\\\"", "\"").replace("\\\\", "\\"))
-    })
-}
-
 /// F6 compensation (T14): fall back to salida 5 — a COMPLETE degraded
 /// install (`provider = "none"`), never a failed one. Only the config is
 /// written; `models/`, `db/` and user files are untouched.
@@ -608,26 +549,8 @@ pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        badge_label, config_value, estimate_row, json_bool, json_raw, json_string, json_u32,
-        json_u64, local_config, parse_gate, parse_hf_metadata, toml_escape,
-    };
+    use super::{badge_label, estimate_row, parse_gate, parse_hf_metadata};
     use crate::domain::Badge;
-
-    #[test]
-    fn config_value_unescapes_what_toml_escape_writes() {
-        const RAW: &str = "modelo \"con comillas\" y \\ barra";
-        let body = local_config(RAW);
-        assert_eq!(
-            config_value(&body, "model").as_deref(),
-            Some(RAW),
-            "leer la config debe devolver el id original, got:\n{body}"
-        );
-        // Vuelta: re-escapar lo leído reproduce el mismo fichero.
-        let read = config_value(&body, "model").unwrap_or_default();
-        assert_eq!(local_config(&read), body);
-        assert_eq!(toml_escape(RAW), "modelo \\\"con comillas\\\" y \\\\ barra");
-    }
 
     #[test]
     fn badge_label_covers_every_variant() {
@@ -635,14 +558,6 @@ mod tests {
         assert_eq!(badge_label(Badge::Viable), "viable");
         assert_eq!(badge_label(Badge::NotRecommended), "no recomendado");
         assert_eq!(badge_label(Badge::Unknown), "sin datos");
-    }
-
-    #[test]
-    fn json_raw_keeps_whitespace_inside_quotes() {
-        let body = "{\"model\":\"  padded  \",\"n\": 7 }";
-        assert_eq!(json_raw(body, "model"), Some("  padded  "));
-        assert_eq!(json_string(body, "model").as_deref(), Some("  padded  "));
-        assert_eq!(json_u64(body, "n"), Some(7));
     }
 
     #[test]
@@ -694,15 +609,5 @@ mod tests {
         let tagless = parse_hf_metadata(br#"{"safetensors":{}}"#);
         assert_eq!(tagless.embedding_tag, None);
         assert_eq!(tagless.ram_mb, None);
-    }
-
-    #[test]
-    fn json_helpers_read_quoted_and_bare_values() {
-        let body = "{\"name\":\"a\\\"b\",\"n\":42,\"ok\":true}";
-        assert_eq!(json_string(body, "name").as_deref(), Some("a\"b"));
-        assert_eq!(json_u64(body, "n"), Some(42));
-        assert_eq!(json_u32(body, "n"), Some(42));
-        assert_eq!(json_bool(body, "ok"), Some(true));
-        assert_eq!(json_bool(body, "missing"), None);
     }
 }

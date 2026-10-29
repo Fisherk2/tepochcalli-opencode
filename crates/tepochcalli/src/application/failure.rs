@@ -6,6 +6,8 @@
 
 use std::path::{Path, PathBuf};
 
+use super::embedder_menu::config_path;
+
 /// State-dir base scoped to the installer (never the vault).
 #[must_use]
 pub fn state_dir() -> PathBuf {
@@ -67,34 +69,19 @@ pub fn write_failure_log(path: &Path, entry: &str) {
 /// Best-effort: a missing/unreadable config yields no secrets.
 #[must_use]
 pub fn secrets_from_vault(vault: &Path) -> Vec<String> {
-    // Same file `embedder_menu::write_config` writes (literal here to avoid
-    // a cross-module import for one path).
-    let body = match std::fs::read_to_string(vault.join(".tepochcalli/config/tepochcalli.toml")) {
+    // Same file `embedder_menu::config_path` names (written by `write_config`).
+    let body = match std::fs::read_to_string(config_path(vault)) {
         Ok(body) => body,
         Err(_) => return Vec::new(),
     };
     config_value(&body, "api_key").into_iter().collect()
 }
 
-/// Minimal `key = "value"` reader for the wizard-written config. Undoes the
-/// writer's escaping (`\"` first, then `\\`); an empty value yields no secret
-/// on purpose — the other readers return `Some("")`, but a blank secret here
-/// would be handed to `domain::failure::redact`, which (rightly) refuses it.
+/// The shared reader with the secret-specific contract on top: a blank value
+/// is not a secret to redact (`domain::failure::redact` rightly refuses it),
+/// so the `Some("")` the canonical reader returns becomes `None` here.
 fn config_value(body: &str, key: &str) -> Option<String> {
-    body.lines().find_map(|line| {
-        let rest = line
-            .trim()
-            .strip_prefix(key)?
-            .trim_start()
-            .strip_prefix('=')?;
-        let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        let value = value.replace("\\\"", "\"").replace("\\\\", "\\");
-        if value.is_empty() {
-            None
-        } else {
-            Some(value)
-        }
-    })
+    super::text::config_value(body, key).filter(|value| !value.is_empty())
 }
 
 #[cfg(test)]

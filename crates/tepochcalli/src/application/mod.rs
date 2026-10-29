@@ -10,6 +10,7 @@ pub mod maintenance;
 pub mod phase7;
 pub mod phase8;
 pub mod swap;
+pub(crate) mod text;
 
 pub use embedder_menu::{
     compensate_phase6, config_path, read_completed_report, run_phase6, Phase6Deps, Phase6Report,

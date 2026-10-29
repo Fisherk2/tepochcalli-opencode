@@ -25,6 +25,9 @@ use super::embedder_menu::{config_path, Phase6Report, Provenance, EMBEDDER_PATHS
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
+use super::text::{
+    config_value, json_bool, json_escape, json_string, json_u32, json_u64, toml_escape,
+};
 
 /// Model cache dir, sandboxed under the vault (same dir the F6 gate uses).
 const MODELS_DIR: &str = "models";
@@ -473,10 +476,6 @@ fn picked_config_body(picked: &Phase6Report) -> String {
     }
 }
 
-fn toml_escape(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 fn local_config(model: &str) -> String {
     format!(
         "# generado por `tepochcalli config embedder` (swap D8.4)\n\
@@ -773,70 +772,6 @@ fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<u64, WizardErro
     parse_refresh(&out.stdout)
 }
 
-/// Minimal `key = "value"` reader for the wizard-written config (same shape
-/// as the F6 writer — never hand-edited TOML). Undoes [`toml_escape`]'s
-/// escaping (`\"` first, then `\\`) so a model id reads back byte-identical.
-fn config_value(body: &str, key: &str) -> Option<String> {
-    body.lines().find_map(|line| {
-        let rest = line
-            .trim()
-            .strip_prefix(key)?
-            .trim_start()
-            .strip_prefix('=')?;
-        let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        Some(value.replace("\\\"", "\"").replace("\\\\", "\\"))
-    })
-}
-
-/// Minimal JSON readers for the one-line flow contracts (same hand-rolled
-/// shape as the F6 gate and F7 refresh parsers).
-fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{key}\"");
-    let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
-    let value = after_key.trim_start().strip_prefix(':')?.trim_start();
-    if let Some(quoted) = value.strip_prefix('"') {
-        // No trim inside the quotes: that whitespace is part of the value.
-        let mut end = None;
-        let mut escaped = false;
-        for (i, c) in quoted.char_indices() {
-            if escaped {
-                escaped = false;
-            } else if c == '\\' {
-                escaped = true;
-            } else if c == '"' {
-                end = Some(i);
-                break;
-            }
-        }
-        return end.map(|i| &quoted[..i]);
-    }
-    Some(value.split([',', '}']).next().unwrap_or_default().trim())
-}
-
-fn json_bool(body: &str, key: &str) -> Option<bool> {
-    match json_raw(body, key)? {
-        "true" => Some(true),
-        "false" => Some(false),
-        _ => None,
-    }
-}
-
-fn json_u64(body: &str, key: &str) -> Option<u64> {
-    json_raw(body, key)?.parse().ok()
-}
-
-fn json_u32(body: &str, key: &str) -> Option<u32> {
-    json_raw(body, key)?.parse().ok()
-}
-
-fn json_string(body: &str, key: &str) -> Option<String> {
-    json_raw(body, key).map(|raw| raw.replace("\\\"", "\"").replace("\\\\", "\\"))
-}
-
-fn json_escape(raw: &str) -> String {
-    raw.replace('\\', "\\\\").replace('"', "\\\"")
-}
-
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
     match json_bool(body, "ok") {
         Some(true) => Ok(GateOk {
@@ -868,101 +803,11 @@ fn parse_refresh(body: &str) -> Result<u64, WizardError> {
 mod tests {
     use super::*;
 
-    /// Id hostil pero plausible: comilla y barra dentro del valor.
-    const RAW: &str = "modelo \"con comillas\" y \\ barra";
-
     fn temp_vault() -> tempfile::TempDir {
         match tempfile::tempdir() {
             Ok(dir) => dir,
             Err(err) => panic!("tempdir: {err}"),
         }
-    }
-
-    // ---- config writer/reader: ida y vuelta del escape -------------------
-
-    #[test]
-    fn toml_escape_escapes_backslash_and_quote() {
-        assert_eq!(toml_escape("a\\b"), "a\\\\b");
-        assert_eq!(toml_escape("a\"b"), "a\\\"b");
-        assert_eq!(toml_escape(RAW), "modelo \\\"con comillas\\\" y \\\\ barra");
-    }
-
-    #[test]
-    fn config_value_unescapes_what_the_writer_escaped() {
-        let body = local_config(RAW);
-        assert_eq!(
-            config_value(&body, "model").as_deref(),
-            Some(RAW),
-            "leer la config debe devolver el id original, got:\n{body}"
-        );
-        // Vuelta: re-escapar lo leído reproduce el mismo fichero.
-        let read = config_value(&body, "model").unwrap_or_default();
-        assert_eq!(local_config(&read), body);
-    }
-
-    #[test]
-    fn every_escaped_value_round_trips_through_config() {
-        // Exhaustivo sobre el alfabeto que el escape toca (longitud ≤ 3).
-        let alphabet = ['a', '"', '\\'];
-        for a in alphabet {
-            for b in alphabet {
-                for c in alphabet {
-                    let raw: String = [a, b, c].iter().collect();
-                    let body = local_config(&raw);
-                    assert_eq!(
-                        config_value(&body, "model").as_deref(),
-                        Some(raw.as_str()),
-                        "round-trip roto para {raw:?} en:\n{body}"
-                    );
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn config_value_reads_plain_values_and_ignores_other_keys() {
-        let body = local_config("BAAI/bge-m3");
-        assert_eq!(config_value(&body, "model").as_deref(), Some("BAAI/bge-m3"));
-        assert_eq!(config_value(&body, "provider").as_deref(), Some("local"));
-        assert_eq!(config_value(&body, "api_key"), None);
-        assert_eq!(config_value(&body, "mode"), None);
-    }
-
-    // ---- JSON readers ----------------------------------------------------
-
-    #[test]
-    fn json_raw_reads_quoted_and_bare_values() {
-        let body = "{\"model\":\"a\\\"b\",\"n\":42,\"flag\":true}";
-        assert_eq!(json_raw(body, "model"), Some("a\\\"b"));
-        assert_eq!(json_raw(body, "n"), Some("42"));
-        assert_eq!(json_raw(body, "flag"), Some("true"));
-        assert_eq!(json_raw(body, "missing"), None);
-    }
-
-    #[test]
-    fn json_raw_keeps_whitespace_inside_quotes() {
-        let body = "{\"model\":\"  padded  \",\"n\": 7 }";
-        assert_eq!(json_raw(body, "model"), Some("  padded  "));
-        assert_eq!(json_string(body, "model").as_deref(), Some("  padded  "));
-        assert_eq!(json_u64(body, "n"), Some(7));
-    }
-
-    #[test]
-    fn json_scalars_parse_typed_and_reject_garbage() {
-        let body = "{\"ok\":true,\"no\":false,\"n\":42,\"big\":5000000000}";
-        assert_eq!(json_bool(body, "ok"), Some(true));
-        assert_eq!(json_bool(body, "no"), Some(false));
-        assert_eq!(json_bool(body, "n"), None);
-        assert_eq!(json_u64(body, "n"), Some(42));
-        assert_eq!(json_u32(body, "n"), Some(42));
-        assert_eq!(json_u32(body, "big"), None, "desbordar u32 no es 0");
-        assert_eq!(json_u64(body, "missing"), None);
-    }
-
-    #[test]
-    fn json_escape_round_trips_through_json_string() {
-        let body = format!("{{\"model\":\"{}\"}}", json_escape(RAW));
-        assert_eq!(json_string(&body, "model").as_deref(), Some(RAW));
     }
 
     // ---- CLI contract parsers -------------------------------------------
