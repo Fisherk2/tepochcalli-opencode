@@ -683,12 +683,14 @@ fn uninstall_vault_forms_remove_runtime_and_keep_user_files() {
                 "uninstall".to_string(),
                 "--vault".to_string(),
                 arg,
+                "--confirm".to_string(),
                 "--non-interactive".to_string(),
             ]
         } else {
             vec![
                 "uninstall".to_string(),
                 arg,
+                "--confirm".to_string(),
                 "--non-interactive".to_string(),
             ]
         };
@@ -826,7 +828,7 @@ fn uninstall_rejects_valueless_vault_flag() {
     let vault = installed_vault();
     let before = tree_snapshot(vault.path());
     let out = bin()
-        .args(["uninstall", "--non-interactive", "--vault"])
+        .args(["uninstall", "--confirm", "--non-interactive", "--vault"])
         .stdin(Stdio::null())
         .output()
         .expect("spawn binary");
@@ -872,7 +874,7 @@ fn reindex_and_uninstall_help_document_their_flags() {
         .expect("spawn binary");
     assert_eq!(out.status.code(), Some(0));
     let text = stdout_text(&out);
-    for flag in ["--vault", "--non-interactive"] {
+    for flag in ["--confirm", "--vault", "--non-interactive"] {
         assert!(
             text.contains(flag),
             "uninstall --help debe documentar `{flag}`:\n{text}"

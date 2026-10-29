@@ -89,6 +89,7 @@ fn usage_for(command: &str) -> String {
         return "Usage: tepochcalli uninstall [options]\n\
          \nOptions:\n  \
          --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --confirm          mandatory: the uninstall removes the whole runtime\n  \
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --help     print this help\n  \
          --version  print the version\n"
@@ -992,6 +993,7 @@ fn run_uninstall_cmd(
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
     let mut non_interactive = false;
+    let mut confirm = false;
     let mut vault: Option<String> = None;
     let mut i = 0;
     while i < args.len() {
@@ -1005,6 +1007,7 @@ fn run_uninstall_cmd(
                 return 0;
             }
             "--non-interactive" => non_interactive = true,
+            "--confirm" => confirm = true,
             "--vault" => {
                 i += 1;
                 match args.get(i) {
@@ -1024,6 +1027,17 @@ fn run_uninstall_cmd(
             }
         }
         i += 1;
+    }
+    // Gate `--confirm` (patrón reindex, L4-3): sin el flag nada se resuelve
+    // ni se borra — el uninstall elimina TODO el runtime, destructivo.
+    if !confirm {
+        let _ = writeln!(
+            stderr,
+            "uninstall: nada que hacer sin --confirm — el uninstall borra TODO \
+             .tepochcalli/ (venv, bin, db, models, config). Re-ejecuta con `--confirm` \
+             para proceder."
+        );
+        return 2;
     }
     // T6 rule: no TTY means no prompts — fail fast instead of hanging.
     if !non_interactive && !std::io::stdin().is_terminal() {

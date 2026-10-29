@@ -474,6 +474,7 @@ fn uninstall_failure_panel_names_uninstall_without_install_retry() {
     let out = bin()
         .args([
             "uninstall",
+            "--confirm",
             "--non-interactive",
             "--vault",
             vault.path().to_str().expect("utf8 tmp"),

@@ -91,20 +91,33 @@ fn reindex_without_confirm_is_usage_error_not_stub() {
 }
 
 #[test]
-fn uninstall_without_tty_is_typed_abort_not_stub() {
-    // T17: bare `uninstall` with no TTY is a typed abort (41), never a hang
-    // and never the old stub. `Stdio::null` keeps this deterministic with or
-    // without a terminal attached.
+fn uninstall_without_confirm_is_usage_error_not_stub() {
+    // L4-3: bare `uninstall` es usage error (exit 2) — el gate `--confirm`
+    // corre antes del check TTY (patrón reindex) y `Stdio::null` mantiene
+    // el resultado determinista.
     let out = bin()
         .arg("uninstall")
         .stdin(Stdio::null())
         .output()
         .expect("spawn binary");
-    assert_eq!(out.status.code(), Some(41));
+    assert_eq!(out.status.code(), Some(2));
+    assert!(
+        stderr_text(&out).contains("--confirm"),
+        "bare `uninstall` debe explicar el flag, got:\n{}",
+        stderr_text(&out)
+    );
     assert!(
         !stderr_text(&out).contains("not yet implemented"),
         "the T7 stub is gone; T17 owns this subcommand"
     );
+
+    // Con `--confirm` y sin TTY vuelve el abort tipado de siempre (41).
+    let out = bin()
+        .args(["uninstall", "--confirm"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert_eq!(out.status.code(), Some(41));
 }
 
 #[test]
