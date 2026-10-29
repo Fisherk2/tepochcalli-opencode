@@ -21,7 +21,7 @@ use crate::ports::CommandRunner;
 
 use super::embedder_menu::Phase6Report;
 use super::flow_cli::run_flow_cli;
-use super::installer::RUNTIME_DIR;
+use super::installer::{set_user_private, RUNTIME_DIR};
 use super::text::{json_bool, json_escape, json_u64};
 
 /// Flow CLI module invoked through the venv interpreter (D24).
@@ -166,6 +166,7 @@ pub(super) fn write_index_meta(
     let body = format!("{{\"model\":{model_json},\"dims\":{dims_json}}}\n");
     let tmp = dir.join(format!("{INDEX_META_FILE}.tmp"));
     std::fs::write(&tmp, body).map_err(|_| WizardError::PermissionDenied)?;
+    set_user_private(&tmp)?;
     std::fs::rename(&tmp, dir.join(INDEX_META_FILE)).map_err(|_| WizardError::PermissionDenied)?;
     Ok(())
 }
@@ -220,5 +221,22 @@ mod tests {
         );
         assert_eq!(json_raw(&body, "model"), Some("org/weird\\\"name\\\\v2"));
         assert_eq!(json_u64(&body, "dims"), Some(384));
+    }
+
+    /// El sidecar lleva el model id en claro: usuario-privado aunque la
+    /// umask del proceso sea abierta (L2-1).
+    #[cfg(unix)]
+    #[test]
+    fn write_index_meta_leaves_the_sidecar_user_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        write_index_meta(vault.path(), Some("org/model"), Some(384)).expect("write_index_meta");
+        let mode = std::fs::metadata(index_meta_path(vault.path()))
+            .expect("sidecar")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
     }
 }

@@ -25,7 +25,7 @@ use super::embedder_menu::{
     ask_non_empty, build_options, config_path, external_config, local_config, none_config,
     parse_hf_metadata, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
-use super::installer::RUNTIME_DIR;
+use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
 use super::text::{
@@ -397,6 +397,7 @@ fn stage_config(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> 
     let body = picked_config_body(picked);
     let staged = dir.join(CONFIG_SWAP_SUFFIX);
     std::fs::write(&staged, body).map_err(|_| WizardError::PermissionDenied)?;
+    set_user_private(&staged)?;
     Ok(())
 }
 
@@ -485,7 +486,9 @@ fn download_gate_and_reindex(
     );
     let dir = vault.join(RUNTIME_DIR).join("db");
     std::fs::create_dir_all(&dir).map_err(|_| WizardError::PermissionDenied)?;
-    std::fs::write(dir.join(META_SWAP_SUFFIX), body).map_err(|_| WizardError::PermissionDenied)?;
+    let staged_meta = dir.join(META_SWAP_SUFFIX);
+    std::fs::write(&staged_meta, body).map_err(|_| WizardError::PermissionDenied)?;
+    set_user_private(&staged_meta)?;
     Ok(PartialReport {
         model: report_model,
         dims,
@@ -914,6 +917,29 @@ mod tests {
             Some(b"sidecar-ilegible".to_vec()),
             "el rollback no destruye lo que no conmutó"
         );
+    }
+
+    /// El staging `.swap` lleva el modelo (y la clave de la ruta 4) en
+    /// claro: usuario-privado aunque la umask sea abierta (L2-1).
+    #[cfg(unix)]
+    #[test]
+    fn stage_config_leaves_the_staged_config_user_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let vault = temp_vault();
+        std::fs::create_dir_all(vault.path().join(RUNTIME_DIR).join("config"))
+            .expect("fixture config dir");
+        stage_config(vault.path(), &picked_local()).expect("stage_config");
+        let mode = std::fs::metadata(
+            vault
+                .path()
+                .join(RUNTIME_DIR)
+                .join("config")
+                .join(CONFIG_SWAP_SUFFIX),
+        )
+        .expect("staged")
+        .permissions()
+        .mode();
+        assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
     }
 
     #[test]

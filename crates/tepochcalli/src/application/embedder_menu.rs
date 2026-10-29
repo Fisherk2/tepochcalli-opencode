@@ -12,7 +12,7 @@ use crate::config::{badge_for, default_and_large, parse_presets, Preset};
 use crate::domain::{Badge, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
-use super::installer::RUNTIME_DIR;
+use super::installer::{set_user_private, RUNTIME_DIR};
 use super::text::{
     config_value, json_bool, json_raw, json_string, json_u32, json_u64, provider_is_none,
     toml_escape,
@@ -242,6 +242,7 @@ fn write_config(vault: &Path, body: &str) -> Result<(), WizardError> {
     std::fs::create_dir_all(&dir).map_err(|_| WizardError::PermissionDenied)?;
     let tmp = dir.join(format!("{CONFIG_FILE}.tmp"));
     std::fs::write(&tmp, body).map_err(|_| WizardError::PermissionDenied)?;
+    set_user_private(&tmp)?;
     std::fs::rename(&tmp, dir.join(CONFIG_FILE)).map_err(|_| WizardError::PermissionDenied)?;
     Ok(())
 }
@@ -524,8 +525,9 @@ pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        badge_label, estimate_row, external_config, local_config, none_config, parse_gate,
-        parse_hf_metadata, EMBEDDER_PATHS, F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER,
+        badge_label, config_path, estimate_row, external_config, local_config, none_config,
+        parse_gate, parse_hf_metadata, write_config, EMBEDDER_PATHS, F6_EXTERNAL_HEADER,
+        F6_LOCAL_HEADER, F6_NONE_HEADER,
     };
     use crate::domain::{Badge, EmbedderChoice};
 
@@ -640,5 +642,22 @@ mod tests {
     fn hf_metadata_marks_auto_gated_repos() {
         assert!(parse_hf_metadata(br#"{"gated":"auto","tags":["text-generation"]}"#).gated);
         assert!(parse_hf_metadata(br#"{"gated":"manual","tags":["text-generation"]}"#).gated);
+    }
+
+    /// La config lleva la clave de la ruta 4 en claro: usuario-privado
+    /// aunque la umask del proceso sea abierta (L2-1).
+    #[cfg(unix)]
+    #[test]
+    fn write_config_leaves_the_config_user_private() {
+        use std::os::unix::fs::PermissionsExt;
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        write_config(vault.path(), "[embedding]\nprovider = \"litellm\"\n").expect("write_config");
+        let mode = std::fs::metadata(config_path(vault.path()))
+            .expect("config")
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o077, 0, "sin rwx para grupo/otros, mode {mode:o}");
     }
 }

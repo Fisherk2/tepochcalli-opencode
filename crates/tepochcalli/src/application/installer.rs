@@ -388,6 +388,27 @@ fn set_executable(_path: &Path) -> Result<(), WizardError> {
     Ok(())
 }
 
+/// `0o600` (usuario-privado) en unix; no-op donde no existen POSIX perms.
+/// Los artefactos que llevan modelo/clave en claro (`tepochcalli.toml`,
+/// sidecar meta y sus stages `.tmp`/`.swap`) no pueden heredar umask abierto
+/// (`0644` expondría la clave a grupo/otros).
+pub(super) fn set_user_private(path: &Path) -> Result<(), WizardError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        let mut perms = std::fs::metadata(path)
+            .map_err(|_| WizardError::PermissionDenied)?
+            .permissions();
+        perms.set_mode(0o600);
+        std::fs::set_permissions(path, perms).map_err(|_| WizardError::PermissionDenied)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = path;
+        Ok(())
+    }
+}
+
 /// Run `program` with explicit argv + cwd + env; any non-zero status is a
 /// compensated phase failure (exit codes, never text, cross the boundary).
 fn run_checked(
