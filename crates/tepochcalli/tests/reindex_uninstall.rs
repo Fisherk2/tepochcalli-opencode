@@ -23,6 +23,8 @@ use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
 
 const OLD_MODEL: &str = "paraphrase-multilingual-MiniLM-L12-v2";
 const NEW_MODEL: &str = "BAAI/bge-m3";
+/// Embedder externo vía LiteLLM: no hay nada local que descargar ni medir.
+const EXTERNAL_MODEL: &str = "openai/text-embedding-3-small";
 
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T17 fixtures")
@@ -496,6 +498,75 @@ fn reindex_missing_venv_is_internal_without_spawning() {
     let err =
         run_reindex(&proc, &ui, vault.path()).expect_err("sin intérprete no hay refresh posible");
     assert_eq!(err, WizardError::Internal);
+}
+
+/// GAP 6: `reindex` con `provider = "litellm"`. El gate test-embed solo mide
+/// modelos locales, así que se omite y el sidecar queda con `"dims": null` —
+/// misma forma que escribe F7 en la instalación para un modelo sin dims
+/// conocidas. `null` es legible por los lectores del repo (`json_u32` ⇒ sin
+/// dato; `rag_status` deriva las dims del modelo pineado, no del sidecar).
+#[test]
+fn reindex_external_provider_writes_null_dims_without_gate() {
+    // Drift a propósito: el sidecar describe el índice viejo (modelo local).
+    let vault = installed_vault_with(EXTERNAL_MODEL, OLD_MODEL);
+    std::fs::write(
+        vault
+            .path()
+            .join(".tepochcalli")
+            .join("config")
+            .join("tepochcalli.toml"),
+        format!("[embedding]\nprovider = \"litellm\"\nmodel = \"{EXTERNAL_MODEL}\"\n"),
+    )
+    .expect("config externa fixture");
+    let ui = TapUi::new();
+    // Guion con un solo turno: un gate espurio caería en `Internal`.
+    let proc = RecordingProc::scripted([refresh_ok(2, 2, 0)]);
+
+    let report = run_reindex(&proc, &ui, vault.path()).expect("el reindex externo debe triunfar");
+
+    // (a) sin gate: solo el refresh baja al venv.
+    let calls = proc.calls();
+    assert_eq!(calls.len(), 1, "solo el refresh, got: {calls:?}");
+    assert_eq!(calls[0].1, vec!["-m", "tepochcalli_flow", "refresh"]);
+    assert!(
+        calls[0].1.iter().all(|arg| arg != "embed-check"),
+        "el externo no corre el gate test-embed, got: {calls:?}"
+    );
+
+    // (b) forma del sidecar: dims null, modelo externo.
+    let meta = std::fs::read_to_string(
+        vault
+            .path()
+            .join(".tepochcalli")
+            .join("db")
+            .join("index-meta.json"),
+    )
+    .expect("sidecar reescrito");
+    assert_eq!(
+        meta,
+        format!("{{\"model\":\"{EXTERNAL_MODEL}\",\"dims\":null}}\n"),
+        "sin dims medidas el sidecar las declara null"
+    );
+
+    // (c) el refresh corre y su reporte se surfacea.
+    assert_eq!(report.model, EXTERNAL_MODEL);
+    assert_eq!(report.dims, None);
+    assert_eq!(
+        (
+            report.scanned,
+            report.indexed,
+            report.skipped,
+            report.elapsed_ms
+        ),
+        (2, 2, 0, 9)
+    );
+    assert!(report.mismatch, "el drift del sidecar se cura y se marca");
+    assert!(
+        ui.bodies().contains("indexed 2") && ui.bodies().contains("dims (sin dato)"),
+        "el reporte del refresh se paneliza con sus conteos, got:\n{}",
+        ui.bodies()
+    );
+    no_stray_meta_temps(vault.path());
 }
 
 #[test]

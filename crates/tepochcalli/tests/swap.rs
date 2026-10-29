@@ -1180,6 +1180,222 @@ fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
     no_stray_temps(vault.path());
 }
 
+/// GAP 4: la ventana entre los dos renames del `commit`. La config ya
+/// conmutada no puede sobrevivir a un fallo del segundo rename: `run_swap`
+/// hace rollback y la config vuelve byte-idéntica (el índice y los modelos ni
+/// se tocaron, así que siguen intactos por construcción).
+///
+/// Fallo forzado elegido: el destino del sidecar es un **directorio no vacío**
+/// ⇒ `rename(2)` devuelve `EISDIR` y la operación falla igual como uid 1000 y
+/// como root (un `chmod 0555` no vale: root lo atraviesa; y montar un FS de
+/// solo lectura no es portable en CI).
+#[test]
+fn swap_meta_rename_failure_restores_config_byte_identical() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    let config_before = std::fs::read(rt.join("config").join("tepochcalli.toml")).expect("config");
+    let index_before = std::fs::read(rt.join("db").join("chunks.lance")).expect("índice vivo");
+    // El sidecar pasa a ser un directorio con contenido: el rename final muere.
+    let meta_path = rt.join("db").join("index-meta.json");
+    std::fs::remove_file(&meta_path).expect("sidecar fixture removible");
+    std::fs::create_dir_all(&meta_path).expect("sidecar como directorio");
+    std::fs::write(meta_path.join("marker"), b"unreadable-sidecar").expect("marker del sidecar");
+
+    let ui = TapUi::new(vec![1], vec![]);
+    let host = host_16gb();
+    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
+    let http = empty_http();
+
+    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect_err("un fallo en el segundo rename debe fallar el swap");
+    assert_eq!(
+        err,
+        WizardError::PermissionDenied,
+        "error tipado, no un Ok a medias"
+    );
+    assert!(
+        (30..=39).contains(&err.exit_code()),
+        "un fallo de FS cae en el rango 30-39, got {}",
+        err.exit_code()
+    );
+
+    // Cero cambio de estado en lo vivo: config byte-idéntica, índice servable.
+    assert_eq!(
+        std::fs::read(rt.join("config").join("tepochcalli.toml")).unwrap_or_default(),
+        config_before,
+        "la config debe volver byte-idéntica al snapshot pre-swap (ausente ⇒ difiere)"
+    );
+    assert_eq!(
+        std::fs::read(rt.join("db").join("chunks.lance")).expect("índice tras el fallo"),
+        index_before,
+        "el índice viejo sigue servable"
+    );
+    assert_eq!(
+        std::fs::read(meta_path.join("marker")).expect("sidecar tras el fallo"),
+        b"unreadable-sidecar",
+        "el rollback no destruye lo que no pudo fotografiar"
+    );
+    assert_old_slug_dirs_present(vault.path(), OLD_MODEL);
+    no_stray_temps(vault.path());
+}
+
+/// Model id hostil pero plausible: comilla doble y barra invertida dentro del
+/// valor. Ambos escritores tienen que escaparlos o el fichero queda corrupto.
+const HOSTILE_MODEL: &str = "org/weird\"name\\v2";
+/// El mismo id escapado para JSON (forma en que el gate lo devuelve).
+const HOSTILE_MODEL_JSON: &str = r#"org/weird\"name\\v2"#;
+
+/// Des-escapado mínimo (`\x` ⇒ `x`) para leer de vuelta ambos formatos.
+fn unescape(raw: &str) -> String {
+    let mut out = String::with_capacity(raw.len());
+    let mut chars = raw.chars();
+    while let Some(current) = chars.next() {
+        if current == '\\' {
+            if let Some(escaped) = chars.next() {
+                out.push(escaped);
+            }
+        } else {
+            out.push(current);
+        }
+    }
+    out
+}
+
+/// Lector mínimo `key = "valor"` (des-escapa TOML básico).
+fn toml_string(body: &str, key: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let rest = line
+            .trim()
+            .strip_prefix(key)?
+            .trim_start()
+            .strip_prefix('=')?;
+        let value = rest.trim().strip_prefix('"')?;
+        let end = value.rfind('"')?;
+        Some(unescape(&value[..end]))
+    })
+}
+
+/// Lector mínimo `"key":"valor"` (des-escapa JSON básico).
+fn json_string(body: &str, key: &str) -> Option<String> {
+    let needle = format!("\"{key}\":");
+    let after = &body[body.find(&needle)? + needle.len()..];
+    let value = after.trim_start().strip_prefix('"')?;
+    let mut escaped = false;
+    for (index, character) in value.char_indices() {
+        if escaped {
+            escaped = false;
+        } else if character == '\\' {
+            escaped = true;
+        } else if character == '"' {
+            return Some(unescape(&value[..index]));
+        }
+    }
+    None
+}
+
+/// GAP 10: un id con `"` o `\` tiene que sobrevivir `toml_escape` y
+/// `json_escape` y leerse de vuelta idéntico en config y sidecar. Sin el
+/// escapado, la config queda con una cadena TOML truncada y el sidecar con
+/// JSON inválido.
+#[test]
+fn model_id_with_quotes_and_backslashes_round_trips() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    let ui = TapUi::new(vec![2], vec![HOSTILE_MODEL.to_string()]);
+    let host = host_16gb();
+    let proc = FakeProc::scripted([gate_ok(HOSTILE_MODEL_JSON, 768, 900_000_000), refresh_ok(2)]);
+    // Sin metadatos del id: la API falla y el gate queda como fuente de verdad.
+    let http = empty_http();
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("un id con comillas y barras debe completar el swap");
+    assert_eq!(
+        report.model, HOSTILE_MODEL,
+        "el reporte conserva el id crudo"
+    );
+
+    // (a) config: forma escapada exacta + round-trip al id original.
+    let config = std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
+        .expect("config tras el swap");
+    assert!(
+        config.contains(r#"model = "org/weird\"name\\v2""#),
+        "TOML escapado (\\\" y \\\\), got:\n{config}"
+    );
+    assert_eq!(
+        toml_string(&config, "model").as_deref(),
+        Some(HOSTILE_MODEL),
+        "leer la config devuelve el id original, got:\n{config}"
+    );
+
+    // (b) sidecar: forma escapada exacta + round-trip al id original.
+    let meta = std::fs::read_to_string(rt.join("db").join("index-meta.json"))
+        .expect("sidecar tras el swap");
+    assert_eq!(
+        meta, "{\"model\":\"org/weird\\\"name\\\\v2\",\"dims\":768}\n",
+        "JSON escapado y válido"
+    );
+    assert_eq!(
+        json_string(&meta, "model").as_deref(),
+        Some(HOSTILE_MODEL),
+        "leer el sidecar devuelve el id original, got:\n{meta}"
+    );
+    no_stray_temps(vault.path());
+}
+
+/// GAP 11a: swap al MISMO modelo (el preset default ya vigente y cacheado).
+/// Intencionado: `docs/APPFLOW.md` journey (f) paso 5 y
+/// `specs/spec-embeddings.md` §Procedimiento de swap purgan el modelo
+/// **anterior** tras un re-index exitoso; si el "anterior" es el vigente,
+/// borrarlo dejaría el índice vivo sin embedder de consulta (otra descarga de
+/// 470MB, o `E_OFFLINE_NO_CACHE` sin red).
+#[test]
+fn swap_to_the_same_model_does_not_purge_models() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    let ui = TapUi::new(vec![0], vec![]);
+    let host = host_16gb();
+    let proc = FakeProc::scripted([gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)]);
+    let http = empty_http();
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("re-elegir el mismo modelo debe completar el swap");
+
+    assert_eq!(report.model, OLD_MODEL);
+    // El swap se completa igual (conmutación), solo se salta la purga.
+    assert_old_slug_dirs_present(vault.path(), OLD_MODEL);
+    assert_survivors_intact(vault.path(), OLD_MODEL, OLD_MODEL);
+    assert!(
+        std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
+            .expect("config tras el swap")
+            .contains(OLD_MODEL),
+        "el swap se completa igual (conmutación, no purga)"
+    );
+    no_stray_temps(vault.path());
+}
+
+/// GAP 11b: swap a `none` («Configurar después»). Intencionado que la caché
+/// del modelo viejo sobreviva: el journey (f) de `docs/APPFLOW.md` y
+/// `specs/spec-embeddings.md` §Procedimiento de swap solo purgan tras un
+/// re-index exitoso con el modelo nuevo, y aquí no hubo re-index
+/// (`swap_to_configure_later_...` pinea que el sidecar sigue describiendo el
+/// índice viejo). `models/` sigue siendo el embedder que `search` necesita
+/// para embeber consultas: purgarlo rompería las lecturas del índice vivo.
+#[test]
+fn swap_to_none_keeps_the_previous_model_cache() {
+    let vault = installed_vault();
+    let ui = TapUi::new(vec![4], vec![]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([]);
+    let http = empty_http();
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("«Configurar después» debe completarse sin índice");
+    assert_eq!(report.health, RagHealth::Degraded);
+    assert_old_slug_dirs_present(vault.path(), OLD_MODEL);
+    assert_survivors_intact(vault.path(), OLD_MODEL, OLD_MODEL);
+    no_stray_temps(vault.path());
+}
+
 /// GAP 5c: metadata inalcanzable (404) degrada la estimación a «sin dato» —
 /// nunca bloquea. Comportamiento intencionado (D8.1): la instalación no falla
 /// por falta de red y el gate test-embed queda como única fuente de verdad.
