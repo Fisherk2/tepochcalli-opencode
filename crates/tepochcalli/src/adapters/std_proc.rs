@@ -14,6 +14,54 @@ use crate::ports::{CommandOutput, CommandRunner};
 #[derive(Debug, Default, Clone, Copy)]
 pub struct StdCommandRunner;
 
+/// Env del padre que un subproceso NO puede arrastrar por herencia (4b-B):
+/// fuera PYTHONPATH hostil, tokens de fondo, vars de CI... El allowlist
+/// re-añade lo benigno que el toolchain necesita, y NINGÚN par explícito
+/// del caller se pierde (se aplican después, con override).
+const ENV_KEEP_EXACT: &[&str] = &[
+    "PATH",
+    "HOME",
+    "USERPROFILE",
+    "SYSTEMROOT",
+    "COMSPEC",
+    "TMP",
+    "TEMP",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "LANG",
+    "SSL_CERT_FILE",
+    "SSL_CERT_DIR",
+    "http_proxy",
+    "https_proxy",
+    "HTTP_PROXY",
+    "HTTPS_PROXY",
+    "no_proxy",
+    "NO_PROXY",
+];
+const ENV_KEEP_PREFIX: &[&str] = &["LC_", "XDG_"];
+
+/// Aplica env_clear + allowlist del padre sobre `child` (los pares del
+/// caller los pone el caller después, ganando cualquier allowlist).
+fn build_command(program: &str, args: &[&str], cwd: &Path, env: &[(&str, &str)]) -> Command {
+    let mut child = Command::new(program);
+    child.args(args).current_dir(cwd).env_clear();
+    for (key, value) in std::env::vars_os() {
+        let Some(key_str) = key.to_str() else {
+            continue;
+        };
+        // Allowlist exact + prefijos: en Windows las claves son
+        // case-insensitive, y la tabla ya lista ambas grafías para las
+        // variables de tarea (lower y upper en ENV_KEEP_EXACT).
+        let kept = ENV_KEEP_EXACT.contains(&key_str)
+            || ENV_KEEP_PREFIX.iter().any(|p| key_str.starts_with(p));
+        if kept {
+            child.env(key, value);
+        }
+    }
+    child.envs(env.iter().copied());
+    child
+}
+
 impl CommandRunner for StdCommandRunner {
     fn run(
         &self,
@@ -22,10 +70,7 @@ impl CommandRunner for StdCommandRunner {
         cwd: &Path,
         env: &[(&str, &str)],
     ) -> Result<CommandOutput, WizardError> {
-        let output = Command::new(program)
-            .args(args)
-            .current_dir(cwd)
-            .envs(env.iter().copied())
+        let output = build_command(program, args, cwd, env)
             .output()
             .map_err(|_| WizardError::PhaseFailed)?;
         Ok(CommandOutput {
@@ -48,10 +93,7 @@ impl CommandRunner for StdCommandRunner {
         env: &[(&str, &str)],
         timeout: std::time::Duration,
     ) -> Result<CommandOutput, WizardError> {
-        let mut child = Command::new(program)
-            .args(args)
-            .current_dir(cwd)
-            .envs(env.iter().copied())
+        let mut child = build_command(program, args, cwd, env)
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped())
             .spawn()
@@ -84,9 +126,7 @@ impl CommandRunner for StdCommandRunner {
         std::thread::spawn(move || loop {
             std::thread::sleep(std::time::Duration::from_millis(50));
             let verdict = match slot_for_watcher.lock() {
-                Ok(mut guard) => guard
-                    .try_wait()
-                    .unwrap_or_default(),
+                Ok(mut guard) => guard.try_wait().unwrap_or_default(),
                 Err(_) => return,
             };
             if let Some(status) = verdict {

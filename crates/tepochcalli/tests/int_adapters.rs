@@ -331,6 +331,63 @@ fn run_with_timeout_returns_output_of_prompt_children() {
     assert_eq!(out.stdout, "hola-plazo\n");
 }
 
+/// L3-7 (4b-B): el env del hijo es allowlist — un PYTHONPATH hostil y un
+/// HF_TOKEN fantasma del padre no viajan al hijo; lo benigno sí (PATH).
+#[test]
+fn child_env_is_allowlisted_hostile_vars_do_not_travel() {
+    // Rellenado brutal de env hostil del proceso test (no hay fixtures —
+    // set_var muta literalmente el padre; el hijo no puede heredarlo).
+    std::env::set_var("PYTHONPATH", "/tmp/tepochcalli-injection-4bb");
+    std::env::set_var("HF_TOKEN", "not-a-real-token-4bb");
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = runner
+        .run(
+            "sh",
+            &[
+                "-c",
+                "python3 -c 'import os, sys; \
+                 print(int(\"PYTHONPATH\" in os.environ), int(\"HF_TOKEN\" in os.environ))'",
+            ],
+            dir.path(),
+            &[],
+        )
+        .expect("sh/python run");
+    assert_eq!(out.status, 0, "stderr: {}", out.stderr);
+    assert_eq!(
+        out.stdout.trim(),
+        "0 0",
+        "ni PYTHONPATH ni HF_TOKEN pueden heredar"
+    );
+}
+
+/// L3-7: los pares explícitos del caller viven en el hijo (el allowlist no
+/// se los come).
+#[test]
+fn child_env_keeps_explicit_pairs_beyond_the_allowlist() {
+    let runner = StdCommandRunner;
+    let dir = tempfile::tempdir().expect("tempdir");
+    let out = runner
+        .run(
+            "sh",
+            &["-c", "echo $TEPOCHCALLI_ROOT"],
+            dir.path(),
+            &[("TEPOCHCALLI_ROOT", ".")],
+        )
+        .expect("sh run");
+    assert_eq!(out.stdout.trim(), ".");
+    // Y PATH sigue: el toolchain necesita lookup de binarios.
+    let out = runner
+        .run(
+            "sh",
+            &["-c", "sh -c 'command -v ls >/dev/null'"],
+            dir.path(),
+            &[],
+        )
+        .expect("sh run");
+    assert_eq!(out.status, 0, "PATH debe seguir heredado: {}", out.stderr);
+}
+
 #[test]
 fn host_tool_search_accepts_the_windows_exe_twin() {
     let dir = tempfile::tempdir().expect("tempdir");
