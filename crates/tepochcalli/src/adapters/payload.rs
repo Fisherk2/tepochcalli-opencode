@@ -8,7 +8,7 @@
 
 use std::fs;
 use std::io::ErrorKind;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 
 use crate::archive::extract_tar_gz;
 use crate::domain::WizardError;
@@ -287,11 +287,16 @@ fn map_io(error: std::io::Error) -> WizardError {
 /// Join `rel` onto the canonical vault `root`; escape (defense-in-depth —
 /// `rel` comes from a real walk so `..` cannot occur) is `PayloadCorrupt`.
 fn join_checked(root: &Path, rel: &Path) -> Result<PathBuf, WizardError> {
+    // `starts_with` is a component-prefix test, so `root/..` still passes it:
+    // the escape is rejected at the component, not at the joined path.
+    let has_escape = rel
+        .components()
+        .any(|c| !matches!(c, Component::Normal(_) | Component::CurDir));
     let target = root.join(rel);
-    if target.starts_with(root) {
-        Ok(target)
-    } else {
+    if has_escape || !target.starts_with(root) {
         Err(WizardError::PayloadCorrupt)
+    } else {
+        Ok(target)
     }
 }
 
@@ -472,6 +477,20 @@ mod tests {
         // of it must map to `PayloadCorrupt`, never to a path outside the vault.
         let root = Path::new("/vault");
         for escape in ["/etc/passwd", "/vault-evil/x", "/"] {
+            assert_eq!(
+                join_checked(root, Path::new(escape)),
+                Err(WizardError::PayloadCorrupt),
+                "{escape} escapes the root"
+            );
+        }
+    }
+
+    #[test]
+    fn join_checked_rejects_parent_dir_entries() {
+        // `Path::join` keeps `..` as a component, so `root/..` still starts
+        // with `root`: `starts_with` alone cannot see the escape.
+        let root = Path::new("/vault");
+        for escape in ["..", "../etc/passwd", "notes/../../etc/passwd"] {
             assert_eq!(
                 join_checked(root, Path::new(escape)),
                 Err(WizardError::PayloadCorrupt),
