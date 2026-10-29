@@ -151,14 +151,94 @@ fn vault_path_through_file_fails_typed() {
     );
 }
 
-#[test]
-fn install_non_interactive_vault_runs_f1_f2_for_real() {
+/// Fixture shared by both real-binary install tests: an empty payload tree
+/// (F3 still writes the placeholders + intent, T8) and a missing vault dir.
+fn install_fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
     let dir = tmp();
     let target = dir.path().join("tepochcalli-vault");
-    // T8: install runs F3 after F2, so it needs a payload tree (empty here:
-    // F3 still writes the placeholders + intent).
     let payload = dir.path().join("payload");
     std::fs::create_dir_all(&payload).expect("payload fixture dir");
+    (dir, target, payload)
+}
+
+/// The install command with the network forced down: `ureq` reads the proxy
+/// from the environment (`ALL_PROXY`/`HTTPS_PROXY`), and the port below is a
+/// bound-then-dropped loopback listener, so the F4 `uv` download dies at the
+/// proxy connect — no DNS and no real network involved, deterministic offline
+/// or online.
+fn forced_offline_install(target: &Path, payload: &Path) -> std::process::Command {
+    let port = std::net::TcpListener::bind("127.0.0.1:0")
+        .expect("bind a port to close")
+        .local_addr()
+        .expect("loopback addr")
+        .port();
+    let dead = format!("http://127.0.0.1:{port}");
+    let mut cmd = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"));
+    cmd.args([
+        "install",
+        "--non-interactive",
+        "--vault",
+        target.to_str().expect("utf8 tmp"),
+        "--payload",
+        payload.to_str().expect("utf8 tmp"),
+    ])
+    .env("ALL_PROXY", &dead)
+    .env("HTTPS_PROXY", &dead)
+    .env_remove("NO_PROXY")
+    .env_remove("no_proxy");
+    cmd
+}
+
+/// F4 always downloads the pinned `uv` (`installer.rs:413`), so a blocked
+/// network must be reported as the network failure — never as a full disk —
+/// and must compensate `bin/`.
+#[test]
+fn install_offline_fails_at_f4_with_a_network_error() {
+    let (_dir, target, payload) = install_fixture();
+    let out = forced_offline_install(&target, &payload)
+        .output()
+        .expect("spawn install");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    // The documented code for `WizardError::NetDownload` (20-29 network range).
+    assert_eq!(
+        out.status.code(),
+        Some(i32::from(WizardError::NetDownload.exit_code())),
+        "stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("install: phase F4 failed") && stderr.contains("download failed"),
+        "the failure must name F4 and the network cause, got:\n{stderr}"
+    );
+    for wrong in ["disk", "espacio"] {
+        assert!(
+            !stderr.to_lowercase().contains(wrong),
+            "a blocked network must not be diagnosed as {wrong:?}, got:\n{stderr}"
+        );
+    }
+    // F1-F3 ran before the download failed...
+    assert!(target.is_dir(), "F2 must create the vault dir for real");
+    assert!(
+        target
+            .join(".tepochcalli")
+            .join(".install-intent")
+            .is_file(),
+        "F3 must have written the intent file before F4"
+    );
+    // ...and F4 compensated what it wrote.
+    assert!(
+        !target.join(".tepochcalli").join("bin").exists(),
+        "failed F4 must compensate bin/"
+    );
+}
+
+/// T9: install runs F1→F2→F3→F4→F5 for real. The empty fixture payload
+/// carries no pyproject.toml/uv.lock, so the real F5 `uv sync --frozen`
+/// fails AFTER F1–F4 succeeded (F4 proves the pinned download, the
+/// executable bit and `uv --version`); F5 compensates `venv/`.
+#[test]
+#[ignore = "needs network: F4 downloads uv and F5 a managed CPython"]
+fn install_non_interactive_vault_runs_f1_f2_for_real() {
+    let (_dir, target, payload) = install_fixture();
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
         .args([
             "install",
@@ -170,10 +250,6 @@ fn install_non_interactive_vault_runs_f1_f2_for_real() {
         ])
         .output()
         .expect("spawn install");
-    // T9: install runs F1→F2→F3→F4→F5 for real. The empty fixture payload
-    // carries no pyproject.toml/uv.lock, so the real F5 `uv sync --frozen`
-    // fails AFTER F1–F4 succeeded (F4 proves the pinned download, the
-    // executable bit and `uv --version`); F5 compensates `venv/`.
     assert_eq!(
         out.status.code(),
         Some(42),

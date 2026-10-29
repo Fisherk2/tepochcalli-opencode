@@ -110,10 +110,12 @@ fn install_non_interactive_with_closed_stdin_terminates() {
     );
 }
 
-/// Same, with explicit `--vault` + `--payload`: F1→F5 run for real with
-/// closed stdin and terminate (T9: F4 succeeds, the empty fixture payload
-/// has no pyproject/lock so F5 exits 42 — the point here is it terminates,
-/// never that the fixture installs cleanly).
+/// Same, with explicit `--vault` + `--payload`: the install phases run for
+/// real with closed stdin, and the binary must TERMINATE — never block on a
+/// prompt. What it exits with depends on the network (online F4 downloads
+/// `uv` and the empty fixture payload then fails F5 ⇒ 42; offline F4 fails
+/// first ⇒ 20), so only the documented exit ranges are asserted, never a
+/// specific reason.
 #[test]
 fn install_non_interactive_with_vault_flag_terminates() {
     // T8: F3 needs a payload tree; an empty dir still yields placeholders.
@@ -135,8 +137,20 @@ fn install_non_interactive_with_vault_flag_terminates() {
             .expect("spawn binary");
         let _ = tx.send(out);
     });
-    let out = rx
-        .recv_timeout(Duration::from_secs(15))
-        .expect("install --non-interactive --vault must not block on closed stdin");
-    assert_eq!(out.status.code(), Some(42));
+    // A hang detector, not a performance budget: F4/F5 are real downloads.
+    let out = rx.recv_timeout(Duration::from_secs(180)).expect(
+        "install --non-interactive --vault blocked on closed stdin (still running after 180 s)",
+    );
+    // Documented wizard exit codes (`WizardError::exit_code`, src/domain/error.rs):
+    // 10-19 prerequisites, 20-29 network/auth, 30-39 filesystem/asset,
+    // 40+ user cancel / model guards / phase failure / internal (40-44); 0 = clean.
+    let code = out
+        .status
+        .code()
+        .expect("no exit code: the binary was killed by a signal");
+    assert!(
+        matches!(code, 0 | 10..=19 | 20..=29 | 30..=39 | 40..=44),
+        "exit {code} is outside the documented wizard ranges, stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
 }
