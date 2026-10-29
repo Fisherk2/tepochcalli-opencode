@@ -8,7 +8,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::config::{badge_for, parse_presets, Preset};
+use crate::config::{badge_for, default_and_large, parse_presets, Preset};
 use crate::domain::{Badge, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
@@ -109,14 +109,7 @@ pub struct Phase6Report {
 /// anything; every other failure propagates typed (§5.4).
 pub fn run_phase6(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, WizardError> {
     let presets = parse_presets().map_err(|_| WizardError::Internal)?;
-    let default = presets
-        .iter()
-        .find(|preset| preset.recommended_flag)
-        .ok_or(WizardError::Internal)?;
-    let large = presets
-        .iter()
-        .find(|preset| !preset.recommended_flag)
-        .ok_or(WizardError::Internal)?;
+    let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
     loop {
         let options = build_options(default, large, deps.host);
         let shown: Vec<&str> = options.iter().map(String::as_str).collect();
@@ -297,9 +290,9 @@ fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
 /// `None` when the metadata carries no tag signal at all (the gate then
 /// decides); `Some(false)` with a positive tag signal rejects before any
 /// download. Missing fetch degrades to "sin dato", never an install failure.
-struct HfEstimate {
-    gated: bool,
-    embedding_tag: Option<bool>,
+pub(super) struct HfEstimate {
+    pub(super) gated: bool,
+    pub(super) embedding_tag: Option<bool>,
     ram_mb: Option<u64>,
     disk_mb: Option<u64>,
 }
@@ -322,7 +315,7 @@ fn json_number_after(text: &str, marker: &str) -> Option<f64> {
     digits.parse().ok()
 }
 
-fn parse_hf_metadata(body: &[u8]) -> HfEstimate {
+pub(super) fn parse_hf_metadata(body: &[u8]) -> HfEstimate {
     // shortcut: substring match on the tag block; the gate stays the ground
     // truth, so a future HF shape change only costs an extra download.
     let text = String::from_utf8_lossy(body);
@@ -636,5 +629,14 @@ mod tests {
         let tagless = parse_hf_metadata(br#"{"safetensors":{}}"#);
         assert_eq!(tagless.embedding_tag, None);
         assert_eq!(tagless.ram_mb, None);
+    }
+
+    /// HF real devuelve `"auto"`/`"manual"`, no solo `true`: cualquier valor
+    /// distinto de `false` significa repo gated (el swap unificado leía el
+    /// literal `"gated":true` y no ofrecía token en esos ids).
+    #[test]
+    fn hf_metadata_marks_auto_gated_repos() {
+        assert!(parse_hf_metadata(br#"{"gated":"auto","tags":["text-generation"]}"#).gated);
+        assert!(parse_hf_metadata(br#"{"gated":"manual","tags":["text-generation"]}"#).gated);
     }
 }

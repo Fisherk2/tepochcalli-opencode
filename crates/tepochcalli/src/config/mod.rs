@@ -3,5 +3,6 @@
 pub mod presets;
 
 pub use presets::{
-    badge_for, parse_presets, parse_presets_str, preset_by_hf_id, Preset, PresetError,
+    badge_for, default_and_large, parse_presets, parse_presets_str, preset_by_hf_id, Preset,
+    PresetError,
 };

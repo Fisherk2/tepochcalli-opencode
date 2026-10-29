@@ -17,13 +17,13 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::config::{parse_presets, Preset};
+use crate::config::{default_and_large, parse_presets, Preset};
 use crate::domain::{EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
 use super::embedder_menu::{
     ask_non_empty, build_options, config_path, external_config, local_config, none_config,
-    Phase6Report, Provenance, EMBEDDER_PATHS,
+    parse_hf_metadata, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
 use super::installer::RUNTIME_DIR;
 use super::phase7::index_meta_path;
@@ -49,18 +49,13 @@ const GATE_SUBCOMMAND: &str = "embed-check";
 const REFRESH_SUBCOMMAND: &str = "refresh";
 /// HF API base for the free-id pre-check (D8.1; the gate stays ground truth).
 const HF_API_BASE: &str = "https://huggingface.co/api/models/";
-/// Tags that mark an HF repo as an embedding model.
-const EMBEDDING_TAGS: &[&str] = &[
-    "sentence-similarity",
-    "feature-extraction",
-    "sentence-transformers",
-];
 const BYTES_PER_MB: f64 = 1_000_000.0;
 /// Staged (not yet live) replacements: renamed into place only on success.
 const CONFIG_SWAP_SUFFIX: &str = "tepochcalli.toml.swap";
 const META_SWAP_SUFFIX: &str = "index-meta.json.swap";
 
-/// Borrowed collaborators for the swap (ports only — the orchestrator owns no I/O).
+/// Los cuatro collaborators que el swap pide prestados (ports; ellos hacen
+/// el I/O, el swap solo orquesta).
 pub struct SwapDeps<'a> {
     /// Menu, inputs, failure panels.
     pub ui: &'a dyn Ui,
@@ -294,14 +289,7 @@ fn warning(picked: &Phase6Report, current: &CurrentState) -> String {
 /// an optional HF token for a gated free id (child-env only, never logged).
 fn pick_embedder(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), WizardError> {
     let presets = parse_presets().map_err(|_| WizardError::Internal)?;
-    let default = presets
-        .iter()
-        .find(|preset| preset.recommended_flag)
-        .ok_or(WizardError::Internal)?;
-    let large = presets
-        .iter()
-        .find(|preset| !preset.recommended_flag)
-        .ok_or(WizardError::Internal)?;
+    let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
     let options = build_options(default, large, deps.host);
     let shown: Vec<&str> = options.iter().map(String::as_str).collect();
     let index = deps.ui.select("Embedding provider", &shown, 0)?;
@@ -344,44 +332,45 @@ fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>)
         dims: None,
         rss_peak_bytes: None,
     };
-    match deps.http.get(&format!("{HF_API_BASE}{id}")) {
-        Ok(body) => {
-            let text = String::from_utf8_lossy(&body);
-            if EMBEDDING_TAGS.iter().any(|tag| text.contains(*tag)) {
-                // Embedding signal: the gate (step 4) stays ground truth.
-            } else if text.contains("\"tags\"") || text.contains("\"pipeline_tag\"") {
-                deps.ui.panel(
-                    "E_MODEL_INVALID",
-                    "Ese ID no es un modelo de embeddings; el swap se aborta sin escribir nada.",
-                );
-                return Err(WizardError::ModelInvalid);
-            }
-            if text.contains("\"gated\":true") {
-                deps.ui.panel(
-                    "Modelo gated",
-                    "La API marca este repo como gated: la descarga pedirá HF_TOKEN.",
-                );
-                // shortcut: the token travels only in the gate child env
-                // (never in a panel, log or file — same redaction rule as T11g).
-                let raw = deps
-                    .ui
-                    .input("HF_TOKEN (opcional, solo para esta descarga)", None)?;
-                let token = raw.trim().to_string();
-                if token.is_empty() {
-                    return Ok((report_for(id), None));
-                }
-                return Ok((report_for(id), Some(token)));
-            }
-            Ok((report_for(id), None))
-        }
+    let estimate = match deps.http.get(&format!("{HF_API_BASE}{id}")) {
+        Ok(body) => Some(parse_hf_metadata(&body)),
         Err(_) => {
             deps.ui.panel(
                 "Sin estimación",
                 "La API de HF no responde (sin red): se intenta la descarga directa.",
             );
-            Ok((report_for(id), None))
+            None
+        }
+    };
+    // Misma lectura que el menú F6: la decisión vive en `HfEstimate`
+    // (`embedding_tag`/`gated`), con HF real (`"gated":"auto"`) el swap ya
+    // ofrece el token — el viejo `contains("\"gated\":true")` no lo veía.
+    if let Some(estimate) = &estimate {
+        if estimate.embedding_tag == Some(false) {
+            deps.ui.panel(
+                "E_MODEL_INVALID",
+                "Ese ID no es un modelo de embeddings; el swap se aborta sin escribir nada.",
+            );
+            return Err(WizardError::ModelInvalid);
+        }
+        if estimate.gated {
+            deps.ui.panel(
+                "Modelo gated",
+                "La API marca este repo como gated: la descarga pedirá HF_TOKEN.",
+            );
+            // shortcut: the token travels only in the gate child env (never
+            // in a panel, log or file — same redaction rule as T11g).
+            let raw = deps
+                .ui
+                .input("HF_TOKEN (opcional, solo para esta descarga)", None)?;
+            let token = raw.trim().to_string();
+            if token.is_empty() {
+                return Ok((report_for(id), None));
+            }
+            return Ok((report_for(id), Some(token)));
         }
     }
+    Ok((report_for(id), None))
 }
 
 fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {

@@ -201,6 +201,19 @@ pub fn badge_for(preset: &Preset, host: &dyn HostProbe) -> (Badge, ResourceFacts
     (badge, facts)
 }
 
+/// La fila recomendada (default) y la de mayor tamaño (large), en orden de
+/// menú D7.1. Única fuente compartida por el menú F6 y el swap: ambos
+/// buscaban `recommended_flag` a mano con dos iteradores idénticos.
+///
+/// `None` cuando el catálogo no trae exactamente el par (error parseado no
+/// llega aquí: un catálogo válido siempre tiene ambas mitades, D7.2).
+#[must_use]
+pub fn default_and_large(presets: &[Preset]) -> Option<(&Preset, &Preset)> {
+    let default = presets.iter().find(|preset| preset.recommended_flag)?;
+    let large = presets.iter().find(|preset| !preset.recommended_flag)?;
+    Some((default, large))
+}
+
 /// Find a preset by HF id. Badges never filter rows out (D8.3).
 #[must_use]
 pub fn preset_by_hf_id<'a>(presets: &'a [Preset], hf_id: &str) -> Option<&'a Preset> {
