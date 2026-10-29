@@ -88,7 +88,7 @@ de T7/T8/T9): nada aquí es deuda inventada en T10.
 | **`FIX_OFFLINE_NO_CACHE`** | El literal de ese `fix_hint` **no tiene ancla en ninguna spec**: unit y wire se comparan auto-referenciados, así que una derivación silenciosa del texto pasaría inadvertida | Duda declarada en T8 | El contrato del `fix_hint` puede derivar sin que nada falle | Fijar el literal en `spec-mcp-server` §errores (enmienda futura) o fijar el esperado en un test con fuente externa al código |
 | **`opencode_payload_before_t9.json`** | Fixture con la copia del `opencode.json` pre-T9: sostiene el test de *merge conservador* y **irá obsoleta si el payload cambia legítimamente en Phase 4-5** | T9 | El test de merge fallaría por un cambio legítimo del payload y tentaría a «arreglar» el test a ciegas | **Regenerarla en Phase 4-5** cuando el payload cambie; no combatirla. Cualquier cambio de `mcp.servers.*` por tarea autorizada la invalida a propósito |
 
-**R6 cerrada (2026-10-28, T9):** `pyproject.toml` declara `tepochcalli_mcp.tools`; `import tepochcalli_mcp.tools.search` verificado en `crates/tepochcalli/tests/phases_f4f5.rs` (check del venv en F5).
+**R6 cerrada (2026-10-28, T9):** `pyproject.toml` declara `tepochcalli_mcp.tools`; `import tepochcalli_mcp.tools.search` verificado en `crates/tepochcalli/tests/int_install_f4_f5.rs` (check del venv en F5).
 
 ### Pasada de calidad sobre Phase 2 (rito `/test`, 2026-10-27)
 
@@ -172,7 +172,7 @@ fichero; CR-6 es límite externo documentado; CR-7/CR-8 solo activan con escala 
 * **Revisión Phase 3 ejecutada (T17, 2026-10-28):** TD-3 **cerrada** — el comando
   `tepochcalli reindex --confirm` existe y es real (rebuild vía `refresh` del
   venv + metadatos `model`/`dims` atómicos, detección `E_MODEL_MISMATCH` con
-  mensaje accionable, 13 tests en `crates/tepochcalli/tests/reindex_uninstall.rs`);
+  mensaje accionable, 16 tests en `crates/tepochcalli/tests/e2e_maintenance.rs`);
   `tepochcalli uninstall` elimina solo `.tepochcalli/` y deja notas intactas.
 * **Revisión Phase 3 ejecutada (T20, 2026-10-28):** R6 **sigue cerrada** (verificación
   T9 intacta: `pyproject.toml` declara `tepochcalli_mcp.tools`; el check de F5 lo

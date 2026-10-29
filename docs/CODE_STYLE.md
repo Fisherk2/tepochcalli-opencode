@@ -68,6 +68,26 @@ def _truncate_for_budget(results: list[Chunk], max_tokens: int = 1600) -> list[C
 * Códigos de salida del §UX de fallo como constantes nombradas (`EXIT_NETWORK_*`).
 * `thiserror` para errores del wizard; nada de `unwrap()` en rutas de usuario.
 
+### Tests: el nivel va en la ubicación y en el nombre
+
+`crates/tepochcalli/tests/` no se divide en `unit/ integration/ e2e/`: Cargo solo compila
+`tests/*.rs` y `tests/<dir>/main.rs`, y un subdirectorio sin `main.rs` se ignora **en silencio**.
+
+* **Tier 1** — `src/<módulo>.rs` con `#[cfg(test)] mod tests`: lógica pura o privada
+  (parsers, escaping, estimadores, mapeos de error).
+* **`int_<tema>.rs`** — sin proceso hijo: puertos falsos, `tempfile`, API pública
+  (`int_swap.rs`, `int_ports.rs`, `int_domain.rs`).
+* **`e2e_<tema>.rs`** — lanza el binario (`bin()`, `env!("CARGO_BIN_EXE_…")`) o un script
+  (`e2e_installers.rs`, `e2e_cli_help.rs`).
+* **`tests/common/`** — soporte compartido, no es un target.
+
+La convención la hace cumplir `int_architecture.rs` (`tests_layout_uses_tier_prefix`,
+`e2e_tests_spawn_a_process`, `int_tests_do_not_spawn_a_process`): un fichero mal clasificado
+pone el gate rojo, no la memoria del revisor. Al añadir un test: ¿necesita el binario? `e2e_`;
+¿necesita FS o fakes? `int_`; ¿es lógica pura? `#[cfg(test)]` en `src/`. Los instaladores se
+prueban por su costura `TEPOCHCALLI_RELEASE_BASE_URL` (mirror en loopback); PowerShell solo se
+fija de forma estática porque no corre en la CI Linux.
+
 ## Nomenclatura de archivos y docs
 
 | Constructo | Convención | Ejemplo |

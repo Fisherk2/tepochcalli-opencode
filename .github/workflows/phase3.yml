@@ -8,8 +8,8 @@
 # Cobertura de los 5 caminos del menú de embedder (D7.1):
 #   paths 1-4 (MiniLM default, preset alternativo, ID libre de HF, API
 #     externa) ⇒ `cargo test` con `FakeHost` + `FakeHttp`: sin red y sin
-#     descargar el modelo de 470 MB en cada corrida (`embedder_menu.rs`,
-#     `embedder_presets.rs`);
+#     descargar el modelo de 470 MB en cada corrida (`int_embedder_menu.rs`,
+#     `int_presets.rs`);
 #   path 5 («configurar después», el default no interactivo) ⇒ ADEMÁS el job
 #     `smoke`: instalación real con `--non-interactive --skip-model`
 #     (RAG `degraded`, sin índice, sin descargas de modelos).

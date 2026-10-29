@@ -207,7 +207,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
   3. **Windows sin probar**: target compilado pero fuera de la matriz; `install.ps1`, `venv/Scripts/python.exe` y el smoke path-5 nunca se ejecutaron en Windows.
   4. `just rust-ci` **no está verde en este sandbox** (2026-10-28): `rust-fmt` +
   `cargo clippy -D warnings` verdes; `cargo test`: 13 targets en verde pero
-  `phases_f1f2::install_non_interactive_vault_runs_f1_f2_for_real` FALLA — F4
+  `e2e_install_f1_f2::install_non_interactive_vault_runs_f1_f2_for_real` FALLA — F4
   reporta `DiskFull` (exit 30) en vez del 42 esperado porque la descarga real de
   `uv` choca con la red bloqueada (58 GB libres: no es un disco lleno real, sino
   un error de red mal clasificado — no investigado, fuera del alcance de T20);
