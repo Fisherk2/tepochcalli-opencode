@@ -263,13 +263,17 @@ fn estimate_secs(db_bytes: u64) -> u64 {
 }
 
 fn warning(picked: &Phase6Report, current: &CurrentState) -> String {
+    // El externo empaqueta `model\0api_key`: la forma empaquetada no se
+    // paneliza nunca (la clave solo vive en la config gitignored).
+    let name = picked.model.as_deref().unwrap_or("(sin modelo)");
+    let name = name.split_once('\u{0}').map_or(name, |(model, _)| model);
     format!(
         "El swap a {} exige un re-index COMPLETO (LanceDB no mezcla dimensiones).\n\
          Tiempo estimado: ≈{} s (índice actual: {} filas, {} bytes).\n\
          Durante el proceso el índice viejo sigue servable; al triunfar, config y \
          metadatos conmutan atómicamente y el modelo anterior se purga de models/.\n\
          Requiere --confirm explícito.",
-        picked.model.as_deref().unwrap_or("(sin modelo)"),
+        name,
         estimate_secs(current.db_bytes),
         current.rows,
         current.db_bytes,

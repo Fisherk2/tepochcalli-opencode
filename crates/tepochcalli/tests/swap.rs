@@ -18,6 +18,7 @@ use common::{FakeHost, FakeHttp, FakeProc};
 use tepochcalli::application::swap::{run_swap, SwapDeps, SwapOptions};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
+use tepochcalli::RagHealth;
 
 const OLD_MODEL: &str = "paraphrase-multilingual-MiniLM-L12-v2";
 const NEW_MODEL: &str = "BAAI/bge-m3";
@@ -792,5 +793,431 @@ fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
         "un error de uso no imprime nada en stdout"
     );
     assert_byte_identical(vault.path(), &before);
+    no_stray_temps(vault.path());
+}
+
+/// Una invocación hija registrada: argv + env (copias propias).
+#[derive(Debug, Clone)]
+struct Call {
+    args: Vec<String>,
+    env: Vec<(String, String)>,
+}
+
+/// `CommandRunner` fake que REGISTRA cada llamada antes de repertir el guion:
+/// única forma de afirmar «no se lanzó el gate» / «HF_TOKEN llegó solo al
+/// env de un hijo» (FakeProc de `common` no guarda argv/env).
+struct RecordingProc {
+    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
+    calls: RefCell<Vec<Call>>,
+}
+
+impl RecordingProc {
+    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
+        Self {
+            script: RefCell::new(script.into_iter().collect()),
+            calls: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn calls(&self) -> Vec<Call> {
+        self.calls.borrow().clone()
+    }
+
+    fn argv(&self) -> Vec<Vec<String>> {
+        self.calls().into_iter().map(|call| call.args).collect()
+    }
+
+    /// ¿Corrió el gate test-embed (`embed-check --model`)?
+    fn gated(&self) -> bool {
+        self.calls()
+            .iter()
+            .any(|call| call.args.iter().any(|arg| arg == "embed-check"))
+    }
+
+    /// ¿Corrió el re-index (`refresh`)?
+    fn refreshed(&self) -> bool {
+        self.calls()
+            .iter()
+            .any(|call| call.args.iter().any(|arg| arg == "refresh"))
+    }
+}
+
+impl CommandRunner for RecordingProc {
+    fn run(
+        &self,
+        _program: &str,
+        args: &[&str],
+        _cwd: &Path,
+        env: &[(&str, &str)],
+    ) -> Result<CommandOutput, WizardError> {
+        self.calls.borrow_mut().push(Call {
+            args: args.iter().map(|arg| (*arg).to_string()).collect(),
+            env: env
+                .iter()
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+                .collect(),
+        });
+        self.script
+            .borrow_mut()
+            .pop_front()
+            .unwrap_or(Err(WizardError::Internal))
+    }
+}
+
+/// HF API base del pre-chequeo D8.1 (contrato de `pending_free_id`).
+const HF_API: &str = "https://huggingface.co/api/models/";
+
+/// `FakeHttp` sirviendo exactamente la metadata de ese id.
+fn http_serving(id: &str, body: &str) -> FakeHttp {
+    FakeHttp::new(HashMap::from([(
+        format!("{HF_API}{id}"),
+        body.as_bytes().to_vec(),
+    )]))
+}
+
+const EXTERNAL_MODEL: &str = "openai/text-embedding-3-small";
+/// Clave señuelo: si aparece fuera de la config gitignored, el test lo delata.
+const FAKE_KEY: &str = "sk-LEAK-TEST-0123456789abcdef";
+
+/// GAP 2: el camino de API externa (índice 3) nunca se ejercitaba. La clave
+/// viaja empaquetada como `model\0api_key` y solo `picked_config_body` la
+/// separa; aquí se prueba que (a) cae exactamente una vez en la config, (b)
+/// no sale por ningún panel, (c) no hay descarga/gate de dims y (d) el
+/// sidecar conserva la forma documentada con `dims: null`.
+#[test]
+fn external_api_swap_writes_key_once_and_never_in_panel() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    let ui = TapUi::new(
+        vec![3],
+        vec![EXTERNAL_MODEL.to_string(), FAKE_KEY.to_string()],
+    );
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([refresh_ok(2)]);
+    let http = empty_http();
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("el swap a API externa debe triunfar sin descarga local");
+
+    // (a) config: provider litellm, modelo y clave exactamente una vez.
+    let config = std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
+        .expect("config tras el swap");
+    assert!(
+        config.contains("provider = \"litellm\""),
+        "provider externo, got:\n{config}"
+    );
+    assert_eq!(
+        config.matches(EXTERNAL_MODEL).count(),
+        1,
+        "el modelo aparece exactamente una vez, got:\n{config}"
+    );
+    assert_eq!(
+        config.matches(FAKE_KEY).count(),
+        1,
+        "la clave aparece exactamente una vez, got:\n{config}"
+    );
+    assert_eq!(report.model, EXTERNAL_MODEL, "el reporte no lleva la clave");
+    assert_eq!(report.dims, None, "el externo no tiene dims medidas");
+    assert_eq!(report.health, RagHealth::Ok);
+
+    // (b) la clave nunca sale por la UI (títulos, cuerpos ni prompts).
+    let visible = format!("{}\n{}", ui.titles().join("\n"), ui.bodies().join("\n"));
+    assert!(
+        !visible.contains(FAKE_KEY),
+        "la clave nunca puede aparecer en un panel (títulos/cuerpos/prompts)"
+    );
+
+    // (c) sin gate de dims: el externo no descarga; el re-index sí corre y
+    // su hijo no recibe la clave (ni por env ni por argv).
+    assert!(
+        !proc.gated(),
+        "el camino externo no corre el gate test-embed/dims, argv: {:?}",
+        proc.argv()
+    );
+    assert!(
+        proc.refreshed(),
+        "el re-index corre para el externo, argv: {:?}",
+        proc.argv()
+    );
+    for call in proc.calls() {
+        assert!(
+            call.env.iter().all(|(key, value)| key != "HF_TOKEN"
+                && key != "TEPOCHCALLI_EMBED_API_KEY"
+                && value != FAKE_KEY),
+            "la clave no viaja en el env del hijo, got: {:?}",
+            call.env
+        );
+    }
+    assert!(
+        !format!("{:?}", proc.argv()).contains(FAKE_KEY),
+        "la clave no viaja en argv"
+    );
+
+    // (d) forma documentada del sidecar para proveedor externo:
+    // `{"model":<id>,"dims":null}` (misma que escribe F7/reindex, sin dims).
+    let meta = std::fs::read_to_string(rt.join("db").join("index-meta.json"))
+        .expect("sidecar tras el swap");
+    assert_eq!(
+        meta,
+        format!("{{\"model\":\"{EXTERNAL_MODEL}\",\"dims\":null}}\n"),
+        "forma del sidecar para provider externo"
+    );
+    no_stray_temps(vault.path());
+}
+
+/// GAP 2 (seguridad): una clave vacía no se escribe nunca. `ask_non_empty`
+/// re-pregunta; con el guion agotado el swap aborta tipado antes de tocar
+/// config, sidecar o lanzar gate/refresh.
+#[test]
+fn external_api_swap_with_empty_key_is_refused_before_writing() {
+    let vault = installed_vault();
+    let before = snapshot(vault.path());
+    let ui = TapUi::new(vec![3], vec![EXTERNAL_MODEL.to_string(), "   ".to_string()]);
+    let host = host_16gb();
+    // Guion de procesos vacío: cualquier spawn devolvería Internal y delataría
+    // que el swap siguió adelante sin clave.
+    let proc = RecordingProc::scripted([]);
+    let http = empty_http();
+
+    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect_err("sin clave el swap no puede escribir config");
+
+    assert_eq!(
+        err,
+        WizardError::UserAborted,
+        "el rechazo es tipado (re-pregunta agotada), nunca un half-swap"
+    );
+    assert!(
+        ui.titles()
+            .iter()
+            .any(|title| title.contains("Falta un dato")),
+        "explica que el valor no puede ir vacío, títulos: {:?}",
+        ui.titles()
+    );
+    assert_byte_identical(vault.path(), &before);
+    assert!(
+        proc.calls().is_empty(),
+        "sin clave válida no se lanza gate ni refresh, argv: {:?}",
+        proc.argv()
+    );
+    no_stray_temps(vault.path());
+}
+
+/// GAP 3: «Configurar después» (índice 4) nunca se ejercitaba en el swap.
+///
+/// Estado que deja, pineado explícitamente: **no** hay gate ni refresh (el
+/// índice vivo queda byte-idéntico, servible), la config pasa a
+/// `provider = "none"` y el sidecar `index-meta.json` SIGUE describiendo el
+/// índice viejo (modelo y dims). Eso es deliberado y correcto: el sidecar
+/// describe las filas que hay en disco, que nadie reconstruyó; quien decide
+/// el estado RAG es la config (`none` ⇒ `rag_status` degraded / E_NO_EMBEDDER),
+/// así que un lector no lee el sidecar como si hubiera un embedder activo.
+#[test]
+fn swap_to_configure_later_keeps_meta_describing_the_old_index_and_never_refreshes() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    let before = snapshot(vault.path());
+    let ui = TapUi::new(vec![4], vec![]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([]);
+    let http = empty_http();
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("«Configurar después» debe completarse sin índice");
+
+    // (a) nada se descarga ni se reindexa: el índice vivo queda intacto.
+    assert!(
+        proc.calls().is_empty(),
+        "la salida 5 no lanza gate ni refresh, argv: {:?}",
+        proc.argv()
+    );
+    assert!(!proc.gated() && !proc.refreshed());
+    assert_eq!(
+        std::fs::read(rt.join("db").join("chunks.lance")).expect("índice vivo"),
+        before.2,
+        "el índice vivo no se toca"
+    );
+
+    // (b) la config refleja la salida 5: sin provider local y sin modelo.
+    let config = std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
+        .expect("config tras el swap");
+    assert!(
+        config.contains("provider = \"none\""),
+        "config en modo none, got:\n{config}"
+    );
+    assert!(
+        !config.contains("model ="),
+        "ningún modelo a medias en la config, got:\n{config}"
+    );
+    assert_eq!(report.health, RagHealth::Degraded);
+    assert_eq!(report.dims, None);
+    assert_eq!(report.model, "", "la salida 5 no nombra modelo");
+    assert_eq!(
+        report.rows, 2,
+        "sin re-index el conteo sigue siendo el del db previo (2 ficheros)"
+    );
+
+    // (c) el sidecar sigue describiendo el índice viejo (pin del estado real).
+    let meta = std::fs::read_to_string(rt.join("db").join("index-meta.json"))
+        .expect("sidecar tras el swap");
+    assert_eq!(
+        meta,
+        String::from_utf8(before.1).expect("meta utf8"),
+        "sin re-index el sidecar sigue describiendo el índice viejo (modelo y dims): \
+         la config `none` es la que manda para rag_status"
+    );
+    assert!(
+        meta.contains(OLD_MODEL) && meta.contains("384"),
+        "pin explícito del estado que un lector de rag_status encontraría, got:\n{meta}"
+    );
+    no_stray_temps(vault.path());
+}
+
+const GATED_ID: &str = "org/gated-embed-model";
+/// Token señuelo: solo puede aparecer en el env del hijo del gate.
+const GATED_TOKEN: &str = "hf_LEAK-TEST-gated-token-0987";
+
+/// GAP 5a: un repo de HF que no es de embeddings se rechaza ANTES de tocar
+/// disco (pre-filtro D8.1 por `pipeline_tag`/tags ⇒ `E_MODEL_INVALID`).
+#[test]
+fn free_id_non_embedding_repo_aborts_with_model_invalid() {
+    let vault = installed_vault();
+    let before = snapshot(vault.path());
+    let id = "microsoft/phi-3-mini-4k-instruct";
+    let ui = TapUi::new(vec![2], vec![id.to_string()]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([]);
+    let http = http_serving(
+        id,
+        "{\"tags\":[\"text-generation\"],\"pipeline_tag\":\"text-generation\"}",
+    );
+
+    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect_err("un repo no-embeddings debe abortar el swap");
+
+    assert_eq!(err, WizardError::ModelInvalid);
+    assert!(
+        ui.titles()
+            .iter()
+            .any(|title| title.contains("E_MODEL_INVALID")),
+        "el código público se muestra al usuario, títulos: {:?}",
+        ui.titles()
+    );
+    assert!(
+        proc.calls().is_empty(),
+        "ni descarga ni gate: el rechazo ocurre antes, argv: {:?}",
+        proc.argv()
+    );
+    assert_byte_identical(vault.path(), &before);
+    no_stray_temps(vault.path());
+}
+
+/// GAP 5b: repo `gated` ⇒ se pide HF_TOKEN y viaja SOLO en el env del hijo
+/// del gate (spec-embeddings §HF_TOKEN: nunca se loggea ni se persiste).
+#[test]
+fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    let ui = TapUi::new(vec![2], vec![GATED_ID.to_string(), GATED_TOKEN.to_string()]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([gate_ok(GATED_ID, 768, 1_500_000_000), refresh_ok(2)]);
+    let http = http_serving(
+        GATED_ID,
+        "{\"tags\":[\"sentence-similarity\"],\"gated\":true}",
+    );
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("un id gated con token debe completar el swap");
+
+    assert_eq!(report.model, GATED_ID);
+    assert_eq!(report.dims, Some(768));
+
+    // El token llega al env del gate y a ningún otro hijo.
+    let calls = proc.calls();
+    assert_eq!(calls.len(), 2, "gate + refresh, argv: {:?}", proc.argv());
+    let gate = &calls[0];
+    assert!(
+        gate.args.iter().any(|arg| arg == "embed-check"),
+        "la primera llamada es el gate, got: {:?}",
+        gate.args
+    );
+    assert!(
+        gate.env
+            .contains(&("HF_TOKEN".to_string(), GATED_TOKEN.to_string())),
+        "el gate recibe HF_TOKEN en su env, got: {:?}",
+        gate.env
+    );
+    let refresh = &calls[1];
+    assert!(
+        refresh.env.iter().all(|(key, _)| key != "HF_TOKEN"),
+        "el refresh no necesita el token, got: {:?}",
+        refresh.env
+    );
+
+    // Ni panel, ni argv, ni config/sidecar: la única salida es el env del hijo.
+    let visible = format!("{}\n{}", ui.titles().join("\n"), ui.bodies().join("\n"));
+    assert!(
+        !visible.contains(GATED_TOKEN),
+        "el token no aparece en ningún panel"
+    );
+    assert!(
+        !format!("{:?}", proc.argv()).contains(GATED_TOKEN),
+        "el token nunca viaja en argv"
+    );
+    for file in ["config/tepochcalli.toml", "db/index-meta.json"] {
+        let body = std::fs::read_to_string(rt.join(file)).expect("fichero escrito por el swap");
+        assert!(
+            !body.contains(GATED_TOKEN),
+            "{file} no puede persistir el HF_TOKEN (solo la API key de la salida 4 se persiste)"
+        );
+    }
+    assert!(
+        std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
+            .expect("config")
+            .contains(GATED_ID),
+        "la config sí nombra el modelo elegido"
+    );
+    no_stray_temps(vault.path());
+}
+
+/// GAP 5c: metadata inalcanzable (404) degrada la estimación a «sin dato» —
+/// nunca bloquea. Comportamiento intencionado (D8.1): la instalación no falla
+/// por falta de red y el gate test-embed queda como única fuente de verdad.
+#[test]
+fn free_id_missing_metadata_proceeds_to_download() {
+    let vault = installed_vault();
+    let id = "acme/unlisted-embed";
+    let ui = TapUi::new(vec![2], vec![id.to_string()]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([gate_ok(id, 512, 900_000_000), refresh_ok(2)]);
+    // Sin entradas: cualquier GET devuelve NetDownload (404/API caída).
+    let http = empty_http();
+
+    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect("sin metadatos de la API el swap sigue por el gate");
+
+    assert_eq!(report.model, id);
+    assert_eq!(report.dims, Some(512), "las dims las mide el gate");
+    assert!(
+        ui.titles()
+            .iter()
+            .any(|title| title.contains("Sin estimación")),
+        "explica que la estimación no llegó, títulos: {:?}",
+        ui.titles()
+    );
+    let calls = proc.calls();
+    assert!(
+        calls[0].args.iter().any(|arg| arg == "embed-check"),
+        "la descarga se intenta igual, argv: {:?}",
+        proc.argv()
+    );
+    assert!(
+        calls
+            .iter()
+            .flat_map(|call| call.env.iter())
+            .all(|(key, _)| key != "HF_TOKEN"),
+        "sin dato `gated` no se pide token, envs: {:?}",
+        calls.iter().map(|call| &call.env).collect::<Vec<_>>()
+    );
     no_stray_temps(vault.path());
 }
