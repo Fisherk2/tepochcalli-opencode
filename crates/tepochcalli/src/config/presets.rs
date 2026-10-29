@@ -4,7 +4,6 @@
 //! via `include_str!`; badges are pure functions over [`HostProbe`].
 
 use crate::domain::{Badge, ResourceFacts};
-use crate::ports::HostProbe;
 
 /// One row of the embedder menu (spec-embeddings.md §presets.toml v2).
 #[derive(Debug, Clone, PartialEq)]
@@ -173,22 +172,23 @@ fn to_int(field: &'static str, value: f64) -> Result<u64, PresetError> {
     Ok(value as u64)
 }
 
-/// Badge + declared facts for one preset on this host (D8.2).
+/// Badge + declared facts for one preset over the run's `HostFacts` snapshot
+/// (D8.2 + L5-1: el snapshot se captura una vez por menú; aquí solo lee).
 ///
 /// Available RAM first, total as fallback; all-`None` probe → `Unknown`
 /// with declared numbers (never a crash). A `gpu_recommended` preset on a
 /// GPU-less host is `NotRecommended` but stays selectable (D8.3).
 #[must_use]
-pub fn badge_for(preset: &Preset, host: &dyn HostProbe) -> (Badge, ResourceFacts) {
-    let facts = ResourceFacts {
+pub fn badge_for(preset: &Preset, facts: &crate::ports::HostFacts) -> (Badge, ResourceFacts) {
+    let resource = ResourceFacts {
         disk_mb: preset.disk_mb,
         ram_mb: (preset.rec_ram_gb * 1024.0) as u64,
     };
-    let Some(avail) = host.ram_available_gb().or_else(|| host.ram_total_gb()) else {
-        return (Badge::Unknown, facts);
+    let Some(avail) = facts.ram_available_gb.or(facts.ram_total_gb) else {
+        return (Badge::Unknown, resource);
     };
-    if preset.gpu_recommended && host.gpu().is_none() {
-        return (Badge::NotRecommended, facts);
+    if preset.gpu_recommended && facts.gpu.is_none() {
+        return (Badge::NotRecommended, resource);
     }
     let badge = if avail >= preset.rec_ram_gb * 1.5 {
         Badge::Recommended
@@ -197,7 +197,7 @@ pub fn badge_for(preset: &Preset, host: &dyn HostProbe) -> (Badge, ResourceFacts
     } else {
         Badge::NotRecommended
     };
-    (badge, facts)
+    (badge, resource)
 }
 
 /// La fila recomendada (default) y la de mayor tamaño (large), en orden de

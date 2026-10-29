@@ -627,3 +627,51 @@ fn install_non_interactive_rejects_http_mirror_without_confirmation() {
     );
     // Y no hay descarga: el sandbox del transporte detiene la URL ajena.
 }
+
+/// L5-2: los avisos de skip llegan CONTRAÍDOS en un pipe (no-tty): una sola
+/// línea con el count (y los primeros 5 caminos) — una payload con 100
+/// symlinks no genera 100 líneas de ruido.
+#[test]
+#[cfg(unix)]
+fn install_reports_skips_as_one_contracted_line_without_tty() {
+    use std::os::unix::fs::symlink;
+    use std::process::Stdio;
+    let dir = tmp();
+    let payload = dir.path().join("payload-skip100");
+    std::fs::create_dir_all(&payload).expect("payload dir");
+    std::fs::write(payload.join("real.md"), b"# real\n").expect("payload file");
+    for index in 0..100 {
+        symlink(
+            payload.join("real.md"),
+            payload.join(format!("link-{index}.md")),
+        )
+        .expect("symlink fixture");
+    }
+    let vault = dir.path().join("v-skip100");
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--skip-model",
+            "--vault",
+            vault.to_str().expect("utf8 tmp"),
+            "--payload",
+            payload.to_str().expect("utf8 tmp"),
+        ])
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn install");
+    let stderr = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(
+        stderr.contains("100 ficheros ya estaban"),
+        "el aviso contraído debe aparecer, got:\n{stderr}"
+    );
+    assert_eq!(
+        stderr
+            .lines()
+            .filter(|line| line.contains("ya estaban"))
+            .count(),
+        1,
+        "una SOLA línea de skip en pipe, got:\n{stderr}"
+    );
+}

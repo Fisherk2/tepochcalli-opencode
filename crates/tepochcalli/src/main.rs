@@ -656,12 +656,35 @@ fn run_phases(
             }
         }
     };
-    for already in &skipped {
-        let _ = writeln!(
-            stderr,
-            "warning: ya estaba (sin cambios): {}",
-            already.display()
-        );
+    if !skipped.is_empty() {
+        if std::io::stdout().is_terminal() {
+            // TTY: avisos uno por línea (revisión visual de cada fichero).
+            for already in &skipped {
+                let _ = writeln!(
+                    stderr,
+                    "warning: ya estaba (sin cambios): {}",
+                    already.display()
+                );
+            }
+        } else {
+            // Sin tty (pipe/CI): contraído a una única línea — count + los
+            // primeros 5 caminos, suficiente para una CI que grep-ea.
+            let shown: Vec<String> = skipped
+                .iter()
+                .take(5)
+                .map(|p| p.display().to_string())
+                .collect();
+            let _ = writeln!(
+                stderr,
+                "warning: {} ficheros ya estaban (sin cambios){}",
+                skipped.len(),
+                if shown.is_empty() {
+                    String::new()
+                } else {
+                    format!("; primeros: {}", shown.join(", "))
+                }
+            );
+        }
     }
     // F4: pinned `uv` into `.tepochcalli/bin/` (+ version proof).
     // Compensates itself on failure.

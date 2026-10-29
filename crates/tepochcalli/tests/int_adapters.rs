@@ -388,6 +388,32 @@ fn child_env_keeps_explicit_pairs_beyond_the_allowlist() {
     assert_eq!(out.status, 0, "PATH debe seguir heredado: {}", out.stderr);
 }
 
+/// L5-1 bench pin: el fail-path de F1 evaluado sobre el snapshot memoizado
+/// es rápido — sin `System::new_all()` por fila, el gate completo corre en
+/// < 150 ms (el veredicto depende del host real; lo pineado es el tiempo).
+#[test]
+fn real_f1_gate_is_fast_over_the_cached_snapshot() {
+    use std::time::{Duration, Instant};
+
+    let probe = SysHostProbe;
+    // Warm-up: un snapshot servido (la corrida real lo hace en F1... y solo
+    // una vez; aquí pinamos que repetir el gate NO paga de nuevo).
+    let _ = probe.snapshot();
+    let dir = tempfile::tempdir().expect("tempdir");
+    let started = Instant::now();
+    let _ = tepochcalli::application::check_prereqs_on(
+        &probe,
+        std::env::consts::OS,
+        dir.path(),
+        &tepochcalli::adapters::path_dirs(),
+    );
+    let elapsed = started.elapsed();
+    assert!(
+        elapsed < Duration::from_millis(150),
+        "F1 sobre el snapshot cacheado debe correr < 150 ms, tomó {elapsed:?}"
+    );
+}
+
 #[test]
 fn host_tool_search_accepts_the_windows_exe_twin() {
     let dir = tempfile::tempdir().expect("tempdir");

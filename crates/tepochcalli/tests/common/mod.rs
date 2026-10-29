@@ -71,11 +71,14 @@ impl HttpClient for FakeHttp {
 }
 
 /// `HostProbe` fake: fully configurable fixtures, `None` = probe failed.
+/// Con contador de snapshots (L5-1): el menú debe capturar los facts UNA
+/// vez por corrida, no re-probar por fila.
 pub struct FakeHost {
     ram_total_gb: Option<f64>,
     ram_available_gb: Option<f64>,
     disk_free_gb: Option<f64>,
     gpu: Option<GpuInfo>,
+    snapshots: RefCell<usize>,
 }
 
 impl FakeHost {
@@ -91,7 +94,15 @@ impl FakeHost {
             ram_available_gb,
             disk_free_gb,
             gpu,
+            snapshots: RefCell::new(0),
         }
+    }
+
+    /// Snapshots servidos: 1 por corrida del menú (pin L5-1). `allow` porque
+    /// targets sin este pin no lo tocan (common es módulo compartido).
+    #[allow(dead_code)]
+    pub fn snapshot_count(&self) -> usize {
+        *self.snapshots.borrow()
     }
 }
 
@@ -110,6 +121,15 @@ impl HostProbe for FakeHost {
 
     fn gpu(&self) -> Option<GpuInfo> {
         self.gpu.clone()
+    }
+
+    fn snapshot(&self) -> tepochcalli::ports::HostFacts {
+        *self.snapshots.borrow_mut() += 1;
+        tepochcalli::ports::HostFacts {
+            ram_total_gb: self.ram_total_gb,
+            ram_available_gb: self.ram_available_gb,
+            gpu: self.gpu.clone(),
+        }
     }
 }
 

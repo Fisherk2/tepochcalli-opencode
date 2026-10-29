@@ -296,7 +296,10 @@ fn warning(picked: &Phase6Report, current: &CurrentState) -> String {
 fn pick_embedder(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), WizardError> {
     let presets = parse_presets().map_err(|_| WizardError::Internal)?;
     let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
-    let options = build_options(default, large, deps.host);
+    // L5-1: un snapshot de facts por corrida — el menú deja de re-probar
+    // RAM/GPU por fila.
+    let facts = deps.host.snapshot();
+    let options = build_options(default, large, &facts);
     let shown: Vec<&str> = options.iter().map(String::as_str).collect();
     let index = deps.ui.select("Embedding provider", &shown, 0)?;
     let choice = EMBEDDER_PATHS

@@ -10,7 +10,7 @@ use std::time::Duration;
 
 use sysinfo::{Disks, System};
 
-use crate::ports::{GpuInfo, HostProbe};
+use crate::ports::{GpuInfo, HostFacts, HostProbe};
 
 /// Bytes per GiB; the port contract reports GiB floats.
 const BYTES_PER_GIB: f64 = 1024.0 * 1024.0 * 1024.0;
@@ -86,15 +86,11 @@ pub struct SysHostProbe;
 
 impl HostProbe for SysHostProbe {
     fn ram_total_gb(&self) -> Option<f64> {
-        let mut sys = System::new_all();
-        sys.refresh_memory();
-        nonzero_gib(sys.total_memory())
+        Self::cached_facts().ram_total_gb
     }
 
     fn ram_available_gb(&self) -> Option<f64> {
-        let mut sys = System::new_all();
-        sys.refresh_memory();
-        nonzero_gib(sys.available_memory())
+        Self::cached_facts().ram_available_gb
     }
 
     fn disk_free_gb(&self, path: &Path) -> Option<f64> {
@@ -110,14 +106,51 @@ impl HostProbe for SysHostProbe {
     }
 
     fn gpu(&self) -> Option<GpuInfo> {
-        let dirs = path_dirs();
-        for (tool, args) in GPU_TOOLS {
-            if let Some(program) = find_tool_in(tool, &dirs) {
-                if let Some(name) = run_with_timeout(program, args, GPU_TIMEOUT) {
-                    return Some(GpuInfo { name });
+        Self::cached_facts().gpu
+    }
+
+    /// Una sola `System::new_all()` por corrida (L5-1): el snapshot cachea
+    /// RAM y GPU — la sonda GPU cross-OS viaja dentro del mismo snapshot.
+    fn snapshot(&self) -> HostFacts {
+        Self::cached_facts()
+    }
+}
+
+impl SysHostProbe {
+    /// Snapshot memoizado del proceso (los menús llaman 4+ veces).
+    fn cached_facts() -> HostFacts {
+        let cached = CACHE.lock().ok().and_then(|guard| guard.clone());
+        match cached {
+            Some(facts) => facts,
+            None => {
+                let mut sys = System::new_all();
+                sys.refresh_memory();
+                let facts = HostFacts {
+                    ram_total_gb: nonzero_gib(sys.total_memory()),
+                    ram_available_gb: nonzero_gib(sys.available_memory()),
+                    gpu: gpu_probe(),
+                };
+                if let Ok(mut guard) = CACHE.lock() {
+                    *guard = Some(facts.clone());
                 }
+                facts
             }
         }
-        None
     }
+}
+
+static CACHE: std::sync::Mutex<Option<HostFacts>> = std::sync::Mutex::new(None);
+
+/// Sonda GPU cross-OS via `find_tool_in` (misma fuente de `PATH`, L4-5);
+/// nunca crashea la instalación: fallo/ausencia ⇒ `None`.
+fn gpu_probe() -> Option<GpuInfo> {
+    let dirs = path_dirs();
+    for (tool, args) in GPU_TOOLS {
+        if let Some(program) = find_tool_in(tool, &dirs) {
+            if let Some(name) = run_with_timeout(program, args, GPU_TIMEOUT) {
+                return Some(GpuInfo { name });
+            }
+        }
+    }
+    None
 }

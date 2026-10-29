@@ -109,8 +109,14 @@ recommended_flag = false
 fn badge_table_4gb_no_gpu() {
     let presets = parse_presets().expect("embedded presets parse");
     let host = FakeHost::new(Some(4.0), Some(4.0), Some(50.0), None);
-    assert_eq!(badge_for(minilm(&presets), &host).0, Badge::Recommended);
-    assert_eq!(badge_for(bgem3(&presets), &host).0, Badge::NotRecommended);
+    assert_eq!(
+        badge_for(minilm(&presets), &host.snapshot()).0,
+        Badge::Recommended
+    );
+    assert_eq!(
+        badge_for(bgem3(&presets), &host.snapshot()).0,
+        Badge::NotRecommended
+    );
 }
 
 #[test]
@@ -126,7 +132,7 @@ fn badge_table_16gb_with_gpu() {
     );
     // Both fit with headroom: Recommended per ratio rule (accept Viable).
     for p in &presets {
-        let (badge, _) = badge_for(p, &host);
+        let (badge, _) = badge_for(p, &host.snapshot());
         assert!(
             badge == Badge::Recommended || badge == Badge::Viable,
             "{} on 16GB+GPU must be Recommended or Viable, got {badge:?}",
@@ -141,7 +147,7 @@ fn gpu_required_without_gpu_is_not_recommended() {
     // Even a huge-RAM host without GPU must flag the GPU preset.
     let host = FakeHost::new(Some(64.0), Some(64.0), Some(100.0), None);
     assert_eq!(
-        badge_for(bgem3(&presets), &host).0,
+        badge_for(bgem3(&presets), &host.snapshot()).0,
         Badge::NotRecommended,
         "gpu_recommended && no GPU => NotRecommended"
     );
@@ -152,7 +158,7 @@ fn not_recommended_preset_stays_selectable() {
     // D8.3: a warning badge never filters the row out of the lookup.
     let presets = parse_presets().expect("embedded presets parse");
     let host = FakeHost::new(Some(4.0), Some(4.0), Some(50.0), None);
-    let (badge, _) = badge_for(bgem3(&presets), &host);
+    let (badge, _) = badge_for(bgem3(&presets), &host.snapshot());
     assert_eq!(badge, Badge::NotRecommended);
     assert!(
         bgem3(&presets).hf_id == "BAAI/bge-m3",
@@ -166,7 +172,7 @@ fn probe_failure_yields_unknown_badge_and_declared_facts() {
     let host = FakeHost::new(None, None, None, None);
     assert!(host.ram_available_gb().is_none());
     for p in &presets {
-        let (badge, facts) = badge_for(p, &host);
+        let (badge, facts) = badge_for(p, &host.snapshot());
         assert_eq!(badge, Badge::Unknown, "{} must be Unknown", p.hf_id);
         assert_eq!(facts.disk_mb, p.disk_mb);
         // ResourceFacts.gpu retirado (espejo muerto de preset.gpu_recommended;
@@ -180,5 +186,27 @@ fn available_ram_falls_back_to_total() {
     let presets = parse_presets().expect("embedded presets parse");
     // Probe reports total but not available: menu still badges off total.
     let host = FakeHost::new(Some(4.0), None, Some(50.0), None);
-    assert_eq!(badge_for(minilm(&presets), &host).0, Badge::Recommended);
+    assert_eq!(
+        badge_for(minilm(&presets), &host.snapshot()).0,
+        Badge::Recommended
+    );
+}
+
+/// L5-1: el snapshot del menú se captura UNA vez — tres badge_for sobre los
+/// mismos facts NO re-probean (FakeHost cuenta los snapshots servidos).
+#[test]
+fn menu_snapshots_once_not_per_row() {
+    let presets = parse_presets().expect("embedded presets parse");
+    let host = FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None);
+    let facts = host.snapshot();
+    assert_eq!(host.snapshot_count(), 1, "un snapshot al capturar");
+
+    for _ in 0..3 {
+        let _ = badge_for(minilm(&presets), &facts);
+    }
+    assert_eq!(
+        host.snapshot_count(),
+        1,
+        "tres badge_for sobre el snapshot no re-probean RAM/GPU"
+    );
 }

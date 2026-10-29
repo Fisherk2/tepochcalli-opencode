@@ -11,7 +11,7 @@ pub mod payload;
 pub mod proc;
 pub mod ui;
 
-pub use host::{GpuInfo, HostProbe};
+pub use host::{GpuInfo, HostFacts, HostProbe};
 pub use net::HttpClient;
 pub use payload::{MergeReport, PayloadSource};
 pub use proc::{CommandOutput, CommandRunner};

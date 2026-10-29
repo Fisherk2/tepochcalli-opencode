@@ -110,7 +110,10 @@ pub fn run_phase6(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
     let presets = parse_presets().map_err(|_| WizardError::Internal)?;
     let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
     loop {
-        let options = build_options(default, large, deps.host);
+        // El snapshot va fuera del loop (L5-1): un re-enter del menú por id
+        // inválido NO re-prueba RAM/GPU por fila — un probe real por corrida.
+        let facts = deps.host.snapshot();
+        let options = build_options(default, large, &facts);
         let shown: Vec<&str> = options.iter().map(String::as_str).collect();
         let index = deps.ui.select("Embedding provider", &shown, 0)?;
         let choice = EMBEDDER_PATHS
@@ -145,8 +148,8 @@ pub(super) fn badge_label(badge: Badge) -> &'static str {
     }
 }
 
-pub(super) fn preset_option(preset: &Preset, host: &dyn HostProbe) -> String {
-    let (badge, facts) = badge_for(preset, host);
+pub(super) fn preset_option(preset: &Preset, facts: &crate::ports::HostFacts) -> String {
+    let (badge, resource) = badge_for(preset, facts);
     let gpu = if preset.gpu_recommended {
         "requerida"
     } else {
@@ -157,18 +160,23 @@ pub(super) fn preset_option(preset: &Preset, host: &dyn HostProbe) -> String {
         "{} [{}] 💾 {}MB ({provenance}) · 🧠 {}MB ({provenance}) · 🎮 {gpu}",
         preset.name,
         badge_label(badge),
-        facts.disk_mb,
-        facts.ram_mb
+        resource.disk_mb,
+        resource.ram_mb
     )
 }
 
 /// The 5 rows in [`EMBEDDER_PATHS`] order; preset rows carry badges +
 /// declared figures, the free-id row is static (its estimate arrives after
-/// the user types the id).
-pub(super) fn build_options(default: &Preset, large: &Preset, host: &dyn HostProbe) -> Vec<String> {
+/// the user types the id). L5-1: los facts del snapshot (uno por corrida)
+/// alimentan ambas filas — sin re-probe por fila.
+pub(super) fn build_options(
+    default: &Preset,
+    large: &Preset,
+    facts: &crate::ports::HostFacts,
+) -> Vec<String> {
     vec![
-        preset_option(default, host),
-        preset_option(large, host),
+        preset_option(default, facts),
+        preset_option(large, facts),
         "ID libre de HuggingFace — estima vía API + gate test-embed".to_string(),
         "API externa vía LiteLLM (clave solo en config gitignored)".to_string(),
         "Configurar después (sin índice, RAG degraded)".to_string(),
