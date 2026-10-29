@@ -80,3 +80,57 @@ pub enum PhaseOutcome {
     /// Phase failed and its compensation ran.
     Compensated,
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tier 1: `order_index` drives resume/rollback order and `name` is what
+    //! the failure panel prints, so both must stay unique and complete.
+
+    use super::Phase;
+
+    #[test]
+    fn all_is_the_eight_phases_in_execution_order() {
+        assert_eq!(
+            Phase::all(),
+            [
+                Phase::F1,
+                Phase::F2,
+                Phase::F3,
+                Phase::F4,
+                Phase::F5,
+                Phase::F6,
+                Phase::F7,
+                Phase::F8,
+            ]
+        );
+    }
+
+    #[test]
+    fn order_index_is_positional_therefore_strictly_increasing_and_unique() {
+        // Equality with the position proves both properties in one table: a
+        // duplicate or an out-of-order variant breaks it immediately.
+        for (position, phase) in Phase::all().iter().enumerate() {
+            assert_eq!(
+                usize::from(phase.order_index()),
+                position,
+                "{phase:?} must sit at position {position}"
+            );
+        }
+    }
+
+    #[test]
+    fn name_is_non_empty_unique_and_matches_the_order_index() {
+        let mut seen: Vec<&str> = Vec::new();
+        for phase in Phase::all() {
+            let name = phase.name();
+            assert!(!name.is_empty(), "{phase:?} has no printable name");
+            assert!(!seen.contains(&name), "duplicate phase name {name}");
+            seen.push(name);
+            assert_eq!(
+                name,
+                format!("F{}", phase.order_index() + 1).as_str(),
+                "{phase:?} name/order mismatch"
+            );
+        }
+    }
+}

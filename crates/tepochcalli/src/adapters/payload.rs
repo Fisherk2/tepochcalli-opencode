@@ -357,3 +357,126 @@ pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
     report.skipped.sort();
     Ok(report)
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tier 1: the asset names are the wire contract with `release.yml`, and
+    //! `join_checked` is the private gate that keeps a payload entry inside the
+    //! vault — both are unreachable or redundant from `tests/`.
+
+    use super::{
+        join_checked, parse_sha256_sidecar, payload_asset_name, payload_asset_url_from,
+        payload_checksum_name, payload_release_tag, release_base_url_from, PAYLOAD_RELEASE_REPO,
+    };
+    use crate::domain::WizardError;
+    use std::path::{Path, PathBuf};
+
+    const VERSION: &str = "0.3.0";
+
+    #[test]
+    fn asset_names_match_the_published_release() {
+        // Exactly what `release.yml` uploads: no tag prefix on the file, tag
+        // prefix on the release.
+        assert_eq!(payload_release_tag(VERSION), "tepochcalli-v0.3.0");
+        assert_eq!(
+            payload_asset_name(VERSION),
+            "tepochcalli-workspace-0.3.0.tar.gz"
+        );
+        assert_eq!(
+            payload_checksum_name(VERSION),
+            "tepochcalli-workspace-0.3.0.tar.gz.sha256"
+        );
+    }
+
+    #[test]
+    fn release_base_precedence_empty_counts_as_unset() {
+        let default = format!("https://github.com/{PAYLOAD_RELEASE_REPO}/releases/download");
+        assert_eq!(release_base_url_from(None), default);
+        assert_eq!(release_base_url_from(Some("")), default);
+        assert_eq!(release_base_url_from(Some("   ")), default);
+        assert_eq!(
+            release_base_url_from(Some(" http://127.0.0.1:1/dl/ ")),
+            "http://127.0.0.1:1/dl",
+            "an override is honoured with its edges trimmed"
+        );
+        assert_eq!(
+            release_base_url_from(Some("https://mirror.test/dl///")),
+            "https://mirror.test/dl",
+            "every trailing slash goes, so the join cannot double it"
+        );
+    }
+
+    #[test]
+    fn asset_url_never_doubles_the_separator() {
+        let expected =
+            "https://mirror.test/dl/tepochcalli-v0.3.0/tepochcalli-workspace-0.3.0.tar.gz";
+        for base in ["https://mirror.test/dl", "https://mirror.test/dl/"] {
+            assert_eq!(payload_asset_url_from(base, VERSION), expected);
+        }
+    }
+
+    #[test]
+    fn sidecar_parser_accepts_both_documented_forms() {
+        let hex = "a".repeat(64);
+        for sidecar in [
+            format!("{hex}  {}\n", payload_asset_name(VERSION)),
+            format!("{hex} *{}\n", payload_asset_name(VERSION)),
+            format!("{hex}\n"),
+        ] {
+            assert_eq!(
+                parse_sha256_sidecar(sidecar.as_bytes()),
+                Ok(hex.clone()),
+                "valid sidecar must parse: {sidecar:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn sidecar_parser_rejects_garbage_as_payload_corrupt() {
+        for bad in [
+            String::new(),
+            "\n".to_string(),
+            "not-a-hash  asset.tar.gz\n".to_string(),
+            format!("{}  asset.tar.gz\n", "0".repeat(63)),
+            format!("{}  asset.tar.gz\n", "g".repeat(64)),
+        ] {
+            assert_eq!(
+                parse_sha256_sidecar(bad.as_bytes()),
+                Err(WizardError::PayloadCorrupt),
+                "garbage must fail clean: {bad:?}"
+            );
+        }
+        assert_eq!(
+            parse_sha256_sidecar(&[0xff, 0xfe]),
+            Err(WizardError::PayloadCorrupt),
+            "non-UTF-8 sidecar must not panic"
+        );
+    }
+
+    #[test]
+    fn join_checked_builds_targets_inside_the_root() {
+        let root = Path::new("/vault");
+        assert_eq!(
+            join_checked(root, Path::new("notes/day1.md")),
+            Ok(PathBuf::from("/vault/notes/day1.md"))
+        );
+        assert_eq!(
+            join_checked(root, Path::new("")),
+            Ok(PathBuf::from("/vault"))
+        );
+    }
+
+    #[test]
+    fn join_checked_rejects_absolute_entries() {
+        // An absolute entry replaces the root in `Path::join`; every variant
+        // of it must map to `PayloadCorrupt`, never to a path outside the vault.
+        let root = Path::new("/vault");
+        for escape in ["/etc/passwd", "/vault-evil/x", "/"] {
+            assert_eq!(
+                join_checked(root, Path::new(escape)),
+                Err(WizardError::PayloadCorrupt),
+                "{escape} escapes the root"
+            );
+        }
+    }
+}

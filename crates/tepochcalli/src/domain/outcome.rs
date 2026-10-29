@@ -50,3 +50,48 @@ impl InstallOutcome {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tier 1: both outcomes exit 0 (§5.4); the difference the user sees is the
+    //! hint and the `E_NO_EMBEDDER` code, so each variant is pinned here.
+
+    use super::{InstallOutcome, VaultPath};
+
+    fn vault() -> VaultPath {
+        let Some(vault) = VaultPath::new("vault") else {
+            panic!("fixture vault is non-empty");
+        };
+        vault
+    }
+
+    #[test]
+    fn degraded_names_the_swap_command_and_the_contract_code() {
+        let outcome = InstallOutcome::degraded(vault());
+        assert!(matches!(outcome, InstallOutcome::Degraded { .. }));
+        assert_eq!(outcome.e_star(), Some("E_NO_EMBEDDER"));
+        let hint = outcome.fix_hint_text();
+        assert!(!hint.is_empty(), "degraded install must carry a hint");
+        assert!(
+            hint.contains("tepochcalli config embedder"),
+            "hint must name the swap command, got: {hint}"
+        );
+    }
+
+    #[test]
+    fn complete_install_has_no_hint_and_no_code() {
+        let outcome = InstallOutcome::Ok { vault: vault() };
+        assert_eq!(outcome.fix_hint_text(), "");
+        assert_eq!(outcome.e_star(), None);
+    }
+
+    #[test]
+    fn degraded_keeps_the_vault_it_was_built_with() {
+        let expected = vault();
+        let outcome = InstallOutcome::degraded(expected.clone());
+        match outcome {
+            InstallOutcome::Degraded { vault, .. } => assert_eq!(vault, expected),
+            InstallOutcome::Ok { .. } => panic!("degraded() must build the Degraded variant"),
+        }
+    }
+}

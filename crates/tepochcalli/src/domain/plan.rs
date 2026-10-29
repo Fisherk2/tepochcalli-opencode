@@ -45,3 +45,42 @@ impl InstallContext {
         Self { plan }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tier 1: `VaultPath` is the only validated path in the domain — an empty
+    //! value must never reach an installer phase (it would resolve to the CWD).
+
+    use super::{InstallContext, InstallPlan, VaultPath};
+    use std::path::Path;
+
+    #[test]
+    fn vault_path_rejects_empty_and_blank_input() {
+        for raw in ["", " ", "   ", "\t", "\n", "  \t\n "] {
+            assert!(
+                VaultPath::new(raw).is_none(),
+                "{raw:?} must be rejected, not resolved to the CWD"
+            );
+        }
+    }
+
+    #[test]
+    fn vault_path_trims_the_edges_and_keeps_the_rest_verbatim() {
+        let Some(vault) = VaultPath::new("  /tmp/my vault  ") else {
+            panic!("a non-blank path must be accepted");
+        };
+        assert_eq!(vault.as_path(), Path::new("/tmp/my vault"));
+    }
+
+    #[test]
+    fn context_wraps_the_plan_unchanged() {
+        let Some(vault) = VaultPath::new("vault") else {
+            panic!("fixture vault is non-empty");
+        };
+        let plan = InstallPlan {
+            vault,
+            non_interactive: true,
+        };
+        assert_eq!(InstallContext::new(plan.clone()).plan, plan);
+    }
+}

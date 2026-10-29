@@ -65,3 +65,31 @@ pub struct ResourceFacts {
     /// Whether this path wants a GPU.
     pub gpu: bool,
 }
+
+#[cfg(test)]
+mod tests {
+    //! Tier 1: the menu order is what the ADR-007 numbering refers to, and
+    //! `Default` is what the prompt preselects — both pinned here.
+
+    use super::EmbedderChoice;
+
+    #[test]
+    fn menu_order_is_the_adr_numbering() {
+        assert_eq!(
+            EmbedderChoice::all(),
+            [
+                EmbedderChoice::PresetDefault,
+                EmbedderChoice::PresetLarge,
+                EmbedderChoice::HuggingFaceId,
+                EmbedderChoice::ExternalApi,
+                EmbedderChoice::ConfigureLater,
+            ]
+        );
+    }
+
+    #[test]
+    fn default_is_the_same_path_as_default_path() {
+        assert_eq!(EmbedderChoice::default(), EmbedderChoice::default_path());
+        assert_eq!(EmbedderChoice::default(), EmbedderChoice::PresetDefault);
+    }
+}
