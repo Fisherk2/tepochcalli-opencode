@@ -157,19 +157,16 @@ pub fn run_swap(
         return Err(WizardError::UserAborted);
     }
     // Stage the replacement config (live config untouched until the commit).
-    let staged = stage_config(vault, &picked)?;
+    stage_config(vault, &picked)?;
     let outcome = download_gate_and_reindex(deps, vault, &picked, token.as_deref(), &current);
     match outcome {
         Err(err) => {
-            rollback(vault, &before);
-            cleanup_staged(vault);
-            let _ = staged;
+            abort_swap(vault, &before);
             Err(err)
         }
         Ok(partial) => {
             if commit(vault, &picked, &before).is_err() {
-                rollback(vault, &before);
-                cleanup_staged(vault);
+                abort_swap(vault, &before);
                 return Err(WizardError::PermissionDenied);
             }
             cleanup_staged(vault);
@@ -400,16 +397,23 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
     })
 }
 
-/// Staged replacement config on a `.swap` temp path: the live config is
+/// Stage the replacement config on a `.swap` temp path: the live config is
 /// untouched until the commit renames this into place.
-fn stage_config(vault: &Path, picked: &Phase6Report) -> Result<PathBuf, WizardError> {
+fn stage_config(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention).
     let dir = vault.join(RUNTIME_DIR).join("config");
     std::fs::create_dir_all(&dir).map_err(|_| WizardError::PermissionDenied)?;
     let body = picked_config_body(picked);
     let staged = dir.join(CONFIG_SWAP_SUFFIX);
     std::fs::write(&staged, body).map_err(|_| WizardError::PermissionDenied)?;
-    Ok(staged)
+    Ok(())
+}
+
+/// The arm of both failure branches: live bytes back to the snapshot first
+/// (rollback), then the staged temps go away — zero-state, in that order.
+fn abort_swap(vault: &Path, before: &Snapshot) {
+    rollback(vault, before);
+    cleanup_staged(vault);
 }
 
 /// Config body for the pick. The external path carries `model\0api_key`
