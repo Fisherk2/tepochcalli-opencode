@@ -100,20 +100,21 @@ class EmbedderNotConfiguredError(NotImplementedError):
 
 
 class EmbeddingApiKeyMissingError(ValueError):
-    """`provider = "litellm"` sin la variable `api_key_env` en el entorno (T6).
+    """`provider = "litellm"` sin clave en NINGUNA de las dos fuentes (T6).
 
-    Se detecta ANTES de cualquier llamada a la API (chequeo local de
-    `os.environ`). El mensaje nombra SOLO el nombre de la variable — nunca un
-    valor de clave (plan §9 riesgo crítico: «el traceback de litellm filtra
-    la clave»; docs/SECURITY.md) — y el nombre viaja además en el atributo
-    `api_key_env`, que el composition root del MCP (`server._refresh_once`)
-    traduce a `E_API_AUTH` sin parsear mensajes.
+    Se detecta ANTES de cualquier llamada a la API (chequeo local, cero red:
+    `EmbeddingConfig.resolve_api_key()`). El mensaje nombra SOLO el nombre de la
+    variable y el campo del toml — nunca un valor de clave (plan §9 riesgo
+    crítico: «el traceback de litellm filtra la clave»; docs/SECURITY.md) — y el
+    nombre viaja además en el atributo `api_key_env`, que el composition root
+    del MCP (`server._refresh_once`) traduce a `E_API_AUTH` sin parsear mensajes.
     """
 
     def __init__(self, api_key_env: str) -> None:
         """`api_key_env` es SOLO el nombre de la variable (jamás un valor)."""
         super().__init__(
-            f"falta la variable de entorno {api_key_env!r} (api_key_env) — "
+            f"falta la clave del embedder: ni la variable de entorno {api_key_env!r} "
+            "ni `api_key` en [embedding] de tepochcalli.toml la definen — "
             "define la clave para provider='litellm'"
         )
         self.api_key_env = api_key_env
@@ -137,8 +138,11 @@ def _build_embedder(config: flow_config.Config) -> object:
     * `local` ⇒ `SentenceTransformerEmbedder(model, device)` (E1/ADR-006; el
       pin de `revision` vive en el atajo documentado de `config.MODEL_REVISION`
       — el embedder de cocoindex no acepta revision).
-    * `litellm` ⇒ `LiteLLMEmbedder(model, api_key=…)` con la clave LEÍDA del
-      entorno (`api_key_env` guarda solo el NOMBRE). Fuente instalada
+    * `litellm` ⇒ `LiteLLMEmbedder(model, api_key=…)` con la clave de
+      `EmbeddingConfig.resolve_api_key()` (env var `api_key_env` si existe;
+      si no, la `api_key` literal del toml gitignored que escribe el wizard —
+      misma precedencia que el reader del MCP, una sola implementación). Fuente
+      instalada
       `cocoindex==1.0.25/ops/litellm.py`: los kwargs pasan «to every
       ``litellm.aembedding`` call (e.g., ``api_key``…)» y el constructor es
       INERTE — sin clave ⇒ error tipado local, jamás una llamada con la pata
@@ -153,8 +157,8 @@ def _build_embedder(config: flow_config.Config) -> object:
     if provider == "litellm":
         from cocoindex.ops.litellm import LiteLLMEmbedder
 
-        api_key = os.environ.get(config.embedding.api_key_env)
-        if not api_key:
+        api_key = config.embedding.resolve_api_key()
+        if api_key is None:
             raise EmbeddingApiKeyMissingError(config.embedding.api_key_env)
         return LiteLLMEmbedder(config.embedding.model, api_key=api_key)
     if provider == "none":

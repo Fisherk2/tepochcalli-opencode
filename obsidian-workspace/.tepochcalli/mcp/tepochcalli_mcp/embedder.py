@@ -22,11 +22,13 @@ input, api_key=…)` sincrónico (fuente instalada `litellm/main.py:6303`,
   modo que ni `repr` ni el `logger.exception` del guard pueden verla (plan §9
   riesgo crítico).
 
-**Seguridad de la clave (spec-embeddings §Security):** config guarda solo el
-NOMBRE `api_key_env`; el valor se lee de `os.environ` aquí, se pasa como kwarg
-a litellm y JAMÁS se concatena en mensajes — el scrub del wrapper es la red de
-seguridad para los errores de terceros (security-and-hardening: traducir las
-excepciones de la biblioteca en el borde).
+**Seguridad de la clave (spec-embeddings §Security):** config guarda el NOMBRE
+`api_key_env` y —desde el fix del wizard— la `api_key` literal del toml
+gitignored. La precedencia env > fichero vive en UN solo sitio
+(`EmbeddingConfig.resolve_api_key`, compartido con el flow); aquí solo se
+consume, se pasa como kwarg a litellm y JAMÁS se concatena en mensajes — el
+scrub del wrapper es la red de seguridad para los errores de terceros
+(security-and-hardening: traducir las excepciones de la biblioteca en el borde).
 
 **Módulo LIGERO en import:** `sentence_transformers` (⇒ torch) y `litellm`
 (pesado) se importan DENTRO de las ramas — `tools/rag_status.py` importa
@@ -166,17 +168,18 @@ def _local_cut(config: Config) -> Callable[[str], list[float]]:
 
 
 def _litellm_cut(config: Config) -> Callable[[str], list[float]]:
-    """Rama `litellm`: clave SOLO del entorno + `litellm.embedding` sincrónico con scrub.
+    """Rama `litellm`: clave vía `resolve_api_key` (env > toml) + `litellm.embedding` con scrub.
 
-    La clave se lee UNA vez en la construcción: ausente ⇒ `EmbedderAuthError`
+    La clave se resuelve UNA vez en la construcción: ausente en las dos fuentes
+    ⇒ `EmbedderAuthError`
     ANTES de importar litellm ni llamar a la API (chequeo local, cero red).
     En la llamada, cualquier excepción no-credenciales se traduce a
     `EmbedderApiError` con la clave reemplazada por `***` y `from None` — el
     valor jamás llega a `repr`, logs ni payloads.
     """
     api_key_env = config.embedding.api_key_env
-    api_key = os.environ.get(api_key_env)
-    if not api_key:
+    api_key = config.embedding.resolve_api_key()
+    if api_key is None:
         raise EmbedderAuthError(api_key_env)
     model = config.embedding.model
 

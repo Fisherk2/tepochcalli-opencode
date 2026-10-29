@@ -45,14 +45,17 @@ from tepochcalli_mcp.tools import json_result
 from tepochcalli_mcp.tools import search as search_handler
 
 FAKE_KEY = "sk-t6-sup-secreto-999"
+LEAK_SECRET = "sk-LEAK-TEST-fichero-mcp"
 LITELLM_MODEL = "openai/text-embedding-3-small"
 
 
-def _config(provider: str = "local", *, model: str = DEFAULT_EMBEDDING_MODEL) -> Config:
+def _config(
+    provider: str = "local", *, model: str = DEFAULT_EMBEDDING_MODEL, api_key: str | None = None
+) -> Config:
     """Config de prueba directa (el loader real lo cubre `test_d15_provider_none`)."""
     return Config(
         models_dir=Path("/vault/.tepochcalli/models"),
-        embedding=EmbeddingConfig(provider=provider, model=model),
+        embedding=EmbeddingConfig(provider=provider, model=model, api_key=api_key),
     )
 
 
@@ -311,6 +314,33 @@ def test_litellm_read_wrapper_returns_the_embedding_as_floats(
     assert calls == [
         {"model": LITELLM_MODEL, "input": ["una consulta"], "api_key": FAKE_KEY},
     ], "una sola llamada, con el texto como `input` de una lista"
+
+
+def test_litellm_read_wrapper_reads_the_key_from_the_toml_when_the_env_is_unset(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sin env var, la clave sale de `[embedding].api_key` (lo que escribe el wizard).
+
+    Mismo Prove-It que el reader del flow: el wizard persiste la clave literal
+    en el toml gitignored; sin el fallback, `provider = "litellm"` respondía
+    `E_API_AUTH` con la clave delante. El valor tampoco llega al log.
+    """
+    monkeypatch.delenv(DEFAULT_API_KEY_ENV, raising=False)
+    calls: list[dict[str, object]] = []
+
+    def _fake_embedding(**kwargs: object) -> object:
+        calls.append(kwargs)
+        return types.SimpleNamespace(data=[{"embedding": [0.5]}])
+
+    monkeypatch.setitem(sys.modules, "litellm", types.SimpleNamespace(embedding=_fake_embedding))
+
+    cut = embedder.build_embedder(_config("litellm", model=LITELLM_MODEL, api_key=LEAK_SECRET))
+
+    assert cut("una consulta") == [0.5]
+    assert calls == [
+        {"model": LITELLM_MODEL, "input": ["una consulta"], "api_key": LEAK_SECRET},
+    ]
+    assert LEAK_SECRET not in caplog.text
 
 
 def test_litellm_read_wrapper_never_calls_the_provider_without_the_key(

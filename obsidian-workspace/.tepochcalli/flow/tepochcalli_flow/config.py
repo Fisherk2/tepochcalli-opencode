@@ -13,9 +13,11 @@ overrides); clave/sección desconocida, tipo erróneo o `provider` fuera de
 {local, litellm, none} = warning + default de ese campo (las overrides hermanas se
 respetan). Todo se loggea con `logging.getLogger(__name__)`.
 
-Seguridad: `api_key_env` es solo el NOMBRE de una variable de entorno — este
-módulo jamás lee su valor, por lo que ni `repr` ni logs pueden filtrarlo
-(docs/SECURITY.md; spec-embeddings.md §Security Considerations).
+Seguridad: dos fuentes de clave, env > fichero (fix cross-layer 2026-10-28). `api_key_env` es el
+NOMBRE de la variable; `api_key` es la clave literal que el wizard escribe en el
+toml gitignored. Ninguna de las dos se renderiza: `api_key` lleva `repr=False` y
+el log del loader solo nombra `api_key_env` (docs/SECURITY.md;
+spec-embeddings.md §Security Considerations).
 
 Este módulo es código de dominio: NO importa `cocoindex` ni `lancedb` (test de
 arquitectura, T9).
@@ -68,14 +70,35 @@ _KNOWN_SECTIONS: Final = ("embedding", "chunking", "search")
 class EmbeddingConfig:
     """Sección `[embedding]` — spec-embeddings.md §tepochcalli.toml; device: E1 (D11).
 
-    `api_key_env` solo se consulta con `provider = "litellm"` y aquí se guarda
-    únicamente el nombre de la variable, nunca su valor.
+    `api_key_env` es el nombre de la variable y `api_key` la clave literal que
+    el wizard escribe en el toml gitignored; solo se usan con
+    `provider = "litellm"` y SIEMPRE vía `resolve_api_key()`.
     """
 
     provider: str = DEFAULT_EMBEDDING_PROVIDER
     model: str = DEFAULT_EMBEDDING_MODEL
     device: str = DEFAULT_EMBEDDING_DEVICE
     api_key_env: str = DEFAULT_API_KEY_ENV
+    api_key: str | None = field(default=None, repr=False)
+    """Clave LITERAL del toml (el wizard la escribe en el fichero gitignored).
+
+    `repr=False`: ni `repr(EmbeddingConfig())` ni `repr(Config())` la exponen —
+    en logs sale solo el símbolo `api_key_env`. Se resuelve siempre vía
+    `resolve_api_key()`, nunca leyendo el campo a pelo.
+    """
+
+    def resolve_api_key(self) -> str | None:
+        """Clave del proveedor: env nombrada por `api_key_env`, si no `api_key`, si no `None`.
+
+        Única implementación de la precedencia (env > fichero) para los dos
+        readers (`app.py` y `tepochcalli_mcp/embedder.py`). Recorta espacios y
+        trata la cadena vacía como ausente; devuelve SOLO el valor a mano, que
+        nunca debe concatenarse en mensajes, `repr` ni logs.
+        """
+        from_env = os.environ.get(self.api_key_env, "").strip()
+        if from_env:
+            return from_env
+        return (self.api_key or "").strip() or None
 
 
 @dataclass(frozen=True)
@@ -228,6 +251,8 @@ def _merge_section[SectionT: _DataclassSection](
             )
             continue
         expected = type(getattr(defaults, key))
+        if expected is type(None):
+            expected = str  # campo `str | None` (default None): solo acepta texto
         if not _matches_type(value, expected):
             logger.warning(
                 "Valor de '%s' en [%s] de %s: se esperaba %s y llegó %s; se usa el default",

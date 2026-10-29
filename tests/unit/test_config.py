@@ -19,6 +19,8 @@ import pytest
 from tepochcalli_flow import config as flow_config
 
 CONFIG_RELPATH = Path(".tepochcalli/config/tepochcalli.toml")
+LEAK_SECRET = "sk-LEAK-TEST-no-debe-aparecer-en-repr-ni-logs"
+"""Clave FALSA: el wizard escribe la clave literal en `[embedding].api_key` (gitignored)."""
 EXAMPLE_PATH = (
     Path(__file__).resolve().parents[2]
     / "obsidian-workspace"
@@ -191,6 +193,76 @@ def test_api_key_env_value_never_reaches_renderings_or_logs(
     logs = "\n".join(_module_messages(caplog, level=logging.DEBUG))
     assert "TEPOCHCALLI_EMBED_API_KEY" in logs  # el nombre sí se loggea
     assert sentinel not in logs
+
+
+def test_api_key_from_toml_is_parsed_and_never_rendered(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """`[embedding].api_key` (literal del wizard) se parsea y JAMÁS sale en repr/logs.
+
+    El toml real está gitignored y puede llevar la clave literal; el nombre
+    `api_key_env` sigue siendo el símbolo público (el que sí se loggea).
+    """
+    caplog.set_level(logging.DEBUG, logger="tepochcalli_flow.config")
+    _write_config(tmp_path, f'[embedding]\nprovider = "litellm"\napi_key = "{LEAK_SECRET}"\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.api_key == LEAK_SECRET
+    for rendering in (repr(cfg.embedding), repr(cfg), str(cfg), f"{cfg}"):
+        assert LEAK_SECRET not in rendering
+    assert "TEPOCHCALLI_EMBED_API_KEY" in repr(cfg)  # el nombre sí
+    assert LEAK_SECRET not in caplog.text
+    assert _module_messages(caplog) == [], "api_key es clave conocida: sin warnings"
+
+
+def test_resolve_api_key_prefers_the_environment_over_the_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Precedencia env > fichero: la variable de entorno gana si está definida."""
+    env_secret = "sk-LEAK-TEST-gana-el-entorno"
+    monkeypatch.setenv(flow_config.DEFAULT_API_KEY_ENV, env_secret)
+    _write_config(tmp_path, f'[embedding]\napi_key = "{LEAK_SECRET}"\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.resolve_api_key() == env_secret
+
+
+def test_resolve_api_key_falls_back_to_the_file_when_the_env_is_unset(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sin la env var, la clave literal del toml es la que resuelve (fix del defecto)."""
+    monkeypatch.delenv(flow_config.DEFAULT_API_KEY_ENV, raising=False)
+    _write_config(tmp_path, f'[embedding]\napi_key = "{LEAK_SECRET}"\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.resolve_api_key() == LEAK_SECRET
+
+
+def test_resolve_api_key_treats_empty_and_whitespace_as_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Cadena vacía o solo espacios = ausente, en las dos fuentes; el valor se recorta."""
+    monkeypatch.setenv(flow_config.DEFAULT_API_KEY_ENV, "   ")
+    _write_config(tmp_path, f'[embedding]\napi_key = "  {LEAK_SECRET}  "\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.resolve_api_key() == LEAK_SECRET
+    assert flow_config.EmbeddingConfig(api_key="  ").resolve_api_key() is None
+
+
+def test_resolve_api_key_is_none_when_neither_source_defines_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sin env var y sin `api_key` en el toml ⇒ `None` (el reader eleva E_API_AUTH)."""
+    monkeypatch.delenv(flow_config.DEFAULT_API_KEY_ENV, raising=False)
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.resolve_api_key() is None
 
 
 def test_model_cache_env_resolves_under_vault(tmp_path: Path) -> None:

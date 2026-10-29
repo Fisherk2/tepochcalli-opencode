@@ -37,6 +37,7 @@ from tepochcalli_flow.config import (
 
 LITELLM_MODEL = "openai/text-embedding-3-small"
 FAKE_KEY = "sk-t6-fake-key-nunca-real"
+LEAK_SECRET = "sk-LEAK-TEST-fichero-flow"
 
 LLM_MODULES = frozenset({"litellm", "openai", "anthropic"})
 
@@ -56,11 +57,13 @@ def _scrub_llm_modules() -> Iterator[None]:
         del sys.modules[name]
 
 
-def _config(provider: str, *, model: str = DEFAULT_EMBEDDING_MODEL) -> Config:
+def _config(
+    provider: str, *, model: str = DEFAULT_EMBEDDING_MODEL, api_key: str | None = None
+) -> Config:
     """Config de prueba — igual que la del loader, construida directa (sin toml)."""
     return Config(
         models_dir=Path("/vault/.tepochcalli/models"),
-        embedding=EmbeddingConfig(provider=provider, model=model),
+        embedding=EmbeddingConfig(provider=provider, model=model, api_key=api_key),
     )
 
 
@@ -93,6 +96,46 @@ def test_litellm_provider_builds_lite_llm_embedder_with_key_from_env(
     assert embedder.__coco_memo_key__() == (LITELLM_MODEL, {"api_key": FAKE_KEY})
 
 
+def test_litellm_provider_reads_the_key_from_the_toml_when_the_env_is_unset(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sin env var, `[embedding].api_key` (lo que escribe el wizard) alimenta el embedder.
+
+    Prove-It del defecto cross-layer: `swap.rs`/`embedder_menu.rs` persisten la
+    clave literal en el toml gitignored y este reader solo miraba el entorno ⇒
+    `provider = "litellm"` roto de punta a punta.
+    """
+    from cocoindex.ops.litellm import LiteLLMEmbedder
+
+    monkeypatch.delenv(DEFAULT_API_KEY_ENV, raising=False)
+
+    embedder = flow_app._build_embedder(
+        _config("litellm", model=LITELLM_MODEL, api_key=LEAK_SECRET)
+    )
+
+    assert isinstance(embedder, LiteLLMEmbedder)
+    assert embedder.__coco_memo_key__() == (LITELLM_MODEL, {"api_key": LEAK_SECRET})
+    assert LEAK_SECRET not in caplog.text
+
+
+def test_litellm_provider_prefers_the_env_key_over_the_toml(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Un único resolver (env > fichero): la misma precedencia que el loader."""
+    from cocoindex.ops.litellm import LiteLLMEmbedder
+
+    env_secret = "sk-LEAK-TEST-entorno-gana"
+    monkeypatch.setenv(DEFAULT_API_KEY_ENV, env_secret)
+
+    embedder = flow_app._build_embedder(
+        _config("litellm", model=LITELLM_MODEL, api_key=LEAK_SECRET)
+    )
+
+    assert isinstance(embedder, LiteLLMEmbedder)
+    assert embedder.__coco_memo_key__() == (LITELLM_MODEL, {"api_key": env_secret})
+    assert LEAK_SECRET not in caplog.text
+
+
 def test_litellm_without_the_env_key_raises_typed_error_naming_only_the_variable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -110,6 +153,8 @@ def test_litellm_without_the_env_key_raises_typed_error_naming_only_the_variable
 
     message = str(exc_info.value)
     assert DEFAULT_API_KEY_ENV in message, "nombra QUÉ variable falta (accionable)"
+    # Veraz sobre la fuente: el fallback del fichero también es una vía de clave.
+    assert "api_key" in message
     assert FAKE_KEY not in message
     assert FAKE_KEY not in repr(exc_info.value)
 
