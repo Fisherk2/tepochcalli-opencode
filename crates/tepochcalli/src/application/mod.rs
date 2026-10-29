@@ -5,6 +5,7 @@
 
 pub mod embedder_menu;
 pub mod failure;
+pub(crate) mod flow_cli;
 pub mod installer;
 pub mod maintenance;
 pub mod phase7;

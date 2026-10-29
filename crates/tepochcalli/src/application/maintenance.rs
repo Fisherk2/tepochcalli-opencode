@@ -14,6 +14,7 @@ use crate::domain::WizardError;
 use crate::ports::{CommandRunner, Ui};
 
 use super::embedder_menu::config_path;
+use super::flow_cli::run_flow_cli;
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::{index_meta_path, write_index_meta};
 use super::text::{config_value, json_bool, json_string, json_u32, json_u64, or_fallback};
@@ -24,9 +25,6 @@ const FLOW_MODULE: &str = "tepochcalli_flow";
 const GATE_SUBCOMMAND: &str = "embed-check";
 /// `refresh` rebuilds the index and prints its `RefreshReport` (T12 contract).
 const REFRESH_SUBCOMMAND: &str = "refresh";
-/// Model cache dir, sandboxed under the vault via `HF_HOME` (same dir the
-/// F6 gate and F7 pass: the download happens once, every pass reuses it).
-const MODELS_DIR: &str = "models";
 
 /// What the confirmed rebuild established: the counts plus the embedder the
 /// fresh sidecar now describes.
@@ -173,29 +171,17 @@ struct GateOk {
     dims: u32,
 }
 
-/// `venv python -m tepochcalli_flow embed-check --model <id>` with the model
-/// cache sandboxed under the vault. `ok:false` is the portero verdict
-/// (`E_MODEL_INVALID`); a crashed/garbled gate is `PhaseFailed`.
+/// `venv python -m tepochcalli_flow embed-check --model <id>` (shared spawn
+/// trunk). `ok:false` is the portero verdict (`E_MODEL_INVALID`); a
+/// crashed/garbled gate is `PhaseFailed`.
 fn run_gate(proc: &dyn CommandRunner, vault: &Path, model: &str) -> Result<GateOk, WizardError> {
-    let python = venv_python(&vault.join(RUNTIME_DIR).join(VENV_DIR_NAME));
-    let models = vault
-        .join(RUNTIME_DIR)
-        .join(MODELS_DIR)
-        .to_string_lossy()
-        .into_owned();
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let out = proc.run(
-        &program,
-        &["-m", FLOW_MODULE, GATE_SUBCOMMAND, "--model", model],
+    let out = run_flow_cli(
+        proc,
         vault,
-        &[
-            ("HF_HOME", &models),
-            ("SENTENCE_TRANSFORMERS_HOME", &models),
-        ],
+        &["-m", FLOW_MODULE, GATE_SUBCOMMAND, "--model", model],
+        &[],
+        None,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     parse_gate(&out.stdout)
 }
 
@@ -210,25 +196,13 @@ struct Refreshed {
 }
 
 fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<Refreshed, WizardError> {
-    let python = venv_python(&vault.join(RUNTIME_DIR).join(VENV_DIR_NAME));
-    let models = vault
-        .join(RUNTIME_DIR)
-        .join(MODELS_DIR)
-        .to_string_lossy()
-        .into_owned();
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let out = proc.run(
-        &program,
-        &["-m", FLOW_MODULE, REFRESH_SUBCOMMAND],
+    let out = run_flow_cli(
+        proc,
         vault,
-        &[
-            ("HF_HOME", &models),
-            ("SENTENCE_TRANSFORMERS_HOME", &models),
-        ],
+        &["-m", FLOW_MODULE, REFRESH_SUBCOMMAND],
+        &[],
+        None,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     parse_refresh(&out.stdout)
 }
 

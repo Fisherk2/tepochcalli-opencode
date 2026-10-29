@@ -23,7 +23,7 @@ use std::path::Path;
 use crate::domain::WizardError;
 use crate::ports::CommandRunner;
 
-use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::flow_cli::run_flow_cli;
 use super::text::json_raw;
 
 /// The only `mcp.servers` key F8 owns (spec-installer-wizard §Merge, D19).
@@ -197,23 +197,16 @@ fn parse_rag_status(body: &str) -> Result<RagHealth, WizardError> {
 
 /// Run the registered registration's interpreter with its cwd + env and
 /// validate the `rag_status` shape end to end (spec-mcp-server §rag_status).
+/// The contract env rides `extra_env`: the probe speaks `TEPOCHCALLI_ROOT`,
+/// not the flow sandbox.
 fn verify_rag_status(proc: &dyn CommandRunner, vault: &Path) -> Result<RagHealth, WizardError> {
-    // shortcut: a vault without the venv interpreter means F5 never ran;
-    // same class as F5's missing-`uv` and F7's missing-interpreter checks.
-    let python = venv_python(&vault.join(RUNTIME_DIR).join(VENV_DIR_NAME));
-    if !python.is_file() {
-        return Err(WizardError::Internal);
-    }
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let out = proc.run(
-        &program,
-        &["-c", RAG_STATUS_PROBE],
+    let out = run_flow_cli(
+        proc,
         vault,
+        &["-c", RAG_STATUS_PROBE],
         &[(CONTRACT_ROOT_ENV, ".")],
+        None,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     parse_rag_status(out.stdout.trim())
 }
 

@@ -25,7 +25,7 @@ use super::embedder_menu::{
     ask_non_empty, build_options, config_path, external_config, local_config, none_config,
     Phase6Report, Provenance, EMBEDDER_PATHS,
 };
-use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::installer::RUNTIME_DIR;
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
 use super::text::{
@@ -630,43 +630,21 @@ struct GateOk {
     rss_peak_bytes: u64,
 }
 
-/// `venv python -m tepochcalli_flow embed-check --model <id>` with the model
-/// cache sandboxed under the vault. `ok:false` is the portero verdict
-/// (`E_MODEL_INVALID`); a crashed/garbled gate is `PhaseFailed`.
+/// `venv python -m tepochcalli_flow embed-check --model <id>` (shared spawn
+/// trunk). Gate payload parsing stays local to the swap.
 fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
     model_id: &str,
     token: Option<&str>,
 ) -> Result<GateOk, WizardError> {
-    let python = venv_python(&vault.join(RUNTIME_DIR).join(VENV_DIR_NAME));
-    if !python.is_file() {
-        return Err(WizardError::Internal);
-    }
-    let models = vault
-        .join(RUNTIME_DIR)
-        .join(MODELS_DIR)
-        .to_string_lossy()
-        .into_owned();
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let mut env: Vec<(&str, &str)> = vec![
-        ("HF_HOME", &models),
-        ("SENTENCE_TRANSFORMERS_HOME", &models),
-    ];
-    if let Some(secret) = token {
-        // shortcut: the token travels only in the child env (T11g redacts all
-        // UI/log surfaces; a generic env-scrubber is T15 scope).
-        env.push(("HF_TOKEN", secret));
-    }
-    let out = proc.run(
-        &program,
-        &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
+    let out = super::flow_cli::run_flow_cli(
+        proc,
         vault,
-        &env,
+        &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
+        &[],
+        token,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     parse_gate(&out.stdout)
 }
 
@@ -674,28 +652,13 @@ fn run_gate(
 /// replacement `scanned` count. `ok:false` maps to `ModelInvalid`, matching
 /// the F7 portero parity.
 fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<u64, WizardError> {
-    let python = venv_python(&vault.join(RUNTIME_DIR).join(VENV_DIR_NAME));
-    if !python.is_file() {
-        return Err(WizardError::Internal);
-    }
-    let models = vault
-        .join(RUNTIME_DIR)
-        .join(MODELS_DIR)
-        .to_string_lossy()
-        .into_owned();
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let out = proc.run(
-        &program,
-        &["-m", GATE_MODULE, REFRESH_SUBCOMMAND],
+    let out = super::flow_cli::run_flow_cli(
+        proc,
         vault,
-        &[
-            ("HF_HOME", &models),
-            ("SENTENCE_TRANSFORMERS_HOME", &models),
-        ],
+        &["-m", GATE_MODULE, REFRESH_SUBCOMMAND],
+        &[],
+        None,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     parse_refresh(&out.stdout)
 }
 

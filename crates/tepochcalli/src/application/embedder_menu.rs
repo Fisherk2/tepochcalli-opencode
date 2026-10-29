@@ -12,7 +12,7 @@ use crate::config::{badge_for, parse_presets, Preset};
 use crate::domain::{Badge, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
-use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::installer::RUNTIME_DIR;
 use super::text::{
     config_value, json_bool, json_raw, json_string, json_u32, json_u64, toml_escape,
 };
@@ -63,9 +63,7 @@ const HF_API_BASE: &str = "https://huggingface.co/api/models/";
 const CONFIG_DIR: &str = "config";
 /// Config file name; written via temp + rename (never half-written).
 const CONFIG_FILE: &str = "tepochcalli.toml";
-/// Model cache dir the gate sandboxes via `HF_HOME` (spec-embeddings).
-const MODELS_DIR: &str = "models";
-/// Gate probe phrase is flow-side (T12); the wizard only passes `--model`.
+/// Gate contract is flow-side (T12); the wizard only passes `--model`.
 const GATE_MODULE: &str = "tepochcalli_flow";
 const GATE_SUBCOMMAND: &str = "embed-check";
 /// fp32 resident estimate: params × 4 B × 1.3 overhead, shown in MB.
@@ -264,40 +262,22 @@ struct GateOk {
     rss_peak_bytes: u64,
 }
 
-/// Runs `venv python -m tepochcalli_flow embed-check --model <id>` with the
-/// model cache sandboxed under the vault. `ok:false` is the portero verdict
-/// (`E_MODEL_INVALID`); a crashed/garbled gate is `PhaseFailed`.
+/// Runs `venv python -m tepochcalli_flow embed-check --model <id>` (shared
+/// spawn trunk). `ok:false` is the portero verdict (`E_MODEL_INVALID`); a
+/// crashed/garbled gate is `PhaseFailed`.
 fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
     model_id: &str,
     token: Option<&str>,
 ) -> Result<GateOk, WizardError> {
-    let venv = vault.join(RUNTIME_DIR).join(VENV_DIR_NAME);
-    let python = venv_python(&venv);
-    let models = venv
-        .parent()
-        .map(|runtime| runtime.join(MODELS_DIR).to_string_lossy().into_owned())
-        .unwrap_or_default();
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let mut env: Vec<(&str, &str)> = vec![
-        ("HF_HOME", &models),
-        ("SENTENCE_TRANSFORMERS_HOME", &models),
-    ];
-    if let Some(secret) = token {
-        // shortcut: the token travels only in the child env (T11g redacts all
-        // UI/log surfaces; a generic env-scrubber is T15 scope).
-        env.push(("HF_TOKEN", secret));
-    }
-    let out = proc.run(
-        &program,
-        &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
+    let out = super::flow_cli::run_flow_cli(
+        proc,
         vault,
-        &env,
+        &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
+        &[],
+        token,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     parse_gate(&out.stdout)
 }
 

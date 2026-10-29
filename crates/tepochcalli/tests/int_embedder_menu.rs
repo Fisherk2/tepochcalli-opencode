@@ -22,6 +22,21 @@ fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T11 fixtures")
 }
 
+/// Materializes the vault venv python (is_file guard of the shared flow CLI):
+/// without it run_phase6 fails with `Internal` before the scripted gate.
+fn create_venv_python(vault: &Path) {
+    let python = vault
+        .join(".tepochcalli")
+        .join("venv")
+        .join(if cfg!(windows) {
+            "Scripts/python.exe"
+        } else {
+            "bin/python"
+        });
+    std::fs::create_dir_all(python.parent().expect("venv bin parent")).expect("venv fixture");
+    std::fs::write(python, b"fake-python").expect("venv python fixture");
+}
+
 fn host_16gb() -> FakeHost {
     FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
 }
@@ -240,6 +255,7 @@ fn path1_ok_writes_local_config_after_gate() {
     )]);
     let http = empty_http();
     let vault = tmp();
+    create_venv_python(vault.path());
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
@@ -308,6 +324,7 @@ fn path2_ok_writes_large_preset() {
     let proc = FakeProc::scripted([gate_ok("BAAI/bge-m3", 1024, 3_000_000_000)]);
     let http = empty_http();
     let vault = tmp();
+    create_venv_python(vault.path());
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
@@ -338,6 +355,7 @@ fn path3_free_id_estimates_then_gates_ok() {
     let proc = FakeProc::scripted([gate_ok(id, 384, 650_000_000)]);
     let http = FakeHttp::new(files);
     let vault = tmp();
+    create_venv_python(vault.path());
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
@@ -402,6 +420,7 @@ fn path3_gate_invalid_returns_to_menu_without_config() {
     let proc = FakeProc::scripted([gate_invalid()]);
     let http = empty_http();
     let vault = tmp();
+    create_venv_python(vault.path());
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
@@ -431,6 +450,7 @@ fn path3_gated_repo_asks_token_and_passes_it_to_gate_env() {
     let proc = RecordingProc::scripted([gate_ok(id, 384, 300_000_000)]);
     let http = FakeHttp::new(files);
     let vault = tmp();
+    create_venv_python(vault.path());
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
@@ -523,6 +543,7 @@ fn failed_gate_leaves_preexisting_config_byte_identical() {
     let dir = vault.path().join(".tepochcalli").join("config");
     std::fs::create_dir_all(&dir).expect("config dir fixture");
     std::fs::write(dir.join("tepochcalli.toml"), before).expect("preexisting config");
+    create_venv_python(vault.path());
     let ui = TapUi::new(vec![0], vec![]);
     let host = host_16gb();
     let proc = FakeProc::scripted([Err(WizardError::PhaseFailed)]);

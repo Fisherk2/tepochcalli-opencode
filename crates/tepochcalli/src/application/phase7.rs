@@ -20,16 +20,14 @@ use crate::domain::WizardError;
 use crate::ports::CommandRunner;
 
 use super::embedder_menu::Phase6Report;
-use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
+use super::flow_cli::run_flow_cli;
+use super::installer::RUNTIME_DIR;
 use super::text::{json_bool, json_escape, json_u64};
 
 /// Flow CLI module invoked through the venv interpreter (D24).
 const REFRESH_MODULE: &str = "tepochcalli_flow";
 /// `refresh` indexes the vault and prints its `RefreshReport` as one JSON line.
 const REFRESH_SUBCOMMAND: &str = "refresh";
-/// Model cache dir, sandboxed under the vault via `HF_HOME` (same dir the
-/// F6 gate passes: the download happens once, the index reuses it).
-const MODELS_DIR: &str = "models";
 /// Index dir holding LanceDB plus the metadata sidecar.
 const DB_DIR: &str = "db";
 /// Sidecar with the embedder that produced the index (T17 reads it back).
@@ -69,30 +67,13 @@ pub fn run_phase7(
             dims: None,
         });
     }
-    // shortcut: a vault without the venv interpreter means F5 never ran;
-    // same class as F5's missing-`uv` check (typed, never a spawn attempt).
-    let python = venv_python(&vault.join(RUNTIME_DIR).join(VENV_DIR_NAME));
-    if !python.is_file() {
-        return Err(WizardError::Internal);
-    }
-    let models = vault
-        .join(RUNTIME_DIR)
-        .join(MODELS_DIR)
-        .to_string_lossy()
-        .into_owned();
-    let program = python.to_str().ok_or(WizardError::Internal)?.to_string();
-    let out = proc.run(
-        &program,
-        &["-m", REFRESH_MODULE, REFRESH_SUBCOMMAND],
+    let out = run_flow_cli(
+        proc,
         vault,
-        &[
-            ("HF_HOME", &models),
-            ("SENTENCE_TRANSFORMERS_HOME", &models),
-        ],
+        &["-m", REFRESH_MODULE, REFRESH_SUBCOMMAND],
+        &[],
+        None,
     )?;
-    if out.status != 0 {
-        return Err(WizardError::PhaseFailed);
-    }
     match parse_refresh(&out.stdout)? {
         RefreshParsed::Refused => Err(WizardError::ModelInvalid),
         RefreshParsed::Ok {
