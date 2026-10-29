@@ -656,9 +656,9 @@ fn run_phases(
             }
         }
     };
+    // V-5 contracción: en pipe una sola línea (count + muestra), en tty el detalle.
     if !skipped.is_empty() {
-        if std::io::stdout().is_terminal() {
-            // TTY: avisos uno por línea (revisión visual de cada fichero).
+        if std::io::stderr().is_terminal() {
             for already in &skipped {
                 let _ = writeln!(
                     stderr,
@@ -667,22 +667,22 @@ fn run_phases(
                 );
             }
         } else {
-            // Sin tty (pipe/CI): contraído a una única línea — count + los
-            // primeros 5 caminos, suficiente para una CI que grep-ea.
-            let shown: Vec<String> = skipped
+            let head = skipped
                 .iter()
                 .take(5)
-                .map(|p| p.display().to_string())
-                .collect();
+                .map(|p| {
+                    p.file_name()
+                        .unwrap_or_default()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
             let _ = writeln!(
                 stderr,
-                "warning: {} ficheros ya estaban (sin cambios){}",
+                "warning: {} ficheros ya estaban (sin cambios): {}…",
                 skipped.len(),
-                if shown.is_empty() {
-                    String::new()
-                } else {
-                    format!("; primeros: {}", shown.join(", "))
-                }
+                head
             );
         }
     }
