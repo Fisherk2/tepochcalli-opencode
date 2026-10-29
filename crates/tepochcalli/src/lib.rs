@@ -23,8 +23,5 @@ pub use application::{
     VENV_DIR_NAME,
 };
 
-pub use domain::{
-    Badge, EmbedderChoice, InstallContext, InstallOutcome, InstallPlan, Phase, PhaseOutcome,
-    PhaseState, ResourceFacts, VaultPath, WizardError,
-};
+pub use domain::{Badge, EmbedderChoice, Phase, ResourceFacts, VaultPath, WizardError};
 pub use ports::{CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, PayloadSource, Ui};

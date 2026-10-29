@@ -1,9 +1,7 @@
-//! Domain unit tests (T3): phase ordering, exit-code ranges,
-//! `E_*` mapping (§5.4), and the degraded-outcome `fix_hint`.
+//! Domain unit tests (T3): phase ordering, exit-code ranges and `E_*` mapping (§5.4).
 
-use tepochcalli::domain::{
-    Badge, EmbedderChoice, InstallOutcome, Phase, PhaseState, VaultPath, WizardError,
-};
+use tepochcalli::application::EMBEDDER_PATHS;
+use tepochcalli::domain::{Badge, EmbedderChoice, Phase, WizardError};
 
 #[test]
 fn phase_ordering_f1_before_f8() {
@@ -22,15 +20,6 @@ fn phase_ordering_f1_before_f8() {
 fn phase_names_cover_f1_to_f8() {
     let names: Vec<&str> = Phase::all().iter().copied().map(Phase::name).collect();
     assert_eq!(names, ["F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8",]);
-}
-
-#[test]
-fn phase_state_covers_lifecycle() {
-    // Every phase starts NotStarted; enum must expose the 4 lifecycle states.
-    let _ = PhaseState::NotStarted;
-    let _ = PhaseState::InProgress;
-    let _ = PhaseState::Done;
-    let _ = PhaseState::Compensated;
 }
 
 #[test]
@@ -98,25 +87,13 @@ fn e_star_mapping_table() {
 }
 
 #[test]
-fn degraded_outcome_carries_fix_hint() {
-    let vault = VaultPath::new("vault").expect("fixture vault is non-empty");
-    let out = InstallOutcome::degraded(vault);
-    let hint = out.fix_hint_text();
-    assert!(
-        hint.contains("tepochcalli config embedder"),
-        "fix_hint must point at the swap command, got: {hint}"
-    );
-    assert_eq!(out.e_star(), Some("E_NO_EMBEDDER"));
-    assert!(matches!(out, InstallOutcome::Degraded { .. }));
-}
-
-#[test]
 fn embedder_menu_has_five_paths_with_default() {
-    let all = EmbedderChoice::all();
-    assert_eq!(all.len(), 5, "D7.1 fixes exactly 5 menu paths");
+    // Tras retirar EmbedderChoice::all()/default_path(), EMBEDDER_PATHS es la
+    // única fuente del orden D7.1 decidido.
+    assert_eq!(EMBEDDER_PATHS.len(), 5, "D7.1 fixes exactly 5 menu paths");
     assert_eq!(
-        EmbedderChoice::default_path(),
-        EmbedderChoice::PresetDefault,
+        EMBEDDER_PATHS.first(),
+        Some(&EmbedderChoice::PresetDefault),
         "default preselected = paraphrase-multilingual-MiniLM-L12-v2"
     );
 }

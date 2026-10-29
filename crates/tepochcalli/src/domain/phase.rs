@@ -59,28 +59,6 @@ impl Phase {
     }
 }
 
-/// Lifecycle state of one phase (rollback by compensation, never booleans).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PhaseState {
-    /// Not attempted yet.
-    NotStarted,
-    /// Currently executing.
-    InProgress,
-    /// Finished without errors.
-    Done,
-    /// Failed and compensated (user data untouched).
-    Compensated,
-}
-
-/// How a phase finished, once it leaves `InProgress`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PhaseOutcome {
-    /// Phase completed; artifacts in place.
-    Done,
-    /// Phase failed and its compensation ran.
-    Compensated,
-}
-
 #[cfg(test)]
 mod tests {
     //! Tier 1: `order_index` drives resume/rollback order and `name` is what

@@ -311,11 +311,6 @@ fn pick_embedder(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), 
 /// Local pick before the gate: dims/RSS arrive in step 4 (measured, D8.1).
 fn pending_local(preset: &Preset) -> Phase6Report {
     Phase6Report {
-        choice: if preset.recommended_flag {
-            EmbedderChoice::PresetDefault
-        } else {
-            EmbedderChoice::PresetLarge
-        },
         provider: "local".to_string(),
         model: Some(preset.hf_id.clone()),
         dims: None,
@@ -326,7 +321,6 @@ fn pending_local(preset: &Preset) -> Phase6Report {
 fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), WizardError> {
     let id = ask_non_empty(deps.ui, "HuggingFace model id")?;
     let report_for = |model: String| Phase6Report {
-        choice: EmbedderChoice::HuggingFaceId,
         provider: "local".to_string(),
         model: Some(model),
         dims: None,
@@ -382,7 +376,6 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
     // E_API_AUTH at first embed (same edge-table rule as T11 path 4).
     let api_key = ask_non_empty(deps.ui, "API key (solo se guarda en config gitignored)")?;
     Ok(Phase6Report {
-        choice: EmbedderChoice::ExternalApi,
         provider: "litellm".to_string(),
         model: Some(format!("{model}\u{0}{api_key}")),
         dims: None,
@@ -769,7 +762,6 @@ mod tests {
     #[test]
     fn warning_names_the_model_and_the_estimate_without_the_api_key() {
         let picked = Phase6Report {
-            choice: EmbedderChoice::ExternalApi,
             provider: "litellm".to_string(),
             model: Some("openai/text-embedding-3-small\u{0}sk-SECRETO".to_string()),
             dims: None,
@@ -853,7 +845,6 @@ mod tests {
 
     fn picked_local() -> Phase6Report {
         Phase6Report {
-            choice: EmbedderChoice::PresetDefault,
             provider: "local".to_string(),
             model: Some("BAAI/bge-m3".to_string()),
             dims: Some(1024),

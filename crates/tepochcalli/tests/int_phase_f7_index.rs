@@ -18,7 +18,7 @@ use std::path::{Path, PathBuf};
 use common::FakeProc;
 use tepochcalli::application::phase7::{run_phase7, Phase7Report};
 use tepochcalli::application::Phase6Report;
-use tepochcalli::domain::{EmbedderChoice, WizardError};
+use tepochcalli::domain::WizardError;
 use tepochcalli::ports::{CommandOutput, CommandRunner};
 
 fn tmp() -> tempfile::TempDir {
@@ -50,7 +50,6 @@ fn venv_python(vault: &Path) -> PathBuf {
 
 fn path1_report() -> Phase6Report {
     Phase6Report {
-        choice: EmbedderChoice::PresetDefault,
         provider: "local".to_string(),
         model: Some("paraphrase-multilingual-MiniLM-L12-v2".to_string()),
         dims: Some(384),
@@ -60,7 +59,6 @@ fn path1_report() -> Phase6Report {
 
 fn path5_report() -> Phase6Report {
     Phase6Report {
-        choice: EmbedderChoice::ConfigureLater,
         provider: "none".to_string(),
         model: None,
         dims: None,
@@ -318,7 +316,6 @@ fn f7_external_provider_persists_model_with_null_dims() {
     venv_python(vault.path());
     let proc = FakeProc::scripted([refresh_ok(2, 2, 0)]);
     let path4 = Phase6Report {
-        choice: EmbedderChoice::ExternalApi,
         provider: "litellm".to_string(),
         model: Some("openai/text-embedding-3-small".to_string()),
         dims: None,

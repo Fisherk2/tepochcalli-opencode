@@ -183,7 +183,6 @@ pub fn badge_for(preset: &Preset, host: &dyn HostProbe) -> (Badge, ResourceFacts
     let facts = ResourceFacts {
         disk_mb: preset.disk_mb,
         ram_mb: (preset.rec_ram_gb * 1024.0) as u64,
-        gpu: preset.gpu_recommended,
     };
     let Some(avail) = host.ram_available_gb().or_else(|| host.ram_total_gb()) else {
         return (Badge::Unknown, facts);
@@ -212,10 +211,4 @@ pub fn default_and_large(presets: &[Preset]) -> Option<(&Preset, &Preset)> {
     let default = presets.iter().find(|preset| preset.recommended_flag)?;
     let large = presets.iter().find(|preset| !preset.recommended_flag)?;
     Some((default, large))
-}
-
-/// Find a preset by HF id. Badges never filter rows out (D8.3).
-#[must_use]
-pub fn preset_by_hf_id<'a>(presets: &'a [Preset], hf_id: &str) -> Option<&'a Preset> {
-    presets.iter().find(|p| p.hf_id == hf_id)
 }

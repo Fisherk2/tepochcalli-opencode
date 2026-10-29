@@ -162,10 +162,10 @@ fn report_failure(
     context: &str,
     err: WizardError,
     vault: Option<&Path>,
-    extra_secrets: &[String],
 ) -> u8 {
-    let mut owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
-    owned.extend(extra_secrets.iter().cloned());
+    // shortcuts: los secretos a borrar viven en la config del vault (T15);
+    // ningún caller de esta ruta añade un secreto extra a mano.
+    let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
     let secrets: Vec<&str> = owned.iter().map(String::as_str).collect();
     let log_path = log_path_in(&state_dir(), now_secs());
     let title = failure_title(phase);
@@ -335,7 +335,6 @@ fn run_install(
                 "install: prerequisites failed",
                 err,
                 None,
-                &[],
             );
         }
     };
@@ -360,7 +359,6 @@ fn run_install(
                 "install: vault selection failed",
                 err,
                 None,
-                &[],
             );
         }
     };
@@ -380,7 +378,6 @@ fn run_install(
                     "install: offline without local payload/cache",
                     err,
                     None,
-                    &[],
                 );
             }
         }
@@ -394,7 +391,6 @@ fn run_install(
                 "install: vault directory failed",
                 err,
                 None,
-                &[],
             );
         }
     };
@@ -459,7 +455,6 @@ fn run_f6_or_degraded(
                     "install: phase F6 failed",
                     err,
                     Some(path.as_path()),
-                    &[],
                 ));
             }
             match compensate_phase6(path.as_path()) {
@@ -477,7 +472,6 @@ fn run_f6_or_degraded(
                     "install: phase F6 failed",
                     comp_err,
                     Some(path.as_path()),
-                    &[],
                 )),
             }
         }
@@ -523,7 +517,6 @@ fn run_phases(
                     "install: phase F3 failed",
                     offline_map(offline, err),
                     Some(path.as_path()),
-                    &[],
                 );
             }
         },
@@ -553,7 +546,6 @@ fn run_phases(
                     "install: phase F3 failed",
                     err,
                     Some(path.as_path()),
-                    &[],
                 );
             }
         }
@@ -584,7 +576,6 @@ fn run_phases(
                     "install: phase F4 failed",
                     err,
                     Some(path.as_path()),
-                    &[],
                 );
             }
         }
@@ -604,7 +595,6 @@ fn run_phases(
                     "install: phase F5 failed",
                     err,
                     Some(path.as_path()),
-                    &[],
                 );
             }
         }
@@ -662,7 +652,6 @@ fn run_phases(
                     "install: phase F7 failed",
                     err,
                     Some(path.as_path()),
-                    &[],
                 );
             }
         }
@@ -692,7 +681,6 @@ fn run_phases(
                     "install: phase F8 failed",
                     err,
                     Some(path.as_path()),
-                    &[],
                 );
             }
         }
@@ -775,7 +763,6 @@ fn run_config_embedder(
                 "config embedder: vault selection failed",
                 err,
                 None,
-                &[],
             );
         }
     };
@@ -802,7 +789,7 @@ fn run_config_embedder(
             );
             0
         }
-        Err(err) => report_failure(&*ui, None, "config embedder failed", err, Some(path), &[]),
+        Err(err) => report_failure(&*ui, None, "config embedder failed", err, Some(path)),
     }
 }
 

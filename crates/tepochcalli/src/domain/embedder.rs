@@ -15,32 +15,6 @@ pub enum EmbedderChoice {
     ConfigureLater,
 }
 
-impl EmbedderChoice {
-    /// All 5 paths in menu order (D7.1 fixes exactly these).
-    #[must_use]
-    pub fn all() -> [Self; 5] {
-        [
-            Self::PresetDefault,
-            Self::PresetLarge,
-            Self::HuggingFaceId,
-            Self::ExternalApi,
-            Self::ConfigureLater,
-        ]
-    }
-
-    /// Preselected default (path 1).
-    #[must_use]
-    pub fn default_path() -> Self {
-        Self::PresetDefault
-    }
-}
-
-impl Default for EmbedderChoice {
-    fn default() -> Self {
-        Self::default_path()
-    }
-}
-
 /// Hardware badge per menu row (D8.2; computed in T10, type frozen here).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Badge {
@@ -62,34 +36,4 @@ pub struct ResourceFacts {
     pub disk_mb: u64,
     /// RAM needed in MB.
     pub ram_mb: u64,
-    /// Whether this path wants a GPU.
-    pub gpu: bool,
-}
-
-#[cfg(test)]
-mod tests {
-    //! Tier 1: the menu order is what the ADR-007 numbering refers to, and
-    //! `Default` is what the prompt preselects — both pinned here.
-
-    use super::EmbedderChoice;
-
-    #[test]
-    fn menu_order_is_the_adr_numbering() {
-        assert_eq!(
-            EmbedderChoice::all(),
-            [
-                EmbedderChoice::PresetDefault,
-                EmbedderChoice::PresetLarge,
-                EmbedderChoice::HuggingFaceId,
-                EmbedderChoice::ExternalApi,
-                EmbedderChoice::ConfigureLater,
-            ]
-        );
-    }
-
-    #[test]
-    fn default_is_the_same_path_as_default_path() {
-        assert_eq!(EmbedderChoice::default(), EmbedderChoice::default_path());
-        assert_eq!(EmbedderChoice::default(), EmbedderChoice::PresetDefault);
-    }
 }

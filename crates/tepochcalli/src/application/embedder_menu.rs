@@ -92,8 +92,6 @@ pub struct Phase6Deps<'a> {
 /// What F6 established: the `[embedding]` choice plus gate evidence.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Phase6Report {
-    /// Menu path taken.
-    pub choice: EmbedderChoice,
     /// `"local"` | `"litellm"` | `"none"`.
     pub provider: String,
     /// HF id or external model name (`None` for path 5).
@@ -394,11 +392,6 @@ fn finish_local(
     );
     write_config(vault, &local_config(F6_LOCAL_HEADER, &preset.hf_id))?;
     Ok(Phase6Report {
-        choice: if preset.recommended_flag {
-            EmbedderChoice::PresetDefault
-        } else {
-            EmbedderChoice::PresetLarge
-        },
         provider: "local".to_string(),
         model: Some(preset.hf_id.clone()),
         dims: Some(gate.dims),
@@ -449,7 +442,6 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
     );
     write_config(vault, &local_config(F6_LOCAL_HEADER, &id))?;
     Ok(Phase6Report {
-        choice: EmbedderChoice::HuggingFaceId,
         provider: "local".to_string(),
         model: Some(id),
         dims: Some(gate.dims),
@@ -471,7 +463,6 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
         &external_config(F6_EXTERNAL_HEADER, &model, &api_key),
     )?;
     Ok(Phase6Report {
-        choice: EmbedderChoice::ExternalApi,
         provider: "litellm".to_string(),
         model: Some(model),
         dims: None,
@@ -490,7 +481,6 @@ impl Phase6Report {
     #[must_use]
     pub fn configure_later() -> Self {
         Self {
-            choice: EmbedderChoice::ConfigureLater,
             provider: "none".to_string(),
             model: None,
             dims: None,
@@ -515,12 +505,7 @@ pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
         return Some(Phase6Report::configure_later());
     }
     let model = config_value(&body, "model");
-    let choice = match provider.as_str() {
-        "litellm" => EmbedderChoice::ExternalApi,
-        _ => EmbedderChoice::PresetDefault,
-    };
     Some(Phase6Report {
-        choice,
         provider,
         model,
         dims: None,
@@ -539,9 +524,25 @@ pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
 mod tests {
     use super::{
         badge_label, estimate_row, external_config, local_config, none_config, parse_gate,
-        parse_hf_metadata, F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER,
+        parse_hf_metadata, EMBEDDER_PATHS, F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER,
     };
-    use crate::domain::Badge;
+    use crate::domain::{Badge, EmbedderChoice};
+
+    /// Fuente única del orden del menú (tras retirar `EmbedderChoice::all()`):
+    /// el array ES el contrato D7.1; un reorden silencioso rompe esta igualdad.
+    #[test]
+    fn menu_order_is_the_adr_numbering() {
+        assert_eq!(
+            EMBEDDER_PATHS,
+            [
+                EmbedderChoice::PresetDefault,
+                EmbedderChoice::PresetLarge,
+                EmbedderChoice::HuggingFaceId,
+                EmbedderChoice::ExternalApi,
+                EmbedderChoice::ConfigureLater,
+            ]
+        );
+    }
 
     #[test]
     fn config_bodies_combine_the_caller_header_byte_identically() {

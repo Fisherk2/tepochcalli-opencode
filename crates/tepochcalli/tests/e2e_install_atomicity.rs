@@ -297,7 +297,6 @@ fn f6_failure_compensates_to_degraded_path5() {
 #[test]
 fn f7_failure_leaves_no_index_and_keeps_placeholders() {
     use tepochcalli::application::Phase6Report;
-    use tepochcalli::domain::EmbedderChoice;
 
     let vault = tmp();
     let dir = vault.path().join("00-Resources");
@@ -305,7 +304,6 @@ fn f7_failure_leaves_no_index_and_keeps_placeholders() {
     write(&dir.join("ejemplo.md"), "# Ejemplo\n");
     venv_python(vault.path());
     let report = Phase6Report {
-        choice: EmbedderChoice::PresetDefault,
         provider: "local".to_string(),
         model: Some("paraphrase-multilingual-MiniLM-L12-v2".to_string()),
         dims: Some(384),

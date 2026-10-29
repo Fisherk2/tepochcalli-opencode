@@ -22,36 +22,12 @@ impl VaultPath {
     }
 }
 
-/// What to install where; flags stay out until their task (T14) needs them.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstallPlan {
-    /// Target vault directory (created/reused, never wiped).
-    pub vault: VaultPath,
-    /// Fail with a typed error instead of prompting when input is missing.
-    pub non_interactive: bool,
-}
-
-/// Everything one installer run needs to know up front.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InstallContext {
-    /// The plan this run executes.
-    pub plan: InstallPlan,
-}
-
-impl InstallContext {
-    /// Wrap a plan as a fresh run context.
-    #[must_use]
-    pub fn new(plan: InstallPlan) -> Self {
-        Self { plan }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     //! Tier 1: `VaultPath` is the only validated path in the domain — an empty
     //! value must never reach an installer phase (it would resolve to the CWD).
 
-    use super::{InstallContext, InstallPlan, VaultPath};
+    use super::VaultPath;
     use std::path::Path;
 
     #[test]
@@ -70,17 +46,5 @@ mod tests {
             panic!("a non-blank path must be accepted");
         };
         assert_eq!(vault.as_path(), Path::new("/tmp/my vault"));
-    }
-
-    #[test]
-    fn context_wraps_the_plan_unchanged() {
-        let Some(vault) = VaultPath::new("vault") else {
-            panic!("fixture vault is non-empty");
-        };
-        let plan = InstallPlan {
-            vault,
-            non_interactive: true,
-        };
-        assert_eq!(InstallContext::new(plan.clone()).plan, plan);
     }
 }

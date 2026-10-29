@@ -7,17 +7,31 @@
 mod common;
 
 use common::FakeHost;
-use tepochcalli::config::{badge_for, parse_presets, parse_presets_str, preset_by_hf_id};
+use tepochcalli::config::{badge_for, parse_presets, parse_presets_str};
 use tepochcalli::domain::Badge;
 use tepochcalli::ports::{GpuInfo, HostProbe};
 
 fn minilm(presets: &[tepochcalli::config::Preset]) -> &tepochcalli::config::Preset {
-    preset_by_hf_id(presets, "paraphrase-multilingual-MiniLM-L12-v2")
-        .expect("default preset present")
+    lookup(
+        presets,
+        "paraphrase-multilingual-MiniLM-L12-v2",
+        "default preset present",
+    )
 }
 
 fn bgem3(presets: &[tepochcalli::config::Preset]) -> &tepochcalli::config::Preset {
-    preset_by_hf_id(presets, "BAAI/bge-m3").expect("bge-m3 preset present")
+    lookup(presets, "BAAI/bge-m3", "bge-m3 preset present")
+}
+
+fn lookup<'a>(
+    presets: &'a [tepochcalli::config::Preset],
+    hf_id: &str,
+    msg: &str,
+) -> &'a tepochcalli::config::Preset {
+    presets
+        .iter()
+        .find(|p| p.hf_id == hf_id)
+        .unwrap_or_else(|| panic!("{msg}: fixture must contain {hf_id}"))
 }
 
 #[test]
@@ -141,7 +155,7 @@ fn not_recommended_preset_stays_selectable() {
     let (badge, _) = badge_for(bgem3(&presets), &host);
     assert_eq!(badge, Badge::NotRecommended);
     assert!(
-        preset_by_hf_id(&presets, "BAAI/bge-m3").is_some(),
+        bgem3(&presets).hf_id == "BAAI/bge-m3",
         "NotRecommended preset must still be returned by lookup"
     );
 }
@@ -155,7 +169,8 @@ fn probe_failure_yields_unknown_badge_and_declared_facts() {
         let (badge, facts) = badge_for(p, &host);
         assert_eq!(badge, Badge::Unknown, "{} must be Unknown", p.hf_id);
         assert_eq!(facts.disk_mb, p.disk_mb);
-        assert_eq!(facts.gpu, p.gpu_recommended);
+        // ResourceFacts.gpu retirado (espejo muerto de preset.gpu_recommended;
+        // la fila del menú ya lee el preset directamente).
         assert!(facts.ram_mb > 0, "declared RAM facts still returned");
     }
 }
