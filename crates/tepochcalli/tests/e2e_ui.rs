@@ -19,16 +19,14 @@ fn headless_returns_scripted_answers_in_order() {
     let ui = HeadlessUi::new(
         VecDeque::from([2]),
         VecDeque::from(["/tmp/vault".to_string()]),
-        VecDeque::from([true]),
     );
     assert_eq!(ui.select("embedder?", &["a", "b", "c"], 0).unwrap(), 2);
     assert_eq!(ui.input("vault?", None).unwrap(), "/tmp/vault".to_string());
-    assert!(ui.confirm("proceed?", false).unwrap());
 }
 
 #[test]
 fn headless_missing_answer_is_a_typed_error_never_a_guess() {
-    let ui = HeadlessUi::new(VecDeque::new(), VecDeque::new(), VecDeque::new());
+    let ui = HeadlessUi::new(VecDeque::new(), VecDeque::new());
     assert_eq!(
         ui.select("embedder?", &["a", "b"], 0).unwrap_err(),
         WizardError::UserAborted
@@ -37,29 +35,21 @@ fn headless_missing_answer_is_a_typed_error_never_a_guess() {
         ui.input("vault?", None).unwrap_err(),
         WizardError::UserAborted
     );
-    assert_eq!(
-        ui.confirm("proceed?", true).unwrap_err(),
-        WizardError::UserAborted
-    );
 }
 
 #[test]
 fn headless_ignores_fallback_defaults_instead_of_guessing() {
     // Even with a `default` offered, an empty script is a typed error.
-    let ui = HeadlessUi::new(VecDeque::new(), VecDeque::new(), VecDeque::new());
+    let ui = HeadlessUi::new(VecDeque::new(), VecDeque::new());
     assert_eq!(
         ui.input("vault?", Some("/default")).unwrap_err(),
-        WizardError::UserAborted
-    );
-    assert_eq!(
-        ui.confirm("proceed?", true).unwrap_err(),
         WizardError::UserAborted
     );
 }
 
 #[test]
 fn headless_out_of_range_select_is_a_typed_error() {
-    let ui = HeadlessUi::new(VecDeque::from([9]), VecDeque::new(), VecDeque::new());
+    let ui = HeadlessUi::new(VecDeque::from([9]), VecDeque::new());
     assert_eq!(
         ui.select("embedder?", &["a", "b"], 0).unwrap_err(),
         WizardError::UserAborted
@@ -81,8 +71,7 @@ fn tty_ui_panel_renders_without_panicking_off_terminal() {
     // No TTY in CI: the panel must degrade to plain text, never panic.
     assert!(!std::io::stderr().is_terminal() || true);
     TtyUi.panel("E_PROBE", "probe body");
-    HeadlessUi::new(VecDeque::new(), VecDeque::new(), VecDeque::new())
-        .panel("E_PROBE", "probe body");
+    HeadlessUi::new(VecDeque::new(), VecDeque::new()).panel("E_PROBE", "probe body");
 }
 
 /// `install --non-interactive --skip-model` with stdin closed and no `--vault`

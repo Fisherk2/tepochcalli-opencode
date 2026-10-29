@@ -43,14 +43,6 @@ impl Ui for TtyUi {
         asked.interact_text().map_err(|_| WizardError::UserAborted)
     }
 
-    fn confirm(&self, prompt: &str, default: bool) -> Result<bool, WizardError> {
-        dialoguer::Confirm::new()
-            .with_prompt(prompt)
-            .default(default)
-            .interact()
-            .map_err(|_| WizardError::UserAborted)
-    }
-
     fn panel(&self, title: &str, body: &str) {
         render_panel(title, body);
     }
@@ -63,21 +55,15 @@ impl Ui for TtyUi {
 pub struct HeadlessUi {
     selects: RefCell<VecDeque<usize>>,
     inputs: RefCell<VecDeque<String>>,
-    confirms: RefCell<VecDeque<bool>>,
 }
 
 impl HeadlessUi {
     /// Answers in call order per question kind.
     #[must_use]
-    pub fn new(
-        selects: VecDeque<usize>,
-        inputs: VecDeque<String>,
-        confirms: VecDeque<bool>,
-    ) -> Self {
+    pub fn new(selects: VecDeque<usize>, inputs: VecDeque<String>) -> Self {
         Self {
             selects: RefCell::new(selects),
             inputs: RefCell::new(inputs),
-            confirms: RefCell::new(confirms),
         }
     }
 
@@ -88,7 +74,6 @@ impl HeadlessUi {
         Self {
             selects: RefCell::new(VecDeque::from([if skip_model { 4 } else { 0 }])),
             inputs: RefCell::new(vault.into_iter().collect()),
-            confirms: RefCell::new(VecDeque::new()),
         }
     }
 }
@@ -115,13 +100,6 @@ impl Ui for HeadlessUi {
         // The offered `default` is deliberately ignored: without a scripted
         // answer there is nothing to fall back to, and guessing is forbidden.
         self.inputs
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn confirm(&self, _prompt: &str, _default: bool) -> Result<bool, WizardError> {
-        self.confirms
             .borrow_mut()
             .pop_front()
             .ok_or(WizardError::UserAborted)

@@ -116,14 +116,12 @@ fn ui_returns_canned_answers_in_order() {
     let ui = ScriptedUi::new(FakeUiScript {
         selects: vec![2].into(),
         inputs: vec!["my-model".to_string()].into(),
-        confirms: vec![true].into(),
     });
     assert_eq!(ui.select("pick", &["a", "b", "c"], 0).expect("select"), 2);
     assert_eq!(
         ui.input("name?", None).expect("input"),
         "my-model".to_string()
     );
-    assert!(ui.confirm("sure?", false).expect("confirm"));
     ui.panel("title", "body"); // Panel never fails; must not panic.
 }
 
@@ -132,5 +130,4 @@ fn ui_errors_when_script_exhausted() {
     let ui = ScriptedUi::new(FakeUiScript::default());
     assert_eq!(ui.select("pick", &["a"], 0), Err(WizardError::UserAborted));
     assert_eq!(ui.input("name?", None), Err(WizardError::UserAborted));
-    assert_eq!(ui.confirm("sure?", true), Err(WizardError::UserAborted));
 }

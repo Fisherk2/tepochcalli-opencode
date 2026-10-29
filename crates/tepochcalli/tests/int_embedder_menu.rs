@@ -128,11 +128,6 @@ impl Ui for TapUi {
             .ok_or(WizardError::UserAborted)
     }
 
-    fn confirm(&self, prompt: &str, _default: bool) -> Result<bool, WizardError> {
-        self.captured.borrow_mut().push(format!("CONFIRM {prompt}"));
-        Err(WizardError::UserAborted)
-    }
-
     fn panel(&self, title: &str, body: &str) {
         self.captured
             .borrow_mut()

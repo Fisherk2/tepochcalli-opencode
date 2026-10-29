@@ -17,8 +17,6 @@ pub trait Ui {
     ) -> Result<usize, WizardError>;
     /// Free-text answer; `default` is used when the user enters nothing.
     fn input(&self, prompt: &str, default: Option<&str>) -> Result<String, WizardError>;
-    /// Yes/no question; `default` is used when the user enters nothing.
-    fn confirm(&self, prompt: &str, default: bool) -> Result<bool, WizardError>;
     /// Informational/error block (failure UX panel in T15).
     fn panel(&self, title: &str, body: &str);
 }

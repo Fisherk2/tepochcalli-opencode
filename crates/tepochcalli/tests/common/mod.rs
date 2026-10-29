@@ -152,8 +152,6 @@ pub struct FakeUiScript {
     pub selects: VecDeque<usize>,
     /// Answers for successive `input` calls.
     pub inputs: VecDeque<String>,
-    /// Answers for successive `confirm` calls.
-    pub confirms: VecDeque<bool>,
 }
 
 /// `Ui` fake: returns canned answers; exhausted script is `UserAborted`.
@@ -188,14 +186,6 @@ impl Ui for ScriptedUi {
         self.script
             .borrow_mut()
             .inputs
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn confirm(&self, _prompt: &str, _default: bool) -> Result<bool, WizardError> {
-        self.script
-            .borrow_mut()
-            .confirms
             .pop_front()
             .ok_or(WizardError::UserAborted)
     }

@@ -749,7 +749,6 @@ fn run_config_embedder(
         Box::new(HeadlessUi::new(
             vec![0].into(),
             std::collections::VecDeque::new(),
-            std::collections::VecDeque::new(),
         ))
     } else {
         Box::new(TtyUi)
@@ -857,11 +856,7 @@ fn run_reindex_cmd(
         // The flag (when given) answers the directory question in
         // `resolve_vault_dir` without asking; an absent one surfaces as a
         // typed `UserAborted` — never a guess, never stdin.
-        Box::new(HeadlessUi::new(
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        ))
+        Box::new(HeadlessUi::new(Default::default(), Default::default()))
     } else {
         Box::new(TtyUi)
     };
@@ -947,11 +942,7 @@ fn run_uninstall_cmd(
     }
     let ui: Box<dyn Ui> = if non_interactive {
         // Same contract as `reindex`: the flag answers, absence aborts typed.
-        Box::new(HeadlessUi::new(
-            Default::default(),
-            Default::default(),
-            Default::default(),
-        ))
+        Box::new(HeadlessUi::new(Default::default(), Default::default()))
     } else {
         Box::new(TtyUi)
     };
