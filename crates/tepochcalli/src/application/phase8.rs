@@ -179,7 +179,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
                 break;
             }
         }
-        return end.map(|i| quoted[..i].trim());
+        return end.map(|i| &quoted[..i]);
     }
     Some(value.split([',', '}']).next().unwrap_or_default().trim())
 }
@@ -299,5 +299,20 @@ pub fn compensate_phase8(vault: &Path) {
             // deletes user data (single-threaded installer, seconds apart).
             let _ = std::fs::remove_file(&target);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_raw_keeps_whitespace_inside_quotes() {
+        // Quoted content is data: `rag_status` must report the model id
+        // byte-for-byte, never trimmed (same shape as the other four readers).
+        let body = "{\"model\":\"  padded  \",\"ok\": true}";
+        assert_eq!(json_raw(body, "model"), Some("  padded  "));
+        assert_eq!(json_raw(body, "ok"), Some("true"));
+        assert_eq!(json_raw(body, "missing"), None);
     }
 }

@@ -156,7 +156,7 @@ pub fn run_swap(
             Err(err)
         }
         Ok(partial) => {
-            if commit(vault, &picked).is_err() {
+            if commit(vault, &picked, &before).is_err() {
                 rollback(vault, &before);
                 cleanup_staged(vault);
                 return Err(WizardError::PermissionDenied);
@@ -575,8 +575,10 @@ fn download_gate_and_reindex(
 
 /// Step 5: atomic switch — staged config + staged metadata go live via rename
 /// in the same dir (same filesystem). Only called after the replacement index
-/// and its report are complete.
-fn commit(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> {
+/// and its report are complete. A failed metadata rename puts the previous
+/// config bytes back itself (absent stays absent): a half-commit never leaves
+/// the caller with a config that describes an index it does not have.
+fn commit(vault: &Path, picked: &Phase6Report, before: &Snapshot) -> Result<(), WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention).
     let config_live = config_path(vault);
     let staged_config = vault
@@ -588,9 +590,7 @@ fn commit(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> {
         let meta_live = index_meta_path(vault);
         let staged_meta = vault.join(RUNTIME_DIR).join("db").join(META_SWAP_SUFFIX);
         if let Err(err) = std::fs::rename(&staged_meta, &meta_live) {
-            // The config already switched: restore it before reporting, so a
-            // half-commit never strands config without metadata.
-            let _ = std::fs::remove_file(&config_live);
+            restore_or_remove(&config_live, before.config.as_deref());
             return Err(map_fs_err(err));
         }
     }
@@ -697,6 +697,7 @@ fn cleanup_staged(vault: &Path) {
 }
 
 /// Gate success payload (T12 programs the flow CLI against this shape).
+#[derive(Debug, PartialEq, Eq)]
 struct GateOk {
     model: String,
     dims: u32,
@@ -773,7 +774,8 @@ fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<u64, WizardErro
 }
 
 /// Minimal `key = "value"` reader for the wizard-written config (same shape
-/// as the F6 writer — never hand-edited TOML).
+/// as the F6 writer — never hand-edited TOML). Undoes [`toml_escape`]'s
+/// escaping (`\"` first, then `\\`) so a model id reads back byte-identical.
 fn config_value(body: &str, key: &str) -> Option<String> {
     body.lines().find_map(|line| {
         let rest = line
@@ -782,7 +784,7 @@ fn config_value(body: &str, key: &str) -> Option<String> {
             .trim_start()
             .strip_prefix('=')?;
         let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        Some(value.to_string())
+        Some(value.replace("\\\"", "\"").replace("\\\\", "\\"))
     })
 }
 
@@ -793,6 +795,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
     let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
     let value = after_key.trim_start().strip_prefix(':')?.trim_start();
     if let Some(quoted) = value.strip_prefix('"') {
+        // No trim inside the quotes: that whitespace is part of the value.
         let mut end = None;
         let mut escaped = false;
         for (i, c) in quoted.char_indices() {
@@ -805,7 +808,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
                 break;
             }
         }
-        return end.map(|i| quoted[..i].trim());
+        return end.map(|i| &quoted[..i]);
     }
     Some(value.split([',', '}']).next().unwrap_or_default().trim())
 }
@@ -858,5 +861,352 @@ fn parse_refresh(body: &str) -> Result<u64, WizardError> {
     ) {
         (Some(scanned), Some(_), Some(_), Some(_)) => Ok(scanned),
         _ => Err(WizardError::PhaseFailed),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Id hostil pero plausible: comilla y barra dentro del valor.
+    const RAW: &str = "modelo \"con comillas\" y \\ barra";
+
+    fn temp_vault() -> tempfile::TempDir {
+        match tempfile::tempdir() {
+            Ok(dir) => dir,
+            Err(err) => panic!("tempdir: {err}"),
+        }
+    }
+
+    // ---- config writer/reader: ida y vuelta del escape -------------------
+
+    #[test]
+    fn toml_escape_escapes_backslash_and_quote() {
+        assert_eq!(toml_escape("a\\b"), "a\\\\b");
+        assert_eq!(toml_escape("a\"b"), "a\\\"b");
+        assert_eq!(toml_escape(RAW), "modelo \\\"con comillas\\\" y \\\\ barra");
+    }
+
+    #[test]
+    fn config_value_unescapes_what_the_writer_escaped() {
+        let body = local_config(RAW);
+        assert_eq!(
+            config_value(&body, "model").as_deref(),
+            Some(RAW),
+            "leer la config debe devolver el id original, got:\n{body}"
+        );
+        // Vuelta: re-escapar lo leído reproduce el mismo fichero.
+        let read = config_value(&body, "model").unwrap_or_default();
+        assert_eq!(local_config(&read), body);
+    }
+
+    #[test]
+    fn every_escaped_value_round_trips_through_config() {
+        // Exhaustivo sobre el alfabeto que el escape toca (longitud ≤ 3).
+        let alphabet = ['a', '"', '\\'];
+        for a in alphabet {
+            for b in alphabet {
+                for c in alphabet {
+                    let raw: String = [a, b, c].iter().collect();
+                    let body = local_config(&raw);
+                    assert_eq!(
+                        config_value(&body, "model").as_deref(),
+                        Some(raw.as_str()),
+                        "round-trip roto para {raw:?} en:\n{body}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn config_value_reads_plain_values_and_ignores_other_keys() {
+        let body = local_config("BAAI/bge-m3");
+        assert_eq!(config_value(&body, "model").as_deref(), Some("BAAI/bge-m3"));
+        assert_eq!(config_value(&body, "provider").as_deref(), Some("local"));
+        assert_eq!(config_value(&body, "api_key"), None);
+        assert_eq!(config_value(&body, "mode"), None);
+    }
+
+    // ---- JSON readers ----------------------------------------------------
+
+    #[test]
+    fn json_raw_reads_quoted_and_bare_values() {
+        let body = "{\"model\":\"a\\\"b\",\"n\":42,\"flag\":true}";
+        assert_eq!(json_raw(body, "model"), Some("a\\\"b"));
+        assert_eq!(json_raw(body, "n"), Some("42"));
+        assert_eq!(json_raw(body, "flag"), Some("true"));
+        assert_eq!(json_raw(body, "missing"), None);
+    }
+
+    #[test]
+    fn json_raw_keeps_whitespace_inside_quotes() {
+        let body = "{\"model\":\"  padded  \",\"n\": 7 }";
+        assert_eq!(json_raw(body, "model"), Some("  padded  "));
+        assert_eq!(json_string(body, "model").as_deref(), Some("  padded  "));
+        assert_eq!(json_u64(body, "n"), Some(7));
+    }
+
+    #[test]
+    fn json_scalars_parse_typed_and_reject_garbage() {
+        let body = "{\"ok\":true,\"no\":false,\"n\":42,\"big\":5000000000}";
+        assert_eq!(json_bool(body, "ok"), Some(true));
+        assert_eq!(json_bool(body, "no"), Some(false));
+        assert_eq!(json_bool(body, "n"), None);
+        assert_eq!(json_u64(body, "n"), Some(42));
+        assert_eq!(json_u32(body, "n"), Some(42));
+        assert_eq!(json_u32(body, "big"), None, "desbordar u32 no es 0");
+        assert_eq!(json_u64(body, "missing"), None);
+    }
+
+    #[test]
+    fn json_escape_round_trips_through_json_string() {
+        let body = format!("{{\"model\":\"{}\"}}", json_escape(RAW));
+        assert_eq!(json_string(&body, "model").as_deref(), Some(RAW));
+    }
+
+    // ---- CLI contract parsers -------------------------------------------
+
+    #[test]
+    fn parse_gate_ok_yields_measured_fields() {
+        match parse_gate("{\"ok\":true,\"model\":\"m\",\"dims\":384,\"rss_peak_bytes\":650000000}")
+        {
+            Ok(gate) => {
+                assert_eq!(gate.model, "m");
+                assert_eq!(gate.dims, 384);
+                assert_eq!(gate.rss_peak_bytes, 650_000_000);
+            }
+            Err(err) => panic!("gate válido debe parsear, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_gate_refuses_aborts_and_missing_fields() {
+        assert_eq!(
+            parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
+            Err(WizardError::ModelInvalid)
+        );
+        assert_eq!(parse_gate("garabato"), Err(WizardError::PhaseFailed));
+        assert_eq!(
+            parse_gate("{\"ok\":true,\"model\":\"m\",\"rss_peak_bytes\":1}"),
+            Err(WizardError::Internal),
+            "campo faltante no puede inventarse las dims"
+        );
+    }
+
+    #[test]
+    fn parse_refresh_returns_scanned_and_types_its_failures() {
+        assert_eq!(
+            parse_refresh(
+                "{\"ok\":true,\"scanned\":10,\"indexed\":3,\"skipped\":7,\"elapsed_ms\":120}"
+            ),
+            Ok(10)
+        );
+        // `ok` ausente con los cuatro contadores: el contrato T12 lo admite.
+        assert_eq!(
+            parse_refresh("{\"scanned\":1,\"indexed\":0,\"skipped\":1,\"elapsed_ms\":5}"),
+            Ok(1)
+        );
+        assert_eq!(
+            parse_refresh("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
+            Err(WizardError::ModelInvalid)
+        );
+        assert_eq!(
+            parse_refresh("{\"scanned\":1,\"indexed\":0,\"elapsed_ms\":5}"),
+            Err(WizardError::PhaseFailed),
+            "sin `skipped` no hay reporte"
+        );
+    }
+
+    // ---- display helpers -------------------------------------------------
+
+    #[test]
+    fn estimate_secs_has_a_floor_and_grows_with_the_index() {
+        assert_eq!(estimate_secs(0), 1);
+        assert_eq!(estimate_secs(999_999), 1);
+        assert_eq!(estimate_secs(1_000_000), 2);
+        assert_eq!(estimate_secs(5_000_000), 10);
+        assert_eq!(estimate_secs(10_000_000), 20);
+        let monotonic = [0, 1_000_000, 2_500_000, 9_999_999, 10_000_000]
+            .iter()
+            .map(|bytes| estimate_secs(*bytes))
+            .collect::<Vec<_>>();
+        assert!(monotonic.windows(2).all(|pair| pair[0] <= pair[1]));
+    }
+
+    #[test]
+    fn badge_label_covers_every_variant() {
+        assert_eq!(badge_label(Badge::Recommended), "recomendado");
+        assert_eq!(badge_label(Badge::Viable), "viable");
+        assert_eq!(badge_label(Badge::NotRecommended), "no recomendado");
+        assert_eq!(badge_label(Badge::Unknown), "sin datos");
+    }
+
+    #[test]
+    fn warning_names_the_model_and_the_estimate_without_the_api_key() {
+        let picked = Phase6Report {
+            choice: EmbedderChoice::ExternalApi,
+            provider: "litellm".to_string(),
+            model: Some("openai/text-embedding-3-small\u{0}sk-SECRETO".to_string()),
+            dims: None,
+            rss_peak_bytes: None,
+        };
+        let current = CurrentState {
+            provider: Some("local".to_string()),
+            model: Some("viejo".to_string()),
+            dims: Some(384),
+            rows: 7,
+            db_bytes: 4_000_000,
+        };
+        let text = warning(&picked, &current);
+        assert!(
+            !text.contains("sk-SECRETO"),
+            "la clave no puede llegar a un panel:\n{text}"
+        );
+        assert!(
+            text.contains("openai/text-embedding-3-small"),
+            "got:\n{text}"
+        );
+        assert!(text.contains("≈8 s"), "4MB ⇒ 8 s, got:\n{text}");
+        assert!(text.contains("7 filas"), "got:\n{text}");
+    }
+
+    // ---- model cache GC --------------------------------------------------
+
+    #[test]
+    fn gc_candidate_dirs_covers_slash_and_flat_ids() {
+        assert_eq!(
+            gc_candidate_dirs("org/model"),
+            vec![
+                "models--org--model".to_string(),
+                "models--sentence-transformers--org--model".to_string()
+            ]
+        );
+        assert_eq!(
+            gc_candidate_dirs("all-MiniLM-L6-v2"),
+            vec![
+                "models--all-MiniLM-L6-v2".to_string(),
+                "models--sentence-transformers--all-MiniLM-L6-v2".to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn gc_candidate_dirs_maps_the_sentence_transformers_twin_both_ways() {
+        let st = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
+        let dirs = gc_candidate_dirs(st);
+        assert_eq!(
+            dirs,
+            vec![
+                "models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2".to_string(),
+                "models--paraphrase-multilingual-MiniLM-L12-v2".to_string()
+            ]
+        );
+        // El gemelo inverso: un id escueto protege también su forma ST.
+        let bare = gc_candidate_dirs("paraphrase-multilingual-MiniLM-L12-v2");
+        assert_eq!(bare.len(), 2);
+        assert_eq!(
+            bare[1],
+            format!(
+                "models--sentence-transformers--{}",
+                bare[0].trim_start_matches("models--")
+            )
+        );
+    }
+
+    #[test]
+    fn model_cache_roots_point_at_models_and_its_hub() {
+        let vault = Path::new("/v");
+        let roots = model_cache_roots(vault);
+        assert_eq!(roots[0], vault.join(".tepochcalli").join("models"));
+        assert_eq!(
+            roots[1],
+            vault.join(".tepochcalli").join("models").join("hub")
+        );
+    }
+
+    // ---- commit: estado final tras un fallo ------------------------------
+
+    fn picked_local() -> Phase6Report {
+        Phase6Report {
+            choice: EmbedderChoice::PresetDefault,
+            provider: "local".to_string(),
+            model: Some("BAAI/bge-m3".to_string()),
+            dims: Some(1024),
+            rss_peak_bytes: None,
+        }
+    }
+
+    /// Config staged lista y destino del sidecar ocupado por un directorio no
+    /// vacío: el segundo rename del `commit` falla con cualquier uid (`EISDIR`;
+    /// un `chmod 0555` no vale porque root lo atraviesa).
+    fn vault_with_failing_meta_rename(config: Option<&[u8]>) -> tempfile::TempDir {
+        let vault = temp_vault();
+        let runtime = vault.path().join(RUNTIME_DIR);
+        for dir in ["config", "db"] {
+            if let Err(err) = std::fs::create_dir_all(runtime.join(dir)) {
+                panic!("fixture {dir}: {err}");
+            }
+        }
+        if let Some(bytes) = config {
+            if let Err(err) = std::fs::write(config_path(vault.path()), bytes) {
+                panic!("fixture config: {err}");
+            }
+        }
+        if let Err(err) = std::fs::write(
+            runtime.join("config").join(CONFIG_SWAP_SUFFIX),
+            b"staged-config",
+        ) {
+            panic!("fixture staged config: {err}");
+        }
+        if let Err(err) = std::fs::write(
+            runtime.join("db").join(META_SWAP_SUFFIX),
+            b"{\"model\":\"m\",\"dims\":1}\n",
+        ) {
+            panic!("fixture staged meta: {err}");
+        }
+        let meta = index_meta_path(vault.path());
+        if let Err(err) = std::fs::create_dir_all(meta.join("occupied")) {
+            panic!("fixture meta dir: {err}");
+        }
+        if let Err(err) = std::fs::write(meta.join("marker"), b"sidecar-ilegible") {
+            panic!("fixture marker: {err}");
+        }
+        vault
+    }
+
+    #[test]
+    fn failed_commit_restores_the_previous_config_bytes() {
+        let previous: &[u8] = b"# previa\n[embedding]\nprovider = \"none\"\n";
+        let vault = vault_with_failing_meta_rename(Some(previous));
+        let before = snapshot(vault.path());
+        assert_eq!(
+            commit(vault.path(), &picked_local(), &before),
+            Err(WizardError::PermissionDenied)
+        );
+        assert_eq!(
+            std::fs::read(config_path(vault.path())).ok().as_deref(),
+            Some(previous),
+            "un commit fallido deja los bytes previos, no un fichero borrado"
+        );
+        assert_eq!(
+            std::fs::read(index_meta_path(vault.path()).join("marker")).ok(),
+            Some(b"sidecar-ilegible".to_vec()),
+            "el rollback no destruye lo que no conmutó"
+        );
+    }
+
+    #[test]
+    fn failed_commit_leaves_an_absent_config_absent() {
+        let vault = vault_with_failing_meta_rename(None);
+        let before = snapshot(vault.path());
+        assert_eq!(
+            commit(vault.path(), &picked_local(), &before),
+            Err(WizardError::PermissionDenied)
+        );
+        assert!(
+            !config_path(vault.path()).exists(),
+            "config ausente antes del commit debe seguir ausente"
+        );
     }
 }

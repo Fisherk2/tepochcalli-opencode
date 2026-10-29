@@ -295,6 +295,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
     let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
     let value = after_key.trim_start().strip_prefix(':')?.trim_start();
     if let Some(quoted) = value.strip_prefix('"') {
+        // No trim inside the quotes: that whitespace is part of the value.
         let mut end = None;
         let mut escaped = false;
         for (i, c) in quoted.char_indices() {
@@ -307,7 +308,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
                 break;
             }
         }
-        return end.map(|i| quoted[..i].trim());
+        return end.map(|i| &quoted[..i]);
     }
     Some(value.split([',', '}']).next().unwrap_or_default().trim())
 }
@@ -584,7 +585,8 @@ pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
 }
 
 /// Minimal `key = "value"` reader for the wizard-written config (the file is
-/// always produced by `write_config` above, never hand-edited TOML).
+/// always produced by `write_config` above, never hand-edited TOML). Undoes
+/// [`toml_escape`]'s escaping (`\"` first, then `\\`).
 fn config_value(body: &str, key: &str) -> Option<String> {
     body.lines().find_map(|line| {
         let rest = line
@@ -593,7 +595,7 @@ fn config_value(body: &str, key: &str) -> Option<String> {
             .trim_start()
             .strip_prefix('=')?;
         let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        Some(value.to_string())
+        Some(value.replace("\\\"", "\"").replace("\\\\", "\\"))
     })
 }
 
@@ -607,8 +609,41 @@ pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        estimate_row, json_bool, json_string, json_u32, json_u64, parse_gate, parse_hf_metadata,
+        badge_label, config_value, estimate_row, json_bool, json_raw, json_string, json_u32,
+        json_u64, local_config, parse_gate, parse_hf_metadata, toml_escape,
     };
+    use crate::domain::Badge;
+
+    #[test]
+    fn config_value_unescapes_what_toml_escape_writes() {
+        const RAW: &str = "modelo \"con comillas\" y \\ barra";
+        let body = local_config(RAW);
+        assert_eq!(
+            config_value(&body, "model").as_deref(),
+            Some(RAW),
+            "leer la config debe devolver el id original, got:\n{body}"
+        );
+        // Vuelta: re-escapar lo leído reproduce el mismo fichero.
+        let read = config_value(&body, "model").unwrap_or_default();
+        assert_eq!(local_config(&read), body);
+        assert_eq!(toml_escape(RAW), "modelo \\\"con comillas\\\" y \\\\ barra");
+    }
+
+    #[test]
+    fn badge_label_covers_every_variant() {
+        assert_eq!(badge_label(Badge::Recommended), "recomendado");
+        assert_eq!(badge_label(Badge::Viable), "viable");
+        assert_eq!(badge_label(Badge::NotRecommended), "no recomendado");
+        assert_eq!(badge_label(Badge::Unknown), "sin datos");
+    }
+
+    #[test]
+    fn json_raw_keeps_whitespace_inside_quotes() {
+        let body = "{\"model\":\"  padded  \",\"n\": 7 }";
+        assert_eq!(json_raw(body, "model"), Some("  padded  "));
+        assert_eq!(json_string(body, "model").as_deref(), Some("  padded  "));
+        assert_eq!(json_u64(body, "n"), Some(7));
+    }
 
     #[test]
     fn gate_ok_parses_model_dims_and_rss() {

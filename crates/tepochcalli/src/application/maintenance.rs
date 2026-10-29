@@ -170,6 +170,7 @@ pub fn run_uninstall(vault: &Path) -> Result<UninstallReport, WizardError> {
 
 /// Gate success payload (T11 programs the flow CLI against this shape):
 /// only the measured dims matter here — the model is the configured one.
+#[derive(Debug, PartialEq, Eq)]
 struct GateOk {
     dims: u32,
 }
@@ -202,6 +203,7 @@ fn run_gate(proc: &dyn CommandRunner, vault: &Path, model: &str) -> Result<GateO
 
 /// Replacement `refresh` (T12 contract). `ok:false` maps to `ModelInvalid`,
 /// matching the F7 portero parity; anything else unparseable is `PhaseFailed`.
+#[derive(Debug, PartialEq, Eq)]
 struct Refreshed {
     scanned: u64,
     indexed: u64,
@@ -254,7 +256,8 @@ fn write_index_meta(vault: &Path, model: &str, dims: Option<u32>) -> Result<(), 
 }
 
 /// Minimal `key = "value"` reader for the wizard-written config (the file is
-/// always produced by the F6 writer, never hand-edited TOML).
+/// always produced by the F6 writer, never hand-edited TOML). Undoes the
+/// writer's escaping (`\"` first, then `\\`) so the model reads back exact.
 fn config_value(body: &str, key: &str) -> Option<String> {
     body.lines().find_map(|line| {
         let rest = line
@@ -263,7 +266,7 @@ fn config_value(body: &str, key: &str) -> Option<String> {
             .trim_start()
             .strip_prefix('=')?;
         let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
-        Some(value.to_string())
+        Some(value.replace("\\\"", "\"").replace("\\\\", "\\"))
     })
 }
 
@@ -274,6 +277,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
     let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
     let value = after_key.trim_start().strip_prefix(':')?.trim_start();
     if let Some(quoted) = value.strip_prefix('"') {
+        // No trim inside the quotes: that whitespace is part of the value.
         let mut end = None;
         let mut escaped = false;
         for (i, c) in quoted.char_indices() {
@@ -286,7 +290,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
                 break;
             }
         }
-        return end.map(|i| quoted[..i].trim());
+        return end.map(|i| &quoted[..i]);
     }
     Some(value.split([',', '}']).next().unwrap_or_default().trim())
 }
@@ -342,5 +346,91 @@ fn parse_refresh(body: &str) -> Result<Refreshed, WizardError> {
             elapsed_ms,
         }),
         _ => Err(WizardError::PhaseFailed),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RAW: &str = "modelo \"con comillas\" y \\ barra";
+
+    #[test]
+    fn config_value_unescapes_what_the_writer_escaped() {
+        let body = format!(
+            "[embedding]\nprovider = \"local\"\nmodel = \"{}\"\n",
+            RAW.replace('\\', "\\\\").replace('"', "\\\"")
+        );
+        assert_eq!(
+            config_value(&body, "model").as_deref(),
+            Some(RAW),
+            "leer la config debe devolver el id original, got:\n{body}"
+        );
+        assert_eq!(config_value(&body, "provider").as_deref(), Some("local"));
+        assert_eq!(config_value(&body, "api_key"), None);
+    }
+
+    #[test]
+    fn config_value_returns_some_empty_for_an_empty_value() {
+        // Divergencia deliberada con `failure::config_value` (que devuelve
+        // `None`): aquí el valor es el modelo/provider, no un secreto a borrar.
+        assert_eq!(config_value("model = \"\"\n", "model").as_deref(), Some(""));
+    }
+
+    #[test]
+    fn json_escape_round_trips_through_json_string() {
+        let body = format!("{{\"model\":\"{}\"}}", json_escape(RAW));
+        assert_eq!(json_string(&body, "model").as_deref(), Some(RAW));
+        assert_eq!(
+            json_string("{\"model\":null}", "model").as_deref(),
+            Some("null")
+        );
+    }
+
+    #[test]
+    fn parse_gate_returns_measured_dims_only() {
+        match parse_gate("{\"ok\":true,\"model\":\"m\",\"dims\":384,\"rss_peak_bytes\":1}") {
+            Ok(gate) => assert_eq!(gate.dims, 384),
+            Err(err) => panic!("gate válido debe parsear, got: {err:?}"),
+        }
+        assert_eq!(
+            parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
+            Err(WizardError::ModelInvalid)
+        );
+        assert_eq!(parse_gate("garabato"), Err(WizardError::PhaseFailed));
+        assert_eq!(
+            parse_gate("{\"ok\":true,\"model\":\"m\"}"),
+            Err(WizardError::Internal),
+            "sin dims no hay medida que reportar"
+        );
+    }
+
+    #[test]
+    fn parse_refresh_keeps_all_four_counters() {
+        match parse_refresh(
+            "{\"ok\":true,\"scanned\":10,\"indexed\":3,\"skipped\":7,\"elapsed_ms\":120}",
+        ) {
+            Ok(refreshed) => {
+                assert_eq!(refreshed.scanned, 10);
+                assert_eq!(refreshed.indexed, 3);
+                assert_eq!(refreshed.skipped, 7);
+                assert_eq!(refreshed.elapsed_ms, 120);
+            }
+            Err(err) => panic!("refresh válido debe parsear, got: {err:?}"),
+        }
+    }
+
+    #[test]
+    fn parse_refresh_types_refusals_and_garbage() {
+        assert_eq!(
+            parse_refresh("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
+            Err(WizardError::ModelInvalid)
+        );
+        assert_eq!(parse_refresh("garabato"), Err(WizardError::PhaseFailed));
+        assert_eq!(
+            parse_refresh("{\"ok\":true,\"scanned\":1}"),
+            Err(WizardError::PhaseFailed),
+            "un contador ausente no se inventa"
+        );
     }
 }

@@ -76,7 +76,10 @@ pub fn secrets_from_vault(vault: &Path) -> Vec<String> {
     config_value(&body, "api_key").into_iter().collect()
 }
 
-/// Minimal `key = "value"` reader for the wizard-written config.
+/// Minimal `key = "value"` reader for the wizard-written config. Undoes the
+/// writer's escaping (`\"` first, then `\\`); an empty value yields no secret
+/// on purpose — the other readers return `Some("")`, but a blank secret here
+/// would be handed to `domain::failure::redact`, which (rightly) refuses it.
 fn config_value(body: &str, key: &str) -> Option<String> {
     body.lines().find_map(|line| {
         let rest = line
@@ -85,10 +88,39 @@ fn config_value(body: &str, key: &str) -> Option<String> {
             .trim_start()
             .strip_prefix('=')?;
         let value = rest.trim().strip_prefix('"')?.strip_suffix('"')?;
+        let value = value.replace("\\\"", "\"").replace("\\\\", "\\");
         if value.is_empty() {
             None
         } else {
-            Some(value.to_string())
+            Some(value)
         }
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn config_value_unescapes_what_the_writer_escaped() {
+        // Forma que `embedder_menu::external_config` produce para una clave
+        // con comilla y barra: el secreto tiene que leerse exacto para que el
+        // redactor pueda borrarlo entero (un fragmento sobrevive al log).
+        let body = "[embedding]\nprovider = \"litellm\"\n\
+                    model = \"openai/text-embedding-3-small\"\n\
+                    api_key = \"sk-\\\"a\\\\b\"\n";
+        assert_eq!(
+            config_value(body, "api_key").as_deref(),
+            Some("sk-\"a\\b"),
+            "leer la clave debe devolver el valor original"
+        );
+    }
+
+    #[test]
+    fn config_value_returns_none_for_an_empty_secret() {
+        // Divergencia deliberada con las otras tres copias (que devuelven
+        // `Some("")`): una clave vacía no es un secreto que borrar.
+        assert_eq!(config_value("api_key = \"\"\n", "api_key"), None);
+        assert_eq!(config_value("provider = \"none\"\n", "api_key"), None);
+    }
 }

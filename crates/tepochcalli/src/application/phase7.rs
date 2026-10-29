@@ -113,6 +113,7 @@ pub fn run_phase7(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
 enum RefreshParsed {
     Ok {
         scanned: u64,
@@ -132,6 +133,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
     let after_key = body.find(&needle).map(|i| &body[i + needle.len()..])?;
     let value = after_key.trim_start().strip_prefix(':')?.trim_start();
     if let Some(quoted) = value.strip_prefix('"') {
+        // No trim inside the quotes: that whitespace is part of the value.
         let mut end = None;
         let mut escaped = false;
         for (i, c) in quoted.char_indices() {
@@ -144,7 +146,7 @@ fn json_raw<'a>(body: &'a str, key: &str) -> Option<&'a str> {
                 break;
             }
         }
-        return end.map(|i| quoted[..i].trim());
+        return end.map(|i| &quoted[..i]);
     }
     Some(value.split([',', '}']).next().unwrap_or_default().trim())
 }
@@ -222,4 +224,65 @@ fn write_index_meta(
     std::fs::write(&tmp, body).map_err(|_| WizardError::PermissionDenied)?;
     std::fs::rename(&tmp, dir.join(INDEX_META_FILE)).map_err(|_| WizardError::PermissionDenied)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn json_raw_keeps_whitespace_inside_quotes_and_trims_bare_values() {
+        let body = "{\"model\":\"  padded  \",\"n\": 7 }";
+        assert_eq!(json_raw(body, "model"), Some("  padded  "));
+        assert_eq!(json_u64(body, "n"), Some(7));
+        assert_eq!(json_bool(body, "n"), None, "un número no es un bool");
+        assert_eq!(json_raw(body, "missing"), None);
+    }
+
+    #[test]
+    fn parse_refresh_maps_the_three_verdicts() {
+        match parse_refresh(
+            "{\"ok\":true,\"scanned\":10,\"indexed\":3,\"skipped\":7,\"elapsed_ms\":120}",
+        ) {
+            Ok(RefreshParsed::Ok {
+                scanned,
+                indexed,
+                skipped,
+                elapsed_ms,
+            }) => {
+                assert_eq!((scanned, indexed, skipped, elapsed_ms), (10, 3, 7, 120));
+            }
+            other => panic!("refresh válido debe parsear, got: {other:?}"),
+        }
+        assert!(matches!(
+            parse_refresh("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
+            Ok(RefreshParsed::Refused)
+        ));
+        assert_eq!(parse_refresh("garabato"), Err(WizardError::PhaseFailed));
+        assert_eq!(
+            parse_refresh("{\"ok\":true,\"scanned\":1}"),
+            Err(WizardError::PhaseFailed)
+        );
+    }
+
+    #[test]
+    fn write_index_meta_escapes_the_model_and_writes_valid_json() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        const RAW: &str = "org/weird\"name\\v2";
+        if let Err(err) = write_index_meta(vault.path(), Some(RAW), Some(384)) {
+            panic!("write_index_meta: {err:?}");
+        }
+        let body = match std::fs::read_to_string(index_meta_path(vault.path())) {
+            Ok(body) => body,
+            Err(err) => panic!("leer el sidecar: {err}"),
+        };
+        assert_eq!(
+            body,
+            "{\"model\":\"org/weird\\\"name\\\\v2\",\"dims\":384}\n"
+        );
+        assert_eq!(json_raw(&body, "model"), Some("org/weird\\\"name\\\\v2"));
+        assert_eq!(json_u64(&body, "dims"), Some(384));
+    }
 }

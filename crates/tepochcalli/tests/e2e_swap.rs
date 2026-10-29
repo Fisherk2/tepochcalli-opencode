@@ -1239,6 +1239,40 @@ fn swap_meta_rename_failure_restores_config_byte_identical() {
     no_stray_temps(vault.path());
 }
 
+/// Mismo fallo del segundo rename, pero con la config **ausente** de partida
+/// (vault degradado al que se le añade por primera vez un embedder): el rollback
+/// no puede inventarse un fichero. Estado final: sin config, sidecar intacto y
+/// cero `.swap` en el vault.
+#[test]
+fn swap_meta_rename_failure_keeps_an_absent_config_absent() {
+    let vault = installed_vault();
+    let rt = vault.path().join(".tepochcalli");
+    std::fs::remove_file(rt.join("config").join("tepochcalli.toml")).expect("config fuera");
+    let meta_path = rt.join("db").join("index-meta.json");
+    std::fs::remove_file(&meta_path).expect("sidecar fixture removible");
+    std::fs::create_dir_all(&meta_path).expect("sidecar como directorio");
+    std::fs::write(meta_path.join("marker"), b"unreadable-sidecar").expect("marker del sidecar");
+
+    let ui = TapUi::new(vec![1], vec![]);
+    let host = host_16gb();
+    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
+    let http = empty_http();
+
+    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
+        .expect_err("un fallo en el segundo rename debe fallar el swap");
+    assert_eq!(err, WizardError::PermissionDenied);
+    assert!(
+        !rt.join("config").join("tepochcalli.toml").exists(),
+        "config ausente antes del swap debe seguir ausente"
+    );
+    assert_eq!(
+        std::fs::read(meta_path.join("marker")).expect("sidecar tras el fallo"),
+        b"unreadable-sidecar",
+        "el rollback no destruye lo que no pudo fotografiar"
+    );
+    no_stray_temps(vault.path());
+}
+
 /// Model id hostil pero plausible: comilla doble y barra invertida dentro del
 /// valor. Ambos escritores tienen que escaparlos o el fichero queda corrupto.
 const HOSTILE_MODEL: &str = "org/weird\"name\\v2";
