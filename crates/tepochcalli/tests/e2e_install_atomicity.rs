@@ -525,8 +525,9 @@ fn rerun_is_idempotent_with_zero_dupes() {
 fn skip_model_writes_path5_config_without_spawning() {
     use tepochcalli::adapters::HeadlessUi;
 
-    // The headless constructor is the CLI contract: skip_model ⇒ row 4.
-    let _ui = HeadlessUi::for_install(true, Some("/tmp/v".to_string()));
+    // The headless constructor is the CLI contract (L3-4): skip_model + the
+    // row indices main passes ⇒ same row 4.
+    let _ui = HeadlessUi::for_install(4, 0, true);
     let vault = tmp();
     // Drive path 5 through the scripted row directly (same index HeadlessUi uses).
     let ui = ScriptedUi::new(FakeUiScript {

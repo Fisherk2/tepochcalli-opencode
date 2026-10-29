@@ -75,13 +75,21 @@ impl HeadlessUi {
         }
     }
 
-    /// Answers derived from `install` flags: `skip_model` preselects the
-    /// "configure later" row, `vault` answers the directory question.
+    /// Answers derived from `install` flags (L3-4): rows come from `main`
+    /// as real EMBEDDER_PATHS indices — the constructor no longer hardcodes
+    /// the D7.1 numbering. `skip_row` answers the single F6 menu row under
+    /// `--skip-model`; `default_row` (MiniLM) otherwise. The former vault
+    /// param was dead: `--vault` resolves by flag and an absent flag must
+    /// abort typed (never guess), so no queue entry ever helped.
     #[must_use]
-    pub fn for_install(skip_model: bool, vault: Option<String>) -> Self {
+    pub fn for_install(skip_row: usize, default_row: usize, skip_model: bool) -> Self {
         Self {
-            selects: RefCell::new(VecDeque::from([if skip_model { 4 } else { 0 }])),
-            inputs: RefCell::new(vault.into_iter().collect()),
+            selects: RefCell::new(VecDeque::from([if skip_model {
+                skip_row
+            } else {
+                default_row
+            }])),
+            inputs: RefCell::new(VecDeque::new()),
         }
     }
 }

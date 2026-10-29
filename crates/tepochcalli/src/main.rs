@@ -27,8 +27,8 @@ use tepochcalli::application::{
     SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::failure::{failure_body, failure_title, redact};
-use tepochcalli::domain::{Phase, VaultPath, WizardError};
-use tepochcalli::ports::Ui;
+use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
+use tepochcalli::{ports::Ui, EMBEDDER_PATHS};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -327,7 +327,17 @@ fn run_install(
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
-        Box::new(HeadlessUi::for_install(skip_model, vault.clone()))
+        // Índices reales de EMBEDDER_PATHS (D7.1, L3-4): el acoplamiento del
+        // constructor hardcodeado muere — reordenar el menú se rompe aquí.
+        let skip_row = {
+            let last = EMBEDDER_PATHS.len() - 1;
+            match EMBEDDER_PATHS[last] {
+                EmbedderChoice::ConfigureLater => last,
+                _ => 0, // no atingible: D7.1 fija la fila 4 al final
+            }
+        };
+        let default_row = 0; // EMBEDDER_PATHS[0] == PresetDefault (D7.1)
+        Box::new(HeadlessUi::for_install(skip_row, default_row, skip_model))
     } else {
         Box::new(TtyUi)
     };

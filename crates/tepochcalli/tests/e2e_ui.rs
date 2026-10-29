@@ -57,13 +57,29 @@ fn headless_out_of_range_select_is_a_typed_error() {
 }
 
 #[test]
-fn for_install_preselects_skip_model_and_vault_answers() {
-    let ui = HeadlessUi::for_install(true, Some("/tmp/vault".to_string()));
-    // skip-model = "configure later" row; must resolve without asking.
-    assert!(ui
-        .select("embedder?", &["m", "b", "h", "a", "later"], 0)
-        .is_ok());
-    assert_eq!(ui.input("vault?", None).unwrap(), "/tmp/vault".to_string());
+fn for_install_answers_the_d7_1_row_indices_from_main() {
+    // L3-4: el constructor ya no hardcodea el 4/0 — main pasa índices
+    // EMBEDDER_PATHS. skip-model ⇒ fila "configure later" (4).
+    let ui = HeadlessUi::for_install(4, 0, true);
+    assert_eq!(
+        ui.select("embedder?", &["m", "b", "h", "a", "later"], 0)
+            .unwrap(),
+        4
+    );
+    // El param vault era muerto: sin `--vault` la pregunta aborta tipada —
+    // jamais survive un guess.
+    assert_eq!(
+        ui.input("vault?", None).unwrap_err(),
+        WizardError::UserAborted
+    );
+
+    // Sin skip-model: la fila default (0, MiniLM preseleccionado).
+    let ui = HeadlessUi::for_install(4, 0, false);
+    assert_eq!(
+        ui.select("embedder?", &["m", "b", "h", "a", "later"], 0)
+            .unwrap(),
+        0
+    );
 }
 
 #[test]
