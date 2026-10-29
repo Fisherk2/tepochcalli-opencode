@@ -711,3 +711,86 @@ fn swap_gc_maps_st_qualified_id_to_both_slug_variants() {
     assert_survivors_intact(vault.path(), OLD_MODEL_ST, NEW_MODEL);
     no_stray_temps(vault.path());
 }
+
+/// GAP 12: `config embedder` comparte el contrato de `--vault` con el resto de
+/// subcomandos — `--vault X` ≡ `--vault=X`, y un `--vault` sin valor es error
+/// de uso (exit 2) sin efectos. El vault del fixture no tiene intérprete
+/// ejecutable: el gate muere con `PhaseFailed` (42), lo que prueba que el
+/// directorio se resolvió desde el flag (sin él sería `UserAborted`, 41).
+#[test]
+fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
+    let state = tempfile::tempdir().expect("state home fixture");
+    for form in ["--vault", "--vault="] {
+        let vault = installed_vault();
+        let path = vault.path().to_str().expect("utf8 tmp").to_string();
+        let args: Vec<String> = if form == "--vault" {
+            vec![
+                "config".to_string(),
+                "embedder".to_string(),
+                "--non-interactive".to_string(),
+                "--confirm".to_string(),
+                "--vault".to_string(),
+                path,
+            ]
+        } else {
+            vec![
+                "config".to_string(),
+                "embedder".to_string(),
+                "--non-interactive".to_string(),
+                "--confirm".to_string(),
+                format!("--vault={path}"),
+            ]
+        };
+        let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+            .args(&args)
+            .env("XDG_STATE_HOME", state.path())
+            .env("LOCALAPPDATA", state.path())
+            .stdin(std::process::Stdio::null())
+            .output()
+            .expect("spawn binary");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert_eq!(out.status.code(), Some(42), "args {args:?}:\n{stderr}");
+        assert!(
+            stderr.contains("config embedder failed"),
+            "el swap debe haber corrido con el vault del flag, args {args:?}:\n{stderr}"
+        );
+        assert!(
+            !stderr.contains("vault selection failed"),
+            "el flag no debe ignorarse, args {args:?}:\n{stderr}"
+        );
+    }
+
+    // `--vault` sin valor: error de uso explicado, cero efectos.
+    let vault = installed_vault();
+    let before = snapshot(vault.path());
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "config",
+            "embedder",
+            "--non-interactive",
+            "--confirm",
+            "--vault",
+        ])
+        .env("XDG_STATE_HOME", state.path())
+        .env("LOCALAPPDATA", state.path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "un --vault sin valor es error de uso:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.contains("--vault") && stderr.contains("needs a value"),
+        "explica el flag sin valor, got:\n{stderr}"
+    );
+    assert!(
+        out.stdout.is_empty(),
+        "un error de uso no imprime nada en stdout"
+    );
+    assert_byte_identical(vault.path(), &before);
+    no_stray_temps(vault.path());
+}

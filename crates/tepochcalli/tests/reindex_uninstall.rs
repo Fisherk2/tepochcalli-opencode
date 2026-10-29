@@ -654,6 +654,133 @@ fn uninstall_vault_forms_remove_runtime_and_keep_user_files() {
     }
 }
 
+/// Intérprete falso que satisface el contrato T12 (`refresh`): imprime el
+/// `RefreshReport` y sale 0, sin Python real ni red.
+#[cfg(unix)]
+fn write_fake_flow_python(vault: &Path) {
+    use std::os::unix::fs::PermissionsExt as _;
+    let python = vault
+        .join(".tepochcalli")
+        .join("venv")
+        .join("bin")
+        .join("python");
+    std::fs::write(
+        &python,
+        "#!/bin/sh\nprintf '{\"scanned\":2,\"indexed\":2,\"skipped\":0,\"elapsed_ms\":9}\\n'\n",
+    )
+    .expect("fake python fixture");
+    std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755))
+        .expect("fake python executable");
+}
+
+/// GAP 12: `--vault X` y `--vault=X` son idénticos para `reindex`; un `--vault`
+/// sin valor es error de uso (exit 2) sin efectos.
+#[cfg(unix)]
+#[test]
+fn reindex_accepts_both_vault_forms_and_rejects_valueless_flag() {
+    for form in ["--vault", "--vault="] {
+        let vault = installed_vault();
+        write_fake_flow_python(vault.path());
+        let path = vault.path().to_str().expect("utf8 tmp").to_string();
+        let args: Vec<String> = if form == "--vault" {
+            vec![
+                "reindex".to_string(),
+                "--confirm".to_string(),
+                "--non-interactive".to_string(),
+                "--vault".to_string(),
+                path,
+            ]
+        } else {
+            vec![
+                "reindex".to_string(),
+                "--confirm".to_string(),
+                "--non-interactive".to_string(),
+                format!("--vault={path}"),
+            ]
+        };
+        let out = bin()
+            .args(&args)
+            .stdin(Stdio::null())
+            .output()
+            .expect("spawn binary");
+        assert_eq!(
+            out.status.code(),
+            Some(0),
+            "args {args:?}: {}",
+            stderr_text(&out)
+        );
+        // El flag se honra de verdad: el refresh solo corre si el intérprete
+        // vive bajo ESE vault (ignorado el flag, la resolución sería abortada).
+        assert!(
+            stdout_text(&out).contains("indexed 2"),
+            "args {args:?}: {}",
+            stdout_text(&out)
+        );
+    }
+
+    // `--vault` sin valor: error de uso explicado, cero efectos.
+    let vault = installed_vault();
+    let before = tree_snapshot(vault.path());
+    let out = bin()
+        .args(["reindex", "--confirm", "--non-interactive", "--vault"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "un --vault sin valor es error de uso:\n{}",
+        stderr_text(&out)
+    );
+    let err = stderr_text(&out);
+    assert!(
+        err.contains("--vault") && err.contains("needs a value"),
+        "explica el flag sin valor, got:\n{err}"
+    );
+    assert!(
+        stdout_text(&out).is_empty(),
+        "un error de uso no imprime nada en stdout"
+    );
+    assert_eq!(
+        tree_snapshot(vault.path()),
+        before,
+        "un error de uso no toca el vault"
+    );
+}
+
+/// Mismo contrato para `uninstall`: `--vault` sin valor es exit 2 (las dos
+/// formas con valor ya están fijadas en el test anterior).
+#[test]
+fn uninstall_rejects_valueless_vault_flag() {
+    let vault = installed_vault();
+    let before = tree_snapshot(vault.path());
+    let out = bin()
+        .args(["uninstall", "--non-interactive", "--vault"])
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+    assert_eq!(
+        out.status.code(),
+        Some(2),
+        "un --vault sin valor es error de uso:\n{}",
+        stderr_text(&out)
+    );
+    let err = stderr_text(&out);
+    assert!(
+        err.contains("--vault") && err.contains("needs a value"),
+        "explica el flag sin valor, got:\n{err}"
+    );
+    assert!(
+        stdout_text(&out).is_empty(),
+        "un error de uso no imprime nada en stdout"
+    );
+    assert_eq!(
+        tree_snapshot(vault.path()),
+        before,
+        "un error de uso no toca el vault"
+    );
+}
+
 #[test]
 fn reindex_and_uninstall_help_document_their_flags() {
     let out = bin()
