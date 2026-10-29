@@ -154,9 +154,16 @@ fn default_install_fetches_own_version_payload_from_loopback() {
         println!("skip: sh and/or curl unavailable (POSIX toolchain the install phases need)");
         return;
     }
+    // L3-3 artifact-first: el opencode.json del peso trae ya la entrada
+    // gestionada — es el artefacto F8 que el probe exige para saltar la
+    // fase (el marker sol no vale ya). Con eso el re-run no se superpone:
+    // F3 copia el fichero byte-idéntico y F8 lo ve como artefacto hecho.
     let payload_files: [(&str, &[u8]); 2] = [
         ("AGENTS.md", b"# vault agent rules\n"),
-        ("opencode.json", b"{\"mcp\": {\"servers\": {}}}\n"),
+        (
+            "opencode.json",
+            b"{\"mcp\": {\"servers\": {\"tepochcalli-rag\": {}}}}\n",
+        ),
     ];
     let asset = tar_gz(&payload_files);
     let hex = sha256_hex(&asset);
@@ -176,12 +183,32 @@ fn default_install_fetches_own_version_payload_from_loopback() {
     let vault = dir.path().join("vault");
     // F4/F5/F8 need the real network and a venv; pre-marking them done keeps
     // this run hermetic. F3 stays unmarked: it is the phase under test.
+    // L3-3 artifact-first: el marker ya no salta una fase sin artefacto, así
+    // que el fixture los sirve (uv fake — F4 se saltea sin ejecutarlo — y
+    // interpreter fake del venv para el probe de F5).
     std::fs::create_dir_all(vault.join(".tepochcalli")).expect("state dir");
     std::fs::write(
         vault.join(".tepochcalli").join(".install-state"),
         "F1\nF2\nF4\nF5\nF8\n",
     )
     .expect("state marker");
+    std::fs::create_dir_all(vault.join(".tepochcalli").join("bin")).expect("uv bin dir");
+    std::fs::write(
+        vault.join(".tepochcalli").join("bin").join("uv"),
+        b"fake-uv",
+    )
+    .expect("uv artifact");
+    std::fs::create_dir_all(vault.join(".tepochcalli").join("venv").join("bin"))
+        .expect("venv bin dir");
+    std::fs::write(
+        vault
+            .join(".tepochcalli")
+            .join("venv")
+            .join("bin")
+            .join("python"),
+        b"#!/bin/sh\nexit 0\n",
+    )
+    .expect("venv python artifact");
     let out = Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
         .args([
             "install",
