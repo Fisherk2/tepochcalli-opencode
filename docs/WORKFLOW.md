@@ -1,6 +1,6 @@
 # Implementation Plan — Tepochcalli v1
 
-**Date:** 2026-10-21 (rev. 5 — estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
+**Date:** 2026-10-21 (rev. 6 — estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
@@ -18,7 +18,7 @@
 | 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e |
 | 6 | E2E Acceptance | Validar los 7 criterios de UH.md sobre sistema completo | Aceptación: tabla §6.3 toda verde en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 
-> **Estado (2026-10-28):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4); **Phase 4 (blueprint) liberada**; el resto de fases sin arrancar. GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
+> **Estado (2026-10-29):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 4 (blueprint) LISTO PARA PLANIFICAR** — dependencias satisfechas (Phase 0 contratos D9 + Phase 3 completada); el resto de fases sin arrancar. GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
 
 ## 2. Phase Breakdown
 
@@ -66,7 +66,7 @@
 
 ### Phase 3 — Wizard
 
-* **Estado (2026-10-28): COMPLETADA.** T1-T20 ejecutados; CP-A (6/6), CP-B (6/6), CP-C (6/6) y CP-D (6/6) cerrados con el FTR; **FTR Phase 3→4 verde y aprobado 2026-10-28** (§4). T19 entrega el asset del payload + regla one-version; T20 cierra la documentación (APPFLOW journeys d/e/f, TECH_DEBT, CHANGELOG, spec → Approved).
+* **Estado (2026-10-28): COMPLETADA.** T1-T20 ejecutados; CP-A (6/6), CP-B (6/6), CP-C (6/6) y CP-D (6/6) cerrados con el FTR; **FTR Phase 3→4 verde y aprobado 2026-10-28** (§4). T19 entrega el asset del payload + regla one-version; T20 cierra la documentación (APPFLOW journeys d/e/f, TECH_DEBT, CHANGELOG, spec → Approved). Cierre posterior: revisión formal de 5 ejes sobre el crate entero 2026-10-29 (§4, punto 4) — 311 passed / 0 failed / 2 ignored.
 * Entregado: crate Rust `tepochcalli` + cargo-dist (ADR-003) ejecutando las 8 fases atómicas con rollback/`--resume`/`--offline`/`--skip-model` — el menú embedder es la fase 6 (no añade una 9ª fase; spec-installer-wizard §Fases). Semántica `--skip-model` = salida-5 degraded (ADR-007 D7.1-5), NO `INDEX_EMPTY`.
 * Objetivo: crate Rust `tepochcalli` + cargo-dist (ADR-003) ejecutando las 8 fases atómicas con rollback/`--resume`/`--offline`/`--skip-model` — el menú embedder es la fase 6 (no añade una 9ª fase; spec-installer-wizard §Fases). Semántica `--skip-model` = salida-5 degraded (ADR-007 D7.1-5), NO `INDEX_EMPTY`.
 * Tareas clave: fases con execute/compensate; merge conservador de `opencode.json` con `.bak`; UX TUI; matriz CI multi-OS; release `v*` de prueba; paso Embedding provider D7.1 (5 salidas, default `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado); `presets.toml` embebido vía `include_str!` (D7.2); portero test-embed con RSS medido para todo camino local (D8.1); detección de host `sysinfo` + probe `nvidia-smi`/`rocm-smi` con badges `recommended`/`viable`/`no recomendado` (D8.2; fixture: host 4GB → fila `BAAI/bge-m3` badge `no recomendado` PERO seleccionable — warn-never-block D8.3); flujo degraded salida-5 (instalación COMPLETA sin fase 7 + checklist de re-entrada); swap atómico D8.4 (`tepochcalli config embedder` / `tepochcalli reindex --confirm` / `--keep-previous` / auto-GC del modelo viejo; fracaso inducido → cero cambio de estado). **Nota:** el merge conservador de `opencode.json` **NO debe copiar la entrada `markitdown` standalone** (retirada del payload en `ee26073`; la conversión es en proceso vía `add_source`, [spec-markitdown](../specs/spec-markitdown.md) §Config) — política reforzada por `tests/unit/test_opencode_payload_registration.py`.
@@ -76,6 +76,7 @@
 
 ### Phase 4 — Diseño del agent workflow (blueprint)
 
+* **Estado (2026-10-29): LISTO PARA PLANIFICAR.** Dependencias satisfechas (Phase 0 contratos D9 congelados + Phase 3 completada); lienzo vivo `specs/spec-payload-vault.md` en **Proposed**; arranque del diseño vía `/plan`. Sin gate BLUEPRINT APPROVED, Phase 5 no arranca.
 * Objetivo: completar specs/spec-payload-vault.md hasta estado **Approved**: system prompts definitivos de los 5 agentes, bloques YAML de permisos (last-match-wins), templates determinísticos de los 9 comandos. AGENDA: (i) §Tabla de invocación por comando — 9 filas × 4 columnas {skills concretas del inventario real, herramientas nativas, MCPs a ejecutar (`tepochcalli-rag` tools por comando; markitdown; excel/jupyter si existen), subagentes permitidos}; (ii) §Matriz de conflictos/redundancias de skills contra el inventario REAL de `obsidian-workspace/.opencode/skills/` (lectura only).
 * Naturaleza: **documentación pura — cero escritura de payload**. `obsidian-workspace/` sigue vedado; la prohibición es un deliverable verbal de esta fase, no código.
 * Dependencias: Phase 0 (contratos D9); puede correr en paralelo a Phases 1-3 (no los necesita — los contratos MCP ya están Accepted).
@@ -174,6 +175,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 | --- | --- | --- | --- |
 | Phase 0→1 | specs/ + ADRs | consistencia D1-D9, links, mermaid | Usuario + arquitecto |
 | Phase 2→3 | contratos vs código | shapes = spec-mcp-server | arquitecto |
+| Phase 3→4 | wizard crate + docs de cierre | CP-A..D (6/6 cada uno) + FTR checklist + suite local | Usuario |
 | Phase 4→5 | blueprint (spec-payload-vault Approved) | tabla invocación + matriz conflictos + permisos V2 sin legacy | Usuario + arquitecto |
 | Phase 5→6 | payload + skills | Anexo A acciones ejecutadas + permission fixtures + methodology e2e verdes + coherencia blueprint vs archivos generados | Usuario |
 
@@ -242,6 +244,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 * Cualquier desviación de un contrato = ADR nuevo (inmutabilidad Accepted).
 * Cambios de scope solo con aprobación usuario; se registran al final de este documento.
 * Lessons learned: sección a llenar tras cada gate (fallas de benches, sorpresas de plataformas).
+  * **2026-10-29 (cierre Phase 3):** el informe verde de un subagente no sustituye la verificación propia — la re-corrida de las puertas en target limpio destapó clippy E0432 (re-export muerto `check_prereqs`) y 7 call sites de test con la firma vieja tras el reporte «verde» del aplicador; cierre en `b4ecaeb`.
 
 ### Registro de olas de scope (2026-10-21)
 
