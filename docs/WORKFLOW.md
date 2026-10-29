@@ -205,15 +205,12 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
   1. La matrix CI (`phase3.yml`: ubuntu+macos + smoke path-5) **nunca se ejecutó** — `cargo test`/`rust-ci` solo corrieron en local; no se declara «CI verde».
   2. **No hay release publicada**: `release.yml` nunca corrió, no existe ningún asset `tepochcalli-workspace-<ver>.tar.gz` real ni installers generados por `dist`; la regla one-version solo está probada con payload local.
   3. **Windows sin probar**: target compilado pero fuera de la matriz; `install.ps1`, `venv/Scripts/python.exe` y el smoke path-5 nunca se ejecutaron en Windows.
-  4. `just rust-ci` **no está verde en este sandbox** (2026-10-28): `rust-fmt` +
-  `cargo clippy -D warnings` verdes; `cargo test`: 13 targets en verde pero
-  `e2e_install_f1_f2::install_non_interactive_vault_runs_f1_f2_for_real` FALLA — F4
-  reporta `DiskFull` (exit 30) en vez del 42 esperado porque la descarga real de
-  `uv` choca con la red bloqueada (58 GB libres: no es un disco lleno real, sino
-  un error de red mal clasificado — no investigado, fuera del alcance de T20);
-  el fail-fast de cargo dejó los tests `ui` (timeouts de 15 s) sin ejecutar.
-  Independiente de T20 (esta tarea solo toca docs, nada embebido en el crate);
-  no se intentó corregirlo — queda como no-verificado aquí.
+  4. `just rust-ci` **verde en local desde 2026-10-28 (rito `/test` posterior al FTR)**: `rust-fmt` y
+  `cargo clippy -D warnings` limpios, y `cargo test` con **223 passed, 0 failed, 2 ignored**.
+  Los dos tests que dependían de red dejaron de mentir: F4 ya no reporta `DiskFull` cuando la
+  red está caída (`map_fetch_error` clasifica los `io::ErrorKind` de transporte como
+  `NetDownload`, con tabla unit en el adaptador) y los dos flujos reales que descargan `uv` y un
+  CPython gestionado quedan `#[ignore]` con motivo, para el job con red (`cargo test -- --ignored`).
 
 ## 5. Risk Management
 
