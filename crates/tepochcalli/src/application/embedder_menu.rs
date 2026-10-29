@@ -146,7 +146,7 @@ pub fn run_phase6(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
     }
 }
 
-fn badge_label(badge: Badge) -> &'static str {
+pub(super) fn badge_label(badge: Badge) -> &'static str {
     match badge {
         Badge::Recommended => "recomendado",
         Badge::Viable => "viable",
@@ -155,7 +155,7 @@ fn badge_label(badge: Badge) -> &'static str {
     }
 }
 
-fn preset_option(preset: &Preset, host: &dyn HostProbe) -> String {
+pub(super) fn preset_option(preset: &Preset, host: &dyn HostProbe) -> String {
     let (badge, facts) = badge_for(preset, host);
     let gpu = if preset.gpu_recommended {
         "requerida"
@@ -175,7 +175,7 @@ fn preset_option(preset: &Preset, host: &dyn HostProbe) -> String {
 /// The 5 rows in [`EMBEDDER_PATHS`] order; preset rows carry badges +
 /// declared figures, the free-id row is static (its estimate arrives after
 /// the user types the id).
-fn build_options(default: &Preset, large: &Preset, host: &dyn HostProbe) -> Vec<String> {
+pub(super) fn build_options(default: &Preset, large: &Preset, host: &dyn HostProbe) -> Vec<String> {
     vec![
         preset_option(default, host),
         preset_option(large, host),
@@ -187,7 +187,7 @@ fn build_options(default: &Preset, large: &Preset, host: &dyn HostProbe) -> Vec<
 
 /// Re-ask until the answer is non-blank; an exhausted script surfaces
 /// `UserAborted` (never a guess).
-fn ask_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardError> {
+pub(super) fn ask_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardError> {
     loop {
         let raw = ui.input(prompt, None)?;
         let value = raw.trim().to_string();
@@ -201,9 +201,20 @@ fn ask_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardError> {
     }
 }
 
-fn local_config(model: &str) -> String {
+/// Header line of `[embedding]` configs this wizard writes — provenance is
+/// caller-specific and stays byte-identical per artifact (trazabilidad):
+/// install paths carry the F6 blurb, the swap path the D8.4 one. The whole
+/// line is the parameter; the builders never invent its text.
+const F6_LOCAL_HEADER: &str =
+    "generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`";
+const F6_EXTERNAL_HEADER: &str =
+    "generado por `tepochcalli install` (F6) — gitignored, nunca commitear";
+const F6_NONE_HEADER: &str =
+    "generado por `tepochcalli install` (F6, salida 5) — re-entrada: `tepochcalli config embedder`";
+
+pub(super) fn local_config(header: &str, model: &str) -> String {
     format!(
-        "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
+        "# {header}\n\
          [embedding]\n\
          provider = \"local\"\n\
          model = \"{}\"\n\
@@ -212,9 +223,9 @@ fn local_config(model: &str) -> String {
     )
 }
 
-fn external_config(model: &str, api_key: &str) -> String {
+pub(super) fn external_config(header: &str, model: &str, api_key: &str) -> String {
     format!(
-        "# generado por `tepochcalli install` (F6) — gitignored, nunca commitear\n\
+        "# {header}\n\
          [embedding]\n\
          provider = \"litellm\"\n\
          model = \"{}\"\n\
@@ -224,11 +235,12 @@ fn external_config(model: &str, api_key: &str) -> String {
     )
 }
 
-fn none_config() -> String {
-    "# generado por `tepochcalli install` (F6, salida 5) — re-entrada: `tepochcalli config embedder`\n\
-     [embedding]\n\
-     provider = \"none\"\n"
-        .to_string()
+pub(super) fn none_config(header: &str) -> String {
+    format!(
+        "# {header}\n\
+         [embedding]\n\
+         provider = \"none\"\n"
+    )
 }
 
 /// Temp file + rename: a failed write never leaves half a config, and a
@@ -407,7 +419,7 @@ fn finish_local(
             Provenance::Measured.label()
         ),
     );
-    write_config(vault, &local_config(&preset.hf_id))?;
+    write_config(vault, &local_config(F6_LOCAL_HEADER, &preset.hf_id))?;
     Ok(Phase6Report {
         choice: if preset.recommended_flag {
             EmbedderChoice::PresetDefault
@@ -462,7 +474,7 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
             Provenance::Measured.label()
         ),
     );
-    write_config(vault, &local_config(&id))?;
+    write_config(vault, &local_config(F6_LOCAL_HEADER, &id))?;
     Ok(Phase6Report {
         choice: EmbedderChoice::HuggingFaceId,
         provider: "local".to_string(),
@@ -481,7 +493,10 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
     // E_API_AUTH at first embed (spec-embeddings edge table). Re-ask loop is
     // the retry-without-continuing the spec asks for.
     let api_key = ask_non_empty(deps.ui, "API key (solo se guarda en config gitignored)")?;
-    write_config(vault, &external_config(&model, &api_key))?;
+    write_config(
+        vault,
+        &external_config(F6_EXTERNAL_HEADER, &model, &api_key),
+    )?;
     Ok(Phase6Report {
         choice: EmbedderChoice::ExternalApi,
         provider: "litellm".to_string(),
@@ -492,7 +507,7 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
 }
 
 fn finish_later(vault: &Path) -> Result<Phase6Report, WizardError> {
-    write_config(vault, &none_config())?;
+    write_config(vault, &none_config(F6_NONE_HEADER))?;
     Ok(Phase6Report::configure_later())
 }
 
@@ -544,13 +559,45 @@ pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
 /// install (`provider = "none"`), never a failed one. Only the config is
 /// written; `models/`, `db/` and user files are untouched.
 pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
-    write_config(vault, &none_config())
+    write_config(vault, &none_config(F6_NONE_HEADER))
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{badge_label, estimate_row, parse_gate, parse_hf_metadata};
+    use super::{
+        badge_label, estimate_row, external_config, local_config, none_config, parse_gate,
+        parse_hf_metadata, F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER,
+    };
     use crate::domain::Badge;
+
+    #[test]
+    fn config_bodies_combine_the_caller_header_byte_identically() {
+        // Trazabilidad del artefacto: la cabecera es del caller, el cuerpo lo
+        // ponen los generadores. Comillas/barras van en medio del escape.
+        let body = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3");
+        assert_eq!(
+            body,
+            "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
+             [embedding]\n\
+             provider = \"local\"\n\
+             model = \"BAAI/bge-m3\"\n\
+             device = \"cpu\"\n"
+        );
+        assert_eq!(
+            external_config(F6_EXTERNAL_HEADER, "m\"a\\b", "sk-1"),
+            "# generado por `tepochcalli install` (F6) — gitignored, nunca commitear\n\
+             [embedding]\n\
+             provider = \"litellm\"\n\
+             model = \"m\\\"a\\\\b\"\n\
+             api_key = \"sk-1\"\n"
+        );
+        assert_eq!(
+            none_config(F6_NONE_HEADER),
+            "# generado por `tepochcalli install` (F6, salida 5) — re-entrada: `tepochcalli config embedder`\n\
+             [embedding]\n\
+             provider = \"none\"\n"
+        );
+    }
 
     #[test]
     fn badge_label_covers_every_variant() {

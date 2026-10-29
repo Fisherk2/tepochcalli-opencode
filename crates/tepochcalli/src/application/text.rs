@@ -90,6 +90,17 @@ pub(crate) fn json_escape(raw: &str) -> String {
     raw.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+/// Display of an optional measured figure: present ⇒ value, absent ⇒ the
+/// shared "(sin dato)" placeholder (swap, reindex and the two CLI flags).
+///
+/// `pub` (not `pub(crate)`) because `main.rs` draws the same two summary
+/// lines; the rest of the module stays internal.
+pub fn or_fallback<T: ToString>(value: Option<T>) -> String {
+    value
+        .map(|v| v.to_string())
+        .unwrap_or_else(|| "(sin dato)".to_string())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -201,5 +212,11 @@ mod tests {
     fn json_escape_round_trips_through_json_string() {
         let body = format!("{{\"model\":\"{}\"}}", json_escape(RAW));
         assert_eq!(json_string(&body, "model").as_deref(), Some(RAW));
+    }
+
+    #[test]
+    fn or_fallback_names_absent_figures_and_passes_present_ones() {
+        assert_eq!(or_fallback(Some(384u32)), "384");
+        assert_eq!(or_fallback::<u32>(None), "(sin dato)");
     }
 }

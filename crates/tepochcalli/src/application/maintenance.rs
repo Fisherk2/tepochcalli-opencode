@@ -15,8 +15,8 @@ use crate::ports::{CommandRunner, Ui};
 
 use super::embedder_menu::config_path;
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
-use super::phase7::index_meta_path;
-use super::text::{config_value, json_bool, json_escape, json_string, json_u32, json_u64};
+use super::phase7::{index_meta_path, write_index_meta};
+use super::text::{config_value, json_bool, json_string, json_u32, json_u64, or_fallback};
 
 /// Flow CLI module invoked through the venv interpreter (D24, T12 contract).
 const FLOW_MODULE: &str = "tepochcalli_flow";
@@ -102,9 +102,7 @@ pub fn run_reindex(
                  (dims {}). LanceDB no mezcla dimensiones: el re-index completo lo \
                  reconstruye con el modelo actual.",
                 meta_model.as_deref().unwrap_or("(desconocido)"),
-                json_u32(&raw_meta, "dims")
-                    .map(|dims| dims.to_string())
-                    .unwrap_or_else(|| "(sin dato)".to_string()),
+                or_fallback(json_u32(&raw_meta, "dims")),
             ),
         );
     }
@@ -125,13 +123,12 @@ pub fn run_reindex(
         _ => None,
     };
     let refreshed = run_refresh(proc, vault)?;
-    write_index_meta(vault, &model, dims)?;
+    write_index_meta(vault, Some(&model), dims)?;
     ui.panel(
         "Reindex completo",
         &format!(
             "modelo {model} · dims {} · scanned {} · indexed {} ({} ms){}",
-            dims.map(|dims| dims.to_string())
-                .unwrap_or_else(|| "(sin dato)".to_string()),
+            or_fallback(dims),
             refreshed.scanned,
             refreshed.indexed,
             refreshed.elapsed_ms,
@@ -233,27 +230,6 @@ fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<Refreshed, Wiza
         return Err(WizardError::PhaseFailed);
     }
     parse_refresh(&out.stdout)
-}
-
-/// Temp file + rename: a failed write never leaves half a sidecar, and a
-/// failed reindex never corrupts the metadata the previous pass wrote.
-fn write_index_meta(vault: &Path, model: &str, dims: Option<u32>) -> Result<(), WizardError> {
-    // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
-    // T15 refines the panel).
-    let dir = vault.join(RUNTIME_DIR).join("db");
-    std::fs::create_dir_all(&dir).map_err(|_| WizardError::PermissionDenied)?;
-    let dims_json = dims
-        .map(|width| width.to_string())
-        .unwrap_or_else(|| "null".to_string());
-    let body = format!(
-        "{{\"model\":\"{}\",\"dims\":{dims_json}}}\n",
-        json_escape(model)
-    );
-    let tmp = dir.join("index-meta.json.tmp");
-    std::fs::write(&tmp, body).map_err(|_| WizardError::PermissionDenied)?;
-    std::fs::rename(&tmp, dir.join("index-meta.json"))
-        .map_err(|_| WizardError::PermissionDenied)?;
-    Ok(())
 }
 
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {

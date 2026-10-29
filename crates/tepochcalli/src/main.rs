@@ -18,6 +18,7 @@ use tepochcalli::adapters::{
 use tepochcalli::application::failure::{
     log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
 };
+use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
     check_prereqs, compensate_phase6, ensure_vault_dir, guard_offline_before_touch, is_phase_done,
     mark_phase_done, payload_local_ready, read_completed_report, resolve_vault_dir, run_phase3,
@@ -797,10 +798,7 @@ fn run_config_embedder(
                 stdout,
                 "embedder: {} (dims {})",
                 report.model,
-                report
-                    .dims
-                    .map(|dims| dims.to_string())
-                    .unwrap_or_else(|| "(sin dato)".to_string())
+                or_fallback(report.dims)
             );
             0
         }
@@ -899,10 +897,7 @@ fn run_reindex_cmd(
                 stdout,
                 "reindex: modelo {} · dims {} · indexed {} ({} ms)",
                 report.model,
-                report
-                    .dims
-                    .map(|dims| dims.to_string())
-                    .unwrap_or_else(|| "(sin dato)".to_string()),
+                or_fallback(report.dims),
                 report.indexed,
                 report.elapsed_ms
             );

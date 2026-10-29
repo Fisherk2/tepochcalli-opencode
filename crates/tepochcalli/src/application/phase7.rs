@@ -164,7 +164,10 @@ pub fn compensate_phase7(vault: &Path) {
 
 /// Temp file + rename: a failed write never leaves half a sidecar, and an
 /// interrupted F7 never corrupts the metadata a previous pass wrote.
-fn write_index_meta(
+/// Shared with maintenance (F7 parity): the bytes and constants are the same
+/// for both write paths — maintenance passes `Some(model)`, F7 may pass
+/// `None` (external-API path).
+pub(super) fn write_index_meta(
     vault: &Path,
     model: Option<&str>,
     dims: Option<u32>,

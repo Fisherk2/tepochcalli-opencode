@@ -17,17 +17,29 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::config::{badge_for, parse_presets, Preset};
-use crate::domain::{Badge, EmbedderChoice, WizardError};
+use crate::config::{parse_presets, Preset};
+use crate::domain::{EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
-use super::embedder_menu::{config_path, Phase6Report, Provenance, EMBEDDER_PATHS};
+use super::embedder_menu::{
+    ask_non_empty, build_options, config_path, external_config, local_config, none_config,
+    Phase6Report, Provenance, EMBEDDER_PATHS,
+};
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
 use super::text::{
-    config_value, json_bool, json_escape, json_string, json_u32, json_u64, toml_escape,
+    config_value, json_bool, json_escape, json_string, json_u32, json_u64, or_fallback,
 };
+
+/// Header lines of the swap-written `[embedding]` configs (D8.4): identical
+/// shape to the F6 ones via the shared builders — the bytes stay the ones
+/// the swap has always written (trazabilidad del artefacto).
+const SWAP_LOCAL_HEADER: &str = "generado por `tepochcalli config embedder` (swap D8.4)";
+const SWAP_EXTERNAL_HEADER: &str =
+    "generado por `tepochcalli config embedder` (swap D8.4) — gitignored, nunca commitear";
+const SWAP_NONE_HEADER: &str =
+    "generado por `tepochcalli config embedder` (swap D8.4, salida 5) — re-entrada con el mismo comando";
 
 /// Model cache dir, sandboxed under the vault (same dir the F6 gate uses).
 const MODELS_DIR: &str = "models";
@@ -104,18 +116,14 @@ struct CurrentState {
 impl CurrentState {
     fn describe(&self) -> String {
         let (state, mode): (String, String) = match self.provider.as_deref() {
-            Some("local" | "litellm") => {
-                ("ok".to_string(), self.provider.clone().unwrap_or_default())
-            }
+            Some(provider @ ("local" | "litellm")) => ("ok".to_string(), provider.to_string()),
             _ => ("degraded".to_string(), "none".to_string()),
         };
         format!(
             "model: {}\ndims: {}\nfilas del índice: {}\ntamaño de db: {} bytes\n\
              rag_status: {{\"state\":\"{state}\",\"mode\":\"{mode}\"}}",
             self.model.as_deref().unwrap_or("(sin configurar)"),
-            self.dims
-                .map(|dims| dims.to_string())
-                .unwrap_or_else(|| "(sin dato)".to_string()),
+            or_fallback(self.dims),
             self.rows,
             self.db_bytes,
         )
@@ -183,15 +191,12 @@ pub fn run_swap(
                     "modelo {} · dims {} · RSS pico {}MB ({})\n\
                      config y metadatos conmutados atómicamente{}",
                     partial.model,
-                    partial
-                        .dims
-                        .map(|dims| dims.to_string())
-                        .unwrap_or_else(|| "(sin dato)".to_string()),
-                    partial
-                        .rss_peak_bytes
-                        .map(|rss| (rss as f64 / BYTES_PER_MB) as u64)
-                        .map(|mb| mb.to_string())
-                        .unwrap_or_else(|| "(sin dato)".to_string()),
+                    or_fallback(partial.dims),
+                    or_fallback(
+                        partial
+                            .rss_peak_bytes
+                            .map(|rss| (rss as f64 / BYTES_PER_MB) as u64)
+                    ),
                     Provenance::Measured.label(),
                     if opts.keep_previous {
                         "; modelo anterior retenido (--keep-previous)"
@@ -395,57 +400,6 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
     })
 }
 
-/// Re-ask until the answer is non-blank; an exhausted script is `UserAborted`.
-fn ask_non_empty(ui: &dyn Ui, prompt: &str) -> Result<String, WizardError> {
-    loop {
-        let raw = ui.input(prompt, None)?;
-        let value = raw.trim().to_string();
-        if !value.is_empty() {
-            return Ok(value);
-        }
-        ui.panel(
-            "Falta un dato",
-            "El valor no puede estar vacío; pulsa Ctrl-C para volver al menú.",
-        );
-    }
-}
-
-fn badge_label(badge: Badge) -> &'static str {
-    match badge {
-        Badge::Recommended => "recomendado",
-        Badge::Viable => "viable",
-        Badge::NotRecommended => "no recomendado",
-        Badge::Unknown => "sin datos",
-    }
-}
-
-fn preset_option(preset: &Preset, host: &dyn HostProbe) -> String {
-    let (badge, facts) = badge_for(preset, host);
-    let gpu = if preset.gpu_recommended {
-        "requerida"
-    } else {
-        "no requerida"
-    };
-    let provenance = Provenance::Declared.label();
-    format!(
-        "{} [{}] 💾 {}MB ({provenance}) · 🧠 {}MB ({provenance}) · 🎮 {gpu}",
-        preset.name,
-        badge_label(badge),
-        facts.disk_mb,
-        facts.ram_mb
-    )
-}
-
-fn build_options(default: &Preset, large: &Preset, host: &dyn HostProbe) -> Vec<String> {
-    vec![
-        preset_option(default, host),
-        preset_option(large, host),
-        "ID libre de HuggingFace — estima vía API + gate test-embed".to_string(),
-        "API externa vía LiteLLM (clave solo en config gitignored)".to_string(),
-        "Configurar después (sin índice, RAG degraded)".to_string(),
-    ]
-}
-
 /// Staged replacement config on a `.swap` temp path: the live config is
 /// untouched until the commit renames this into place.
 fn stage_config(vault: &Path, picked: &Phase6Report) -> Result<PathBuf, WizardError> {
@@ -468,42 +422,15 @@ fn picked_config_body(picked: &Phase6Report) -> String {
             .as_deref()
             .and_then(|packed| packed.split_once('\u{0}'))
             .unwrap_or(("", ""));
-        external_config(model, key)
+        external_config(SWAP_EXTERNAL_HEADER, model, key)
     } else if picked.provider == "none" {
-        none_config()
+        none_config(SWAP_NONE_HEADER)
     } else {
-        local_config(picked.model.as_deref().unwrap_or_default())
+        local_config(
+            SWAP_LOCAL_HEADER,
+            picked.model.as_deref().unwrap_or_default(),
+        )
     }
-}
-
-fn local_config(model: &str) -> String {
-    format!(
-        "# generado por `tepochcalli config embedder` (swap D8.4)\n\
-         [embedding]\n\
-         provider = \"local\"\n\
-         model = \"{}\"\n\
-         device = \"cpu\"\n",
-        toml_escape(model)
-    )
-}
-
-fn external_config(model: &str, api_key: &str) -> String {
-    format!(
-        "# generado por `tepochcalli config embedder` (swap D8.4) — gitignored, nunca commitear\n\
-         [embedding]\n\
-         provider = \"litellm\"\n\
-         model = \"{}\"\n\
-         api_key = \"{}\"\n",
-        toml_escape(model),
-        toml_escape(api_key)
-    )
-}
-
-fn none_config() -> String {
-    "# generado por `tepochcalli config embedder` (swap D8.4, salida 5) — re-entrada con el mismo comando\n\
-     [embedding]\n\
-     provider = \"none\"\n"
-        .to_string()
 }
 
 /// Step 4: download + test-embed gate (measured RSS) then re-index with the
@@ -877,14 +804,6 @@ mod tests {
             .map(|bytes| estimate_secs(*bytes))
             .collect::<Vec<_>>();
         assert!(monotonic.windows(2).all(|pair| pair[0] <= pair[1]));
-    }
-
-    #[test]
-    fn badge_label_covers_every_variant() {
-        assert_eq!(badge_label(Badge::Recommended), "recomendado");
-        assert_eq!(badge_label(Badge::Viable), "viable");
-        assert_eq!(badge_label(Badge::NotRecommended), "no recomendado");
-        assert_eq!(badge_label(Badge::Unknown), "sin datos");
     }
 
     #[test]
