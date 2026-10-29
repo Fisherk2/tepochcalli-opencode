@@ -80,10 +80,11 @@ pub fn is_supported_os(os: &str) -> bool {
 }
 
 /// `true` when `name` (or `name.exe`) is an executable file under `dirs`.
+/// Delega en la única lookup del crate (adapters::host) para no duplicar la
+/// regla `.exe`; el caller mantiene la firma histórica (prereqs + tests).
 #[must_use]
 pub fn tool_present_in(name: &str, dirs: &[PathBuf]) -> bool {
-    dirs.iter()
-        .any(|dir| dir.join(name).is_file() || dir.join(format!("{name}.exe")).is_file())
+    crate::adapters::find_tool_in(name, dirs).is_some()
 }
 
 fn path_dirs() -> Vec<PathBuf> {

@@ -31,11 +31,22 @@ fn nonzero_gib(bytes: u64) -> Option<f64> {
     }
 }
 
-/// First `name` found under `dirs` (extracted for tests; the probe passes
-/// the real `PATH`). Missing file ⇒ absent tool, never an error.
+/// First `name` (or `name.exe`, for Windows layouts browsed from anywhere)
+/// found under `dirs`, else `None`. Una sola lookup con una sola regla .exe:
+/// `tool_present_in` y la sonda de GPU comparten esta función.
 #[must_use]
 pub fn find_tool_in(name: &str, dirs: &[PathBuf]) -> Option<PathBuf> {
-    dirs.iter().map(|dir| dir.join(name)).find(|p| p.is_file())
+    dirs.iter().find_map(|dir| {
+        let bare = dir.join(name);
+        let exe = dir.join(format!("{name}.exe"));
+        if bare.is_file() {
+            Some(bare)
+        } else if exe.is_file() {
+            Some(exe)
+        } else {
+            None
+        }
+    })
 }
 
 fn path_dirs() -> Vec<PathBuf> {

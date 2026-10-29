@@ -192,3 +192,21 @@ fn host_tool_search_finds_present_and_misses_absent() {
     let empty: Vec<PathBuf> = Vec::new();
     assert_eq!(find_tool_in("sh", &empty), None);
 }
+
+#[test]
+fn host_tool_search_accepts_the_windows_exe_twin() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let exe = dir.path().join("notepad-plus-tool-t6.exe");
+    std::fs::write(&exe, b"MZ").expect("write fake exe");
+    assert_eq!(
+        find_tool_in("notepad-plus-tool-t6", &[dir.path().to_path_buf()]),
+        Some(exe.clone()),
+        "busca name.exe cuando el bare no existe"
+    );
+    // existing_bare wins; existing_exe.gone: solo .exe cuenta, no .bare.
+    assert_eq!(
+        find_tool_in("notepad-plus-tool-t6.exe", &[dir.path().to_path_buf()]),
+        Some(exe),
+        "el id con sufijo también se encuentra"
+    );
+}
