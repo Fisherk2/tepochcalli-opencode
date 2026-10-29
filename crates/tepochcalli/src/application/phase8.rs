@@ -253,15 +253,18 @@ fn merge_and_verify(
 }
 
 /// F8 compensation: restore the pre-merge bytes (or remove the file F8
-/// created when none pre-existed); the backup is removed so a compensated
-/// run leaves no residue. Missing backup + missing file is a no-op.
+/// created when none pre-existed); the backup is removed ONLY when the
+/// restore succeeded — a failed write keeps the `.bak` as the last good
+/// copy (mailing user data is never the compensation's outcome). Missing
+/// backup + missing file is a no-op.
 pub fn compensate_phase8(vault: &Path) {
     let target = vault.join(OPENCODE_JSON);
     let backup = vault.join(OPENCODE_BAK);
     match std::fs::read(&backup) {
         Ok(bytes) => {
-            let _ = std::fs::write(&target, &bytes);
-            let _ = std::fs::remove_file(&backup);
+            if std::fs::write(&target, &bytes).is_ok() {
+                let _ = std::fs::remove_file(&backup);
+            }
         }
         Err(_) => {
             // No backup ⇒ F8 created the file (absent at entry); remove it.
@@ -284,5 +287,30 @@ mod tests {
             parse_rag_status(r#"{"error":"E_X","reason":"boom"}"#),
             Err(WizardError::PhaseFailed)
         );
+    }
+
+    /// L2-3: si la restauración del `.bak` falla (destino ocupado por un
+    /// directorio ⇒ EISDIR con cualquier uid), el backup SOBREVIVE: nunca
+    /// queda una copia de los bytes del usuario sola en un write que falló.
+    #[test]
+    fn failed_restore_keeps_the_backup() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let backup = vault.path().join(OPENCODE_BAK);
+        if let Err(err) = std::fs::write(&backup, b"# original\n") {
+            panic!("fixture .bak: {err}");
+        }
+        let target = vault.path().join(OPENCODE_JSON);
+        if let Err(err) = std::fs::create_dir(&target) {
+            panic!("fixture target dir (IEID saboteado): {err}");
+        }
+
+        compensate_phase8(vault.path());
+
+        match std::fs::read(&backup) {
+            Ok(bytes) => assert_eq!(bytes, b"# original\n", "el .bak sobrevive"),
+            Err(err) => panic!("el .bak no puede perderse: {err}"),
+        }
     }
 }
