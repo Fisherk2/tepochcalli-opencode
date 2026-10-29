@@ -780,6 +780,18 @@ fn run_phases(
         }
     }
     let _ = writeln!(stdout, "{}", path.as_path().display());
+    // Checklist degraded (4c-6): una salida 5 deja el RAG sin índice —
+    // las órdenes exactas de re-entrada van en stdout (no se pierden entre
+    // el ruido de stderr del install).
+    if picked.provider == "none" {
+        let _ = writeln!(
+            stdout,
+            "\n== RAG degradado: sin embedder (ruta 5) ==\n\
+             El índice no se construyó. Re-entrada:\n  \
+             1) tepochcalli config embedder --confirm\n  \
+             2) tepochcalli reindex --confirm\n"
+        );
+    }
     0
 }
 

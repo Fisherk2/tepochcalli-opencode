@@ -569,6 +569,75 @@ fn skip_model_writes_path5_config_without_spawning() {
 
 // --- CLI surface: --resume / --offline flags exist ---
 
+/// L4-4 (4c-6): un install salida 5 (provider none) imprime en STDOUT el
+/// checklist de re-entrada (`config embedder` + `reindex`). Fixture con
+/// F4/F5/F8 servidas por artefactos (uv/venv fakes + rag_status JSON fake
+/// del interpreter) para que el camino quede hermético.
+#[test]
+fn degraded_install_prints_the_reentry_checklist_on_stdout() {
+    use std::io::Write as _;
+
+    let dir = tmp();
+    let payload = dir.path().join("payload-checklist");
+    std::fs::create_dir_all(&payload).expect("payload dir");
+    std::fs::write(payload.join("READ.md"), b"# read\n").expect("payload file");
+    let vault = dir.path().join("v-checklist");
+    let rt = vault.join(".tepochcalli");
+    std::fs::create_dir_all(rt.join("bin")).expect("bin dir");
+    std::fs::create_dir_all(rt.join("venv").join("bin")).expect("venv bin dir");
+    std::fs::write(rt.join("bin").join("uv"), b"fake-uv").expect("uv artifact");
+    let mut fake_python =
+        std::fs::File::create(rt.join("venv").join("bin").join("python")).expect("venv artifact");
+    // Interpreter fake que habla el contrato rag_status (degraded).
+    let script = "#!/bin/sh\necho '{\"embedder\":null,\"index\":null,\"config\":null,\"health\":null,\"state\":\"degraded\",\"reason\":\"E_NO_EMBEDDER\",\"fix_hint\":\"run config embedder\",\"mode\":\"none\"}'\n";
+    let _ = fake_python.write_all(script.as_bytes());
+    drop(fake_python);
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(
+        rt.join("venv").join("bin").join("python"),
+        std::fs::Permissions::from_mode(0o755),
+    )
+    .expect("chmod fake python");
+    std::fs::write(
+        vault.join(".tepochcalli").join(".install-state"),
+        "F1\nF2\nF3\nF4\nF5\nF8\n",
+    )
+    .expect("state marker");
+    std::fs::write(vault.join(".tepochcalli").join(".install-intent"), "")
+        .expect("intent artifact");
+
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--skip-model",
+            "--resume",
+            "--vault",
+            vault.to_str().expect("utf8 tmp"),
+            "--payload",
+            payload.to_str().expect("utf8 tmp"),
+        ])
+        .output()
+        .expect("spawn install");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr:\n{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    for expected in [
+        "RAG degradado",
+        "tepochcalli config embedder --confirm",
+        "tepochcalli reindex --confirm",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "stdout debe llevar el checklist de re-entrada ({expected}), got:\n{stdout}"
+        );
+    }
+}
+
 /// L3-3 e2e: un vault con F3..F8 marcados done donde el venv (artefacto F5)
 /// fue borrado — `install --resume` vuelve a ejecutar F5 (la reparación) —
 /// mientras que el mismo vault con venv presente salta F4/F5 y termina 0.
