@@ -81,6 +81,7 @@ Criterios UH tocados: **4** (tokens/consulta) degradado en conversiones grandes;
 | --- | --- | --- |
 | 2026-10-30 | Este diagnóstico (standalone `markitdown` testing) | Saturación por devolución de artefacto completo |
 | 2026-10-27 | Retirada del standalone markitdown (review Phase 2, spec-markitdown.md:58) | Misma raíz (superficie sin cliente) detectada por review, no por síntoma |
+
 _Patrón 2/3: si la skill anydoc-fallback se integra sin devolución resumen, cierra la terna — sugerir un contract test transversal tipo «ninguna tool devuelve artefacto >N bytes»._
 
 ## References
