@@ -218,7 +218,7 @@ Como usuario quiero indicar qué directorio escanear o dónde escribir el result
 
 - «Escanea `sources/` e indexa» e «convierte `prueba.docx` a `convertidos/prueba.md`» funcionan como órdenes directas.
 - `00-Resources/` sigue siendo el convenio default cuando no se indica otro directorio.
-- OPEN DECISION sobre D16/D9.1 — historia bloqueada hasta elegir: A (estricta), B (relativo-al-vault), C (relajar con ADR).
+- Decisión del dueño (2026-10-30, por question tool): **B′ — frontera = el vault completo, nada fuera.** El conversor escanea/escribe en CUALQUIER directorio del vault, jamás en directorios externos; fuera del vault ⇒ error tipado (`VALIDATION_ERROR`, mismo estilo D16). `00-Resources/` sigue siendo el convenio default para fuentes indexables (MCP-first/D9.1); la escritura con `output_path` explícito puede apuntar a cualquier ruta interna del vault. La extensión del dominio D16 al OUTPUT del conversor se formaliza como enmienda spec (`spec-markitdown` §Security + `spec-mcp-server` §Security, cuyo wording D16 sigue pendiente del FTR) o ADR nuevo al aterrizar en Phase 3.5 — las HU se implementan en esa fase.
 
 #### H4 — Skill `tepochcalli-mcp`
 
