@@ -84,7 +84,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 
 ## Pre-Commit Checklist
 
-* [ ] Ningún cambio a `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/` salvo tarea que lo autorice.
+* [ ] Ningún cambio a `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/` salvo tarea que lo autorice, o salvo orden explícita del dueño del repo (se registra como excepción autorizada en el cuerpo del commit).
 
   <!-- markdownlint-disable MD004 -->
 

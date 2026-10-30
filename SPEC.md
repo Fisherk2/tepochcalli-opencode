@@ -2,7 +2,7 @@
 
 > Workspace distribuible de Obsidian potenciado con OpenCode V2 + motor RAG, para búsqueda
 > semántica citada sobre notas y PDFs de investigación con coste mínimo de tokens LLM.
-> Fuente de requisitos: [docs/UH.md](docs/UH.md) (no se modifica; se especifica).
+> Fuente de requisitos: [docs/UH.md](docs/UH.md) (no se modifica; se especifica, salvo orden explícita del dueño del repo — se registra como excepción autorizada en el cuerpo del commit).
 > Este documento indexa las specs modulares (`specs/spec-*.md`) y los ADRs (`specs/adr/`).
 
 ## Objetivo
@@ -95,7 +95,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | Siempre (Always) | Preguntar antes (Ask first) | Nunca (Never) |
 | --- | --- | --- |
 | Respetar contratos D1-D7 o escribir ADR nuevo | Añadir dependencias al `pyproject.toml` pineado | Commitear claves, `config/`, `db/`, `models/`, `venv/` |
-| Specs antes que código; commits atómicos Convención | Cambiar top_k por default o tamaño de chunk | Modificar `docs/UH.md`, `obsidian-workspace/.opencode/` (agents/commands/skills), `README.md`, `LICENSE` |
+| Specs antes que código; commits atómicos Convención | Cambiar top_k por default o tamaño de chunk | Modificar `docs/UH.md` (salvo orden explícita del dueño del repo — se registra como excepción autorizada en el cuerpo del commit), `obsidian-workspace/.opencode/` (agents/commands/skills), `README.md`, `LICENSE` |
 | Validar entradas en el borde MCP (`add_source` rutas) | Añadir un nuevo MCP server al payload | Exponer el RAG por red (stdio local únicamente) |
 | Citas estructuradas en toda respuesta RAG | Re-index strategy distinta de "swap=full" | Hacer que el instalador toque `.obsidian/` |
 
