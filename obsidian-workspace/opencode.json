@@ -129,12 +129,9 @@
   "plugins": [
     "opencode-rpc@2.0.0",
     "opencode-navigator@latest",
-    "opencode-vitals@latest",
     "opencode-skills-collection@latest",
     "opencode-skill-creator@latest",
-    "@tarquinen/opencode-dcp@latest",
     "opencode-search-plugin@latest",
-    "@hacky.software/opencode-todo-supervisor@latest",
     "opencode-parser@latest"
   ],
   "permissions": [
