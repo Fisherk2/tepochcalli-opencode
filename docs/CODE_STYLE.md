@@ -88,6 +88,52 @@ pone el gate rojo, no la memoria del revisor. Al añadir un test: ¿necesita el 
 prueban por su costura `TEPOCHCALLI_RELEASE_BASE_URL` (mirror en loopback); PowerShell solo se
 fija de forma estática porque no corre en la CI Linux.
 
+## Umbral de líneas por fichero (código)
+
+Aplica a los ficheros de código del proyecto (`.py` bajo `flow/`/`mcp/`, `.rs` bajo
+`crates/`); los artefactos gitignored (`venv/`, `db/`, `models/`, `target/`) y la
+**documentación** (umbral propio en la sección siguiente) no cuentan. Objetivo: ficheros
+legibles, modulares y editables. Recuento = líneas totales del fichero (`wc -l`);
+**todo refactor exigido por la tabla baja el fichero a <500**.
+
+| Líneas | Regla |
+| --- | --- |
+| ≤ 500 | Conforme. |
+| 501 – 700 | Si **no** es justificable o necesario: refactorizar, simplificar y/o generar ficheros nuevos hasta <500. Si **es** justificable o necesario: se permite esa cifra. |
+| 701 – 1000 | Mismo criterio que el tramo anterior, pero la justificación solo se acepta **con advertencia** de refactorizar el código lo antes posible. |
+| > 1000 | **Obligatorio** refactorizar, simplificar y/o generar ficheros nuevos para reducir a **<500** — sin excepción por justificación. |
+
+* La justificación de una cifra admitida (501–1000) consta en el commit/PR que crea o alarga
+  el fichero; si el porqué no se ve en el código, se deja comentario en el fichero.
+* Es regla de revisión, todavía **sin gate automático**: quien alargue un fichero por encima
+  de un umbral lo declara en la revisión.
+
+## Umbral de líneas por documentación (.md)
+
+Aplica a los `.md` del proyecto — raíz, `docs/`, `specs/`, `tasks/` — **sin
+`obsidian-workspace/`** (payload congelado hasta Phase 5); tampoco cuentan los assets
+gitignored (`skills/`, `agents/`, `commands/` de la raíz) ni los `.md` que son datos de
+test (`tests/fixtures/`). Recuento = líneas totales (`wc -l`). Objetivo: documentación
+legible y mantenible.
+
+| Documento | Umbral |
+| --- | --- |
+| `CHANGELOG.md` · `README.md` (raíz) · `docs/UH.md` | **Sin límite** (historial y fuente de verdad; `UH.md` además es inmutable). |
+| `tasks/**` · `docs/diagnosis/**` | **< 1000** líneas. |
+| `docs/WORKFLOW.md` · `docs/TECH_DEBT.md` | **< 700** líneas. |
+| El resto de documentación | **< 500** líneas. |
+
+Al superar el umbral, las acciones dependen del tramo — el objetivo es bajar **por debajo del
+umbral de su propio tramo**, no a <500:
+
+* **Tramo `<500`:** refactorizar, simplificar, contraer y/o **generar documentos nuevos**
+  (dividir; actualizar el índice y los enlaces que referencien el documento dividido).
+* **Tramos `<700` y `<1000`:** solo refactorizar, simplificar, contraer, resumir contenido o
+  eliminar contenido desactualado e irrelevante — **sin dividir en documentos nuevos** (son
+  largos por naturaleza: plan, registro de deuda, tareas, diagnóstico).
+* El umbral lo fija la **ruta**, no el nombre: `docs/diagnosis/README.md` es tramo `<1000`,
+  no el README exento de la raíz.
+
 ## Nomenclatura de archivos y docs
 
 | Constructo | Convención | Ejemplo |

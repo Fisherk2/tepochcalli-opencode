@@ -49,6 +49,15 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).
 * Nomenclatura: specs `specs/spec-<kebab>.md`; ADRs `specs/adr/adr-NNN-<kebab>.md`; commits
   Conventional Commits (`type: resumen ≤72 cols`).
+* **Umbral de líneas por fichero de código** (documentación: bullet siguiente): ≤500 conforme;
+  501–700 solo si es justificable o necesario; 701–1000 solo si es justificable y **con
+  advertencia** de refactorizar lo antes posible; **>1000 obligatorio bajar a <500**. Detalle
+  y recuento en [docs/CODE_STYLE.md](docs/CODE_STYLE.md) (§Umbral de líneas por fichero (código)).
+* **Umbral de líneas por documentación (.md)** (fuera `obsidian-workspace/`): sin límite en
+  `CHANGELOG.md`/`README.md` raíz/`docs/UH.md`; **<1000** en `tasks/` y `docs/diagnosis/`;
+  **<700** en `docs/WORKFLOW.md`/`docs/TECH_DEBT.md`; **<500** en el resto — al superarlo se
+  contrae, simplifica y resume (**dividir en documentos nuevos solo en el tramo <500**).
+  Detalle en [docs/CODE_STYLE.md](docs/CODE_STYLE.md) (§Umbral de líneas por documentación).
 
 ## Security Rules
 
