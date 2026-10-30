@@ -99,6 +99,26 @@
   },
   "mcp": {
     "servers": {
+      "tepochcalli-rag": {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "environment": {
+          "TEPOCHCALLI_ROOT": "."
+        },
+        "disabled": false
+      },
+      "markitdown": {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "markitdown_mcp"],
+        "cwd": ".",
+        "disabled": false
+      },
+      "anydoc": {
+        "type": "local",
+        "command": ["npx","-y","mcp-server-anydoc"],
+        "disabled":true
+      },
       "excel": {
         "type": "local",
         "command": ["uvx", "excel-mcp-server", "stdio"],
@@ -114,15 +134,6 @@
           "MCP_JUPYTER_TOKEN": "{env:MCP_JUPYTER_TOKEN}",
           "MCP_JUPYTER_NOTEBOOK_PATH": "agent_demo.ipynb"
         }
-      },
-      "tepochcalli-rag": {
-        "type": "local",
-        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
-        "cwd": ".",
-        "environment": {
-          "TEPOCHCALLI_ROOT": "."
-        },
-        "disabled": false
       }
     }
   },
