@@ -1,237 +1,201 @@
-# TODO — Phase 3: Wizard Rust `tepochcalli`
+# TODO — Phase 3.5: conversor summary-only + índice multi-raíz + RAG de documentos + dieta + skill `tepochcalli-mcp`
 
 > Detalle completo en [tasks/plan.md](plan.md). Orden impuesto por el grafo de dependencias.
-> Regla de la casa: **una calpulli = un camino completo**, con criterio de aceptación y
-> verificación. Nada de Phase 4-5 (payload de agents/commands/skills del vault).
+> Regla de la casa: **una calpulli = un camino completo**, con criterio de aceptación y verificación.
+> Nada de Phase 4-5 (blueprint y payload), nada del wizard más allá de lo autorizado en T6.
 
-**Rama:** `feat/workspace-obsidian` · **Fuente:** [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 3
-**Rama de código:** `crates/tepochcalli/` · **Rama de tests:** `crates/tepochcalli/tests/`
-**Rama de código Python (tocada):** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/` (solo T12)
-**Historial:** este fichero sustituye al TODO de Phase 2, que se conserva íntegro en el
-historial de git (`git show a070385:tasks/todo.md`).
+**Rama:** `feat/workspace-obsidian` · **Fuente:** [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 3.5
+**Motor (tocado):** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/`
+**Server (tocado):** `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/`
+**Deps (tocado):** `obsidian-workspace/.tepochcalli/pyproject.toml` + `uv.lock` (T4)
+**Tests:** `tests/unit/` · `tests/integration/` · `tests/e2e/` · `tests/benchmarks/`
+**Payload (tocado):** `obsidian-workspace/opencode.json` (T14) · `obsidian-workspace/.opencode/skills/tepochcalli-mcp/` (T15)
+**Documentos:** `specs/adr/adr-009|010|011-*.md` (nuevos) · `specs/spec-markitdown.md` · `specs/spec-mcp-server.md` · `specs/spec-rag-engine.md` · `specs/spec-vault-structure.md` · `docs/WORKFLOW.md` · `docs/ARCHITECTURE.md` · `docs/SECURITY.md` · `docs/TECH_DEBT.md` · `docs/TRD.md` · `SPEC.md` · `CHANGELOG.md`
+**Historial:** sustituye al TODO de Phase 3 (`git show a10706e:tasks/todo.md`).
 
 ---
 
-## Sub-fase A — Anclaje y contratos (fail-fast)
+## Sub-fase A — Contratos (fail-fast)
 
-- [x] **T1 · Reconciliar contratos: el §Merge de la spec y las olas D19-D27**
-  - Subagentes: `technical-writer` (lead), `code-reviewer` · Skills: `documentation-and-adrs`, `spec-driven-development`, `clean-code`
-  - AC: (a) `specs/spec-installer-wizard.md` §Merge deja de registrar `mcp.servers.markitdown` y explica que la conversión es **en proceso** (D19); (b) el §Merge dice que el comando del MCP se **genera por SO** (`venv/bin/python` POSIX · `venv/Scripts/python.exe` Windows) (D20); (c) la *Open Question* de `--resume` queda **resuelta** como «deducir por artefactos + marker `.install-state`» (D21); (d) la spec documenta que el wizard crea `00-Resources/` + placeholders (D22) y que el TUI es line-based (D23); (e) `docs/WORKFLOW.md` §8 registra las olas D19-D27 con su justificación; (f) la spec sigue en *Proposed* (el paso a *Approved* es T20, con FTR)
-  - Verificar: `just md-lint` verde · `grep -n "markitdown" specs/spec-installer-wizard.md` no devuelve la entrada de registro · el diff de §8 es aditivo (no reescribe olas previas)
-  - 📌 **Por qué primero:** la spec es el contrato que T3-T13 implementan; si el §Merge sigue diciendo `markitdown`, T13 implementaría el contrato equivocado.
-  - Dep.: — · Tamaño: S
+- [ ] **T1 · ADR-009 + ADR-010 + ADR-011 + enmiendas a 4 specs + olas D28-D61**
+  - Subagentes: `technical-writer` (lead), `software-architect`, `code-reviewer` · Skills: `documentation-and-adrs`, `api-and-interface-design`, `spec-driven-development` · Herramientas: `gitmcp`, `codebase-memory-mcp`, `context7`
+  - AC: (a) **ADR-009** (conversor summary-only): D28 (3 tools en `tepochcalli-rag`, markitdown in-process), D31 (frontera B′), D36 (resumen de 5 claves), D37/D38/D39 (defaults y taxonomía), y por qué no un server aparte ni reusar el `markitdown` standalone; (b) **ADR-010** (índice multi-raíz + cita): D32 (raíces por llamada, sin estado), D41 (`source_path` relativo al vault, alineado con `FilePath` de CocoIndex), D43 (whitelist ampliada), D46 (recursión + raíz-fichero + dedup), D47 (frontera de symlinks = vault), D50 (`offsets_ref="extract"`), D51 (documentos fuera del Δ), y la alternativa descartada de config persistente; (c) **ADR-011** (política de dependencias): D52 (dos librerías: cocoindex + markitdown, y lo que arrastran), D53 (docling fuera), D55 (`markitdown-mcp` fuera y extras granulares), D54 (**el PDF pierde headings** — el coste explícito), D58 (`@coco.fn` en los helpers: change detection real), D59 (una sola implementación de embedder + modelo local), D61 (sin memo de embeddings por chunk, con el coste cuantificado), y la regla de que **cualquier** dependencia nueva requiere ADR; (d) `spec-markitdown`: H1/H2, B′, standalone retirado (D29), catálogo, y que el conversor **no** es el camino de indexación (D49); (e) `spec-mcp-server`: 3 tools, `index_refresh(directories=?)` + `roots` aditivo, `rag_status` con las raíces de sesión, taxonomía (D39), §Security con el wording **estricto** de D16 **más** B′; (f) `spec-rag-engine`: §Fuentes (raíces, whitelist), §Target (`source_path` vault-relativo, `doc_kind`, `offsets_ref`), §Ruta de documentos (markitdown; **sin headings en PDF**; fuera del Δ), §Embeddings (el modelo por ruta local y por qué), §Alternatives (Docling fuera: la regla de oro y el coste medido); (g) `spec-vault-structure`: `00-Resources/` = convención, no imposición; (h) `docs/WORKFLOW.md` §8 con D28-D61 y §Phase 3.5 con el alcance nuevo; (i) `docs/UH.md` **intacto**
+  - Verificar: `just md-lint` sin errores · `git diff docs/UH.md` vacío · las 4 tools preexistentes de `spec-mcp-server` sin cambios de forma · los ADRs no re-editan ADR-005
+  - 📌 **Por qué primero:** T2-T15 implementan estos contratos; el ADR-011 es el que fija la regla de oro
+  - Dep.: — · Tamaño: L
 
-- [x] **T2 · Spike fail-fast: extracción de archivos segura + bootstrap de `uv` portable**
-  - Subagentes: `rust-engineer` (lead), `security-auditor` · Skills: `test-driven-development`, `security-and-hardening`, `error-handling-patterns`, `doubt-driven-development`
-  - AC: (a) existe un extractor capaz de desenvolver un `.tar.gz` **y** un `.zip` en un directorio destino; (b) **rechaza** con error tipado las 4 clases de ataque: `../` en el nombre (`zip-slip`/`tar-slip`), ruta absoluta POSIX (`/etc/passwd`), ruta absoluta Windows (`C:\...`), y symlink con destino absoluto o fuera del destino; (c) la comprobación ocurre **antes** de escribir en disco (test que verifica que el destino queda intacto); (d) se puede descargar el binario de `uv` de la release oficial **por plataforma** (`x86_64`/`aarch64` × linux/macos), verificar su SHA-256, dejarlo ejecutable y obtener `uv --version`; (e) el spike **no** usa scripts remotos (`install.sh`/`install.ps1`): solo artefactos released con checksum
-  - Verificar: `cargo test` verde con los 4 casos de ataque como tests nominales (no `xfail`) · spike manual en linux y macos · **el AC de `cargo clippy -D warnings` limpio**
-  - 📌 **Omen mayor OM-1**: un instalador que escribe en el vault del usuario es un extractor de archivos Writing-Outside-Dir. Este AC bloquea F3 y F4: no se avanza a verde sin él.
-  - Dep.: T1 · Tamaño: M
+---
 
-- [x] **T3 · Esqueleto del crate: `Cargo.toml`, CLI y dominio**
-  - Subagentes: `rust-engineer` (lead), `cli-developer` · Skills: `clean-ddd-hexagonal`, `design-patterns`, `solid`, `error-handling-patterns`
-  - AC: (a) `crates/tepochcalli/Cargo.toml` con `name = "tepochcalli"`, `edition = "2021"`, binario `tepochcalli`; (b) `src/domain/` con `Phase` (F1..F8), `PhaseState`, `InstallPlan`, `VaultPath`, `EmbedderChoice`, `Badge`, `ResourceFacts`, `InstallOutcome` (`Ok` | `Degraded`), `WizardError` y `ExitCode`; (c) `ExitCode` respeta los rangos de la spec (0 · 10-19 · 20-29 · 30-39 · 40+) con el mapeo de §5.4 del plan; (d) `src/main.rs` con subcomandos `install`, `config embedder`, `reindex`, `uninstall` y `--help`/`--version` por subcomando; (e) `domain/` **no** importa nada de `adapters/` ni crates de infra (se comprueba en T4); (f) versionado semver del crate alineado con la release del payload (regla one-version)
-  - Verificar: `cargo build`, `cargo test`, `cargo fmt --check`, `cargo clippy -D warnings` verdes · `tepochcalli --help` y `tepochcalli install --help` imprimen uso legible
+## Sub-fase B — El motor
+
+- [ ] **T2 · Motor multi-raíz + `source_path` vault-relativo + `verify.py`**
+  - Subagentes: `rag-pipeline-engineer` (lead), `python-pro`, `code-reviewer` · Skills: `clean-ddd-hexagonal`, `test-driven-development`, `incremental-implementation` · Herramientas: `codebase-memory-mcp`
+  - AC: (a) `citation.normalize_source_path` deja de prefijar `RESOURCES_DIR/` y devuelve la ruta **relativa al vault**; `..` que escape ⇒ `CitationError`; (b) `source.walk_sources(vault_root, roots)` acepta **N raíces**, cada una validada (dentro del vault, sin `..`, sin symlink fuera) **antes** de tocar el disco; inexistente ⇒ error tipado (D44); (c) **recursión a cualquier profundidad** (D46): test con `materiales/1-geografia/x.pdf` y `documentos/pdf/y.pdf`; (d) una raíz puede ser un **fichero suelto**; (e) **dedup** de raíces solapadas (`scanned == indexed + skipped` se mantiene); (f) `classify_file` calcula el `source_path` relativo al vault y la **frontera del symlink es el vault** (D47); (g) `app.refresh_blocking(directories=None)` con `None` ⇒ `["00-Resources"]` y `RefreshReport` gana `roots` (aditivo); (h) `parsers.py`/`adapters/lancedb_reader.py` siguen coherentes con el path nuevo (`path_filter` sigue siendo un glob relativo al vault); (i) `verify.py` resuelve el `source_path` vault-relativo; (j) el **golden-vault** se re-verifica: el slice del original == el `text` de la fila, con el `source_path` nuevo
+  - Verificar: `just typecheck` verde · `just python-test` verde · golden-vault re-verificado (e2e) · `just coverage` ≥95 % · test de arquitectura verde
+  - 📌 **OM-8 fail-fast:** cambia el contrato de cita; sin el golden-vault re-verificado, las citas dejan de reproducir el fichero y el daño es silencioso
+  - Dep.: T1 · Tamaño: L
+
+- [ ] **T3 · Motor: documentos con markitdown (`doc_kind`, whitelist, skips tipados)**
+  - Subagentes: `rag-pipeline-engineer` (lead), `python-pro` · Skills: `source-driven-development`, `test-driven-development`, `design-patterns` · Herramientas: `context7`, `gitmcp`
+  - AC: (a) `parsers.extract_text` usa **markitdown** para todo lo que no sea texto plano (D48): `.md/.markdown/.txt` se leen en UTF-8 estricto (offsets `source`); `.pdf/.docx/.pptx/.xlsx/.xls` vía `MarkItDown().convert(Path).markdown` (offsets `extract`); el anclaje a la **fuente instalada** (`markitdown==0.1.9`) queda escrito en el docstring; (b) `citation.DocKind` gana `docx/pptx/xlsx/xls` (aditivo) y `offsets_ref_for` queda `{md,markdown,txt}→"source"`, resto → `"extract"` (D50); (c) `source.WHITELIST_PATTERNS` amplía con los documentos (D43) en el «único lugar»; (d) **el PDF pierde la jerarquía de headings** (D54): `heading` nulo en sus citas — el AC lo afirma, no lo oculta; (e) un extractor que falla (corrupto, cifrado, sin capa de texto) **no aborta el pase**: `SkippedSource` con motivo tipado, y un documento **sin texto** no se indexa como vacío (OM-11); (f) `doc_kind` nuevo = columna de texto (sin enum) ⇒ esquema aditivo
+  - Verificar: `just typecheck` verde · unit de `doc_kind_for`/`offsets_ref_for` · integration con un `.docx`/`.xlsx` de fixture ⇒ indexado, con `heading` cuando el documento lo tiene · el PDF **sin** headings (afirmado) · `just coverage` ≥95 %
+  - 📌 **Nota:** con markitdown, el texto indexado y el `.md` del conversor **coinciden** (misma librería) — se afirma en un test
   - Dep.: T2 · Tamaño: M
 
-- [x] **T4 · Los 5 puertos + fakes + test de arquitectura**
-  - Subagentes: `rust-engineer`, `test-engineer` · Skills: `clean-ddd-hexagonal`, `api-and-interface-design`, `test-driven-development`
-  - AC: (a) `ports/` define `CommandRunner`, `HttpClient`, `HostProbe`, `PayloadSource`, `Ui` con **firma mínima** (nada de opciones "para luego"); (b) `tests/common/mod.rs` trae `FakeProc` (guion de respuestas por comando), `FakeHttp` (offline, 404, cuerpo corrupto), `FakeHost` (RAM/disco/GPU configurables) y `ScriptedUi` (respuestas predefinidas por pregunta); (c) `tests/architecture.rs` falla si `domain/` importa `adapters/`, `std::fs`, `std::process` o crates de infra (réplica de `tests/unit/test_architecture.py` del flow); (d) **no** hay puerto `FileSystem`: los tests de FS usan `tempfile` real (D26); (e) cada puerto tiene **al menos un test** que lo ejercita
-  - Verificar: `cargo test` verde · el test de arquitectura **falla** si se añade `use std::fs` a `domain/` (se comprueba rompiéndolo a mano y revirtiendo)
+- [ ] **T4 · Dieta: pyproject + `uv.lock` + medición del venv**
+  - Subagentes: `dependency-manager` (lead), `devops-engineer`, `build-engineer` · Skills: `dependency-audit`, `bash-defensive-patterns`, `ci-cd-and-automation` · Herramientas: `codebase-memory-mcp`
+  - AC: (a) el pyproject del payload declara **`markitdown[docx,pptx,xlsx,xls,pdf]==0.1.9`** y **quita** `markitdown-mcp==0.0.1a8`, `docling>=2,<3` y `torchvision==0.29.1` (D55, D53); los comentarios del pyproject se actualizan (torch sigue declarado **por el pin del índice CPU**); (b) `uv.lock` regenerado y **committeado** (ADR-004: el wizard instala desde el lock); (c) **medición antes/después**: tamaño del venv en disco y nº de paquetes, con el método publicado (objetivo ≤ 1,95 GB y ≤ ~560 paquetes; si no se alcanza, se reporta la cifra real, no la estimada); (d) `uv sync --frozen` verde con el lock nuevo y el **import-check** del wizard ampliado a `import markitdown` (el motor ahora la usa); (e) el modo `--offline` del wizard verificado con el lock nuevo (OM-13); (f) el **formato de archivo** que el motor declara se ajusta a los extras instalados (los `.rtf/.odt/.epub` de markitdown quedan fuera de alcance v1 y se documentan)
+  - Verificar: `uv sync --frozen` sin cambios · `python -c "import markitdown, tepochcalli_mcp.tools.search"` OK dentro del venv · la cifra del venv medida y publicada · `grep -c "name = " uv.lock` antes/después
   - Dep.: T3 · Tamaño: M
 
-- [x] **T5 · Adapters reales: `std_proc`, `http`, `host` (sysinfo + probe de GPU)**
-  - Subagentes: `rust-engineer`, `platform-engineer` · Skills: `source-driven-development`, `error-handling-patterns`, `performance-analysis`
-  - AC: (a) `CommandRunner` real ejecuta con `cwd` y `env` dados, captura stdout/stderr y el exit code, y **no** usa `shell = true` salvo que el comando lo exija explícitamente; (b) `HttpClient` real: GET con timeout, redirecciones limitadas y descarga a fichero con **verificación SHA-256** (falla si no coincide); (c) `HostProbe` real con `sysinfo`: RAM total/disponible y disco libre; (d) probe de GPU **opcional**: busca `nvidia-smi` y `rocm-smi` en el PATH; **ausencia = "no hay GPU", no es error**; (e) el sondeo **nunca** hace que la instalación crashee: si `sysinfo` falla, se devuelven valores `None` y el menú cae a los valores declarados de `presets.toml` **sin badge** (D8.2)
-  - Verificar: tests unitarios con `FakeHost` para la lógica de badges (T10) · test de `HttpClient` con SHA-256 incorrecto ⇒ error tipado · `cargo clippy -D warnings` limpio
-  - Dep.: T4 · Tamaño: M
+- [ ] **T5 · Change detection: `@coco.fn` en los helpers + `as_async`**
+  - Subagentes: `rag-pipeline-engineer` (lead), `python-pro` · Skills: `source-driven-development`, `test-driven-development`, `performance-analysis` · Herramientas: `context7`
+  - AC: (a) `parsers.extract_text`, `parsers.chunk_document` y los helpers de cita que influyen en el texto indexado se decoran con **`@coco.fn`** (sin `memo=True`) para que su lógica participe en el fingerprint (D58); (b) el salto a hilo manual (`asyncio.to_thread(extract_text, …)`) se sustituye por **`@coco.fn.as_async`** (D60); (c) el **test que lo demuestra**: tocar la lógica del parser (o del troceo) **invalida** el memo del componente por fichero ⇒ el índice se rehace; (d) `deps`/`version` se usan donde el valor no es visible en el cuerpo (p. ej. el id del modelo si queda fuera de los argumentos) — si el modelo ya viaja en `config` (argumento), no hace falta `deps`; (e) **no** se añade memo de embeddings por chunk (D61: ~600 MB por 100k chunks); (f) el batching de embeddings según la op se **evalúa** (no se activa a ciegas): se mide con y sin y se reporta
+  - Verificar: test de invalidación (rojo si se quita un `@coco.fn`) · `just python-test` verde · la métrica Δ comparable (T13)
+  - 📌 **Por qué importa:** hoy, cambiar el parser **no** invalida el índice ⇒ resultados stale en silencio (bug verificado)
+  - Dep.: T2 · Tamaño: M
 
-- [x] **T6 · UI: `TtyUi` (dialoguer) + `HeadlessUi` (`--non-interactive`)**
-  - Subagentes: `cli-developer` (lead), `rust-engineer` · Skills: `clean-code`, `test-driven-development`, `crafting-effective-readmes`
-  - AC: (a) `TtyUi` implementa `Ui` sobre `dialoguer`: `Select` con default preseleccionado, `Input` para texto, `Confirm` para confirmaciones; (b) `HeadlessUi` lee las respuestas de flags (`--skip-model`, `--non-interactive`) y **falla con error tipado** si le falta una respuesta (nunca adivina); (c) la TUI **nunca** se usa cuando no hay TTY: `--non-interactive` es obligatorio en CI; (d) los mensajes van a **stderr** y el resultado a stdout (para que el pipeline sea parseable); (e) el `panel` de error se renderiza en color cuando la salida es un terminal y en texto plano cuando no
-  - Verificar: test con `ScriptedUi` que recorre el menú completo sin TTY · `tepochcalli install --non-interactive --skip-model` no intenta leer de stdin
-  - Dep.: T4 · Tamaño: S
+- [ ] **T6 · Una sola implementación de embedder (write y read) + modelo local**
+  - Subagentes: `rag-pipeline-engineer` (lead), `python-pro`, `mcp-builder` · Skills: `source-driven-development`, `test-driven-development`, `debugging-and-error-recovery` · Herramientas: `context7`
+  - AC: (a) el **write path** usa `cocoindex.ops.sentence_transformers.SentenceTransformerEmbedder` (ya lo hace) y el **read path** usa **la misma clase** (vía costura desde el composition root: el módulo `embedder` del MCP tiene `cocoindex` en su banned-set) ⇒ una sola implementación (D59); (b) la referencia del modelo es **inequívoca**: la config lleva `[embedding].model` (id, para mostrar) y `[embedding].revision` (SHA), y **ambos** caminos resuelven el **mismo path local** `<models>/<slug>@<sha>/` materializado por el wizard (la op acepta «name **or path**»); (c) el wizard (F6) materializa el modelo en ese directorio estable (no el layout interno de la caché de HF) y su import-check lo verifica; (d) si el snapshot no está ⇒ el read path responde **`E_MODEL_INVALID`** con guía («ejecuta `tepochcalli config embedder`»), **nunca** descarga otro modelo en silencio (que es el bug que se cierra); (e) `rag_status` sigue reportando `embedder.mode/model/dims` con la misma forma (el id, no el path); (f) la detección de drift `config.model ≠ fila.model` sigue funcionando y ahora **significa** lo mismo (mismo binario)
+  - Verificar: test que afirma que write y read resuelven **el mismo path** (no solo el mismo nombre) · test del snapshot ausente ⇒ `E_MODEL_INVALID` y **cero red** (el `nonet` de `tests/support/` lo permite) · el wizard: `cargo test` verde con el materializador del modelo · `just ci` verde
+  - 📌 **Cierra el bug verificado:** hoy el índice se construye con «main» y la query se incrusta con un SHA pineado ⇒ modelos distintos
+  - Dep.: T4, T5 · Tamaño: L
 
-### ✅ CP-A · Anclaje — **6/6** ⬜ (pendiente)
+### ✅ CP-A · Contratos — **6/6** ⬜ (pendiente)
 
-- [ ] §Merge de la spec corregido (D19, D20) y olas D19-D27 en WORKFLOW §8
-- [ ] Extracción segura: 4 clases de ataque rechazadas por test
-- [ ] `cargo build`, `cargo fmt --check`, `cargo clippy -D warnings` y `cargo test` verdes
-- [ ] Test de arquitectura: `domain/` no importa `adapters/` ni crates de infra
-- [ ] `tepochcalli --help` y `--help` por subcomando funcionan
-- [ ] `just quality` (gate Python) sigue verde
-- ▶️ **Desbloquea T7-T13.**
+- [ ] ADR-009, ADR-010 y ADR-011 escritos (MADR, *Proposed*)
+- [ ] WORKFLOW §8 con D28-D61 y §Phase 3.5 con el alcance nuevo
+- [ ] `docs/UH.md` intacto y `just md-lint` sin errores
+- [ ] `spec-markitdown` con el standalone retirado y la regla de oro
+- [ ] `spec-rag-engine` con raíces recursivas, documentos y **el PDF sin headings**
+- [ ] ▶️ **Desbloquea T2-T16.**
 
 ---
 
-## Sub-fase B — Las 8 fases (el camino de instalación)
+## Sub-fase C — Dominio puro y MCP del índice
 
-- [x] **T7 · F1 detección de prerrequisitos + F2 directorio del vault**
-  - Subagentes: `rust-engineer`, `platform-engineer` · Skills: `error-handling-patterns`, `clean-code`
-  - AC: (a) F1 comprueba SO/arquitectura soportados, RAM (≥ 8 GB) y disco libre (≥ 4 GB); (b) detecta **Obsidian** y **OpenCode V2** si están presentes y **solo avisa** si faltan (la spec los pone en *Non-Goals*: no se instalan); (c) RAM < 8 GB ⇒ **aborta** con mensaje de requisitos y exit code 10-19 (spec-embeddings: no se instala «mitad»); (d) F2 elige el directorio del vault: `--vault <ruta>` lo fija; sin flag, la TUI pregunta con un default sensato; (e) si el directorio ya existe ⇒ se **reutiliza** (idempotencia), nunca se borra ni se sobreescribe contenido; (f) F1 y F2 **no se compensan** (no tocaron nada del usuario)
-  - Verificar: tests con `FakeHost` (RAM 4 GB ⇒ aborta con 10-19; RAM 16 GB ⇒ pasa) · `--vault` no interactivo · 2ª corrida detecta el vault existente
-  - Dep.: T6 · Tamaño: M
+- [ ] **T7 · Dominio puro: frontera B′, resumen, catálogo, escritor atómico**
+  - Subagentes: `python-pro` (lead), `security-auditor`, `test-engineer` · Skills: `clean-ddd-hexagonal`, `test-driven-development`, `security-and-hardening` · Herramientas: `codebase-memory-mcp`
+  - AC: (a) `paths.validate_vault_path(raw, vault_root, *, must_exist)` — dentro ⇒ ruta absoluta; fuera (absoluta fuera, `..` que escapa, symlink fuera) ⇒ `ValueError` → `VALIDATION_ERROR`; distingue entrada (debe existir) de salida (se crea el destino); (b) `paths.validate_roots(directories, vault_root)` — valida N raíces (mismas reglas + existencia, D44); (c) `summary.build_summary(...)` — dict de **5 claves en orden fijo** leyendo el **fichero escrito**; `preview` ≤500 chars; `truncated` correcto; (d) `summary.serialize_budget` — tope de 1 400 chars serializados; (e) `formats.SUPPORTED_FORMATS` — catálogo puro (sin `markitdown`), con la nota «sin OCR»; (f) `writer.write_atomic(target, content)` — **la misma** escritura atómica que usa `add_source` (sube de `tools/add_source.py`); (g) `errors.source_unreachable(..., guide=...)` admite la guía de OCR sin cambiar la forma del payload; (h) `paths.py` sigue **< 500 líneas**
+  - Verificar: `just typecheck` verde · unit de los 4 módulos nuevos · test de arquitectura verde sin modificarlo · cobertura ≥95 %
+  - Dep.: T1 · Tamaño: M
 
-- [x] **T8 · F3 extraer el payload + `.install-intent` + `00-Resources/` + placeholders**
-  - Subagentes: `rust-engineer` (lead), `security-auditor` · Skills: `security-and-hardening`, `test-driven-development`, `clean-code`
-  - AC: (a) `PayloadSource` con dos adapters: `ReleasePayload` (asset `tepochcalli-workspace-<ver>.tar.gz` de la release + SHA-256) y `LocalPayload` (`--payload <ruta>`, para dev y tests); (b) la extracción **no sobreescribe** ningún fichero existente del usuario: los coincidentes se dejan intactos y se anotan como «ya estaba»; (c) **no toca** `.obsidian/` ni nada fuera del vault; (d) escribe `.tepochcalli/.install-intent` con la **lista exacta** de ficheros escritos (base de la compensación de F3); (e) crea `00-Resources/` con el **case exacto** que indexa el flow (`citation.py:32` → `00-Resources`) y deja 2 placeholders: 1 `.md` y 1 `.pdf` (D22) — el PDF va embebido en el crate (`include_bytes!`), no en el repo del payload; (f) el `.pdf` placeholder es un PDF válido y parseable por Docling; (g) **no** crea `02-drafts/`/`03-citations/`/`04-review/`/`05-outputs/` (eso es Phase 5, TD-8)
-  - Verificar: test con `tempfile` y un payload fake que contiene un fichero que el usuario ya tiene ⇒ ese fichero queda **intacto** y el resto se copia · `.install-intent` coincide con lo escrito · Docling parsea el PDF placeholder
-  - 📌 **OM-4 cerrado aquí**: sin este AC, F7 no puede producir índice.
-  - Dep.: T7 · Tamaño: L
+- [ ] **T8 · `index_refresh(directories=…)` + `rag_status` con las raíces**
+  - Subagentes: `mcp-builder` (lead), `rag-pipeline-engineer` · Skills: `api-and-interface-design`, `test-driven-development` · Herramientas: `codebase-memory-mcp`
+  - AC: (a) la firma pasa a `index_refresh(directories: list[str] | None = None)`; `None` ⇒ `["00-Resources"]` (D42); (b) `directories` se valida **antes** de la costura ⇒ raíz inexistente ⇒ `VALIDATION_ERROR` (D44); (c) la respuesta conserva las **5 claves** y **añade** `roots` (aditivo); (d) la costura de refresh pasa las raíces al motor; (e) `rag_status` **añade** `index.last_refresh_roots` (raíces de la última indexación **de la sesión**, en memoria — documentado); (f) `add_source` no cambia (D45); (g) `VALIDATION_ERROR` precede a `E_NO_EMBEDDER`
+  - Verificar: unit con costura falsa · integration con dos raíces sobre `tempfile` · `index_refresh()` sin argumento indexa `00-Resources/`
+  - Dep.: T2, T3, T7 · Tamaño: M
 
-- [x] **T9 · F4 bootstrap de `uv` + F5 `uv venv`/`uv sync` + fix de R6**
-  - Subagentes: `rust-engineer` (lead), `devops-engineer`, `dependency-manager` · Skills: `bash-defensive-patterns`, `dependency-audit`, `debugging-and-error-recovery`
-  - AC: (a) F4 descarga el binario de `uv` de la release oficial para la plataforma, **verifica su SHA-256**, lo deja en `.tepochcalli/bin/uv` con bit de ejecución y comprueba `uv --version`; (b) F4 **no** ejecuta scripts remotos; (c) F5 crea el venv **en `.tepochcalli/venv/`** (con `UV_PROJECT_ENVIRONMENT=venv`, quirk de uv 0.12.9) y ejecuta `uv sync --frozen` con el `uv.lock` del payload; (d) **R6**: `pyproject.toml` del payload pasa a declarar `tepochcalli_mcp.tools` (explícito o `find`) ⇒ **verificación**: `python -c "import tepochcalli_mcp.tools.search"` dentro del venv del vault; (e) las compensaciones son `rm .tepochcalli/bin/` (F4) y `rm -rf .tepochcalli/venv/` (F5), y **no tocan** `models/`, `db/` ni `config/`; (f) `uv python install 3.12` (CPython gestionado) deja el intérprete en `.tepochcalli/venv/`
-  - Verificar: `cargo test` con `FakeProc` que simula el fallo de `uv` ⇒ compensación ejecutada y `bin/`/`venv/` ausentes · instalación real en `tempfile` con red ⇒ `uv --version` y `import tepochcalli_mcp.tools.search` OK · **R6 cerrado** (anotado en `docs/TECH_DEBT.md`)
-  - Dep.: T8 · Tamaño: M
+### ✅ CP-B · Motor multi-raíz — **6/6** ⬜ (pendiente)
 
-- [x] **T10 · F6a: `presets.toml` embebido + parser + badges D8.1/D8.2/D8.3**
-  - Subagentes: `rust-engineer`, `test-engineer` · Skills: `source-driven-development`, `test-driven-development`, `clean-code`
-  - AC: (a) `src/config/presets.toml` embebido con `include_str!` (D7.2: **datos, no UI**) con los campos de D8.1 (`name`, `hf_id`, `dims`, `size_mb`, `disk_mb`, `min_ram_gb`, `rec_ram_gb`, `gpu_recommended`, `recommended_flag`); (b) el parser **falla con error tipado** ante un preset mal formado (no en silencio); (c) la función de badge computa el ratio `rec_ram_gb` / RAM disponible ⇒ `recommended` (≥ 50 % margen) · `viable` · `no recomendado` (excede RAM **o** `gpu_recommended` && sin GPU); (d) **fixture host 4 GB**: MiniLM = `recommended`, `BAAI/bge-m3` = `no recomendado`; (e) `no recomendado` **no bloquea** la selección (D8.3 — el test elige `bge-m3` y el menú lo acepta); (f) si el sondeo del host falla ⇒ **sin badge** y se usan los valores declarados, sin crash
-  - Verificar: tests de la tabla de badges con `FakeHost` (4 GB, 8 GB, 16 GB, sin GPU, con GPU) · el caso «sin GPU» con `gpu_recommended = true` ⇒ `no recomendado` pero seleccionable
+- [ ] `source_path` relativo al vault; walk recursivo y con dedup
+- [ ] Raíz fuera / con `..` / inexistente ⇒ error tipado antes de tocar el disco; symlink fuera ⇒ `SYMLINK_ESCAPE`
+- [ ] Golden-vault re-verificado (md + PDF) con el `source_path` nuevo
+- [ ] `RefreshReport.roots` aditivo; `index_refresh` devuelve las 5 claves + `roots`
+- [ ] `just typecheck` y `just coverage` verdes; test de arquitectura verde
+- [ ] ▶️ **Desbloquea T3-T16.**
+
+---
+
+## Sub-fase D — Los tres caminos verticales del conversor
+
+- [ ] **T9 · `convert_document`: borde B′ → costura → escritura → resumen → wire**
+  - Subagentes: `mcp-builder` (lead), `python-pro`, `security-auditor` · Skills: `api-and-interface-design`, `test-driven-development`, `error-handling-patterns`, `source-driven-development` · Herramientas: `context7`, `gitmcp`
+  - AC: (a) `convert.py` gana `convert_local(path, *, source_uri)` — markitdown en proceso, con el **mismo** frontmatter de trazabilidad que `add_source`; (b) el handler **no** importa `markitdown` (costura desde `server.py`); (c) firma `convert_document(path, output_path=None, format=None)`; (d) `path` y `output_path` pasan la frontera B′ de T7 (fuera ⇒ `VALIDATION_ERROR` **antes** de tocar el disco); (e) `output_path` omitido ⇒ `00-Resources/<slug>.md` (D37); `format` fuerza la extensión; (f) markdown vacío ⇒ `SOURCE_UNREACHABLE` con la guía «este conversor no hace OCR», sin parciales; `UnsupportedFormatException` ⇒ `VALIDATION_ERROR` con la lista; (g) la respuesta es **exactamente** el resumen de 5 claves, construido desde el fichero escrito; (h) la tool queda registrada en `server.py` con una `description` que dice «escribe a disco, devuelve solo el resumen» y que **no** es el camino de indexación (D49); (i) **test nuclear** (OM-1): el cuerpo del documento no aparece en `content[0].text` (documento ≥100 000 chars con una marca única)
+  - Verificar: unit con costuras falsas · integration con un `.docx` real sobre `tempfile` · `opencode mcp list` ⇒ 5 tools
+  - Dep.: T7, T8 · Tamaño: L
+
+- [ ] **T10 · `convert_base64`: bytes en contexto → disco → resumen**
+  - Subagentes: `mcp-builder` (lead), `python-pro` · Skills: `test-driven-development`, `error-handling-patterns`, `security-and-hardening` · Herramientas: `context7`
+  - AC: (a) `convert.py` gana `convert_bytes(data, *, filename, extension, source_uri)` — markitdown con `BytesIO` + `StreamInfo(extension=…, filename=…)`; (b) firma `convert_base64(data, output_path=None, format=None, filename=None)`; (c) **exige `format` o `filename` con extensión conocida** (D38) ⇒ si no, `VALIDATION_ERROR` que nombra `list_formats`; (d) base64 inválido ⇒ `VALIDATION_ERROR` (no `INTERNAL`); (e) `output_path` con la frontera B′; (f) `source_uri` = `base64:<sha256-8>`; (g) el mismo resumen de 5 claves; (h) el material es **dato no confiado** (OM-7)
+  - Verificar: integration con un `.docx` en base64 ⇒ `.md` equivalente al de T9 · negativos (sin `format`, base64 corrupto, salida fuera del vault) · `opencode mcp list` ⇒ 6 tools
   - Dep.: T9 · Tamaño: M
 
-- [x] **T11 · F6b: menú de 5 salidas + gate test-embed + config atómico**
-  - Subagentes: `rust-engineer` (lead), `test-engineer`, `security-auditor` · Skills: `test-driven-development`, `security-and-hardening`, `error-handling-patterns`
-  - AC: (a) el menú presenta las 5 salidas de D7.1 con **default preseleccionado** = `paraphrase-multilingual-MiniLM-L12-v2`; (b) cada fila muestra `💾 disk (MB)` · `🧠 RAM` · `🎮 GPU` **con etiqueta de procedencia** (`medido` | `estimado` | `declarado`); (c) salida 3 (ID libre de HF) consulta la API de HF para estimar RAM/disco (`safetensors.parameters.total` → RAM = params × 4 B × 1.3) y avisa de `HF_TOKEN` si el repo es `gated`; (d) **gate test-embed**: para las salidas 1-3 el flow Python descarga el modelo, incrusta `"tepochcalli embedding check"` y devuelve dims + **RSS pico medido** (D25) — el RSS aparece en la fila con etiqueta `medido`; (e) la salida 3 actúa de **portero**: un repo HF que no es de embeddings ⇒ rechazo con `E_MODEL_INVALID` y **vuelta al menú sin escribir config**; (f) `config/tepochcalli.toml` se escribe **atómicamente** (fichero temporal + rename) **solo** tras un gate OK — nunca queda config a medias; (g) salida 4 (API externa) pide la clave, la escribe **solo** en `.tepochcalli/config/tepochcalli.toml` (gitignored) y **nunca** en logs, `opencode.json` ni el `.env` del repo; (h) salida 5 = "configurar después" ⇒ `provider = "none"`, RAG `degraded`, **sin** indexación inicial
-  - Verificar: `ScriptedUi` recorre las 5 salidas · el repo HF no-embedding ⇒ rechazo sin escribir config · la clave de la salida 4 no aparece en el log (test de redacción) · config escrito de forma atómica (test que interrumpe la escritura ⇒ el fichero original intacto)
-  - Dep.: T10 · Tamaño: L
+- [ ] **T11 · `list_formats`: el catálogo de formatos, atado al motor**
+  - Subagentes: `mcp-developer` (lead), `technical-writer` · Skills: `source-driven-development`, `clean-code` · Herramientas: `context7`
+  - AC: (a) `list_formats()` sin argumentos devuelve `{formats, count, notes}` del catálogo; (b) la respuesta es **< 200 tokens**; (c) la nota aclara que **no hay OCR**; (d) un test ata cada extensión del catálogo a una conversión real (o a la lista de «best-effort»); (e) registrada en `server.py` con su `description`
+  - Verificar: integration que itera el catálogo · < 200 tokens por el estimador de `budget` · `opencode mcp list` ⇒ 7 tools
+  - Dep.: T10 · Tamaño: S
 
-- [x] **T12 · F7 índice inicial + CLI `python -m tepochcalli_flow` (`refresh`, `embed-check`)**
-  - Subagentes: `rust-engineer` (lead), `rag-pipeline-engineer`, `python-pro` · Skills: `incremental-implementation`, `observability-and-instrumentation`
-  - AC: (a) **CLI nuevo y mínimo** en `flow/tepochcalli_flow/__main__.py` con 2 subcomandos: `refresh` (indexa y devuelve el `RefreshReport` en JSON) y `embed-check --model <id>` (descarga, incrusta la frase de control, devuelve `{ok, model, dims, rss_peak_bytes}`) (D24); (b) el RSS pico se mide **dentro** del proceso Python (`resource.getrusage().ru_maxrss`) y se **normaliza a bytes** (KB en Linux, bytes en macOS) — con test que documenta la diferencia por plataforma (OM-6); (c) el wizard invoca ese CLI con el venv del vault y `HF_HOME`/`SENTENCE_TRANSFORMERS_HOME` apuntando a `.tepochcalli/models/`; (d) F7 deja índice con chunks de los 2 placeholders y escribe `model` + `dims` en los metadatos del índice (`.tepochcalli/db/`); (e) **2ª corrida ⇒ `indexed: 0`** (idempotencia del índice) y 0 duplicados; (f) la salida 5 **omite F7** (no hay índice) y el vault queda completo
-  - Verificar: `python -m tepochcalli_flow refresh` sobre un vault temporal ⇒ JSON con `{scanned, indexed, skipped, elapsed_ms}` · `embed-check` con un modelo malo ⇒ `ok: false` con el código esperado · la suite Python existente (`just quality`) sigue verde tras tocar `flow/`
-  - Dep.: T11 · Tamaño: M
+### ✅ CP-C · Documentos + dieta + embedder — **6/6** ⬜ (pendiente)
 
-- [x] **T13 · F8 merge de `mcp.servers` + `.bak` + comando portable por SO + verificación e2e**
-  - Subagentes: `rust-engineer` (lead), `mcp-builder`, `security-auditor` · Skills: `api-and-interface-design`, `clean-code`, `test-driven-development`
-  - AC: (a) copia de seguridad `.bak` de `opencode.json` **antes** de escribir; la compensación restaura el original byte a byte; (b) merge **conservador**: se preservan **todas** las entradas `mcp.servers` que ya tenía el usuario (p. ej. `excel`, `jupyter`) y solo se gestiona `tepochcalli-rag`; (c) `tepochcalli-rag` se (re)escribe **solo si difiere** de lo esperado, con el comando **portable por SO** (D20: `venv/bin/python` POSIX · `venv/Scripts/python.exe` Windows), `cwd` = vault y `TEPOCHCALLI_ROOT` = vault; (d) **no** se registra `mcp.servers.markitdown` (D19) — y si el usuario la tuviese, se **elimina** (política del payload, `MANAGED_KEYS` del test existente); (e) el JSON se conserva legible (2 espacios, misma forma que el payload) y **atómico**; (f) verificación e2e: lanzar el MCP desde el venv del vault y llamar `rag_status` ⇒ `health.state` correcto (`ok` o `degraded` con `fix_hint`) y la forma exacta de 4 bloques que fija `spec-mcp-server`; (g) la idempotencia de F8: 2ª corrida ⇒ **cero** entradas duplicadas
-  - Verificar: test con un `opencode.json` del usuario que tiene 2 servers extra ⇒ se preservan · el `.bak` es idéntico al original · el test existente `tests/unit/test_opencode_payload_registration.py` sigue verde · e2e de `rag_status` en los dos estados
-  - Dep.: T12 · Tamaño: L
-
-### ✅ CP-B · Las 8 fases — **6/6** ⬜ (pendiente)
-
-- [ ] Las 8 fases se ejecutan en orden sobre un `tempfile` real
-- [ ] Cada fase tiene compensación ejecutada y probada
-- [ ] `00-Resources/` canónico creado con 2 placeholders; el flow lo encuentra (case exacto)
-- [ ] `uv` en `.tepochcalli/bin/`, venv en `.tepochcalli/venv/`, `import tepochcalli_mcp.tools.search` OK (R6 cerrado)
-- [ ] `.tepochcalli/{config,models,db,venv,bin}` gitignorados; ningún secreto en logs
-- [ ] Ningún fichero del usuario preexistente fue sobrescrito
-- ▶️ **Desbloquea T14-T17.**
+- [ ] `.docx/.pptx/.xlsx/.xls` indexados en su forma original, `doc_kind` propio, `offsets_ref="extract"`
+- [ ] `uv.lock` regenerado; `uv sync --frozen` verde; `docling`/`torchvision`/`markitdown-mcp` fuera; venv ≤1,95 GB **medido**
+- [ ] Editar el parser o el troceo **invalida** el índice (test que lo demuestra)
+- [ ] Write y read resuelven **el mismo path** de modelo; sin snapshot ⇒ `E_MODEL_INVALID` (sin red)
+- [ ] El wizard materializa `<models>/<slug>@<sha>/`; import-check con `markitdown`
+- [ ] `just ci` verde
+- [ ] ▶️ **Desbloquea T9-T16.**
 
 ---
 
-## Sub-fase C — Atomicidad y superficie post-instalación
+## Sub-fase E — El contrato en el wire
 
-- [x] **T14 · Compensaciones por fase + `--resume` + `--offline` + idempotencia**
-  - Subagentes: `rust-engineer` (lead), `test-engineer`, `chaos-engineer` · Skills: `test-driven-development`, `debugging-and-error-recovery`, `doubt-driven-development`
-  - AC: (a) **test de fallo inducido en las 8 fases**: se inyecta el fallo en cada fase y se comprueba que la compensación se ejecuta y que **no se pierde ningún dato del usuario** (el comparador es «el árbol del vault antes y después, salvo lo que la fase escribió»); (b) `--resume` reanuda desde la fase correcta usando **artefactos + marker** `.tepochcalli/.install-state` (D21), no re-ejecuta las fases ya completadas y **no** re-descarga lo ya descargado; (c) `--offline`: sin red ⇒ payload local + modelo cacheado; si falta lo necesario ⇒ **fallo limpio** `E_OFFLINE_NO_CACHE` (exit 21) **antes** de tocar el vault; (d) **idempotencia**: install ×2 ⇒ 0 duplicados en `opencode.json`, 0 duplicados en `00-Resources/`, `indexed: 0` en la 2ª pasada; (e) `--skip-model` = salida 5 exacta (no interactivo, sin índice, RAG degraded); (f) la compensación de F6 cae a **salida 5** (instalación COMPLETA degradada), no a "instalación fallida"
-  - Verificar: 8 tests de fallo inducido (uno por fase) · test de `--resume` que corta la instalación en F5 y la reanuda · test de `--offline` sin caché ⇒ vault intacto · test de install ×2
-  - Dep.: T13 · Tamaño: L
+- [ ] **T12 · Contract tests e2e: 8 tools, multi-raíz, documentos, change detection, embedder único**
+  - Subagentes: `test-engineer` (lead), `mcp-builder`, `code-reviewer` · Skills: `test-driven-development`, `api-and-interface-design` · Herramientas: `codebase-memory-mcp`
+  - AC: (a) **forma exacta** (orden de claves) de las 3 respuestas nuevas y de `index_refresh` con `roots`; (b) **presupuesto**: respuesta ≤1 400 chars, `preview` ≤500 (ES/EN y CJK documentados); (c) **test transversal**: ninguna de las 7 tools devuelve un artefacto (la marca única del cuerpo no aparece en ninguna respuesta); (d) **negativos**: entrada/salida fuera del vault, `..`, raíz inexistente, formato no soportado, base64 sin pista, documento sin capa de texto ⇒ todos `VALIDATION_ERROR`/`SOURCE_UNREACHABLE` con JSON canónico; (e) las 4 tools preexistentes no cambian de forma salvo `roots`; (f) **caso de cita vault-relativa y recursiva** (`materiales/1-geografia/x.pdf`); raíz-fichero suelto; raíces solapadas contadas una vez; (g) **caso de documento**: un `.docx` indexado devuelve `source_path` vault-relativo y `offsets_ref="extract"`, y su texto == el `text` de la fila; (h) **caso de change detection**: tocar el parser invalida el índice (integrado en la suite, no solo unit); (i) **caso de embedder**: write y read usan el mismo path de modelo
+  - Verificar: `just python-test` verde · el test transversal falla si alguien devuelve el markdown (comprobado rompiéndolo y revirtiendo) · `just coverage` ≥95 %
+  - Dep.: T2, T3, T5, T6, T9, T10, T11 · Tamaño: L
 
-- [x] **T15 · UX de fallo: panel, log y códigos de salida**
-  - Subagentes: `cli-developer` (lead), `technical-writer`, `security-auditor` · Skills: `error-handling-patterns`, `crafting-effective-readmes`, `security-and-hardening`
-  - AC: (a) el fallo imprime un panel con **fase fallida**, **causa**, **comando de reintento** (`tepochcalli install --resume`) y **ruta del log**; (b) el log vive en `$XDG_STATE_HOME/tepochcalli/install-<ts>.log` (o `%LOCALAPPDATA%` en Windows) y **nunca** dentro del vault; (c) los códigos de salida respetan los rangos de la spec y el mapeo de §5.4 del plan; (d) **redacción**: la clave de la salida 4 nunca aparece en el log, en el panel ni en la salida de `opencode.json`; (e) el panel va a stderr y el resultado a stdout
-  - Verificar: test que inyecta un error y comprueba el contenido del panel y del log · test de redacción con una clave falsa que **no** aparece en ningún artefacto · el log no está bajo el vault
-  - Dep.: T14 · Tamaño: M
+- [ ] **T13 · e2e bulk ~1 000 páginas + re-medición (Δ, RSS, venv, métricas)**
+  - Subagentes: `test-automation-engineer` (lead), `performance-benchmarker` · Skills: `test-driven-development`, `performance-analysis` · Herramientas: `codebase-memory-mcp`
+  - AC: (a) fixture sintético de **~1 000 páginas** (≥1 MB, generado en el test) + 20 ficheros de familias distintas; (b) las **21 conversiones** devuelven el resumen y ningún cuerpo; (c) el contenido íntegro queda en disco y el `preview` es ≤500 chars; (d) presupuesto verificado por respuesta y por suma; (e) **re-medición del motor** (n=20, nearest-rank, publicando n y método): Δ p95 con raíces múltiples y metadatos de cita al 100 % con `source_path` vault-relativo; (f) el **RSS pico** del Δ con documentos binarios (el perfil de TD-2 cambia: sin Docling) y el coste de los documentos **medido aparte** (D51); (g) el tamaño del venv y el nº de paquetes **medidos** (M9); (h) el tiempo del bulk se mide y se publica, sin aserción de latencia (regla anti-flake); (i) el test queda `slow`
+  - Verificar: `just python-test-slow` verde · el informe publica n, corpus, presupuesto, Δ p95, RSS pico, coste de documentos y tamaño del venv · si algo se degrada, **se reporta**
+  - Dep.: T12 · Tamaño: M
 
-- [x] **T16 · Swap atómico D8.4 (`tepochcalli config embedder`)**
-  - Subagentes: `rust-engineer` (lead), `test-engineer`, `security-auditor` · Skills: `test-driven-development`, `doubt-driven-development`, `clean-ddd-hexagonal`
-  - AC: (a) los 6 pasos de D8.4 en orden: mostrar estado actual (modelo, dims, filas, tamaño de db, forma de `rag_status`) → elegir embedder (mismo menú + badges) → **advertencia** de re-index completo (LanceDB no mezcla dims) + tiempo estimado + `--confirm` obligatorio → descarga + gate test-embed (RSS medido) + re-index → **conmutación atómica** de `config.model` + metadatos → **auto-GC** del modelo viejo; (b) durante todo el proceso, **el índice viejo sigue servable** (se consulta y responde); (c) `--keep-previous` desactiva el auto-GC; (d) fallo en **cualquier** paso ⇒ rollback con **cambio de estado cero** (config, índice y modelo idénticos byte a byte); (e) tras el éxito, el modelo viejo se purga de `.tepochcalli/models/`
-  - Verificar: test de la descarga interrumpida ⇒ hash de config/índice/modelo idéntico antes y después · test de éxito ⇒ modelo viejo ausente (y presente con `--keep-previous`) · test de servabilidad del índice viejo durante el reindex
-  - Dep.: T15 · Tamaño: L
+### ✅ CP-D · Dominio puro y MCP del índice — **6/6** ⬜ (pendiente)
 
-- [x] **T17 · `tepochcalli reindex --confirm` (TD-3) + `tepochcalli uninstall`**
-  - Subagentes: `rust-engineer`, `test-engineer` · Skills: `test-driven-development`, `error-handling-patterns`
-  - AC: (a) `reindex` exige `--confirm` **explícito** (sin él, no hace nada y explica por qué): borra el índice y lo reconstruye con el modelo actual, escribiendo `model` + `dims` en los metadatos; (b) detecta `E_MODEL_MISMATCH` (dims del modelo ≠ los del índice) y lo explica; (c) `uninstall --vault <ruta>` elimina `.tepochcalli/` (runtime: `venv/`, `bin/`, `db/`, `models/`, `config/`) y **deja** las notas, el payload y `opencode.json` del usuario; (d) `uninstall` **nunca** borra `00-Resources/` ni las notas; (e) ambos comandos soportan `--non-interactive`
-  - Verificar: test de `reindex` sin `--confirm` ⇒ no hace nada · test de `uninstall` ⇒ `.tepochcalli/` ausente y notas intactas · **TD-3 cerrada** en `docs/TECH_DEBT.md`
-  - Dep.: T16 · Tamaño: M
-
-### ✅ CP-C · Atomicidad y swap — **6/6** ⬜ (pendiente)
-
-- [ ] Fallo inducido en las 8 fases ⇒ compensación correcta, 0 datos del usuario perdidos
-- [ ] `--resume` reanuda desde la fase correcta (artefactos + marker)
-- [ ] `--offline` sin caché ⇒ `E_OFFLINE_NO_CACHE` limpio; con caché ⇒ instala sin red
-- [ ] Idempotencia: install ×2 ⇒ 0 duplicados
-- [ ] Swap D8.4: índice viejo servable; fallo ⇒ estado idéntico byte a byte; éxito ⇒ modelo viejo purgado
-- [ ] `reindex --confirm` y `uninstall` con AC propios (TD-3 cerrada)
-- ▶️ **Desbloquea T18-T20.**
+- [ ] `validate_vault_path`/`validate_roots` cubren todas las formas de escape
+- [ ] `build_summary`: 5 claves en orden fijo, `preview` ≤500, ≤1 400 chars
+- [ ] `write_atomic` es la MISMA función que usa `add_source`
+- [ ] `index_refresh(directories=…)` indexa lo pedido; `None` ⇒ `00-Resources/`; raíz inexistente ⇒ `VALIDATION_ERROR`
+- [ ] `rag_status` reporta las raíces de la sesión
+- [ ] Test de arquitectura verde sin excepciones
+- [ ] ▶️ **Desbloquea T9-T16.**
 
 ---
 
-## Sub-fase D — Distribución y cierre
+## Sub-fase F — Payload y skill
 
-- [x] **T18 · `dist.toml` + workflow de release + matrix CI + recipes `just`**
-  - Subagentes: `devops-engineer` (lead), `build-engineer`, `tooling-engineer` · Skills: `ci-cd-and-automation`, `shipping-and-launch`, `bash-defensive-patterns`
-  - AC: (a) `crates/tepochcalli/dist.toml` con `ci = ["github"]`, `installers = ["shell", "powershell"]` y targets `x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `x86_64-apple-darwin`, `aarch64-apple-darwin`, `x86_64-pc-windows-msvc` (D-b: **windows fuera de la matriz CI**, pero el target se compila para que el instalador exista); (b) `.github/workflows/release.yml` generado por `dist init --ci=github` y **revisado a mano** (acciones pineadas por SHA, como `phase1.yml`); (c) `.github/workflows/phase3.yml`: `cargo fmt --check` + `cargo clippy -D warnings` + `cargo test` en **ubuntu-latest** y **macos-latest**; (d) un job de **smoke de instalación** en ubuntu: VM limpia (sin Python/Node) que instala con `--payload` local y verifica que el vault queda con `00-Resources/` + `mcp.servers` válido; (e) la matrix cubre los **5 caminos** del menú de embedder (paths 1-5) con el camino 5 como el no interactivo por defecto (descargar un modelo de 470 MB en cada corrida de CI es caro: el resto de los caminos se cubre con `FakeHost` + `FakeHttp` en `cargo test`); (f) **nuevas recipes en el `Justfile`**: `rust-fmt`, `rust-lint`, `rust-test`, `rust-ci`, `wizard-smoke` — **nada de `cargo` crudo** (CODE_STYLE); (g) el workflow **declara explícitamente** que nunca se ha ejecutado (M6): no se dice «CI verde» en ninguna parte
-  - Verificar: `just rust-test` y `just rust-lint` verdes en local · `dist plan` produce el plan de artefactos sin errores · los workflows tienen las acciones pineadas por SHA · `just md-lint` verde (el YAML cuenta)
-  - Dep.: T17 · Tamaño: M
+- [ ] **T14 · Payload: retirar la entrada `markitdown` y arreglar el test de merge**
+  - Subagentes: `mcp-builder` (lead), `code-reviewer` · Skills: `git-workflow-and-versioning`, `clean-code` · Herramientas: `opencode` (MCP)
+  - AC: (a) `opencode.json` **deja de registrar** `mcp.servers.markitdown` (D29); (b) `anydoc` sigue `disabled: true` (D30) y `excel`/`jupyter` intactos; (c) `MANAGED_KEYS` incluye `anydoc` (D40) con el docstring explicando el fixture pre-T9; (d) **sin cambios en Rust** (F8 ya borra `markitdown`, D19) — `cargo test` verde sin tocar `crates/`; (e) el resto del JSON byte-idéntico; (f) JSON estricto con la forma de `tepochcalli-rag` (`python -m`, D17)
+  - Verificar: `just python-test-unit` verde (el test de merge deja de estar rojo) · `cargo test` verde · `opencode mcp list` sin `markitdown`
+  - Dep.: T1 (paralelo con T2-T13) · Tamaño: S
 
-- [x] **T19 · `install.sh`/`install.ps1` + asset del payload + regla one-version + SHA-256**
-  - Subagentes: `devops-engineer` (lead), `security-auditor` · Skills: `security-and-hardening`, `ci-cd-and-automation`
-  - AC: (a) `dist` genera `install.sh` y `install.ps1` que descargan el binario de la release, **verifican su SHA-256** y lo ejecutan; (b) el payload viaja como **asset de la misma release** (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`) y el wizard lo descarga con verificación de checksum (integrado con `ReleasePayload` de T8); (c) **regla one-version**: el binario v0.3.x instala **siempre** el payload v0.3.x (el binario pide su propia versión al asset, no una «latest» suelta); (d) el instalador **no** requiere Python ni Node en el host (es el criterio del gate); (e) `curl | sh` documenta el caveat de inspección antes de ejecutarlo
-  - Verificar: `dist build` genera los installers · el smoke de T18 usa el payload **local** (no red) · test de la regla one-version (la versión del payload solicitada == la del binario) · checksum corrupto ⇒ fallo limpio
-  - Dep.: T18 · Tamaño: M
-
-- [x] **T20 · Documentación + CHANGELOG + FTR Phase 3 → Phase 4**
-  - Subagentes: `technical-writer` (lead), `code-reviewer` · Skills: `documentation-and-adrs`, `changelog-generate`, `crafting-effective-readmes`
-  - AC: (a) `docs/APPFLOW.md` journeys d, e, f actualizados con el comportamiento real (instalación completa, salida 5, swap); (b) `docs/TECH_DEBT.md`: **R6 cerrada** (T9), **TD-3 cerrada** (T17), y **deuda nueva** registrada: «CI y release nunca ejecutados» (M6), «Windows fuera de la matrix» (D-b), «spec del wizard sin probar contra el gate de Phase 6»; (c) `CHANGELOG.md` con la entrada de Phase 3 (`changelog-generate`); (d) `specs/spec-installer-wizard.md` pasa a **Approved** (con el FTR del usuario) y `SPEC.md`/`docs/WORKFLOW.md` reflejan Phase 3 completada y Phase 4 liberado; (e) `docs/WORKFLOW.md` §1: estado de Phase 3 → completada con fecha; (f) **el FTR registra explícitamente lo NO verificado**: la matrix CI no se ejecutó, no hay release publicada, Windows no se probó
-  - Verificar: `just md-lint` verde · `just quality` + `just rust-ci` verdes · la sección «no verificado» del FTR está escrita (no vacía)
-  - ⚠️ **No se toca** `README.md`, `LICENSE`, `docs/UH.md` ni `obsidian-workspace/.opencode/` (vedados por AGENTS.md sin autorización explícita)
-  - Dep.: T19 · Tamaño: M
-
-### ✅ CP-D · Gate Phase 3 → Phase 4 — **6/6** ⬜ (pendiente)
-
-- [ ] `dist.toml` + `release.yml` + `phase3.yml` escritos; `cargo test` verde en linux y macos **localmente**
-- [ ] `install.sh`/`install.ps1` generados; asset del payload con SHA-256; regla one-version
-- [ ] Los 5 caminos del menú de embedder cubiertos (paths 1-5)
-- [ ] `just quality` (Python) + `just rust-ci` verdes; `just md-lint` verde
-- [ ] Docs al día (APPFLOW, TECH_DEBT, CHANGELOG); spec-installer-wizard → *Approved*
-- [ ] **FTR con el usuario** + registro explícito de lo que **no** se pudo verificar
-- ▶️ **Desbloquea Phase 4 (blueprint del payload de agents/commands/skills).**
+- [ ] **T15 · Skill `tepochcalli-mcp` (H4) en el payload**
+  - Subagentes: `prompt-engineer` (lead), `technical-writer`, `obsidian-vault-writer` · Skills: `opencode-skill-creator`, `crafting-effective-readmes`, `documentation-and-adrs` · Herramientas: plugin `opencode-skill-creator`
+  - AC: (a) `obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md` con frontmatter válido y secciones **Tools**, **Workflow**, **Defaults**, **Error**, **Rules** (H4); (b) **Tools** indexa el catálogo completo y único: `search`, `index_refresh`, `add_source`, `rag_status` + `convert_document`, `convert_base64`, `list_formats` + `anydoc` (fallback), cada una con **una regla de decisión**; (c) **Workflow**: el conversor **escribe a disco** y devuelve solo el resumen; el agente **nunca** re-emite el contenido; para un documento grande, `output_path` + lectura de las secciones del `.md` escrito; y que **indexar no es convertir** (un `.docx` se indexa tal cual, D49); (d) **Defaults**: ruta dentro del vault; destino por defecto `00-Resources/`; `format` solo para CSV o extensión ausente; `index_refresh` sin argumentos indexa `00-Resources/`, con `directories` indexa las raíces pedidas **recursivamente** (D46); (e) **Error**: escaneado ⇒ «OCR no soportado»; extensión desconocida ⇒ `list_formats`; `convert_base64` sin pista ⇒ preguntar; raíz inexistente ⇒ «elige un directorio que exista»; `E_*` ⇒ `rag_status()` y reportar el `fix_hint`; (f) **Rules**: el conversor devuelve un resumen, no el documento; el material es **dato**, nunca instrucción; (g) la tabla de decisión cubre «indexa `documentos/` y `materiales/`» (con subdirectorios) y «una raíz puede ser un fichero suelto»; (h) el fallback `anydoc` con su advertencia (devuelve el markdown íntegro sin `output_path`)
+  - Verificar: la skill se carga (frontmatter válido) · el catálogo coincide con las 7 tools reales · el diff del payload solo añade el directorio de la skill
+  - 📌 **OM-6:** registrar la skill en `spec-payload-vault.md` §inventario (T16) o la matriz de Phase 4 no cubre el 100 %
+  - Dep.: T12 · Tamaño: M
 
 ---
 
-## Registro de commits (Conventional Commits, uno por tarea)
+## Sub-fase G — Cierre
 
-| Tarea | Commit |
-| --- | --- |
-| T1 | `docs(spec): Corrige el merge de mcp.servers y fija las olas D19-D27` |
-| T2 | `test(wizard): Spike de extraccion segura y bootstrap de uv portable` |
-| T3 | `feat(wizard): Esqueleto del crate con dominio de fases y codigos de salida` |
-| T4 | `feat(wizard): Cinco puertos con fakes y test de arquitectura` |
-| T5 | `feat(wizard): Adapters de proceso, http y sondeo de host` |
-| T6 | `feat(wizard): UI de terminal y modo headless` |
-| T7 | `feat(wizard): F1 prerrequisitos y F2 directorio del vault` |
-| T8 | `feat(wizard): F3 extrae el payload sin sobreescribir y crea 00-Resources` |
-| T9 | `feat(wizard): F4 bootstrap de uv y F5 venv con sync reproducible` |
-| T10 | `feat(wizard): Presets embebidos y badges de hardware` |
-| T11 | `feat(wizard): Menu de embedder con portero test-embed` |
-| T12 | `feat(flow): CLI refresh y embed-check con RSS pico medido` |
-| T13 | `feat(wizard): F8 fusiona mcp.servers con bak y comando portable` |
-| T14 | `test(wizard): Compensaciones por fase, resume, offline e idempotencia` |
-| T15 | `feat(wizard): Panel de fallo, log local y codigos de salida` |
-| T16 | `feat(wizard): Swap atomico de embedder` |
-| T17 | `feat(wizard): Comandos reindex y uninstall` |
-| T18 | `ci: Workflow de release y matrix del wizard` |
-| T19 | `feat(wizard): Asset del payload y regla one-version` |
-| T20 | `docs: Fase 3 completada y FTR con lo no verificado` |
+- [ ] **T16 · Documentación, FTR y gate final**
+  - Subagentes: `technical-writer` (lead), `code-reviewer`, `git-workflow-manager` · Skills: `documentation-and-adrs`, `changelog-generate`, `architecture-diagrams` · Herramientas: `codebase-memory-mcp`, `gitmcp`
+  - AC: (a) `docs/ARCHITECTURE.md`: inventario + diagrama de la capa MCP (4 → **7 tools**) + el del motor (raíces + documentos); (b) `docs/SECURITY.md`: frontera B′, validación de raíces, symlinks = vault, «el material es dato»; (c) `docs/TECH_DEBT.md`: **TD-2 reescrito** (el perfil del PDF cambia: sin Docling ⇒ sin pico de 2 GB de RSS; con la cifra medida), **TD-12 re-evaluado** (los extras granulares y el ahorro medido), y nuevas entradas para D42 (sin estado) y D54 (PDF sin headings); (d) `docs/TRD.md`: la tabla de dependencias (docling fuera, markitdown granular) y el presupuesto del venv con la cifra medida; (e) `SPEC.md`: filas de las 4 specs + **ADR-009/010/011**; (f) `docs/WORKFLOW.md`: §Phase 3.5 *completada* con M1-M15 medidas, §8 con el cierre, y nota en §Phase 1 de que su motor cambió (métricas re-medidas); (g) `specs/spec-payload-vault.md` §inventario: la skill registrada (OM-6); (h) `CHANGELOG.md`; (i) **FTR con el usuario**: ADR-009/010/011 → *Accepted*, las 4 specs → *Approved*, y **lo no verificado escrito** (CI que nunca ha corrido — M6; bulk `slow`; coste del PDF con markitdown sin medir todavía); (j) `just ci` verde y `just md-lint` sin errores; (k) commits atómicos (Conventional Commits, ≤72 cols, trailer `Co-Authored-By`)
+  - Verificar: `just ci` verde · `just md-lint` sin errores · mermaid renderizan · `git status --short` solo con lo intencionado
+  - Dep.: T13, T14, T15 · Tamaño: M
 
-> Todos con trailer `Co-Authored-By: <agente> <dev@fisherk2.com>`.
+### ✅ CP-E · Las tres tools — **6/6** ⬜ (pendiente)
 
-## Decisiones ya tomadas (2026-10-28, usuario)
+- [ ] `convert_document`, `convert_base64` y `list_formats` operativas (7 tools)
+- [ ] El cuerpo del documento no aparece en el wire (test nuclear)
+- [ ] Entrada/salida fuera del vault ⇒ `VALIDATION_ERROR`; raíz inexistente ⇒ `VALIDATION_ERROR`; formato no soportado ⇒ `VALIDATION_ERROR`
+- [ ] Documento escaneado ⇒ `SOURCE_UNREACHABLE` con guía de OCR, sin parciales
+- [ ] `index_refresh(directories=…)` indexa las raíces pedidas; `source_path` vault-relativo; documentos nativos
+- [ ] `opencode mcp list`: 7 tools
+- [ ] ▶️ **Desbloquea T12-T16.**
 
-| # | Decisión |
-| --- | --- |
-| D-a | **Alcance de entrega**: crate completo + `dist.toml` + workflow de release, **sin publicar** (M6 sigue vigente) |
-| D-b | **Windows**: fuera de la matrix CI (Linux + macOS), **pero** el comando del MCP se genera portable por SO |
-| D-c | **Conflicto `markitdown`**: se corrige el §Merge de la spec + ola en WORKFLOW §8, **sin ADR** |
-| D19 | `mcp.servers.markitdown` **NO** se registra en F8 (si el usuario la tenía, se elimina) |
-| D20 | El comando del MCP se genera por SO (`venv/bin/python` vs `venv/Scripts/python.exe`) |
-| D21 | `--resume` = deducir por artefactos + marker `.tepochcalli/.install-state` (cierra la Open Question de la spec) |
-| D22 | El wizard crea `00-Resources/` + 2 placeholders; TD-8 (renombrar el scaffold del repo) sigue en Phase 4/5 |
-| D23 | TUI line-based con `dialoguer` (no `ratatui` full-screen): debe correr sin TTY |
-| D24 | F7 y el gate de embedder invocan un CLI nuevo `python -m tepochcalli_flow` (`refresh`, `embed-check`) |
-| D25 | El wizard **no** descarga modelos: lo hace el flow Python, que **reporta el RSS pico medido** |
-| D26 | **5 puertos** (`CommandRunner`, `HttpClient`, `HostProbe`, `PayloadSource`, `Ui`); **sin** puerto de FS (los tests usan `tempfile` real) |
-| D27 | Los rangos de exit code los fija la spec; el número exacto y el mapeo a `E_*` los elige el wizard |
+### ✅ CP-F · Cierre de fase — **6/6** ⬜ (pendiente)
+
+- [ ] Contract tests e2e verdes (formas, presupuesto, transversal, multi-raíz, documentos, change detection, embedder)
+- [ ] Test transversal: ninguna de las 7 tools devuelve un artefacto
+- [ ] e2e bulk 1000 páginas + métricas del motor re-medidas y publicadas (n y método) + venv medido
+- [ ] Payload sin `mcp.servers.markitdown`; `anydoc` `disabled: true`; skill `tepochcalli-mcp` en el payload
+- [ ] `just ci` verde + `just md-lint` sin errores + **FTR con el usuario** (y lo no verificado, escrito)
+- [ ] ▶️ **Cierra Phase 3.5** y abre Phase 4 (blueprint) sin cambios en su alcance.
