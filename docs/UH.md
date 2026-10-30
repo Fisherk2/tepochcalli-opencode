@@ -190,3 +190,60 @@ Las siguientes cuestiones son dudas mías acerca de como tenemos que llevar el p
 6. ¿Como podemos gestionar los embebidos para que procese los documentos en el RAG? ¿Donde podemos hacer que el usuario configure y coloque sus modelos locales para embebidos? ¿Es posible hacerlo en un directorio llamado `.<Directorio con el nombre del motor RAG>/models`? si es asi ¿Es posible crear un archivo de configuración donde el usuario pueda añadir una API key de modelos para embebidos externos? ¿Si el modelo es local, cual seria los requisitos minimos para que el usuario pueda utilizar el workspace?
 
 Me gustaría que respondieras estas preguntas primero antes de tomar decisiones concretas y continuar, investiga en la web para que me proporciones respuestas actualizadas.
+
+---
+
+### Historias de conversión Markdown + skill tepochcalli-mcp (2026-10-30)
+
+#### H1 — Paridad anydoc
+
+Como investigador quiero convertir documentos a Markdown con la misma semántica que la skill `local-doc-to-markdown`.
+
+- La tool expone `convert_document(path[, output_path, format])`, `convert_base64` y `list_formats` con la misma semántica que `local-doc-to-markdown`.
+- La conversión masiva (bulk) escribe a disco vía `output_path` y por el wire viaja solo un resumen.
+- anydoc actúa como FALLBACK del conversor.
+- Documento escaneado sin capa de texto ⇒ respuesta «OCR no soportado».
+
+#### H2 — Summary-only
+
+Como usuario quiero respuestas de conversión que no inunden el contexto del LLM.
+
+- La tool devuelve solo `{written_to, source_uri, bytes/chars, preview≤500, truncated}`.
+- Coste aproximado de ~200 tokens por respuesta.
+- Fallo de fuente ⇒ `SOURCE_UNREACHABLE` con guía de solución, sin parciales al LLM.
+
+#### H3 — Directorios parametrizados
+
+Como usuario quiero indicar qué directorio escanear o dónde escribir el resultado.
+
+- «Escanea `sources/` e indexa» e «convierte `prueba.docx` a `convertidos/prueba.md`» funcionan como órdenes directas.
+- `00-Resources/` sigue siendo el convenio default cuando no se indica otro directorio.
+- OPEN DECISION sobre D16/D9.1 — historia bloqueada hasta elegir: A (estricta), B (relativo-al-vault), C (relajar con ADR).
+
+#### H4 — Skill `tepochcalli-mcp`
+
+Como agente quiero una skill espejo de `local-doc-to-markdown` para decidir cuándo y cómo convertir.
+
+- La skill incluye Tools, Workflow, Defaults, Error, Rules, tabla de decisión, fallback y summary-only.
+- Aterriza local-first; el payload congelado (`obsidian-workspace/`, Phase 4/5) no se toca.
+- Catálogo completo de tools que la skill debe indexar (conversor = estado objetivo H1; el standalone se retiró — ver `spec-markitdown.md:58`):
+
+| MCP / servidor | Tool | Para qué sirve |
+| :------------- | :--- | :------------- |
+| `tepochcalli-rag` | `search` | Búsqueda semántica citada sobre el índice |
+| `tepochcalli-rag` | `index_refresh` | Reindexar deltas (solo archivos nuevos/modificados) |
+| `tepochcalli-rag` | `add_source` | Convertir URI→markdown, escribir en `00-Resources/` e indexar |
+| `tepochcalli-rag` | `rag_status` | Diagnóstico de embedder e índice |
+| conversor markitdown (objetivo H1) | `convert_document` | Convertir por ruta (`path` + `output_path`; el MCP escribe a disco) |
+| conversor markitdown (objetivo H1) | `convert_base64` | Convertir bytes ya en contexto (requiere `format` o nombre) |
+| conversor markitdown (objetivo H1) | `list_formats` | Consultar formatos soportados |
+| fallback | anydoc | Solo si el conversor propio falla |
+
+- La sección Tools de la skill lista el catálogo completo anterior con una regla de decisión por tool (cuándo usar cada una sin adivinar); todo futuro MCP/tool del proyecto debe añadirse a esa tabla (única fuente de verdad para el agente).
+
+#### Repositorios de referencia
+
+- <https://github.com/firecrawl/anydoc> (motor Rust de conversión)
+- <https://github.com/ofershap/mcp-server-anydoc> (MCP anydoc de referencia/fallback)
+- <https://github.com/microsoft/markitdown> (conversor incumbente)
+- <https://opencode.ai/v2/docs/mcp-servers/> (cómo configurar un MCP en Opencode)
