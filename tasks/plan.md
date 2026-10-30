@@ -72,6 +72,7 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | **D53** | **Docling fuera** | El motor parsea con **markitdown** | −225 MB y un solo camino de parseo; el PDF pierde headings (D54) ⇒ ADR-011 |
 | **D56** | **LiteLLM se queda** | El embedder remoto (opción 4 del menú, ADR-007) sobrevive | 129 MB se quedan; se puede delegar la llamada a `cocoindex.ops.litellm.LiteLLMEmbedder` (T6) |
 | **D57** | **La dieta va dentro de Phase 3.5** | Un solo hito | 16 calpullis, 8 checkpoints |
+| **D60** | **`@coco.fn.as_async`** + batching de embeddings según la op | La op ya ofrece thread-pool y batching (64 con `runner=coco.GPU`): es el backend, no código nuestro | parsers/app (T5, T13) |
 
 ### 2.2 Decisiones derivadas (con suoletad de registro)
 
@@ -84,7 +85,7 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | **D38** | **`convert_base64` exige `format` o `filename`** | Semántica de `local-doc-to-markdown` | spec-markitdown (T1) |
 | **D39** | **Errores**: `VALIDATION_ERROR` (ruta fuera, `..`, formato, base64 sin pista, raíz inexistente) · `SOURCE_UNREACHABLE` (conversión fallida, escaneado sin texto ⇒ guía OCR) · `INTERNAL` | H2; la taxonomía **no** crece | errors.py (T9) + spec (T1) |
 | **D40** | **anydoc**, clave gestionada del test de merge** | Existe en el payload pero no en el fixture pre-T9 ⇒ el test está rojo hoy | test del payload (T14) |
-| **D41** | **`source_path` relativo al VAULT** | Con varias raíces, la cita debe localizar el fichero sin ambigüedad. **Alineado con el modelo de CocoIndex**: `FilePath` = `base_dir` + ruta relativa, con clave de memo estable aunque el árbol se mueva | citation.py + ADR-010 (T1, T2) |
+| **D41** | **`source_path` relativo al VAULT** (no a la raíz) | Con varias raíces, la cita debe localizar el fichero sin ambigüedad: dos raíces distintas pueden tener el **mismo** relativo ⇒ el relativo-a-la-raíz no basta. Es **superior** al modelo de CocoIndex (`FilePath` = `base_dir` + relativo) y hereda su propiedad de memo estable | citation.py + ADR-010 (T1, T2) |
 | **D42** | **`index_refresh(directories=…)` sin estado**; `roots` **aditivo**; `rag_status` reporta las raíces de la última indexación **de la sesión** | Elegido por el dueño: sin config, sin escribir `tepochcalli.toml`, sin tocar el wizard | spec (T1, T8) |
 | **D43** | **Whitelist del motor ampliada** a los documentos (`.pdf` ya; + `.docx/.pptx/.xlsx/.xls`) | Consecuencia de D49 | spec-rag-engine (T1, T3) |
 | **D44** | **Raíz inexistente ⇒ `VALIDATION_ERROR`** con los directorios existentes | El caso que motiva D32 (el usuario borró `00-Resources/`) | paths.py (T7, T8) |
@@ -100,6 +101,8 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | **D59** | **Una sola implementación de embedder**: write y read usan `cocoindex.ops.sentence_transformers.SentenceTransformerEmbedder`, y el modelo se referencia por **ruta local materializada** (`.tepochcalli/models/<slug>@<sha>/`) | Cierra el bug vivo: hoy write usa «main» (cocoindex no acepta `revision`) y read usa un SHA pineado ⇒ **pueden ser modelos distintos**. La op acepta «name **or path**» ⇒ la ruta local es el pin, sin inventar nada | flow + mcp + wizard (T6) |
 | **D60** | **`@coco.fn.as_async`** en vez del salto a hilo manual; **batching** de embeddings según la op | La op ya ofrece thread-pool (`as_async`) y batching (64 con `runner=coco.GPU`): es el backend, no código nuestro | parsers/app (T5, T13) |
 | **D61** | **Sin memo de embeddings por chunk** (el memo por fichero ya cubre el caso estable) | La doc cuantifica el coste del memo por chunk: ~6 KB/vector ⇒ ~600 MB por 100k chunks para cubrir reruns raros. No compensa | ADR-011 (T1) |
+| **D62** | **Cada raíz indexada es una `ContextKey[Path]` de cocoindex** (clave estable por raíz) ⇒ la identidad de memo de una raíz es su **clave**, no su ruta ⇒ mover el vault no invalida el índice | El conector `localfs` acepta `FilePath`, `Path` o `ContextKey[Path]`; la doc recomienda la `ContextKey` para que la memoización sobreviva al traslado del árbol. Con N raíces eso significa N claves estables | source.py/app.py + ADR-010 (T1, T2) |
+| **D63** | **Ledger de «no reinvención»** en ADR-011: lo que delegamos a cocoindex/markitdown y lo que conservamos **con su razón** | Para que ninguna revisión futura «optimice» lo nuestro hacia el backend sin saber por qué: el lector ANN+FTS+RRF (el conector es solo de escritura), `heading_before` (CocoIndex no da heading), los skips tipados (el conector se traga rotos/ilegibles en silencio), `paths` (frontera D16), `write_atomic` (`declare_file` es target state, exige componente), el estimador de tokens (no existe equivalente) y la ausencia de watchers (ADR-002 los prohíbe) | ADR-011 (T1) |
 
 ## 3. Omens mayores (fail-fast)
 >
