@@ -14,6 +14,12 @@ el payload `obsidian-workspace/` en el vault del usuario.
 
 Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se modifica**.
 
+## Research & Reuse Rules (cero asunción)
+
+* **R1 — No reinventar la rueda:** prohibido añadir librería/dependencia si la capacidad ya existe directa o transitivamente (`pyproject.toml`/`uv.lock`, backend de cocoindex/markitdown). Verificar primero el grafo/lock antes de proponer alta.
+* **R2 — Cero asunción:** el agente no sabe nada por defecto; antes de decidir debe investigar y citar fuente, en orden `docs/` → `skills/` → MCPs disponibles (context7, gitmcp, vercel-grep) → websearch/webfetch. Sin cita no hay decisión.
+* **R3 — No asumir APIs instaladas:** leer la documentación de la versión pineada (no la memoria del modelo) antes de usar/cambiar cualquier librería instalada.
+
 ## Architecture Rules
 
 * Cuatro capas con dependencias que apuntan hacia el contrato MCP: `opencode.json/.opencode` →
@@ -98,6 +104,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * [ ] Bloques mermaid válidos (sin paréntesis sin comillas en labels de nodo).
 * [ ] `git status --short` muestra solo mis archivos intencionados; nada de `venv/db/models`.
 * [ ] Commit atómico Conventional Commits ≤72 cols con trailer `Co-Authored-By`.
+* [ ] Cero asunción verificada: ninguna dep nueva duplica capacidad transitiva; toda decisión sobre libs cita fuente investigada.
 
 ## Documentation Index
 
