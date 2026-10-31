@@ -102,6 +102,10 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | **D60** | **`@coco.fn.as_async`** en vez del salto a hilo manual; **batching** de embeddings según la op | La op ya ofrece thread-pool (`as_async`) y batching (64 con `runner=coco.GPU`): es el backend, no código nuestro | parsers/app (T5, T13) |
 | **D61** | **Sin memo de embeddings por chunk** (el memo por fichero ya cubre el caso estable) | La doc cuantifica el coste del memo por chunk: ~6 KB/vector ⇒ ~600 MB por 100k chunks para cubrir reruns raros. No compensa | ADR-011 (T1) |
 | **D62** | **Cada raíz indexada es una `ContextKey[Path]` de cocoindex** (clave estable por raíz) ⇒ la identidad de memo de una raíz es su **clave**, no su ruta ⇒ mover el vault no invalida el índice | El conector `localfs` acepta `FilePath`, `Path` o `ContextKey[Path]`; la doc recomienda la `ContextKey` para que la memoización sobreviva al traslado del árbol. Con N raíces eso significa N claves estables | source.py/app.py + ADR-010 (T1, T2) |
+| **D64** | **Existencia y tipo se validan en el BORDE MCP** (`paths.py`, puro), no en el motor: ruta inexistente · tipo equivocado · extensión fuera ⇒ **`VALIDATION_ERROR`** con `details.suggestions`; **la taxonomía no crece** (D39) | Verificado en el cocoindex pineado: `localfs.walk_dir` lanza `ValueError("Path is not a directory: …")` si la raíz no es un directorio ⇒ si el motor lo dejara pasar, el `internal_guard` lo convertiría en **`INTERNAL`** («fallo interno» cuando el usuario solo escribió mal la carpeta). El chequeo va **antes** de tocar el disco y en un módulo puro y testeable | paths.py (T7, T8, T9) + spec-mcp-server §Errores (T1) |
+| **D65** | **Multi-raíz fail-fast atómico**: si **una** de las N raíces falla la validación, **no se indexa ninguna**; el error nombra la raíz mala, las que sí existen y las sugerencias | Decidido por el dueño (2026-10-30). Un índice parcial que nadie pidió es peor que un error: el usuario corrige la lista y reintenta **una** vez. Garantiza que `scanned == indexed + skipped` describe una operación completa | paths.py + tools/index_refresh.py (T7, T8) |
+| **D66** | **Destino existente ⇒ idempotencia**: el conversor **no** sobrescribe material del usuario; si el destino existe con **contenido idéntico** ⇒ `ok:true` + `written_to` (reintentar la misma conversión no falla); si el contenido **difiere** ⇒ `VALIDATION_ERROR` («el destino existe, elige otro») | Decidido por el dueño (2026-10-30). Es la única semántica que hace seguro reintentar sin añadir un parámetro `overwrite` (YAGNI) ni pisar lo del usuario | writer.py + tools/convert_*.py (T7, T9, T10) |
+| **D67** | **`rag_status` expone `index.available_roots`**: los directorios de primer nivel del vault que son indexables | Decidido por el dueño (2026-10-30). El agente **pregunta** en vez de adivinar el nombre de la carpeta; cabe en el presupuesto <200 tokens (son unas pocas rutas) | tools/rag_status.py (T8) + spec-mcp-server (T1) |
 | **D63** | **Ledger de «no reinvención»** en ADR-011: lo que delegamos a cocoindex/markitdown y lo que conservamos **con su razón** | Para que ninguna revisión futura «optimice» lo nuestro hacia el backend sin saber por qué: el lector ANN+FTS+RRF (el conector es solo de escritura), `heading_before` (CocoIndex no da heading), los skips tipados (el conector se traga rotos/ilegibles en silencio), `paths` (frontera D16), `write_atomic` (`declare_file` es target state, exige componente), el estimador de tokens (no existe equivalente) y la ausencia de watchers (ADR-002 los prohíbe) | ADR-011 (T1) |
 
 ## 3. Omens mayores (fail-fast)
@@ -169,12 +173,24 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 > **Mitigación (T6):** el wizard materializa `<models>/<slug>@<sha>/` y la config registra `model` + `revision`;
 > test que afirma que **write y read resuelven el mismo path**; si el snapshot no está, el read path **falla
 > con `E_MODEL_INVALID`** en vez de descargar otro modelo.
+>
+> **OM-15 — Un path mal escrito se confunde con un bug nuestro.** `localfs.walk_dir` lanza
+> `ValueError("Path is not a directory: …")` (verificado en el cocoindex pineado) ⇒ sin un pre-chequeo en el
+> borde, ese `ValueError` lo traga el `internal_guard` y el usuario recibe **`INTERNAL`** («fallo interno»)
+> cuando lo único que pasa es que escribió mal la carpeta. Y al revés: un `file:` inexistente en
+> `add_source` muere hoy como `SOURCE_UNREACHABLE` con un mensaje que culpa al documento.
+> **Mitigación (D64, T7):** existencia y tipo se validan en `paths.py` (**puro, antes de tocar el disco**)
+> ⇒ `VALIDATION_ERROR` con `details.suggestions` (similitud sin distinguir mayúsculas: `Documentos` →
+> `documentos`) y `vault_dirs`. **Mitigación (D65):** multi-raíz fail-fast atómico — una raíz mala ⇒ **no se
+> indexa ninguna**. **Mitigación (D67):** `rag_status.index.available_roots` ⇒ el agente pregunta en vez de
+> adivinar. **Test que lo demuestra (T12):** `index_refresh` con una raíz inexistente **no** devuelve
+> `INTERNAL`; y `add_source(file:)` inexistente **no** devuelve `SOURCE_UNREACHABLE`.
 
 ## 4. Grafo de dependencias
 
 ```mermaid
 graph TB
-    T1["T1 · ADR-009 + ADR-010 + ADR-011 + enmiendas + olas D28-D61"] --> T2["T2 · Motor multi-raiz + cita vault-relativa"]
+    T1["T1 · ADR-009 + ADR-010 + ADR-011 + enmiendas + olas D28-D67"] --> T2["T2 · Motor multi-raiz + cita vault-relativa"]
     T2 --> T3["T3 · Motor: documentos con markitdown (doc_kind + whitelist)"]
     T2 --> T5["T5 · Change detection: @coco.fn en los helpers"]
     T3 --> T4["T4 · Dieta: pyproject + uv.lock + medicion del venv"]
@@ -254,6 +270,15 @@ obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/        # SERVER MCP
   `{md, markdown, txt} → "source"`, resto → `"extract"`.
 - Los documentos binarios quedan **fuera del presupuesto Δ** (D51) y se miden aparte.
 - **El PDF pierde headings** (D54): `heading` nulo en sus citas.
+
+**Lo que el conector YA resuelve (R1 — verificado en el cocoindex pineado `1.0.25` del payload):**
+
+| Hecho verificado | Dónde | Consecuencia para el plan |
+| --- | --- | --- |
+| `walk_dir` lanza `ValueError("Path is not a directory: …")` si la raíz no es un directorio | `connectors/localfs/_source.py:109-110` | La raíz-suelta de D46 **no** se implementa pasando el fichero a `walk_dir`: el motor lo entrega aparte. Y el chequeo de existencia va en el **borde** (D64), no aquí |
+| El walk **poda** los directorios excluidos (no baja a ellos) | `_source.py:136-138` + `resources/file.py` (docstring de `PatternFilePathMatcher`) | `**/.*` excluye el **subárbol** ⇒ indexar la raíz del vault **no** barre `.tepochcalli/venv/` (2,4 GB), ni `.obsidian/`, ni `.trash/` de Obsidian. **No hacen falta patrones nuevos** |
+| Los bucles de symlink ya se cortan (cadena de ancestros `(dev, ino)`) | `_source.py:113-145` | **No** hay que escribir un visited-set: sería reinventar (R1) |
+| `to_file_path(Path)` usa el **CWD** como base; `ContextKey[Path]` fija la clave | `connectors/localfs/_common.py:69-75` | T2 debe construir el `FilePath` con `base_dir=ContextKey` **explícito** (D62): un `Path` pelado haría depender la clave de memo del CWD del proceso |
 
 ### 5.3 El embedder: una sola implementación (D59)
 
@@ -336,13 +361,39 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 | **Anti-pattern evitado: constant hiding** | las raíces son **datos** | La raíz hardcodeada es el bug que D32 elimina |
 | **Anti-pattern evitado: doble implementación** | un solo embedder (D59) | Dos implementaciones que no coinciden = el bug de revisión |
 
+### 5.9 Frontera de existencia y tipo (D64-D67)
+
+**Tres cubos, cero códigos nuevos** (D39 se mantiene: la taxonomía no crece):
+
+| Situación | Código | Dónde se decide | Qué lleva el error |
+| --- | --- | --- | --- |
+| La ruta **no existe** | `VALIDATION_ERROR` | **borde MCP** (`paths.py`, puro, antes de tocar el disco) | `details: {requested, exists: false, suggestions[], vault_dirs[]}` — sugerencias por similitud sin distinguir mayúsculas (`Documentos` → `documentos`) |
+| Existe pero **no es del tipo pedido** (un directorio donde un documento, un documento donde un directorio) | `VALIDATION_ERROR` | borde MCP | `details: {requested, exists: true, expected, found}` |
+| **Extensión** no soportada | `VALIDATION_ERROR` | borde MCP | la lista de formatos (la de `list_formats`) |
+| Fuera del vault · `..` · symlink que escapa | `VALIDATION_ERROR` / `SYMLINK_ESCAPE` (skip tipado) | borde / motor | el path y el motivo |
+| **N raíces y una mala** | `VALIDATION_ERROR` — **fail-fast atómico**: no se indexa ninguna (D65) | borde MCP | la raíz mala, las que sí existen, las sugerencias |
+| Existe pero **no se puede leer o convertir** (escaneado, corrupto, sin permiso) | `SOURCE_UNREACHABLE` | motor / conversor | la guía de OCR (OM-11) |
+| **Directorio vacío** | **no es error** | motor | `{scanned: 0, indexed: 0, skipped: 0}` + `roots` — el agente no debe leerlo como fallo |
+| Destino ya existe, contenido **idéntico** | `ok: true` + `written_to` (D66) | escritor | nada que hacer: la conversión ya está |
+| Destino ya existe, contenido **distinto** | `VALIDATION_ERROR` | escritor | «el destino existe, elige otro `output_path`» — **nunca** se sobrescribe material del usuario |
+| Nuestro bug | `INTERNAL` | `internal_guard` | el detalle vive en el log, nunca en el payload |
+
+**Por qué en el borde y no en el motor:** verificado en el cocoindex pineado — `walk_dir` lanza
+`ValueError("Path is not a directory: …")`; si el motor lo dejara pasar, el `internal_guard` lo convertiría
+en **`INTERNAL`** («fallo interno» por escribir mal una carpeta). El borde lo convierte en `VALIDATION_ERROR`
+con una lista de lo que **sí** existe: el error deja de ser un callejón y pasa a ser una corrección.
+
+**Lo que el `details` compra:** el agente puede **corregirse solo** en un reintento (elegir `documentos` en
+vez de `Documentos`) sin preguntar al usuario. Es el criterio 5 del UX de `docs/APPFLOW.md`: el error dice
+qué hacer, no sólo qué pasó.
+
 ## 6. Tareas
 
 ### Sub-fase A — Contratos (fail-fast)
 
 | # | Tarea | Tamaño |
 | --- | --- | --- |
-| T1 | ADR-009 + ADR-010 + ADR-011 + enmiendas a 4 specs + olas D28-D61 | L |
+| T1 | ADR-009 + ADR-010 + ADR-011 + enmiendas a 4 specs + olas D28-D67 | L |
 
 ### Sub-fase B — El motor
 
@@ -398,12 +449,13 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 - [ ] `spec-mcp-server`: 3 tools + `index_refresh(directories=?)` + taxonomía + §Security (wording estricto de D16 **más** B′)
 - [ ] `spec-rag-engine`: raíces recursivas, whitelist ampliada, `source_path` vault-relativo, `offsets_ref="extract"`, documentos fuera del Δ, **y el PDF sin headings (D54)**
 - [ ] `spec-vault-structure`: `00-Resources/` = convención, no imposición
-- [ ] WORKFLOW §8 con D28-D61; `docs/UH.md` intacto; `just md-lint` sin errores
+- [ ] WORKFLOW §8 con D28-D67; `docs/UH.md` intacto; `just md-lint` sin errores
 
 ### CP-B · Motor multi-raíz — 6/6
 
 - [ ] `source_path` relativo al vault; `walk_sources(vault_root, roots)` recursivo y con dedup
 - [ ] Raíz fuera / con `..` / inexistente ⇒ error tipado **antes** de tocar el disco; symlink fuera ⇒ `SYMLINK_ESCAPE`
+- [ ] El walk **no baja** a los directorios excluidos: un `.md` dentro de `.tepochcalli/` **no** se indexa (la exclusión poda el subárbol)
 - [ ] Golden-vault **re-verificado** (md + PDF) con el `source_path` nuevo
 - [ ] `RefreshReport.roots` aditivo; `index_refresh` devuelve las 5 claves + `roots`
 - [ ] `just typecheck` y `just coverage` verdes; test de arquitectura verde
@@ -418,20 +470,22 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 - [ ] El wizard (F5) importa el modelo materializado en `<models>/<slug>@<sha>/`; el import-check cubre `markitdown`
 - [ ] `just ci` verde en este punto
 
-### CP-D · Dominio puro y MCP del índice — 6/6
+### CP-D · Dominio puro y MCP del índice — 8/8
 
 - [ ] `validate_vault_path`/`validate_roots` cubren todas las formas de escape
+- [ ] Existencia **y tipo** en el borde: ruta inexistente, tipo equivocado y N-raíces-con-una-mala ⇒ `VALIDATION_ERROR` con `details.suggestions`; **fail-fast atómico** (no se indexa ninguna)
 - [ ] `build_summary`: 5 claves en orden fijo, `preview` ≤500, ≤1 400 chars
 - [ ] `write_atomic` es la MISMA función que usa `add_source`
-- [ ] `index_refresh(directories=…)` indexa lo pedido; `None` ⇒ `00-Resources/`; raíz inexistente ⇒ `VALIDATION_ERROR`
-- [ ] `rag_status` reporta las raíces de la sesión
+- [ ] `index_refresh(directories=…)` indexa lo pedido; `None` ⇒ `00-Resources/`; raíz inexistente ⇒ `VALIDATION_ERROR`; **directorio vacío no es error**
+- [ ] `rag_status` reporta las raíces de la sesión **y** `index.available_roots`
 - [ ] Test de arquitectura verde sin excepciones
 
-### CP-E · Las tres tools — 6/6
+### CP-E · Las tres tools — 7/7
 
 - [ ] `convert_document`, `convert_base64`, `list_formats` operativas (7 tools)
 - [ ] El cuerpo del documento no aparece en el wire (test nuclear)
 - [ ] Entrada/salida fuera del vault ⇒ `VALIDATION_ERROR`; formato no soportado ⇒ `VALIDATION_ERROR`
+- [ ] Path **inexistente** o que **es un directorio** ⇒ `VALIDATION_ERROR` (nunca `INTERNAL`); destino existente ⇒ **idempotente** (idéntico ⇒ `ok`, distinto ⇒ `VALIDATION_ERROR`, nunca se sobrescribe)
 - [ ] Documento escaneado ⇒ `SOURCE_UNREACHABLE` con guía de OCR
 - [ ] `opencode mcp list` ⇒ 7 tools
 - [ ] ▶️ **Desbloquea T12-T16.**
@@ -511,7 +565,7 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
   checkpoints propios, y **re-medición** de sus métricas (OM-9).
 - **El wizard Rust se toca en un punto**: la materialización del modelo en `<models>/<slug>@<sha>/` (D59).
   El resto del wizard no cambia (D19 ya borra `markitdown`; D42 evita secciones nuevas en el toml).
-- **No se edita** `docs/UH.md` (inmutable): las desviaciones de H3/H4 (D32, D33) y las decisiones D28-D61
+- **No se edita** `docs/UH.md` (inmutable): las desviaciones de H3/H4 (D32, D33) y las decisiones D28-D67
   se registran en `docs/WORKFLOW.md` §8.
 
 ## 11. Referencias
