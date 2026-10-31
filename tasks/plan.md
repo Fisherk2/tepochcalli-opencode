@@ -70,7 +70,7 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | **D49** | **El RAG indexa los ofimáticos EN SU FORMA ORIGINAL** | «No convertir a markdown, es un RAG» | El motor gana parseo nativo de documentos; el conversor es el camino del **artefacto `.md`**. T3 |
 | **D52** | **Regla de oro: dos librerías** | `cocoindex` (RAG) + `markitdown` (documento→markdown) y **lo que arrastran**; nada más por cuenta propia | Elimina `docling`/`torchvision`/`markitdown-mcp` y el `[all]`; cierra la puerta a nuevas librerías ⇒ **ADR-011** |
 | **D53** | **Docling fuera** | El motor parsea con **markitdown** | −225 MB y un solo camino de parseo; el PDF pierde headings (D54) ⇒ ADR-011 |
-| **D56** | **LiteLLM se queda** | El embedder remoto (opción 4 del menú, ADR-007) sobrevive | 129 MB se quedan; se puede delegar la llamada a `cocoindex.ops.litellm.LiteLLMEmbedder` (T6) |
+| **D56** | **LiteLLM se queda como feature, pero dejamos de depender de él directamente**: la op `cocoindex.ops.litellm.LiteLLMEmbedder` lo aporta (`cocoindex[litellm]`) y **nuestro código deja de llamarlo**; el pin de seguridad (GHSA-92x9-889m-jgmw) se expresa como **constraint de uv**, no como dependencia directa | El extra de cocoindex es `litellm>=1.81.0` **sin techo** ⇒ quitar nuestra declaración a secas dejaría a uv resolver la serie comprometida. `[tool.uv] constraint-dependencies` restringe la resolución de **toda** la gráfica sin declarar la dependencia ⇒ **los 129 MB siguen** (el paquete lo necesita la op) pero nuestra declaración y nuestro código desaparecen. La op además aporta **reintentos con backoff** (1 s, x2, tope 30 s) dentro de una ventana de `timeout` (10 min) ⇒ **cierra TD-16**; y **batching** de 64 textos | pyproject + `mcp/embedder.py` (T4, T6) |
 | **D57** | **La dieta va dentro de Phase 3.5** | Un solo hito | 16 calpullis, 8 checkpoints |
 | **D60** | **`@coco.fn.as_async`** + batching de embeddings según la op | La op ya ofrece thread-pool y batching (64 con `runner=coco.GPU`): es el backend, no código nuestro | parsers/app (T5, T13) |
 
@@ -307,7 +307,7 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 | `torchvision==0.29.1` | ✔ | **FUERA** (solo lo traía docling-ibm-models) | −7 MB |
 | `torch==2.14.1` | ✔ | ✔ (pin del índice CPU: sin él uv arrastra el stack CUDA de 5 GB) | — |
 | `mcp==2.3.0` | ✔ | ✔ (el protocolo del wire) | — |
-| `litellm>=1.106.2,<1.107.0` | ✔ | ✔ (opción 4 del menú; pin de seguridad GHSA) | — |
+| `litellm>=1.106.2,<1.107.0` | ✔ (declaración directa) | **FUERA como dependencia directa**; pasa por `cocoindex[litellm]` + `[tool.uv] constraint-dependencies` (el pin de seguridad sigue, D56) | 0 MB (el paquete lo necesita la op) − nuestra declaración |
 
 **Total esperado: 2,3 GB → ≈1,95 GB (−350 MB) y 624 → ~560 paquetes.** La cifra se **mide** (T4/T13).
 
@@ -527,5 +527,6 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
   [function](https://cocoindex.io/docs/programming_guide/function/) · [data_types](https://cocoindex.io/docs/common_resources/data_types/) ·
   [connectors/lancedb](https://cocoindex.io/docs/connectors/lancedb/) · [ops/text](https://cocoindex.io/docs/ops/text/) ·
   [ops/sentence_transformers](https://cocoindex.io/docs/ops/sentence_transformers/) · [ops/litellm](https://cocoindex.io/docs/ops/litellm/) ·
+  [connectors/localfs](https://cocoindex.io/docs/connectors/localfs/) ·
   [llms.txt](https://cocoindex.io/docs/llms.txt) (índice; las páginas tienen gemelo `.md`)
 - **MarkitDown**: [microsoft/markitdown](https://github.com/microsoft/markitdown) (extras granulares `docx/pptx/xlsx/xls/pdf`)
