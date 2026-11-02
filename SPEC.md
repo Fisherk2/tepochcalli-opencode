@@ -54,8 +54,8 @@ repo                                # este repositorio (producto + plantilla)
 ├── AGENTS.md                       # reglas para asistentes de IA (línea guía ≤200)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
-│   ├── spec-*.md                   #   7 specs (motor, MCP, vault, embeddings, wizard…)
-│   └── adr/adr-NNN-*.md            #   7 ADRs aceptados 2026-10-21
+│   ├── spec-*.md                   #   8 specs (motor, MCP, vault, embeddings, wizard…)
+│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Proposed 2026-11-02
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
     ├── 00-Resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10+ biblioteca personal
@@ -75,8 +75,8 @@ repo                                # este repositorio (producto + plantilla)
 | Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
 | Selección de embedder (wizard) | **menú "Embedding provider"** con default preseleccionado; `presets.toml` como datos; modo `degraded` + `rag_status` (D7) | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
 | Instalador | **TUI Rust + cargo-dist + GitHub Releases** (`curl\|sh`, `cargo binstall`); NO bunx | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) |
-| Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
-| Conversor soporte | **markitdown-mcp** (oficial, stdio local, mismo venv) | specs/spec-markitdown.md |
+| Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh(directories=?)`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` (Phase 3.5) | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md), [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md), [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) |
+| Conversor soporte | **markitdown** como librería **en proceso** en el venv (el server standalone `markitdown-mcp` se retira del payload) | specs/spec-markitdown.md, [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) |
 | Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) |
 
 Resumen de estilo de código: [docs/CODE_STYLE.md](docs/CODE_STYLE.md) (ruff+type hints Python,
@@ -126,6 +126,9 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como modelo default | Accepted 2026-10-21 |
 | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4; reemplaza solo ADR-006 §4.1) | Accepted 2026-10-21 |
 | [ADR-008](specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico sin reinstalar (refina ADR-007 D7.1/D7.4) | Accepted 2026-10-21 |
+| [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: 3 tools en `tepochcalli-rag`, markitdown en proceso, resumen de 5 claves (D28/D31/D36/D39/D66) | Proposed 2026-11-02 |
+| [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada con `source_path` relativo al vault (D32/D41/D64/D65) | Proposed 2026-11-02 |
+| [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Proposed 2026-11-02 |
 
 ## Referencias
 

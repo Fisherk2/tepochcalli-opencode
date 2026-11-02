@@ -1,14 +1,14 @@
 # Spec: Servidor MCP `tepochcalli-rag` (capa de comunicación)
 
-* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4)
+* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4) · Amended 2026-11-02 (Phase 3.5; ADR-009/010/011)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (capa MCP Server), ADR-005 (ports/adapters), ADR-007 (tool `rag_status` + dialecto `E_*`, D7.3), specs/spec-rag-engine.md, specs/spec-markitdown.md, specs/spec-embeddings.md, docs/WORKFLOW.md Phase 2
+* **Traceability:** docs/UH.md (capa MCP Server; H1-H2 anexo 2026-10-30), ADR-005 (ports/adapters), ADR-007 (tool `rag_status` + dialecto `E_*`, D7.3), ADR-009 (conversor resumen-only), ADR-010 (índice multi-raíz), ADR-011 (dieta de dependencias), specs/spec-rag-engine.md, specs/spec-markitdown.md, specs/spec-embeddings.md, docs/WORKFLOW.md Phase 2
 
 ## Summary
 
-`tepochcalli-rag` es un servidor MCP en Python (`.tepochcalli/mcp/`) que corre como proceso stdio local dentro del venv del proyecto y expone al harness OpenCode V2 cuatro herramientas con contrato fijo: `search`, `index_refresh`, `add_source` y `rag_status` (observabilidad D7.3/ADR-007). Es el puerto (hexagonal) detrás del cual vive el motor CocoIndex/LanceDB; garantiza respuestas con citas estructuradas y presupuesto de tokens ≤2000 por consulta.
+`tepochcalli-rag` es un servidor MCP en Python (`.tepochcalli/mcp/`) que corre como proceso stdio local dentro del venv del proyecto y expone al harness OpenCode V2 **siete** herramientas con contrato fijo: las cuatro preexistentes `search`, `index_refresh`, `add_source` y `rag_status` (observabilidad D7.3/ADR-007), y las tres del conversor `convert_document`, `convert_base64` y `list_formats` (D28/ADR-009). Es el puerto (hexagonal) detrás del cual vive el motor CocoIndex/LanceDB; garantiza respuestas con citas estructuradas y presupuesto de tokens ≤2000 por consulta. Las cuatro preexistentes conservan su forma salvo los campos **aditivos** documentados aquí (`roots` en `index_refresh`; `last_refresh_roots` y `available_roots` en `rag_status`).
 
 ## Problem / Motivation
 
@@ -23,15 +23,18 @@ Sin una frontera tipada, el agente leería archivos crudos del vault (tokens por
 * Contratos D6 exactos con ejemplos JSON y errores tipados (formato único de error).
 * `search` end-to-end (tool-call→respuesta) **<500ms** p95 en CPU (criterio 3); punto de medición definido.
 * Presupuesto de tokens por respuesta: diseño determinista ≤~1600 tokens de payload (criterio 4, con margen).
-* `index_refresh` delta-only con reporte `{scanned, indexed, skipped, elapsed}` (criterio 2).
+* `index_refresh` delta-only sobre las raíces pedidas, con reporte `{scanned, indexed, skipped, elapsed_ms, locked, roots}` y validación atómica `fail-fast` (criterio 2; ADR-010).
 * `add_source` = conversión markitdown + escritura en `00-Resources/<subdir>/` + refresh (criterio 7).
-* `rag_status` = diagnóstico del provider/embedder e índice (estado `ok`/`degraded`, motivos `E_*` con `fix_hint` accionable), coste <200 tokens por forma (D7.3/ADR-007).
+* `rag_status` = diagnóstico del provider/embedder e índice (estado `ok`/`degraded`, motivos `E_*` con `fix_hint` accionable, raíces disponibles e indexadas), coste <200 tokens por forma (D7.3/ADR-007, D67).
+* Las 3 tools del conversor devuelven **solo** el resumen de 5 claves; el cuerpo nunca cruza el wire (H1/H2, D36).
 
 ### Non-Goals
 
 * Endpoints de red (HTTP/socket) — stdio local exclusivamente (docs/SECURITY.md).
 * Generación de respuestas con LLM dentro del server (esa es la capa del agente).
-* Chat de múltiples turnos, historial, o stateful sessions: las tools son stateless salvo el índice.
+* Chat de múltiples turnos, historial, o stateful sessions: las tools son stateless salvo el índice y las raíces de la última pasada.
+* Convertir ≠ indexar: el conversor no indexa (D35/D49); la ingesta sigue siendo `add_source`.
+* OCR de documentos escaneados: fuera de v1 (⇒ `SOURCE_UNREACHABLE` con guía).
 
 ## Proposed Solution
 
@@ -58,21 +61,27 @@ Contrato: `search(query: str, top_k: int = 5, path_filter: str | None = None)`
 ```
 
 * `path_filter`: glob relativo a la raíz del vault; se aplica como pre-filtro en la query LanceDB (`WHERE source_path LIKE …` traducido de `*`→`%`).
+* `source_path`: ruta POSIX **relativa al vault** (D41/ADR-010 §4.2). Con N raíces, `materiales/a.pdf` y `documentos/a.pdf` son citas distintas; el prefijo `00-Resources/` solo aparece cuando el material vive ahí. Es un cambio *breaking* del campo, asumido por el dueño.
 * `score`: similitud normalizada [0,1] del híbrido ANN+FTS; orden descendente garantizado.
-* Campo aditivo (T7, 2026-10-23): `offsets_ref: "source" | "extract"` — `source` si el slice del archivo original reproduce `text` (md/markdown/txt), `extract` si los offsets citan el markdown extraído por Docling (`pdf`; el binario jamás es el espacio de cita).
+* Campo aditivo (T7, 2026-10-23): `offsets_ref: "source" | "extract"` — `source` si el slice del archivo original reproduce `text` (`md/markdown/txt`), `extract` si los offsets citan el markdown extraído por **markitdown** (`pdf/docx/pptx/xlsx/xls`; el binario jamás es el espacio de cita). No hay Docling (ADR-011/D53).
 * Campos congelados por contrato (Hyrum, ADR-005): extensiones futuras solo aditivas/opcionales.
 
 ### Tool `index_refresh`
 
-Contrato: `index_refresh()` — sin argumentos. Ejecuta un ciclo de actualización delta del flow (con lock de un solo proceso).
+Contrato: `index_refresh(directories: list[str] | None = None)` — ejecuta un ciclo de actualización delta del flow sobre las raíces pedidas (con lock de un solo proceso). Sin argumento ⇒ `["00-Resources"]` (D32/D42): compatibilidad byte a byte con los agentes ya escritos. Las raíces viven **solo** en la invocación: no se escriben en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso — cambiar de carpeta es un argumento, no un reinstall.
 
 ```jsonc
-{ "scanned": 214, "indexed": 3, "skipped": 210,
-  "elapsed_ms": 8200, "locked": false }
+{ "scanned": 214, "indexed": 3, "skipped": 211, "elapsed_ms": 8200, "locked": false,
+  "roots": ["materiales", "documentos"] }
 ```
 
-* `scanned`: archivos visitados en la pasada; `indexed`: (re)escritos al índice; `skipped`: memoizados/inalterados/excluidos; `elapsed_ms`: duración de la pasada.
-* Delta grande (>~200 archivos o PDFs pesados) puede exceder 30s: el server responde al completar; el timeout del harness debe cubrir 120s (documentado en TRD) y el criterio 2 aplica a deltas típicos.
+* `scanned`: archivos visitados en la pasada; `indexed`: (re)escritos al índice; `skipped`: memoizados/inalterados/excluidos; `elapsed_ms`: duración de la pasada. La identidad `scanned == indexed + skipped` se mantiene en toda pasada (incluido `locked` y directorio vacío).
+* `roots`: campo **aditivo** (ADR-005/Hyrum) con el conjunto completo declarado en la pasada. Añadirlo no rompe consumidores; quitarlo o renombrarlo, sí.
+* **Validación en el borde, antes de la costura** (`paths.validate_roots`, puro): raíz inexistente, tipo equivocado (un documento donde se espera un directorio o viceversa), fuera del vault o con `..` ⇒ `VALIDATION_ERROR` con `details: {requested, exists, suggestions[], vault_dirs[]}`. Las `suggestions` son por similitud sin distinguir mayúsculas (`Documentos` → `documentos`).
+* **Fail-fast atómico (D65):** se validan las N raíces **antes** de caminar ninguna. Una raíz mala ⇒ no se indexa ninguna y el recuento del índice no cambia. Un índice parcial que nadie pidió es peor que un error corregible.
+* **Directorio vacío no es error:** `{scanned: 0, indexed: 0, skipped: 0, …}` — el agente no debe leerlo como fallo.
+* Raíces solapadas o repetidas se **deduplican**; una raíz puede ser un fichero suelto (ADR-010 §4.4). La recursión y la poda de directorios de punto (`.tepochcalli/`, `.obsidian/`, `.trash/`) ya las resuelve el conector `localfs`.
+* Los documentos binarios (`.pdf/.docx/.pptx/.xlsx/.xls`) quedan **fuera** del presupuesto Δ<30 s y se miden aparte (D51): el criterio 2 aplica a deltas de texto. Un delta grande puede exceder 30 s: el server responde al completar y el timeout del harness cubre 120 s (TRD).
 
 ### Tool `add_source`
 
@@ -83,7 +92,7 @@ Contrato: `add_source(uri: str, subdir: str | None = None)` — convierte URL/ar
   "indexed": { "scanned": 215, "indexed": 1, "skipped": 214, "elapsed_ms": 2600 } }
 ```
 
-* Validación en el borde: `subdir` normalizado, sin `..`, queda dentro de `00-Resources/`; `uri` acepta `http(s):`, `file:` (ver advertencia de seguridad).
+* Validación en el borde: `subdir` normalizado, sin `..`, queda dentro de `00-Resources/`; `uri` acepta `http(s):`, `file:` (ver advertencia de seguridad). Un `file:` **inexistente** ⇒ `VALIDATION_ERROR`: la ruta mal escrita es un argumento corregible, no un documento ilegible que merezca `SOURCE_UNREACHABLE` (D64). El shape de respuesta **no cambia**.
 
 ### Tool `rag_status` (D7.3/ADR-007)
 
@@ -98,24 +107,53 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
                 "model": "paraphrase-multilingual-MiniLM-L12-v2",
                 "dims": 384, "provider": null },
   "index":    { "rows": 1240, "model_matches_config": true,
-                "last_refresh": "2026-10-21T14:32:10Z", "db_size_bytes": 18400000 },
+                "last_refresh": "2026-10-21T14:32:10Z", "db_size_bytes": 18400000,
+                "last_refresh_roots": ["00-Resources"],
+                "available_roots": ["00-Resources", "documentos", "materiales"] },
   "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true },
   "health":   { "state": "ok", "reason": null, "fix_hint": null } }
 
 // response — instalación con "Configurar después" (salida 5 del menú embedder)
 { "embedder": { "mode": "none", "model": null, "dims": null, "provider": null },
   "index":    { "rows": 0, "model_matches_config": true,
-                "last_refresh": null, "db_size_bytes": 0 },
+                "last_refresh": null, "db_size_bytes": 0,
+                "last_refresh_roots": [], "available_roots": ["00-Resources"] },
   "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true },
   "health":   { "state": "degraded", "reason": "E_NO_EMBEDDER",
                 "fix_hint": "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`" } }
 ```
 
+* `index.last_refresh_roots`: raíces de la última indexación **de la sesión** (D42/ADR-010 §4.1); `[]` si aún no hubo refresh. Hace observable qué dejó indexado la pasada anterior.
+* `index.available_roots`: directorios de **primer nivel** del vault que son indexables; los de punto (`.tepochcalli/`, `.obsidian/`, `.trash/`) quedan fuera (D67). El agente **pregunta** qué hay en vez de adivinar qué carpeta indexar.
 * Salida 5 ("Configurar después"): el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config.
 
 * `embedder.mode`: `local` (peso en `.tepochcalli/models/`), `api` (LiteLLM: `provider` nombra el proveedor, `model` su id) o `none` (sin provider — salida 5).
 * `index.model_matches_config`: `false` cuando el campo `model` de los metadatos del índice ≠ `[embedding].model` de config (gate anti-cruce de dims; el índice registra `model + dims` en la instalación, D7.1).
 * `health.reason` usa exclusivamente los códigos de §Códigos de error estructurados; `fix_hint` es la solución exacta para el usuario (la regla del vault en specs/spec-agent-workflow.md obliga al agente a reportarla, no el error crudo).
+
+### Tools del conversor (D28/ADR-009)
+
+`convert_document(path, output_path?, format?)` y `convert_base64(data, output_path?, format?, filename?)` convierten un documento a Markdown **en proceso** y devuelven solo el resumen; `list_formats()` publica el catálogo. El cuerpo nunca viaja en `content[0].text` (H1/H2, D36). Catálogo, cadena de fallback y detalle del conversor: [spec-markitdown](spec-markitdown.md).
+
+```jsonc
+// convert_document(path, output_path?, format?)  → y convert_base64(data, output_path?, format?, filename?)
+{ "written_to": "00-Resources/informe-anual.md",
+  "source_uri": "00-Resources/fuentes/informe-anual.docx",
+  "bytes": 48213, "chars": 47120,
+  "preview": "# Informe anual 2026\n\n…", "truncated": true }
+
+// list_formats()
+{ "formats": [".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".html", ".htm", ".csv",
+              ".txt", ".md", ".markdown", ".json", ".jsonl"],
+  "count": 13, "notes": "…sin OCR: un PDF escaneado no tiene capa de texto…" }
+```
+
+* **Sin clave `ok`**: el éxito es la ausencia de error; `truncated` solo aparece cuando `preview` (≤500 caracteres) se recortó. `bytes`/`chars`/`preview` se leen del fichero escrito, no del buffer en memoria.
+* **B′ (D31):** entrada y `output_path` deben resolver dentro del vault; `..`, ruta absoluta externa o symlink que escapa ⇒ `VALIDATION_ERROR`. La validación corre **antes** de convertir.
+* **Existencia y tipo en el borde (D64):** `path` inexistente o que es un directorio ⇒ `VALIDATION_ERROR` con `details.suggestions`, sin invocar markitdown. El padre del `output_path` debe existir como directorio dentro del vault.
+* **Idempotencia (D66):** destino con los mismos bytes ⇒ misma respuesta de éxito; con bytes distintos ⇒ `VALIDATION_ERROR` («elige otro `output_path`») y nombre alternativo propuesto. Nunca se sobrescribe.
+* `convert_base64` exige `format` **o** `filename`; sin pista de tipo ⇒ `VALIDATION_ERROR`. `output_path` omitido ⇒ `00-Resources/<slug>.md` (`paths.slugify_uri`).
+* El `.md` escrito **no** lleva frontmatter ni `converted_at`: un timestamp rompería la idempotencia (D66).
 
 ### Manejo de errores (formato único)
 
@@ -129,12 +167,26 @@ Toda falla → tool result con `isError` y payload JSON canónico (nunca texto l
 
 | Code | Significado | Acción sugerida del agente |
 | --- | --- | --- |
-| `VALIDATION_ERROR` | argumentos inválidos (top_k>20, glob malformado, subdir fuera de 00-Resources) | reintentar corrigiendo args |
+| `VALIDATION_ERROR` | argumentos inválidos: `top_k` fuera de rango, glob malformado, `subdir` fuera de `00-Resources`, **ruta inexistente, tipo equivocado, raíz fuera del vault o con `..`, formato no soportado, base64 sin pista de tipo**, destino ocupado con contenido distinto | reintentar corrigiendo args (los `details.suggestions` bastan) |
 | `INDEX_EMPTY` | tabla `chunks` inexistente **con embedder configurado** (sin embedder el estado es `E_NO_EMBEDDER`, que tiene precedencia) | invocar `index_refresh()`; si devuelve `E_NO_EMBEDDER` → `rag_status()` y reportar fix_hint |
 | `INDEX_STALE_MODEL` | dims/modelo del índice ≠ config actual | avisar usuario: requiere `tepochcalli reindex --confirm` (spec-embeddings; alias D7.3: `E_MODEL_MISMATCH`) |
-| `ENGINE_LOCKED` | refresh concurrente en curso | reintentar en segundos |
-| `SOURCE_UNREACHABLE` | add_source no pudo fetch/convertir | sugerir descarga manual + `index_refresh()` |
-| `INTERNAL` | inesperado (detalles al log, no al cliente) | reportar issue |
+| `ENGINE_LOCKED` | `add_source`: su refresh interno quedó bloqueado por otro proceso (`index_refresh` **no** emite este error: devuelve `{scanned:0, indexed:0, skipped:0, locked:true}`) | reintentar en segundos |
+| `SOURCE_UNREACHABLE` | **solo** el documento existe y es del tipo pedido pero no se puede leer/convertir (escaneado sin capa de texto, corrupto, cifrado); en `add_source`, fallo de fetch/convert | informar y ofrecer OCR manual o guardar el `.md` a mano |
+| `INTERNAL` | **solo** bug nuestro (detalles al log, nunca al cliente) | reportar issue |
+
+Forma de `details` cuando el error es corregible (rutas, raíces, formato):
+
+```jsonc
+{ "error": { "code": "VALIDATION_ERROR",
+             "message": "La raíz no existe: 'Documentos'",
+             "details": { "requested": "Documentos", "exists": false,
+                          "suggestions": ["documentos"],
+                          "vault_dirs": ["00-Resources", "documentos", "materiales"] } } }
+```
+
+* Las `suggestions` se calculan por similitud **sin distinguir mayúsculas** (`Documentos` → `documentos`); `vault_dirs` lista lo que sí existe para que el agente corrija en un reintento.
+* **La taxonomía NO crece (D39):** ningún caso nuevo introduce un código fuera de los tres de D39 —`VALIDATION_ERROR`, `SOURCE_UNREACHABLE`, `INTERNAL`— más los heredados (`INDEX_EMPTY`, `INDEX_STALE_MODEL`, `ENGINE_LOCKED`) y los `E_*` de D7.3. Un formato no soportado, una raíz mal escrita o un `file:` inexistente son `VALIDATION_ERROR`; `SOURCE_UNREACHABLE` no culpa a la ruta.
+* `SYMLINK_ESCAPE` sigue siendo un skip tipado **del motor**, no un código de wire.
 
 ### Códigos de error estructurados (D7.3/ADR-007)
 
@@ -177,7 +229,8 @@ Diseño determinista en el server (no depende del modelo):
 * Overhead de citación por resultado ≈25 tokens (path+heading+offsets compactos) → +125 tokens.
 * Techo duro: si la suma estimada (peso por carácter: CJK/emoji ⇒ 1 token/car, ES/EN ⇒ 4 chars/token — revisión Phase 2, 2026-10-27) excede 1600, se descartan resultados de menor `score` y se marca `truncated: true` — deja ≥400 tokens de margen para la pregunta del usuario y la respuesta generada dentro de los 2000 totales (criterio 4 REAL también en chino/japonés).
 * Fixtures de test assertan la cota con queries adversas (unicode, listas, PDFs con tablas).
-* `rag_status`: su shape fijo de cuatro bloques (`embedder/index/config/health`) lo mantiene **<200 tokens** por construcción — el coste de llamarlo ante cualquier `E_*` es despreciable (D7.3/ADR-007).
+* `rag_status`: su shape fijo de cuatro bloques (`embedder/index/config/health`) lo mantiene **<200 tokens** por construcción — el coste de llamarlo ante cualquier `E_*` es despreciable (D7.3/ADR-007). Las dos listas nuevas (`last_refresh_roots`, `available_roots`) son nombres de directorios de primer nivel: no rompen el presupuesto.
+* Conversor: ~200 tokens típicos (resumen de 5 claves, `preview` ≤500) y techo 1600 con el **mismo estimador** de `budget.py`. El coste es constante respecto al tamaño del documento porque el cuerpo no cruza el wire (D36).
 
 ### Carga de configuración
 
@@ -203,6 +256,10 @@ Diseño determinista en el server (no depende del modelo):
 ## Testing Strategy
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
+* Contract tests multi-raíz: dos raíces en una pasada, dedup de solapadas, raíz-fichero; `roots` en el reporte y `scanned == indexed + skipped` en todos los casos.
+* Raíz inexistente ⇒ `VALIDATION_ERROR` con `details.suggestions` no vacías y **nunca** `INTERNAL`; atomicidad: el recuento de filas del índice no cambia (D65).
+* Directorio vacío ⇒ tres ceros, **no** error. `rag_status` expone `available_roots`/`last_refresh_roots` y cabe en <200 tokens; `file:` inexistente ⇒ `VALIDATION_ERROR`.
+* Contract tests de las 3 tools del conversor (mismo shape que spec-markitdown): 5 claves y orden, `preview` ≤500, cuerpo ausente de `content[0].text` con un documento ≥100 000 caracteres, idempotencia y frontera B′.
 * Contract tests D7.3: `rag_status` con shape exacto de los 4 bloques y <200 tokens; los cinco códigos `E_*` (`E_NO_EMBEDDER`, `E_API_AUTH`, `E_MODEL_MISMATCH`, `E_MODEL_INVALID`, `E_OFFLINE_NO_CACHE`) con payload `{error:{code,message,fix_hint}}`; instalación degraded (salida 5) → `search` = `E_NO_EMBEDDER` + `rag_status` = `degraded` con `fix_hint`.
 * Fixtures de presupuesto: asserts de tokens por la fórmula de §Presupuesto de tokens (Σ sobre resultados ≤1600, con cota de la envoltura aparte) y de `rag_status` <200, en la suite de corrección. La latencia se **mide** en `tests/benchmarks/bench_search.py`: p95 <500 ms **en local**, publicando n y método de percentil (metodología TRD) — **sin aserciones de latencia en CI**, que son la regla anti-flake de la casa: un rojo que depende de la máquina no es un rojo.
 * Golden answers: queries ES/EN sobre la muestra de `00-Resources/` (md+PDF) verificando que cada resultado cite `source_path` real y offsets reproducibles.
@@ -210,7 +267,9 @@ Diseño determinista en el server (no depende del modelo):
 ## Security Considerations
 
 * Solo stdio local; sin binding de red (docs/SECURITY.md).
-* `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera de `00-Resources/`. **`file:` en `add_source` se RECHAZA si queda fuera del vault** (D16, ratificado 2026-10-26): markitdown con `file:` leería cualquier archivo accesible al proceso (riesgo documentado del canal markitdown, docs/SECURITY.md), y la validación corre **antes** de que el conversor toque el disco (`tepochcalli_mcp.paths.validate_source_uri` / `resolve_file_uri`).
+* `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera del **vault** (`00-Resources/` es el destino por omisión de `add_source`, no el único: el conversor escribe el `output_path` que se le pide, siempre dentro del vault — B′). **`file:` en `add_source` se RECHAZA si queda fuera del vault** (D16, ratificado 2026-10-26): markitdown con `file:` leería cualquier archivo accesible al proceso (riesgo documentado del canal markitdown, docs/SECURITY.md), y la validación corre **antes** de que el conversor toque el disco (`tepochcalli_mcp.paths.validate_source_uri` / `resolve_file_uri`).
+* **B′ (D31/ADR-009):** el conversor valida también el **destino**: `output_path` dentro del vault, sin `..` ni symlink que escape, evitando *arbitrary file write*. `paths.ensure_within` es la defensa en profundidad antes de `os.replace`.
+* La validación de existencia y tipo (raíces, `path`, padre de `output_path`) es **pura** (`paths.py`) y corre **antes** de tocar el disco; si el motor recibiera una ruta mal escrita, el `internal_guard` la convertiría en `INTERNAL`. Por eso el borde decide `VALIDATION_ERROR` (D64).
 * Errores `INTERNAL` nunca exponen stack traces al harness.
 * Las claves API nunca aparecen en logs ni en payloads de error: `E_API_AUTH` nombra solo el proveedor (D7.3/ADR-007); la clave vive únicamente en `.tepochcalli/config/tepochcalli.toml` (gitignored) o `{env:VAR}`.
 
@@ -227,4 +286,4 @@ Diseño determinista en el server (no depende del modelo):
 
 * MCP Python SDK — <https://github.com/modelcontextprotocol/python-sdk>
 * OpenCode V2 MCP servers — <https://opencode.ai/v2/docs/mcp-servers/>
-* ADR-005; ADR-007 (`rag_status` + dialecto `E_*`, D7.3); specs/spec-rag-engine.md; specs/spec-markitdown.md; specs/spec-embeddings.md
+* ADR-005; ADR-007 (`rag_status` + dialecto `E_*`, D7.3); ADR-009 (conversor resumen-only); ADR-010 (índice multi-raíz y cita vault-relativa); ADR-011 (dieta de dependencias); specs/spec-rag-engine.md; specs/spec-markitdown.md; specs/spec-embeddings.md

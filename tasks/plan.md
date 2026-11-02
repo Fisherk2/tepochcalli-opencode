@@ -104,7 +104,7 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | **D62** | **Cada raíz indexada es una `ContextKey[Path]` de cocoindex** (clave estable por raíz) ⇒ la identidad de memo de una raíz es su **clave**, no su ruta ⇒ mover el vault no invalida el índice | El conector `localfs` acepta `FilePath`, `Path` o `ContextKey[Path]`; la doc recomienda la `ContextKey` para que la memoización sobreviva al traslado del árbol. Con N raíces eso significa N claves estables | source.py/app.py + ADR-010 (T1, T2) |
 | **D64** | **Existencia y tipo se validan en el BORDE MCP** (`paths.py`, puro), no en el motor: ruta inexistente · tipo equivocado · extensión fuera ⇒ **`VALIDATION_ERROR`** con `details.suggestions`; **la taxonomía no crece** (D39) | Verificado en el cocoindex pineado: `localfs.walk_dir` lanza `ValueError("Path is not a directory: …")` si la raíz no es un directorio ⇒ si el motor lo dejara pasar, el `internal_guard` lo convertiría en **`INTERNAL`** («fallo interno» cuando el usuario solo escribió mal la carpeta). El chequeo va **antes** de tocar el disco y en un módulo puro y testeable | paths.py (T7, T8, T9) + spec-mcp-server §Errores (T1) |
 | **D65** | **Multi-raíz fail-fast atómico**: si **una** de las N raíces falla la validación, **no se indexa ninguna**; el error nombra la raíz mala, las que sí existen y las sugerencias | Decidido por el dueño (2026-10-30). Un índice parcial que nadie pidió es peor que un error: el usuario corrige la lista y reintenta **una** vez. Garantiza que `scanned == indexed + skipped` describe una operación completa | paths.py + tools/index_refresh.py (T7, T8) |
-| **D66** | **Destino existente ⇒ idempotencia**: el conversor **no** sobrescribe material del usuario; si el destino existe con **contenido idéntico** ⇒ `ok:true` + `written_to` (reintentar la misma conversión no falla); si el contenido **difiere** ⇒ `VALIDATION_ERROR` («el destino existe, elige otro») | Decidido por el dueño (2026-10-30). Es la única semántica que hace seguro reintentar sin añadir un parámetro `overwrite` (YAGNI) ni pisar lo del usuario | writer.py + tools/convert_*.py (T7, T9, T10) |
+| **D66** | **Destino existente ⇒ idempotencia**: el conversor **no** sobrescribe material del usuario; si el destino existe con **contenido idéntico** ⇒ **la misma respuesta de éxito** (las 5 claves de D36 con el mismo `written_to`; sin clave `ok`, el éxito es la ausencia de error) (reintentar la misma conversión no falla); si el contenido **difiere** ⇒ `VALIDATION_ERROR` («el destino existe, elige otro») | Decidido por el dueño (2026-10-30). Es la única semántica que hace seguro reintentar sin añadir un parámetro `overwrite` (YAGNI) ni pisar lo del usuario | writer.py + tools/convert_*.py (T7, T9, T10) |
 | **D67** | **`rag_status` expone `index.available_roots`**: los directorios de primer nivel del vault que son indexables | Decidido por el dueño (2026-10-30). El agente **pregunta** en vez de adivinar el nombre de la carpeta; cabe en el presupuesto <200 tokens (son unas pocas rutas) | tools/rag_status.py (T8) + spec-mcp-server (T1) |
 | **D63** | **Ledger de «no reinvención»** en ADR-011: lo que delegamos a cocoindex/markitdown y lo que conservamos **con su razón** | Para que ninguna revisión futura «optimice» lo nuestro hacia el backend sin saber por qué: el lector ANN+FTS+RRF (el conector es solo de escritura), `heading_before` (CocoIndex no da heading), los skips tipados (el conector se traga rotos/ilegibles en silencio), `paths` (frontera D16), `write_atomic` (`declare_file` es target state, exige componente), el estimador de tokens (no existe equivalente) y la ausencia de watchers (ADR-002 los prohíbe) | ADR-011 (T1) |
 
@@ -203,7 +203,7 @@ graph TB
     T8 --> T9["T9 · convert_document"]
     T9 --> T10["T10 · convert_base64"]
     T10 --> T11["T11 · list_formats"]
-    T2 --> T12["T12 · Contract tests e2e: 8 tools + multi-raiz + documentos"]
+    T2 --> T12["T12 · Contract tests e2e: 7 tools + multi-raiz + documentos"]
     T3 --> T12
     T5 --> T12
     T6 --> T12
@@ -316,9 +316,11 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
   "preview": "# Informe anual 2026\n\n…", "truncated": true }
 
 // convert_base64(data, output_path?, format?, filename?)  → el MISMO resumen
-// list_formats()
-{ "formats": [".pdf", ".docx", ".doc", ".pptx", ".ppt", ".xlsx", ".xls", ".html", ".csv",
-              ".txt", ".md", ".json", ".xml"], "count": 13, "notes": "…sin OCR…" }
+// list_formats()  — catálogo VERIFICADO contra markitdown==0.1.9 (no estimado):
+// sin .doc/.ppt (no hay convertidor para los binarios legacy) ni .zip/.epub/.msg/.ipynb/.xml
+{ "formats": [".pdf", ".docx", ".pptx", ".xlsx", ".xls", ".html", ".htm", ".csv",
+              ".txt", ".md", ".markdown", ".json", ".jsonl"],
+  "count": 13, "notes": "…sin OCR: un PDF escaneado no tiene capa de texto…" }
 ```
 
 ### 5.6 La dieta (D52, D53, D55)
@@ -336,7 +338,7 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 
 **Total esperado: 2,3 GB → ≈1,95 GB (−350 MB) y 624 → ~560 paquetes.** La cifra se **mide** (T4/T13).
 
-### 5.7 Reparto de responsabilidades (ocho tools, ocho intenciones)
+### 5.7 Reparto de responsabilidades (siete tools, ocho intenciones)
 
 | Intención | Tool | Escribe | Indexa |
 | --- | --- | --- | --- |
@@ -374,7 +376,7 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 | **N raíces y una mala** | `VALIDATION_ERROR` — **fail-fast atómico**: no se indexa ninguna (D65) | borde MCP | la raíz mala, las que sí existen, las sugerencias |
 | Existe pero **no se puede leer o convertir** (escaneado, corrupto, sin permiso) | `SOURCE_UNREACHABLE` | motor / conversor | la guía de OCR (OM-11) |
 | **Directorio vacío** | **no es error** | motor | `{scanned: 0, indexed: 0, skipped: 0}` + `roots` — el agente no debe leerlo como fallo |
-| Destino ya existe, contenido **idéntico** | `ok: true` + `written_to` (D66) | escritor | nada que hacer: la conversión ya está |
+| Destino ya existe, contenido **idéntico** | la **misma respuesta de éxito** (las 5 claves de D36, sin clave `ok`) | escritor | nada que hacer: la conversión ya está |
 | Destino ya existe, contenido **distinto** | `VALIDATION_ERROR` | escritor | «el destino existe, elige otro `output_path`» — **nunca** se sobrescribe material del usuario |
 | Nuestro bug | `INTERNAL` | `internal_guard` | el detalle vive en el log, nunca en el payload |
 
@@ -424,7 +426,7 @@ qué hacer, no sólo qué pasó.
 
 | # | Tarea | Tamaño |
 | --- | --- | --- |
-| T12 | Contract tests e2e: 8 tools, multi-raíz, documentos, change detection, embedder único | L |
+| T12 | Contract tests e2e: 7 tools, multi-raíz, documentos, change detection, embedder único | L |
 | T13 | e2e bulk ~1 000 páginas + re-medición (Δ, RSS, venv, métricas) | M |
 
 ### Sub-fase F — Payload y skill

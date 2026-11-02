@@ -54,6 +54,10 @@ graph TB
     RES --- FLOW
 ```
 
+> **Estado de los diagramas:** reflejan el sistema **entregado en Phase 2**. Phase 3.5
+> (ADR-009/010/011) añade las 3 tools del conversor, retira el server standalone `markitdown` y
+> sustituye Docling por `markitdown` en el flow; los diagramas se actualizan al cerrar la fase (T16).
+
 Regla de dependencias: el flujo va SIEMPRE usuario→agente→MCP→engine→storage. El harness no
 importa CocoIndex; el motor no conoce OpenCode. Único punto de contacto: los contratos de
 herramienta de [specs/spec-mcp-server.md](../specs/spec-mcp-server.md) (ADR-005).
@@ -109,8 +113,8 @@ sequenceDiagram
 | AGENTS.md del vault (MCP-first) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
 | `opencode.json` (`mcp.servers`) | Agente | `<vault>/opencode.json` | spec-markitdown §config |
-| `tepochcalli-rag` (search/index_refresh/add_source/rag_status) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — **entregado (Phase 2, T1-T8)** | spec-mcp-server, ADR-005 |
-| `markitdown-mcp` | Comunicación | venv del vault — registrado en `opencode.json` del payload (T9) | spec-markitdown |
+| `tepochcalli-rag` (search/index_refresh/add_source/rag_status + `convert_document`/`convert_base64`/`list_formats` — Phase 3.5) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — **entregado (Phase 2, T1-T8)**; 3 tools del conversor en Phase 3.5 (ADR-009) | spec-mcp-server, ADR-005, ADR-009 |
+| `markitdown` (librería) | Comunicación/Procesamiento | venv del vault — **en proceso** en `convert.py` y en `parsers.py`; el server standalone `markitdown-mcp` queda **retirado del payload** (D29, ADR-011) | spec-markitdown, ADR-011 |
 | **Paquete `tepochcalli_mcp` (Phase 2):** `server.py` (MCPServer stdio, registro de las 4 tools, `CallToolResult` explícito — nunca `ToolError`), `tools/{search,index_refresh,add_source,rag_status}.py` (handlers + validación de borde), `errors.py` (taxonomía `E_*` + `internal_guard`), `budget.py` (estimador `chars/4 + 25`, techo 1600), `paths.py` (glob/`subdir`/`file:` dentro del vault — D16), `embedder.py` (fábrica `local`/`litellm`/`none` — D15), `convert.py` (markitdown en proceso — D-b), `__main__.py` (entrypoint `python -m tepochcalli_mcp` — D17) | Comunicación | `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/` | spec-mcp-server, ADR-005 |
 | **Contract tests + e2e golden (Phase 2):** `tests/e2e/test_mcp_contract.py` (shapes en el wire, 5 `E_*`, instalación degradada, globs de `path_filter`), `tests/e2e/test_mcp_journey.py` (pregunta → tool-call → JSON citado), fixture grabada `tests/fixtures/golden_vault/` (md+PDF) | Verificación | repo `tests/e2e/`, `tests/fixtures/` | CP-C, CP-D, spec-mcp-server §Testing |
 | **Soporte de tests y bench (Phase 2):** `tests/support/mcp_server.py` (ayudantes de arranque/env compartidos — residuo R4 pagado en T8), `tests/benchmarks/bench_search.py` (p95 <500 ms con n y método publicados — M2) | Verificación | repo `tests/support/`, `tests/benchmarks/` | T7, T8 |
@@ -254,6 +258,9 @@ graph TB
 | [ADR-006](../specs/adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como embedding default (elección del modelo default; el comportamiento del wizard en §4.1 queda reemplazado por ADR-007) | Accepted | 2026-10-21 |
 | [ADR-007](../specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4) | Accepted | 2026-10-21 |
 | [ADR-008](../specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico de modelo (refina ADR-007 capa UX) | Accepted | 2026-10-21 |
+| [ADR-009](../specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Proposed | 2026-11-02 |
+| [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada + `source_path` relativo al vault | Proposed | 2026-11-02 |
+| [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Proposed | 2026-11-02 |
 
 ## Key decisions summary
 
