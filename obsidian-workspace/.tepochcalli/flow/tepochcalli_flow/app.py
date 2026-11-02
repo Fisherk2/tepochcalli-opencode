@@ -281,10 +281,10 @@ async def index_file(
             f"{file_path}: creció a {size} bytes tras el classify "
             f"(> {source.DEFAULT_MAX_FILE_BYTES}); cambió durante el pase"
         )
-    # `extract_text` es síncrono (markitdown parsea documentos en CPU, segundos
-    # por documento): en un thread para no saturar el loop del environment, que
-    # comparte proceso con el server MCP.
-    text = await asyncio.to_thread(extract_text, file_path)
+    # `extract_text` está decorado con @coco.fn (D58): `as_async` lo ejecuta en
+    # un hilo (SyncFunction.as_async, cocoindex/_internal/function.py:952-954)
+    # sin bloquear el loop del environment y SIN salto a hilo manual (D60).
+    text = await extract_text.as_async(file_path)
     chunks = chunk_document(
         text,
         normalize_source_path(file.file_path.path.as_posix()),

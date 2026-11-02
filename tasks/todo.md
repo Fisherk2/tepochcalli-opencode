@@ -48,7 +48,7 @@
   - Verificar: `uv sync --frozen` sin cambios · `python -c "import markitdown, tepochcalli_mcp.tools.search"` OK dentro del venv · la cifra del venv medida y publicada · `grep -c "name = " uv.lock` antes/después
   - Dep.: T3 · Tamaño: M
 
-- [ ] **T5 · Change detection: `@coco.fn` en los helpers + `as_async`**
+- [x] **T5 · Change detection: `@coco.fn` en los helpers + `as_async`**
   - Subagentes: `rag-pipeline-engineer` (lead), `python-pro` · Skills: `source-driven-development`, `test-driven-development`, `performance-analysis` · Herramientas: `context7`
   - AC: (a) `parsers.extract_text`, `parsers.chunk_document` y los helpers de cita que influyen en el texto indexado se decoran con **`@coco.fn`** (sin `memo=True`) para que su lógica participe en el fingerprint (D58); (b) el salto a hilo manual (`asyncio.to_thread(extract_text, …)`) se sustituye por **`@coco.fn.as_async`** (D60); (c) el **test que lo demuestra**: tocar la lógica del parser (o del troceo) **invalida** el memo del componente por fichero ⇒ el índice se rehace; (d) `deps`/`version` se usan donde el valor no es visible en el cuerpo (p. ej. el id del modelo si queda fuera de los argumentos) — si el modelo ya viaja en `config` (argumento), no hace falta `deps`; (e) **no** se añade memo de embeddings por chunk (D61: ~600 MB por 100k chunks); (f) el batching de embeddings según la op se **evalúa** (no se activa a ciegas): se mide con y sin y se reporta
   - Verificar: test de invalidación (rojo si se quita un `@coco.fn`) · `just python-test` verde · la métrica Δ comparable (T13)

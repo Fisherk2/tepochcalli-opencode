@@ -27,6 +27,18 @@ fallos del extractor son subclases de `MarkItDownException`
 (`markitdown/_exceptions.py`: `FileConversionException`,
 `UnsupportedFormatException`, `MissingDependencyException`).
 
+**Change detection (D58, T5):** `extract_text`, `chunk_document` y
+`_to_document_chunk` (el helper que deriva la cita del chunk, en esta capa de
+infraestructura) se decoran con **`@coco.fn` sin `memo=True`**. En el pin
+`cocoindex==1.0.25`, `_compute_logic_fingerprint`
+(`cocoindex/_internal/function.py:660-710`) hashea el AST canónico de la
+función y cada llamada añade ese fingerprint al contexto del llamador
+(`function.py:845`), que el memo de `index_file` agrega (`function.py:950`).
+Sin el decorador, editar el parser **no invalida** el memo y el índice queda
+obsoleto en silencio. `citation.py` se mantiene como dominio puro (sin
+`cocoindex`, test de arquitectura): por eso el helper trackeado es
+`_to_document_chunk`, no las funciones de `citation`.
+
 Como `citation`/`config`, este módulo solo trae primitivas del dominio de cita
 más el splitter de cocoindex: la infraestructura del walk vive en `source.py`.
 """
@@ -37,6 +49,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Final
 
+import cocoindex as coco
 from cocoindex.ops.text import RecursiveSplitter
 from cocoindex.resources.chunk import Chunk
 from markitdown import MarkItDown, MarkItDownException
@@ -115,8 +128,15 @@ class DocumentChunk:
     """Embedder que va a vectorizar el chunk — detección de índice mixto (ADR-006)."""
 
 
+@coco.fn
 def extract_text(file_path: Path) -> str:
     """Extrae el texto de un archivo según su extensión (§Fuentes, §Ruta de documentos).
+
+    **Tracked (`@coco.fn`, D58):** su lógica entra en el fingerprint del
+    `index_file` memoizado; editar el parser invalida el índice. Llamarlo en
+    async desde un componente con `extract_text.as_async(...)` lo ejecuta en un
+    hilo (`SyncFunction.as_async`, `cocoindex/_internal/function.py:952-954`),
+    sin bloquear el event loop del engine.
 
     `.md`, `.markdown` y `.txt` se leen como UTF-8 sin transformación
     (decodificador estricto, BOM incluido: el MISMO que la ruta de escritura de
@@ -160,6 +180,7 @@ def _extract_markdown(file_path: Path) -> str:
     return markdown
 
 
+@coco.fn
 def chunk_document(
     text: str,
     source_path: str,
@@ -167,6 +188,10 @@ def chunk_document(
     config: Config | None = None,
 ) -> list[DocumentChunk]:
     r"""Particiona `text` y devuelve chunks con la cita derivada (§Chunking).
+
+    **Tracked (`@coco.fn`, D58):** cambiar la lógica del troceo o de la cita
+    invalida el memo de `index_file`; sin el decorador el índice quedaría
+    stale en silencio.
 
     El presupuesto sale de `config.ChunkingConfig` —default 1536/192 en
     **BYTES** (D11)—, `source_path` se normaliza con el dominio de cita y cada
@@ -203,6 +228,7 @@ def chunk_document(
     ]
 
 
+@coco.fn
 def _to_document_chunk(
     text: str,
     chunk: Chunk,
@@ -211,7 +237,13 @@ def _to_document_chunk(
     model: str,
     scanner: HeadingScanner,
 ) -> DocumentChunk:
-    """Deriva la cita de un `Chunk` del splitter reutilizando el dominio de cita (F1)."""
+    """Deriva la cita de un `Chunk` del splitter reutilizando el dominio de cita (F1).
+
+    Es el helper de cita de la capa de infraestructura: decorarlo con `@coco.fn`
+    (sin `memo`) mete en el fingerprint la derivación de `heading`, offsets y
+    validación F1. Las funciones puras de `citation` no se decoran porque el
+    test de arquitectura prohíbe `cocoindex` en el dominio (ADR-005).
+    """
     char_start, char_end = validate_offsets(text, chunk.start.char_offset, chunk.end.char_offset)
     if not verify_slice_identity(text, char_start, char_end, chunk.text):
         raise CitationError(
