@@ -271,10 +271,11 @@ def path_filter_to_like_predicate(path_filter: str) -> str:
       `citation.normalize_source_path`, rutas POSIX, D9.1);
     * `'` se duplica (`''`): el predicado es una cadena SQL, nunca inyección.
 
-    El glob es RELATIVO a la raíz del vault —como el `source_path` almacenado,
-    que ya incluye `00-Resources/` (D9.1)—: un path absoluto o con `..`
-    LANZA `ValueError` (frontera de confianza; el calling Phase 2 no puede
-    colar un filtro que escape del vault).
+    El glob es RELATIVO a la raíz del vault —igual que el `source_path`
+    almacenado, que es vault-relativo (D41) y por eso puede empezar por
+    `00-Resources/` o por `materiales/`—: un path absoluto o con `..` LANZA
+    `ValueError` (frontera de confianza; el calling Phase 2 no puede colar un
+    filtro que escape del vault).
     """
     normalized = path_filter.replace("\\", "/")
     if normalized.startswith("/"):

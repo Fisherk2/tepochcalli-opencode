@@ -121,7 +121,7 @@ EXPECTED_COUNTS = {
     "stale": (6, 0, 6),
 }
 
-REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
+REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked", "roots"]
 
 RESOURCE_DIR_NAME = citation.RESOURCES_DIR
 
@@ -214,8 +214,8 @@ def _journey_driver() -> None:
     (resources_dir / "efimero.md").write_text(EFIMERO_V2, encoding="utf-8")
     original_items = flow_app._indexable_items
 
-    async def vanish_after_classify(resources_dir: Path) -> object:
-        items = await original_items(resources_dir)
+    async def vanish_after_classify(vault_root: Path, roots: object) -> object:
+        items = await original_items(vault_root, roots)
         (resources_dir / "efimero.md").unlink()
         return items
 
@@ -475,6 +475,7 @@ def test_refresh_report_is_a_frozen_typed_contract_without_any() -> None:
         "skipped": int,
         "elapsed_ms": int,
         "locked": bool,
+        "roots": tuple[str, ...],
     }
     assert not any(hint is Any for hint in hints.values())
 
@@ -515,6 +516,9 @@ def test_every_step_holds_the_scanned_identity_and_exact_counts(
         )
         assert report["elapsed_ms"] > 0
         assert report["locked"] is False
+        assert report["roots"] == [RESOURCE_DIR_NAME], (
+            f"sin argumento el reporte declara la raíz por omisión en {tag}: {report}"
+        )
 
 
 # --- 5: el non-UTF-8 y el directorio ilegible NO son invisibles -----------------

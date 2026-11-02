@@ -49,7 +49,7 @@ def test_classify_file_reports_a_vanished_regular_file_as_unreadable_not_a_broke
     desaparecido.unlink()  # la ruta ya no existe y NUNCA fue un symlink
 
     item = source.classify_file(
-        recursos,
+        tmp_path,
         desaparecido,
         max_file_bytes=source.DEFAULT_MAX_FILE_BYTES,
     )
@@ -79,7 +79,7 @@ def test_classify_file_skips_unreadable_when_doc_kind_raises(
 
     monkeypatch.setattr(source, "doc_kind_for", _race)
 
-    item = source.classify_file(recursos, nota, max_file_bytes=source.DEFAULT_MAX_FILE_BYTES)
+    item = source.classify_file(tmp_path, nota, max_file_bytes=source.DEFAULT_MAX_FILE_BYTES)
 
     assert isinstance(item, source.SkippedSource)
     assert item.reason is source.SkipReason.UNREADABLE
@@ -124,7 +124,7 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
             return []
 
         monkeypatch.setattr(source.os, "walk", fake_walk)
-        return source._unreadable_dir_skips(recursos, matcher)
+        return source._unreadable_dir_skips(tmp_path, recursos, matcher)
 
     ignorados: list[BaseException] = [
         OSError(5, "error de E/S que el conector NO traga", str(recursos / "sub")),
@@ -159,7 +159,7 @@ def test_broken_symlink_outside_the_whitelist_is_not_reported_as_a_skip(tmp_path
     except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
         pytest.skip(f"el filesystem no soporta symlinks: {exc}")
 
-    skips = source.unvisited_skips(recursos)
+    skips = source.unvisited_skips(tmp_path, recursos)
 
     assert [(skip.source_path, skip.reason) for skip in skips] == [
         ("00-Resources/roto.md", source.SkipReason.BROKEN_SYMLINK)

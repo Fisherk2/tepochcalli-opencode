@@ -53,33 +53,46 @@ def test_resolve_vault_root_derives_the_payload_vault_when_no_env_override_is_se
     assert (root / ".tepochcalli").is_dir()
 
 
-def test_indexable_items_skips_a_symlink_that_escapes_the_resource_and_keeps_the_rest(
+def test_indexable_items_skips_a_symlink_that_escapes_the_vault_and_keeps_the_rest(
     tmp_path: Path, caplog: pytest.LogCaptureFixture
 ) -> None:
-    """Contrato de frontera (T6/T8): `_indexable_items` descarta el symlink que escapa.
+    """Contrato de frontera (T2): `_indexable_items` descarta el symlink que escapa del VAULT.
 
     El walk del conector resuelve el symlink y entregaría el archivo de FUERA;
     el wiring debe clasificarlo como `symlink_escape`, loguearlo como descarte y
     seguir indexando el resto. `scanned` cuenta ambos candidatos (el indexable
     y el descarte) para que `scanned == indexed + skipped` siga siendo verdad.
+    Cada `localfs.File` entregado a `index_file` lleva `base_dir=ROOT_KEY`
+    explícito (D62): un `Path` pelado usaría el CWD como base.
     """
     caplog.set_level(logging.WARNING, logger="tepochcalli_flow.app")
-    resources_dir = tmp_path / citation.RESOURCES_DIR
+    vault = tmp_path / "vault"
+    resources_dir = vault / citation.RESOURCES_DIR
     resources_dir.mkdir(parents=True)
     (resources_dir / "ok.md").write_text("# Ok\n\nprosa.\n", encoding="utf-8")
     outside = tmp_path / "outside"
     outside.mkdir()
-    (outside / "secret.md").write_text("# Secreto\n\nfuera del recurso.\n", encoding="utf-8")
+    (outside / "secret.md").write_text("# Secreto\n\nfuera del vault.\n", encoding="utf-8")
     try:
         (resources_dir / "escape.md").symlink_to(outside / "secret.md")
     except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
         pytest.skip(f"el filesystem no soporta symlinks: {exc}")
 
-    items, scanned = asyncio.run(app._indexable_items(resources_dir))
+    items, scanned = asyncio.run(app._indexable_items(vault, (citation.RESOURCES_DIR,)))
 
     keys = {key for key, _file in items}
-    assert "ok.md" in keys
+    assert "00-Resources/ok.md" in keys
     assert not any(key.endswith("escape.md") for key in keys)
     assert scanned == 2  # ok.md + el symlink que escapa, ambos visitados
+    for _key, file in items:
+        assert file.file_path.base_dir is app.ROOT_KEY, (
+            "el FilePath debe construirse con base_dir=ROOT_KEY (D62)"
+        )
     messages = [record.getMessage() for record in caplog.records]
     assert any("symlink_escape" in message for message in messages), messages
+
+
+def test_roots_for_defaults_to_resources_and_preserves_explicit_roots() -> None:
+    """`refresh_blocking(None)` indexa `00-Resources/`; las raíces dadas viajan tal cual (h)."""
+    assert app._roots_for(None) == (citation.RESOURCES_DIR,)
+    assert app._roots_for(["materiales", "documentos"]) == ("materiales", "documentos")

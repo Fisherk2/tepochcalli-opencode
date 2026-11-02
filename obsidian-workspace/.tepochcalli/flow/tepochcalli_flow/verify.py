@@ -34,6 +34,7 @@ from pathlib import Path
 from typing import Final
 
 from .adapters.lancedb_reader import build_reader
+from .citation import verify_slice_identity
 from .config import load_config
 from .layout import DB_RELPATH
 from .ports import CitedChunk
@@ -78,7 +79,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.top_k < 1:
         parser.error(f"--top-k debe ser >= 1, recibido: {args.top_k}")
 
-    vault_root: Path = args.vault_root
+    vault_root: Path = args.vault_root.resolve()
     db_uri = vault_root / DB_RELPATH
     if not db_uri.exists():
         print(
@@ -117,17 +118,38 @@ def main(argv: list[str] | None = None) -> int:
     print(f"\nConsulta: {args.query!r} (top_k={args.top_k}, path_filter={args.path_filter!r})")
     print(f"Chunks citados: {len(results)}")
     for position, chunk in enumerate(results, start=1):
-        _print_chunk(position, chunk)
+        _print_chunk(position, vault_root, chunk)
     return EXIT_OK
 
 
-def _print_chunk(position: int, chunk: CitedChunk) -> None:
+def _source_slice_ok(vault_root: Path, chunk: CitedChunk) -> bool | None:
+    """Comprueba la identidad F1 contra el ORIGINAL (o `None` si no aplica).
+
+    `source_path` es relativo al vault (D41), así que el original se resuelve
+    como `vault_root / source_path` — nunca `vault_root / 00-Resources / …`.
+    Solo aplica a `offsets_ref == "source"`; un binario extraído no es espacio
+    de cita (D50). Un fichero ausente devuelve `False`: la cita no es
+    reproducible y el verificador debe decirlo.
+    """
+    if chunk.offsets_ref != "source":
+        return None
+    try:
+        original = (vault_root / chunk.source_path).read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return verify_slice_identity(original, chunk.char_start, chunk.char_end, chunk.text)
+
+
+def _print_chunk(position: int, vault_root: Path, chunk: CitedChunk) -> None:
     """Imprime un chunk citado con los siete campos congelados de §search."""
+    slice_ok = _source_slice_ok(vault_root, chunk)
+    slice_label = "n/a" if slice_ok is None else ("OK" if slice_ok else "BROKEN")
     print(f"\n[{position}] score={chunk.score:.4f}")
     print(f"    source_path={chunk.source_path}")
     print(f"    heading={chunk.heading!r}")
     print(f"    [char_start={chunk.char_start}, char_end={chunk.char_end}]")
     print(f"    offsets_ref={chunk.offsets_ref}")
+    print(f"    slice={slice_label}")
     print(f"    text={chunk.text!r}")
 
 

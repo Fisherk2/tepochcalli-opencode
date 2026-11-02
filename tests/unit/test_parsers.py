@@ -157,22 +157,24 @@ def test_walk_sources_reports_broken_symlinks_with_reason_without_aborting_f5(
     assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
 
 
-def test_walk_sources_rejects_symlinks_whose_target_escapes_the_resource(
+def test_walk_sources_rejects_symlinks_whose_target_escapes_the_vault(
     tmp_path: Path,
 ) -> None:
-    """Symlink cuyo objetivo resuelve FUERA de `00-Resources/` → `symlink_escape` (frontera).
+    """Symlink cuyo objetivo resuelve FUERA del vault → `symlink_escape` (frontera D47).
 
-    Cubre los tres caminos que el conector sí entrega: archivo apuntando fuera,
-    cadena de dos links (el segundo fuera) y directorio apuntando fuera — en los
-    tres el contenido de fuera jamás debe alcanzar el índice. El conector emite
+    La frontera es el VAULT, no la raíz pedida: con N raíces, un link de una raíz
+    a otra es legítimo; solo lo que sale del vault se rechaza. Cubre los tres
+    caminos que el conector sí entrega: archivo apuntando fuera, cadena de dos
+    links (el segundo fuera) y directorio apuntando fuera. El conector emite
     candidatos ya resueltos (`FilePath.__fspath__` devuelve el target), así que
     la referencia del descarte es el propio target resuelto.
     """
-    recursos = tmp_path / citation.RESOURCES_DIR
+    vault = tmp_path / "vault"
+    recursos = vault / citation.RESOURCES_DIR
     recursos.mkdir(parents=True)
     (recursos / "sana.md").write_text("# Sana\n\nprosa.\n", encoding="utf-8")
     fuera = tmp_path / "fuera.md"
-    fuera.write_text("# Fuera del recurso\n\nsecreto.\n", encoding="utf-8")
+    fuera.write_text("# Fuera del vault\n\nsecreto.\n", encoding="utf-8")
     directorio_fuera = tmp_path / "fuera_dir"
     directorio_fuera.mkdir()
     (directorio_fuera / "oculta.md").write_text("# Oculta\n\nsecreto.\n", encoding="utf-8")
@@ -183,7 +185,7 @@ def test_walk_sources_rejects_symlinks_whose_target_escapes_the_resource(
     except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
         pytest.skip(f"el filesystem no soporta symlinks: {exc}")
 
-    items = source.walk_sources(tmp_path)
+    items = source.walk_sources(vault)
 
     assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
         (fuera.as_posix(), source.SkipReason.SYMLINK_ESCAPE),
@@ -197,7 +199,8 @@ def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
     tmp_path: Path,
 ) -> None:
     """`classify_file` con la ruta-del-link (forma no resuelta) rechaza con cita localizable."""
-    recursos = tmp_path / citation.RESOURCES_DIR
+    vault = tmp_path / "vault"
+    recursos = vault / citation.RESOURCES_DIR
     recursos.mkdir(parents=True)
     fuera = tmp_path / "fuera.md"
     fuera.write_text("# Fuera\n\nsecreto.\n", encoding="utf-8")
@@ -207,7 +210,7 @@ def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
         pytest.skip(f"el filesystem no soporta symlinks: {exc}")
 
     item = source.classify_file(
-        recursos,
+        vault,
         recursos / "secreto.md",
         max_file_bytes=source.DEFAULT_MAX_FILE_BYTES,
     )
@@ -394,11 +397,11 @@ def test_every_chunk_carries_complete_non_null_citation_metadata() -> None:
     """`source_path`, `char_start`, `char_end`, `doc_kind` y `model` no nulos en todo chunk (AC)."""
     text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(encoding="utf-8")
 
-    chunks = parsers.chunk_document(text, "nota.md")
+    chunks = parsers.chunk_document(text, "00-Resources/nota.md")
 
     assert chunks
     for chunk in chunks:
-        assert chunk.source_path == "00-Resources/nota.md"  # POSIX, prefijado
+        assert chunk.source_path == "00-Resources/nota.md"  # POSIX relativo al vault
         assert chunk.doc_kind == "md"
         assert isinstance(chunk.char_start, int)
         assert isinstance(chunk.char_end, int)
@@ -431,15 +434,16 @@ def test_chunk_document_returns_no_chunks_for_empty_text() -> None:
 
 
 def test_chunk_document_normalizes_source_path_before_citing() -> None:
-    """La ruta citada se normaliza con el dominio de T4.
+    """La ruta citada se normaliza con el dominio de T4 (vault-relativa).
 
-    Sin prefijo, sin `./`, anidamiento intacto.
+    Sin prefijo, sin `./`, anidamiento intacto: el llamador entrega la ruta ya
+    relativa al vault (`relative_to(vault_root)`).
     """
     text = "# Título\n\nprosa.\n"
 
     chunks = parsers.chunk_document(text, "./sub/archivo.markdown")
 
-    assert {chunk.source_path for chunk in chunks} == {"00-Resources/sub/archivo.markdown"}
+    assert {chunk.source_path for chunk in chunks} == {"sub/archivo.markdown"}
     assert {chunk.doc_kind for chunk in chunks} == {"markdown"}
 
 

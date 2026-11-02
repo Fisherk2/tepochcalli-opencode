@@ -484,6 +484,9 @@ def test_verify_cli_counts_rows_and_prints_cited_chunks_read_only(
     assert "score=" in proc.stdout
     assert "heading=" in proc.stdout
     assert "[char_start=" in proc.stdout
+    # T2 (j): el verificador resuelve `source_path` contra el vault y comprueba el slice.
+    assert "slice=OK" in proc.stdout
+    assert "slice=BROKEN" not in proc.stdout
 
     assert _snapshot(db_dir) == before, (
         "el verificador modificó .tepochcalli/db/ (¡debe solo leer!)"

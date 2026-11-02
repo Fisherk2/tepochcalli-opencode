@@ -30,6 +30,5 @@ def test_index_file_raises_when_file_grows_after_classify(
                 _FakeFile(nota),  # type: ignore[arg-type]  # duck-typed para el borde
                 table=None,  # type: ignore[arg-type]  # nunca se alcanza en esta rama
                 config=None,  # type: ignore[arg-type]
-                resources_dir=tmp_path,
             )
         )

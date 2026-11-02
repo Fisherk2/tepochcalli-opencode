@@ -71,7 +71,7 @@ class DocumentChunk:
     """Chunk en memoria con su cita completa — el esquema de fila de T6 sin `vector`/`id`."""
 
     source_path: str
-    """Ruta POSIX canónica `00-Resources/...` (no nula, anidamiento intacto; D9.1)."""
+    """Ruta POSIX relativa al vault (no nula, anidamiento intacto; D41)."""
 
     doc_kind: DocKind
     """`md|markdown|txt|pdf` (no nulo) — para PDF, `doc_kind_for` de T4 (§Chunking)."""
@@ -174,7 +174,7 @@ def chunk_document(
         >>> texto = "# Título\n\nprosa."
         >>> chunks = chunk_document(texto, "sub/nota.md")
         >>> chunks[0].source_path, chunks[0].doc_kind
-        ('00-Resources/sub/nota.md', 'md')
+        ('sub/nota.md', 'md')
     """
     if not text:
         return []

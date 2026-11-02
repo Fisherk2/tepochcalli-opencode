@@ -265,7 +265,14 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(
     shapes = asyncio.run(go())
     # Orden exacto de claves por tool (tasks/plan.md §5 «Contrato de datos»).
     assert shapes["search"] == ["error"]  # T2 real: INDEX_EMPTY sobre vault sin índice
-    assert shapes["index_refresh"] == ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
+    assert shapes["index_refresh"] == [
+        "scanned",
+        "indexed",
+        "skipped",
+        "elapsed_ms",
+        "locked",
+        "roots",
+    ]
     assert shapes["add_source"] == ["ok", "written_to", "indexed"]
     assert shapes["rag_status"] == ["embedder", "index", "config", "health"]
 

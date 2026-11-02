@@ -59,7 +59,7 @@ from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_mcp import errors
 
-REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked"]
+REPORT_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked", "roots"]
 """Orden exacto de `asdict(RefreshReport)` — contrato §Tool `index_refresh`."""
 
 ALPHA = (

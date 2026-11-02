@@ -1,4 +1,4 @@
-"""Entrada del flow CocoIndex: `00-Resources/` → chunks citados con embedding en LanceDB.
+"""Entrada del flow CocoIndex: N raíces del vault → chunks citados con embedding en LanceDB.
 
 Sirve specs/spec-rag-engine.md §Proposed Solution (esqueleto v1 corregido en D11)
 y tasks/todo.md → T6 AC:
@@ -53,7 +53,7 @@ import asyncio
 import logging
 import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,12 +67,13 @@ from cocoindex.resources.id import IdGenerator
 
 from . import config as flow_config
 from . import source
-from .citation import RESOURCES_DIR, normalize_source_path
+from .citation import normalize_source_path
 from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME  # noqa: F401  # re-export: tests y wiring del flow consumen los nombres vía app
-from .models import EMBEDDER, LANCE_DB, ChunkRow, RefreshReport
+from .models import EMBEDDER, LANCE_DB, ROOT_KEY, ChunkRow, RefreshReport
 from .parsers import DocumentChunk, chunk_document, extract_text
 from .refresh_lock import acquire_refresh_lock as _acquire_refresh_lock
 from .refresh_lock import release_refresh_lock as _release_refresh_lock
+from .roots import DEFAULT_ROOTS
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,16 @@ FILE_PROCESSOR: Final = "index_file"
 Nunca `stats.total`: la traversa `build_flow` reporta `reprocess=1` por diseño
 (E2) y contaminaría la idempotencia (hallazgo del T8; spec-rag-engine §Semántica
 incremental).
+"""
+
+_active_roots: tuple[str, ...] = DEFAULT_ROOTS
+"""Raíces de la pasada en curso (T2, ADR-010 §4.1).
+
+Las raíces son un ARGUMENTO de `refresh_blocking`, pero el `coco.App` de
+`cocoindex==1.0.25` fija los argumentos de su main function al construirse.
+El lock del refresh serializa las pasadas y `build_flow` se re-ejecuta en cada
+update (E2), así que el valor se fija antes del update y se restaura después:
+sin estado que sobreviva a la llamada.
 """
 
 
@@ -121,14 +132,16 @@ class EmbeddingApiKeyMissingError(ValueError):
 
 
 def resolve_vault_root() -> Path:
-    """Resuelve la raíz del vault: env `TEPOCHCALLI_VAULT_ROOT` o la del payload.
+    """Resuelve la raíz del vault (absoluta): env `TEPOCHCALLI_VAULT_ROOT` o la del payload.
 
     La derivación por `__file__` es estable porque el paquete es editable desde
-    `<vault>/.tepochcalli/flow/` (mismo layout que instala el wizard, D2).
+    `<vault>/.tepochcalli/flow/` (mismo layout que instala el wizard, D2). Se
+    resuelve SIEMPRE: `source_path` y el walk deben ser independientes del cwd
+    desde el que se lanzó el server (misma regla que el composition root del MCP).
     """
     override = os.environ.get(VAULT_ROOT_ENV)
     if override:
-        return Path(override)
+        return Path(override).resolve()
     return Path(__file__).resolve().parents[3]
 
 
@@ -203,6 +216,7 @@ async def provide_resources(builder: coco.EnvironmentBuilder) -> AsyncIterator[N
     if "COCOINDEX_DB" not in os.environ:
         builder.settings.db_path = vault_root / ENGINE_STATE_RELPATH
     builder.provide(LANCE_DB, await lancedb.connect_async(str(vault_root / DB_RELPATH)))
+    builder.provide(ROOT_KEY, vault_root)
     builder.provide(EMBEDDER, _build_embedder(config))
     builder.set_exception_handler(_observe_component_failure)
     yield
@@ -241,15 +255,15 @@ async def index_file(
     file: localfs.File,
     table: lancedb.TableTarget[ChunkRow],
     config: flow_config.Config,
-    resources_dir: Path,
 ) -> None:
     """Particiona un archivo con su cita derivada y fan-outea sus chunks (T5/T6).
 
     Memoizable por contenido: un archivo inmutable no se re-parsea ni se
     re-embebe (semántica Δ de spec-rag-engine §Semántica incremental); la clave
-    de memo depende de los ARGUMENTOS (el `localfs.File` de entrada), no del
-    mecanismo de lectura del cuerpo. La ruta citada se normaliza con
-    `citation.normalize_source_path` — nunca se reconstruye a mano. El texto
+    de memo depende de los ARGUMENTOS —el `localfs.File`, cuyo `base_dir=ROOT_KEY`
+    la ancla a la ruta RELATIVA al vault (D62), y el `config`—, nunca de la ruta
+    absoluta del vault. La cita es ese mismo relativo al vault (D41),
+    normalizado con `citation.normalize_source_path` — nunca a mano. El texto
     sale de `parsers.extract_text`, el ÚNICO decodificador: md/txt en UTF-8
     estricto (BOM incluido, byte a byte equivalente a la lectura directa) y
     PDF vía Docling, cuyos offsets F1 se miden sobre el markdown extraído
@@ -271,7 +285,7 @@ async def index_file(
     text = await asyncio.to_thread(extract_text, file_path)
     chunks = chunk_document(
         text,
-        normalize_source_path(file_path.relative_to(resources_dir)),
+        normalize_source_path(file.file_path.path.as_posix()),
         config=config,
     )
     id_gen = IdGenerator()
@@ -293,11 +307,16 @@ class _ScanTally:
 
 @coco.fn
 async def build_flow() -> _ScanTally:
-    """Monta target gestionado, walk filtrado, fan-out por archivo e índices (T6).
+    """Monta target gestionado, walk multi-raíz, fan-out por archivo e índices (T2/T6).
 
     El trío F2 queda completo aquí: `mount_table_target` (gestionado),
     `coco.mount_each` (ruta de componente por archivo) y —dentro de
     `write_chunk`— `IdGenerator.next_id(chunk.text)`.
+
+    Las raíces de la pasada viven en `_active_roots` (argumento de
+    `refresh_blocking`); cada archivo se monta con una clave vault-relativa
+    (`file.file_path.as_posix()`), así que dos raíces con el mismo nombre de
+    fichero no colisionan en `mount_each`.
 
     Devuelve el `_ScanTally` del pase (T8): `refresh_blocking` lo lee del
     resultado de la main function para armar `RefreshReport.scanned`. La
@@ -306,26 +325,32 @@ async def build_flow() -> _ScanTally:
     """
     vault_root = resolve_vault_root()
     config = flow_config.load_config(vault_root)
-    resources_dir = vault_root / RESOURCES_DIR
     table = await lancedb.mount_table_target(
         LANCE_DB,
         TABLE_NAME,
         table_schema=await lancedb.TableSchema.from_class(ChunkRow, primary_key=["id"]),
     )
-    items, scanned = await _indexable_items(resources_dir)
-    await coco.mount_each(index_file, items, table, config, resources_dir)
+    items, scanned = await _indexable_items(vault_root, _active_roots)
+    await coco.mount_each(index_file, items, table, config)
     table.declare_vector_index(column="embedding")
     table.declare_fts_index(column="text")
     return _ScanTally(scanned=scanned)
 
 
-async def _indexable_items(resources_dir: Path) -> tuple[list[tuple[str, localfs.File]], int]:
-    """Walk real del conector + clasificación F5; SOLO indexables + total visitado (T8).
+async def _indexable_items(
+    vault_root: Path, roots: Sequence[str | Path] | None
+) -> tuple[list[tuple[str, localfs.File]], int]:
+    """Walk multi-raíz + clasificación F5; SOLO indexables + total visitado (T2).
 
-    `source.classify_file` (T5) decide: symlinks que escapan del recurso
-    (frontera de confianza), ilegibles, oversized y rutas fuera de la whitelist
-    nunca montan componente — se loguean como descarte sin abortar el delta
-    (§Fuentes). Los `.pdf` los parsea Docling (T7): el walk ya no los descarta.
+    `source.scan_items` valida y deduplica las raíces (D44/D46/D47) y decide qué
+    archivo entra: symlinks que escapan del vault (frontera de confianza),
+    ilegibles, oversized y rutas fuera de la whitelist nunca montan componente
+    — se loguean como descarte sin abortar el delta (§Fuentes).
+
+    Cada `localfs.File` se reconstruye con `localfs.FilePath(ruta_relativa,
+    base_dir=ROOT_KEY)`: la clave de memo es estable aunque el vault se mueva
+    (D62) y el CWD jamás entra en ella. La clave de `mount_each` es la misma
+    ruta relativa al vault.
 
     Devuelve `(items, scanned)`: además de los candidatos entregados (indexables
     y descartes con motivo), `scanned` cuenta las entradas que el conector traga
@@ -333,28 +358,15 @@ async def _indexable_items(resources_dir: Path) -> tuple[list[tuple[str, localfs
     ilegible—, de modo que la identidad `scanned == indexed + skipped` del
     `RefreshReport` no mienta (hallazgo #5 de CP-B; spec-mcp-server §`index_refresh`).
     """
-    walker = localfs.walk_dir(
-        resources_dir,
-        recursive=True,
-        path_matcher=source.build_path_matcher(),
-    )
+    walked, scanned = await source.scan_items(vault_root, roots)
     items: list[tuple[str, localfs.File]] = []
-    scanned = 0
-    async for key, file in walker.items():
-        scanned += 1
-        entry = source.classify_file(
-            resources_dir,
-            Path(os.fspath(file.file_path)),
-            max_file_bytes=source.DEFAULT_MAX_FILE_BYTES,
-        )
+    for entry in walked:
         if isinstance(entry, source.SourceEntry):
-            items.append((key, file))
+            relative = entry.path.relative_to(vault_root)
+            file = localfs.File(localfs.FilePath(relative, base_dir=ROOT_KEY))
+            items.append((relative.as_posix(), file))
         else:
             logger.warning("Descartado %s: %s — %s", entry.source_path, entry.reason, entry.detail)
-    silent = source.unvisited_skips(resources_dir)
-    scanned += len(silent)
-    for skip in silent:
-        logger.warning("Descartado %s: %s — %s", skip.source_path, skip.reason, skip.detail)
     return items, scanned
 
 
@@ -390,13 +402,24 @@ def _update_blocking_with_stats() -> tuple[_ScanTally, coco.UpdateStats]:
     return asyncio.run_coroutine_threadsafe(_consume(), default_env_loop()).result()
 
 
-def refresh_blocking() -> RefreshReport:
-    """Ejecuta un ciclo Δ del flow con lock de un solo proceso y devuelve su reporte (T8).
+def _roots_for(directories: Sequence[str] | None) -> tuple[str, ...]:
+    """Raíces de la pasada: `None` ⇒ `("00-Resources",)` (ADR-010 §4.1, D32)."""
+    return DEFAULT_ROOTS if directories is None else tuple(directories)
+
+
+def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
+    """Ejecuta un ciclo Δ del flow con lock de un solo proceso y devuelve su reporte (T2/T8).
 
     Entrypoint del criterio 2 (spec-rag-engine §Semántica incremental) y de la
     tool `index_refresh` de Phase 2, que lo invoca y serializa este retorno
     TAL CUAL (spec-mcp-server §Tool `index_refresh`).
 
+    * **Raíces (ADR-010 §4.1):** `directories=None` indexa `00-Resources/`; una
+      secuencia indexa esas raíces **recursivamente** y el reporte las declara
+      en `roots`. Viven solo en la llamada (D32): no se escriben en
+      `tepochcalli.toml` ni sobreviven al proceso. La validación de borde
+      (existencia, tipo, `suggestions`) es de T7; aquí `source.normalize_roots`
+      falla ruidosamente antes de caminar (D65).
     * **Lock:** si OTRO proceso retiene `.tepochcalli/db/refresh.lock` NO se
       arranca update alguno y el reporte es cero con `locked=True` — ni una
       escritura (doble-write que ADR-002 §6 acepta como riesgo, cerrado aquí).
@@ -408,10 +431,11 @@ def refresh_blocking() -> RefreshReport:
       silencios del conector (symlink roto, directorio ilegible) — ver
       `models.RefreshReport`.
     * **Fallo por fichero:** aislado (engine + exception handler del lifespan);
-      solo un `00-Resources/` roto —raíz ausente o no-listable— propaga
-      excepción: eso SÍ es una instalación rota y debe ser ruidoso (F5).
+      solo una raíz rota —ausente o no-listable— propaga excepción: eso SÍ es
+      una instalación rota y debe ser ruidoso (F5).
     * `elapsed_ms` mide adquisición del candado + update con `time.monotonic()`.
     """
+    roots = _roots_for(directories)
     start = time.monotonic()
     lock_fd = _acquire_refresh_lock(resolve_vault_root())
     if lock_fd is None:
@@ -421,10 +445,15 @@ def refresh_blocking() -> RefreshReport:
             skipped=0,
             elapsed_ms=int((time.monotonic() - start) * 1000),
             locked=True,
+            roots=roots,
         )
+    global _active_roots
+    previous_roots = _active_roots
+    _active_roots = roots
     try:
         tally, stats = _update_blocking_with_stats()
     finally:
+        _active_roots = previous_roots
         _release_refresh_lock(lock_fd)
     file_stats = stats.by_component.get(FILE_PROCESSOR)
     indexed = 0 if file_stats is None else file_stats.num_adds + file_stats.num_reprocesses
@@ -434,4 +463,5 @@ def refresh_blocking() -> RefreshReport:
         skipped=tally.scanned - indexed,
         elapsed_ms=int((time.monotonic() - start) * 1000),
         locked=False,
+        roots=roots,
     )

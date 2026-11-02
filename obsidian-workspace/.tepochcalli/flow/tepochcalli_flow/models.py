@@ -37,6 +37,7 @@ Notas de mapeo (fuente instalada `cocoindex==1.0.25`, `connectors/lancedb/_targe
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Annotated, Any
 
 import cocoindex as coco
@@ -50,6 +51,17 @@ LANCE_DB = coco.ContextKey[LanceAsyncConnection]("tepochcalli_db")
 EMBEDDER = coco.ContextKey[SentenceTransformerEmbedder]("embedder", detect_change=True)
 """Embedder del flow con detección de cambio: otro modelo ⇒ re-embedding (ADR-006)."""
 
+ROOT_KEY: coco.ContextKey[Path] = coco.ContextKey[Path]("tepochcalli_root")
+"""Base ESTABLE de cada `FilePath` del walk (D62, ADR-010 §4.7).
+
+Verificado en `cocoindex==1.0.25` (`connectors/localfs/_common.py`): un `Path`
+pelado resuelve contra el **CWD** del proceso, así que la clave de memo
+dependería de dónde se lanzó el server. Con `base_dir=ROOT_KEY` explícito, el
+`__coco_memo_key__()` de `FilePath` es `(clave, ruta relativa al vault)` y
+mover el árbol no invalida el índice. El valor lo provee el lifespan con la
+raíz del vault de hoy; la identidad no cambia con esa ruta.
+"""
+
 
 @dataclass(frozen=True)
 class ChunkRow:
@@ -59,7 +71,7 @@ class ChunkRow:
     """Id estable derivado del texto del chunk — `IdGenerator.next_id` (F2 3/3)."""
 
     source_path: str
-    """Cita POSIX `00-Resources/...` con anidamiento intacto (no nulo; D9.1, D13)."""
+    """Cita POSIX relativa al VAULT con anidamiento intacto (no nulo; D41/D13)."""
 
     doc_kind: str
     """`md|markdown|txt|pdf` (no nulo, dominio `citation.DocKind`; D13)."""
@@ -126,6 +138,9 @@ class RefreshReport:
       bloqueado por candado, que no ejecuta update alguno).
     * `locked`: `True` ⇔ otro proceso retenía el candado: NO se ejecutó
       `update` y el reporte es cero en las tres cuentas (sin escrituras).
+    * `roots`: las raíces de la pasada, tal como se pidieron (aditivo, ADR-010
+      §4.1). Sin argumento es `("00-Resources",)`; las raíces viven solo en la
+      invocación y no sobreviven al proceso (D32).
     """
 
     scanned: int
@@ -142,3 +157,6 @@ class RefreshReport:
 
     locked: bool
     """`True` si otro proceso retenía el candado y la invocación NO ejecutó update."""
+
+    roots: tuple[str, ...]
+    """Raíces pedidas en esta pasada, relativas al vault (ADR-010 §4.1; aditivo)."""

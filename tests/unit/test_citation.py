@@ -22,33 +22,39 @@ from tepochcalli_flow import config as flow_config
 # --- source_path ---------------------------------------------------------------
 
 
-def test_source_path_adds_resources_prefix_preserving_free_nesting() -> None:
-    """Sin prefijo lo gana, conservando el anidamiento libre del usuario (D9.1)."""
+def test_source_path_is_vault_relative_and_preserves_free_nesting() -> None:
+    """La cita es POSIX relativa al VAULT: no prefija ni retira raíz (ADR-010 D41)."""
     assert citation.normalize_source_path("lit/pediatría/ruiz2024.md") == (
-        "00-Resources/lit/pediatría/ruiz2024.md"
+        "lit/pediatría/ruiz2024.md"
     )
-    assert citation.normalize_source_path(Path("a/b/c/d.txt")) == "00-Resources/a/b/c/d.txt"
+    assert citation.normalize_source_path(Path("a/b/c/d.txt")) == "a/b/c/d.txt"
 
 
 def test_source_path_keeps_existing_prefix_unchanged() -> None:
-    """Un path ya prefijado no se duplica (forma canónica de spec-mcp-server §search)."""
+    """Un path ya relativo al vault se devuelve tal cual (spec-mcp-server §search)."""
     assert (
         citation.normalize_source_path("00-Resources/lit-pediatría/ruiz2024.pdf")
         == "00-Resources/lit-pediatría/ruiz2024.pdf"
     )
 
 
-def test_source_path_drops_dot_segments_without_escaping() -> None:
-    """`./` se elimina y `..` se resuelve dentro del recurso: nunca sale de `00-Resources/`."""
-    assert citation.normalize_source_path("./lit/a.md") == "00-Resources/lit/a.md"
-    assert citation.normalize_source_path("lit/tema/../a.md") == "00-Resources/lit/a.md"
-    assert citation.normalize_source_path("../a.md") == "00-Resources/a.md"
-    assert citation.normalize_source_path("00-Resources/../a.md") == "00-Resources/a.md"
+def test_source_path_drops_dot_segments_and_resolves_internal_parents() -> None:
+    """`./` se elimina y `..` se resuelve dentro del vault, sin prefijar nada."""
+    assert citation.normalize_source_path("./lit/a.md") == "lit/a.md"
+    assert citation.normalize_source_path("lit/tema/../a.md") == "lit/a.md"
+    assert citation.normalize_source_path("00-Resources/../a.md") == "a.md"
+
+
+def test_source_path_rejects_a_parent_segment_that_escapes_the_vault() -> None:
+    """`..` sin segmento previo que resolver escapa del vault ⇒ `CitationError` (D41)."""
+    for escaping in ("../a.md", "../../a.md", "lit/../../a.md"):
+        with pytest.raises(citation.CitationError, match="escapa"):
+            citation.normalize_source_path(escaping)
 
 
 def test_source_path_converts_backslashes_to_posix() -> None:
     r"""Entrada con `\` (Windows) → separadores POSIX hacia delante."""
-    assert citation.normalize_source_path("lit\\a.md") == "00-Resources/lit/a.md"
+    assert citation.normalize_source_path("lit\\a.md") == "lit/a.md"
     assert citation.normalize_source_path("00-Resources\\lit\\a.md") == "00-Resources/lit/a.md"
 
 
@@ -57,10 +63,10 @@ def test_source_path_collapses_duplicate_separators() -> None:
     assert citation.normalize_source_path("00-Resources//lit///a.md") == "00-Resources/lit/a.md"
 
 
-def test_source_path_rejects_path_pointing_to_the_resource_root() -> None:
-    """Raíz vacía (`` | `.` | `00-Resources/`) no es una cita: `CitationError`."""
-    for empty in ("", ".", "00-Resources", "00-Resources/"):
-        with pytest.raises(citation.CitationError, match="fuera de"):
+def test_source_path_rejects_an_empty_citation() -> None:
+    """Vacío (`` | `.` | `./` | `/`) no es una cita: `CitationError`."""
+    for empty in ("", ".", "./", "/"):
+        with pytest.raises(citation.CitationError):
             citation.normalize_source_path(empty)
 
 

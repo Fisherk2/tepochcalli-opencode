@@ -30,7 +30,7 @@ type DocKind = Literal["md", "markdown", "txt", "pdf"]
 """Conjunto cerrado de `doc_kind` (spec-rag-engine.md §Chunking; T4 AC)."""
 
 RESOURCES_DIR: Final = "00-Resources"
-"""Única raíz indexable del vault (spec-vault-structure.md, D9.1)."""
+"""Raíz por omisión del índice y destino por omisión de `add_source` (ADR-010)."""
 
 _FRONTMATTER_DELIMITER: Final = "---"
 _ATX_HEADING: Final = re.compile(r"^ {0,3}#{1,6}[ \t]+(\S.*?)[ \t]*$")
@@ -81,14 +81,15 @@ class UnsupportedDocKindError(CitationError):
 
 
 def normalize_source_path(path: str | Path) -> str:
-    """Normaliza `path` a POSIX relativo al vault con prefijo `00-Resources/` (D9.1).
+    """Normaliza `path` a POSIX **relativo al vault** (ADR-010 §4.2, D41).
 
-    Conserva exactamente el anidamiento libre del usuario —ese anidamiento ES la
-    procedencia de la cita (spec-mcp-server.md §search)— y garantiza la forma
-    canónica: sin `./`, sin segmentos `..` (se resuelven dentro del recurso; los
-    `..` sobrantes a la izquierda se descartan), barras hacia delante y sin
-    separadores duplicados. Un path que apunta a la raíz del recurso (vacío,
-    `.` o `00-Resources/`) LANZA `CitationError`: no es una cita.
+    Devuelve la ruta tal cual se le pasa —sin prefijar `00-Resources/` ni
+    quitarlo— porque con N raíces el relativo a la raíz colisionaría entre
+    raíces homónimas. Los llamadores entregan `file_path.relative_to(vault_root)`.
+    Garantiza la forma canónica: sin `./`, sin segmentos `..` internos (se
+    resuelven dentro del vault), barras hacia delante y sin separadores
+    duplicados. Un `..` sin segmento previo que resolver (escape del vault) o un
+    path vacío LANZAN `CitationError`: no son una cita.
     """
     raw = os.fspath(path).replace("\\", "/")
     resolved: list[str] = []
@@ -96,19 +97,20 @@ def normalize_source_path(path: str | Path) -> str:
         if segment in ("", "."):
             continue
         if segment == "..":
-            if resolved:
-                # `..` se resuelve dentro del recurso; sin segmento que poppear se descarta.
-                resolved.pop()
+            if not resolved:
+                raise CitationError(
+                    f"source_path escapa del vault: {raw!r} — se exige una ruta "
+                    "relativa al vault sin `..` que salga de su raíz"
+                )
+            resolved.pop()
             continue
         resolved.append(segment)
-    if resolved and resolved[0] == RESOURCES_DIR:
-        resolved = resolved[1:]
     if not resolved:
         raise CitationError(
-            f"source_path apunta fuera de {RESOURCES_DIR}/: {raw!r} — se exige un "
-            "archivo dentro del recurso"
+            f"source_path apunta a la raíz del vault: {raw!r} — se exige un archivo "
+            "dentro del vault"
         )
-    return f"{RESOURCES_DIR}/" + "/".join(resolved)
+    return "/".join(resolved)
 
 
 class _HeadingState:
