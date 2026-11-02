@@ -59,8 +59,14 @@ DEVICE = "cpu"  # [embedding] device en tepochcalli.toml (default "cpu", E1)
 DB_PATH = ".tepochcalli/db/tepochcalli.lance"
 # D43: whitelist de 8 en un solo lugar; DocKind espeja el mismo conjunto cerrado.
 WHITELIST_PATTERNS = (
-    "**/*.md", "**/*.markdown", "**/*.txt", "**/*.pdf",
-    "**/*.docx", "**/*.pptx", "**/*.xlsx", "**/*.xls",
+    "**/*.md",
+    "**/*.markdown",
+    "**/*.txt",
+    "**/*.pdf",
+    "**/*.docx",
+    "**/*.pptx",
+    "**/*.xlsx",
+    "**/*.xls",
 )
 EXCLUDED_PATTERNS = ("**/.*", "**/.git/**")  # el conector PODA el subárbol (ADR-010 §4.9)
 
