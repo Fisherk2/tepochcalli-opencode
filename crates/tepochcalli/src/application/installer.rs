@@ -273,8 +273,9 @@ pub const UV_PROJECT_ENVIRONMENT: (&str, &str) = ("UV_PROJECT_ENVIRONMENT", "ven
 /// Managed CPython the installer boots (repo canonical: pyproject + workflow
 /// pin the 3.12 series).
 pub const UV_MANAGED_PYTHON: &str = "3.12";
-/// R6 import check: the tools subpackage must import from the fresh venv.
-pub const IMPORT_CHECK: &str = "import tepochcalli_mcp.tools.search";
+/// R6 import check: the tools subpackage must import from the fresh venv, and
+/// `markitdown` must be importable (the flow extracts documents with it, T4/D53).
+pub const IMPORT_CHECK: &str = "import markitdown, tepochcalli_mcp.tools.search";
 
 /// What F4 established: where `uv` lives plus its reported version.
 #[derive(Debug, Clone, PartialEq, Eq)]

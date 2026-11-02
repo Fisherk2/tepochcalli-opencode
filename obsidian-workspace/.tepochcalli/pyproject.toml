@@ -7,21 +7,17 @@ dependencies = [
     # Pins verified by the T1 spike on 2026-10-21 (uv 0.12.9, CPython 3.12.14).
     # Extras are hyphenated; lancedb/pyarrow come from the [lancedb] extra
     # (docs/TRD.md §4: never pin them directly -> avoid version divergence).
-    "cocoindex[lancedb,sentence-transformers]==1.0.25",
-    # Docling 2.x series, CPU only — no GPU extra (docs/TRD.md §4).
-    "docling>=2,<3",
-    # Torch: transitive via sentence-transformers/docling, but declared direct
-    # so [tool.uv.sources] routes it to the CPU index below — uv ignores source
+    # [litellm] aporta la op `cocoindex.ops.litellm`; su pin de seguridad
+    # (GHSA-92x9-889m-jgmw) vive en [tool.uv] constraint-dependencies, no aquí.
+    "cocoindex[lancedb,sentence-transformers,litellm]==1.0.25",
+    # Torch: transitive via sentence-transformers, but declared direct so
+    # [tool.uv.sources] routes it to the CPU index below — uv ignores source
     # pins on transitive deps (uv 0.12.9; astral-sh/uv#9446). PyPI's Linux
     # wheels drag in the CUDA stack (19 pkgs, ~5 GB) we cannot use (E1: no
     # sm_61 kernels). Direct pin keeps the T1-verified 2.14.1 (docs/TRD.md §3
     # venv budget 1-2 GB). Source: https://docs.astral.sh/uv/concepts/indexes/
     # #pinning-a-package-to-an-index
     "torch==2.14.1",
-    # torchvision (via docling-ibm-models): PyPI wheel links against the CUDA
-    # torch ABI -> `operator torchvision::nms does not exist` under +cpu; the
-    # CPU index ships the matching +cpu build.
-    "torchvision==0.29.1",
     # SDK MCP oficial v2 — spike T1 (2026-10-26, plan §3 «omen mayor»): en la v2
     # `FastMCP` se renombró a `MCPServer` (`mcp.server.fastmcp.*` ->
     # `mcp.server.mcpserver.*`; el import viejo lanza ModuleNotFoundError), el
@@ -29,17 +25,11 @@ dependencies = [
     # sirve para nuestro contrato) -> los handlers construyen `CallToolResult`
     # explícito. Pin exacto: la API es reciente y volátil (plan §9).
     "mcp==2.3.0",
-    # markitdown-mcp: conversor soporte (spec-markitdown; D18 acepta +142 MB —
-    # el extra [all] arrastra PDF/audio/YouTube, fuera de alcance v1). Pin
-    # exacto: la API 0.x es inestable (plan §9 «La API de markitdown cambia»).
-    "markitdown-mcp==0.0.1a8",
-    # LiteLLM: proveedor de embeddings por API (D-a: lectura+escritura en
-    # Phase 2; ADR-007 menú D7.2). Pin superior <2 porque la serie 2.x rompería
-    # el contrato `litellm.embedding` que T6 ancla (plan §9 riesgo de lock).
-    # Review Phase 2 (2026-10-27): `<1.107.0` EXCLUSIVO — la serie 1.107.0
-    # publicó malware roba-credenciales (GHSA-92x9-889m-jgmw); no re-abrir el
-    # rango hasta que una serie se declare limpia.
-    "litellm>=1.106.2,<1.107.0",
+    # markitdown: único extractor documento→markdown del motor (ADR-011 D52/D53).
+    # Extras granulares en vez de [all] (sin audio/YouTube/Azure: −125 MB); los
+    # .doc/.ppt legacy y .rtf/.odt/.epub quedan fuera de alcance v1. Pin exacto:
+    # la API 0.x es inestable (plan §9 «La API de markitdown cambia»).
+    "markitdown[docx,pptx,xlsx,xls,pdf]==0.1.9",
 ]
 
 [project.scripts]
@@ -48,17 +38,24 @@ dependencies = [
 # de T1 lo exige; `opencode.json` NO lo usa.
 tepochcalli-mcp = "tepochcalli_mcp.__main__:main"
 
-# Only torch/torchvision may resolve from this index; everything else stays on
-# PyPI. Source: https://docs.astral.sh/uv/guides/integration/pytorch/
+# Only torch may resolve from this index; everything else stays on PyPI.
+# Source: https://docs.astral.sh/uv/guides/integration/pytorch/
 # #using-a-pytorch-index
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
-torchvision = { index = "pytorch-cpu" }
 
 [[tool.uv.index]]
 name = "pytorch-cpu"
 url = "https://download.pytorch.org/whl/cpu"
 explicit = true
+
+# El extra `cocoindex[litellm]` declara `litellm>=1.81.0` SIN techo: sin esta
+# restricción, uv resolvería la serie comprometida. No es una dependencia: es
+# la restricción de resolución de TODA la gráfica (D56). GHSA-92x9-889m-jgmw:
+# la serie 1.107.0 publicó malware roba-credenciales; no re-abrir el rango
+# hasta que una serie se declare limpia.
+[tool.uv]
+constraint-dependencies = ["litellm>=1.106.2,<1.107.0"]
 
 [dependency-groups]
 dev = [

@@ -10,9 +10,10 @@ Fuentes de verdad:
 * tasks/todo.md → T3 AC (e): un extractor que falla no aborta el pase; el
   documento queda en `skipped` y NUNCA produce una fila vacía.
 
-Los `.docx`/`.xlsx` se generan EN EL TEST con las librerías que ya trae el
-extra de markitdown (`python-docx`, `openpyxl`): no se añaden dependencias ni
-binarios al repo. El indexado corre en subproceso (patrón T8/T9).
+Los `.docx`/`.xlsx` se generan EN EL TEST: el `.xlsx` con `openpyxl` (extra de
+markitdown) y el `.docx` con `zipfile` de la stdlib (el extra solo lee docx, no
+escribe): no se añaden dependencias ni binarios al repo. El indexado corre en
+subproceso (patrón T8/T9).
 """
 
 from __future__ import annotations
@@ -22,10 +23,10 @@ import json
 import os
 import subprocess
 import sys
+import zipfile
 from pathlib import Path
 
 import pytest
-from docx import Document
 from model_cache import link_model_cache, offline_env, resolve_model_cache
 from openpyxl import Workbook
 from support.mcp_server import index_vault
@@ -65,11 +66,35 @@ print(json.dumps(dataclasses.asdict(refresh_blocking())), flush=True)
 
 
 def _write_docx(path: Path) -> None:
-    """Genera un `.docx` real con un heading y prosa (python-docx, sin binarios en el repo)."""
-    document = Document()
-    document.add_heading("Titulo Docx", level=1)
-    document.add_paragraph(DOCX_TEXT)
-    document.save(path)
+    """Genera un `.docx` real con la stdlib (`zipfile`); el extra de markitdown solo lee."""
+    content_types = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" ContentType="application/'
+        'vnd.openxmlformats-package.relationships+xml"/>'
+        '<Default Extension="xml" ContentType="application/xml"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/'
+        'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>'
+        "</Types>"
+    )
+    rels = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/'
+        '2006/relationships/officeDocument" Target="word/document.xml"/>'
+        "</Relationships>"
+    )
+    document = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        '<w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'
+        "<w:r><w:t>Titulo Docx</w:t></w:r></w:p>"
+        f"<w:p><w:r><w:t>{DOCX_TEXT}</w:t></w:r></w:p></w:body></w:document>"
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", rels)
+        archive.writestr("word/document.xml", document)
 
 
 def _write_xlsx(path: Path) -> None:

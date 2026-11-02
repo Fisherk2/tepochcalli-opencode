@@ -339,8 +339,8 @@ fn f5_ok_runs_sync_frozen_with_project_env() {
     assert_eq!(calls[0].1, ["python", "install", "3.12"]);
     assert_eq!(calls[1].1, ["venv", "venv"]);
     assert_eq!(calls[2].1, ["sync", "--frozen"]);
-    // The import check runs the venv interpreter (R6: the tools subpackage
-    // must import), never the system python.
+    // The import check runs the venv interpreter (R6/T4: the tools subpackage
+    // and the flow's document extractor must import), never the system python.
     let (python, import_args, _, _) = &calls[3];
     assert!(
         python.ends_with("python") || python.ends_with("python.exe"),
@@ -349,8 +349,9 @@ fn f5_ok_runs_sync_frozen_with_project_env() {
     assert_eq!(import_args.len(), 2);
     assert_eq!(import_args[0], "-c");
     assert!(
-        import_args[1].contains("import tepochcalli_mcp.tools.search"),
-        "R6: the tools subpackage must import, got: {}",
+        import_args[1].contains("import markitdown")
+            && import_args[1].contains("tepochcalli_mcp.tools.search"),
+        "R6/T4: markitdown and the tools subpackage must import, got: {}",
         import_args[1]
     );
     assert_sentinels_intact(vault.path());
