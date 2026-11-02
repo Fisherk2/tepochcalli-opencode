@@ -344,8 +344,9 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 > lock** (la línea base del repo **no** era 624: la estimación contaba otro conjunto/entorno);
 > **2,4 G → 2,1 G** en `du -sh` sobre NTFS, **1,92 GiB** de tamaño aparente. El objetivo ≤1,95 GB
 > se cumple en GiB y **no** en GB decimales (2,06 GB) — se publica la cifra real, no la que
-> cuadra. Lo que no bajó y por qué: `torch` CPU 737 MB (pin obligatorio del índice), `lancedb` 180
-> + `pyarrow` 163 (el almacén, ADR-002) y `litellm` 129 (lo exige la op, D56: desaparece la
+> cuadra. Lo que no bajó y por qué: `torch` CPU 737 MB (pin obligatorio del índice), `lancedb`
+> 180 MB y `pyarrow` 163 MB (el almacén, ADR-002), y `litellm` 129 MB (lo exige la op, D56:
+> desaparece la
 > declaración, no el paquete). Retirado lo previsto: Docling (~225 MB), extras `[all]` (~125 MB),
 > `torchvision` y el server MCP standalone. Efecto secundario detectado: `python-docx` venía
 > **transitivamente de Docling**, no del extra de markitdown ⇒ el fixture `.docx` de los tests se
