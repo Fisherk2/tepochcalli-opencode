@@ -36,7 +36,7 @@ TPOCHCALLI_RAG_ENTRY = {
     "environment": {"TEPOCHCALLI_ROOT": "."},
     "disabled": False,
 }
-MANAGED_KEYS = ("tepochcalli-rag", "markitdown")
+MANAGED_KEYS = ("tepochcalli-rag", "markitdown", "anydoc")
 
 
 def test_payload_is_parseable_and_only_tepochcalli_rag_is_registered() -> None:

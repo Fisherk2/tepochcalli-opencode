@@ -101,12 +101,19 @@
     "servers": {
       "excel": {
         "type": "local",
-        "command": ["uvx", "excel-mcp-server", "stdio"],
+        "command": [
+          "uvx",
+          "excel-mcp-server",
+          "stdio"
+        ],
         "disabled": true
       },
       "jupyter": {
         "type": "local",
-        "command": ["uvx", "mcp-jupyter-notebook"],
+        "command": [
+          "uvx",
+          "mcp-jupyter-notebook"
+        ],
         "disabled": true,
         "environment": {
           "MCP_JUPYTER_SESSION_MODE": "server",
@@ -117,12 +124,12 @@
       }
     }
   },
-  "plugin": [
+  "plugins": [
     "opencode-rpc@2.0.0",
+    "opencode-navigator@latest",
     "opencode-skills-collection@latest",
-    "opencode-skills-tui@latest",
-    "opencode-cockpit@latest",
-    "@hacky.software/opencode-todo-supervisor@latest",
+    "opencode-skill-creator@latest",
+    "opencode-search-plugin@latest",
     "opencode-parser@latest"
   ],
   "permissions": [
