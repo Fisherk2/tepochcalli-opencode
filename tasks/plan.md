@@ -338,6 +338,19 @@ cuantifica su coste (~600 MB por 100k chunks) y el memo por fichero ya cubre el 
 
 **Total esperado: 2,3 GB → ≈1,95 GB (−350 MB) y 624 → ~560 paquetes.** La cifra se **mide** (T4/T13).
 
+> **Medido en T4 (2026-11-02) — sustituye a la estimación de arriba.** Método: venv canónico
+> `venv/` (el `.venv/` paralelo es artefacto local del quirk de uv), `du -sh`/`du -sb`,
+> `*.dist-info` y `grep -c '^name = '` del lock. **184 → 135 paquetes** y **193 → 140 entradas de
+> lock** (la línea base del repo **no** era 624: la estimación contaba otro conjunto/entorno);
+> **2,4 G → 2,1 G** en `du -sh` sobre NTFS, **1,92 GiB** de tamaño aparente. El objetivo ≤1,95 GB
+> se cumple en GiB y **no** en GB decimales (2,06 GB) — se publica la cifra real, no la que
+> cuadra. Lo que no bajó y por qué: `torch` CPU 737 MB (pin obligatorio del índice), `lancedb` 180
+> + `pyarrow` 163 (el almacén, ADR-002) y `litellm` 129 (lo exige la op, D56: desaparece la
+> declaración, no el paquete). Retirado lo previsto: Docling (~225 MB), extras `[all]` (~125 MB),
+> `torchvision` y el server MCP standalone. Efecto secundario detectado: `python-docx` venía
+> **transitivamente de Docling**, no del extra de markitdown ⇒ el fixture `.docx` de los tests se
+> genera con `zipfile` de la stdlib.
+
 ### 5.7 Reparto de responsabilidades (siete tools, ocho intenciones)
 
 | Intención | Tool | Escribe | Indexa |
