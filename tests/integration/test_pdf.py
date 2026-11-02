@@ -1,104 +1,42 @@
-"""Tests de la ruta PDF con Docling en CPU (Phase 1, T7) — escritos en rojo antes que la rama.
+"""Ruta de documentos con markitdown (T3): PDF sin headings y citas sobre el extracto.
 
 Fuentes de verdad:
 
-* specs/spec-rag-engine.md §Ruta PDF (Docling, CPU) — `parse_document`
-  despacha por extensión: PDF → Docling en modo CPU (sin opts GPU),
-  emitiendo markdown con jerarquía de headings conservada (mejora las
-  citas); el costo de PDFs grandes queda fuera del presupuesto Δ (TD-2).
-* specs/spec-rag-engine.md §Fuentes — >100MB → `skipped` con motivo, sin
-  abortar el delta (F5).
-* specs/spec-markitdown.md §fallback — Docling y no markitdown para PDF:
-  markitdown pierde la estructura de headings que alimenta las citas.
-* tasks/todo.md → T7 AC — `doc_kind="pdf"`; `char_start`/`char_end`
-  referidos al **markdown extraído**, nunca al binario PDF (documentado);
-  fixture PDF real (1 página) con heading no nulo; **retirar
-  `SkipReason.PDF_PARSER_PENDING` de `source.classify_file`** (hallazgo
-  revisión CP-B #5: sin esto los PDFs seguirían saltándose en silencio
-  con solo un warning); decodificador único UTF-8 estricto — un decoder
-  distinto rompería M2.
+* specs/spec-rag-engine.md §Ruta de documentos — `markitdown==0.1.9` extrae el
+  texto de `pdf/docx/pptx/xlsx/xls`; los offsets citan el texto EXTRAÍDO
+  (`offsets_ref="extract"`), nunca el binario.
+* specs/adr/adr-011-politica-dependencias-dos-librerias.md §4.3 (D53/D54):
+  Docling fuera y **el PDF pierde la jerarquía de headings** ⇒ `heading` nulo.
+* tasks/todo.md → T3 AC (d): el PDF produce `heading is None`; no se disimula
+  con el título del fichero.
+* tasks/todo.md → T3 AC (e): un extractor que falla no aborta el pase; el
+  documento sin capa de texto queda fuera sin producir una fila vacía.
 
-Decisiones de test, documentadas a propósito (convención de T6):
-
-* **Cache de modelos de Docling FUERA del repo.** El layout model de
-  Docling (~1GB con sus snapshots) nunca debe aterrizar en
-  `obsidian-workspace/.tepochcalli/models/` (payload). El cache estable es
-  el del spike T1 `/tmp/opencode/tepochcalli-t1-spike/models` como `HF_HOME`
-  (Docling descarga vía `snapshot_download` de huggingface_hub, así que
-  `HF_HOME` dirige también sus modelos) más un directorio hermano para
-  `DOCLING_CACHE_DIR` (el `cache_dir` propio de Docling, default
-  `~/.cache/docling`).
-* **M5 sin aserciones de tiempo:** el costo real se mide y se reporta en el
-  cierre de Phase 1 (docs/WORKFLOW.md); un assert de timing sería flaky.
+El fixture PDF se escribe a mano (`tests/fixtures/pdf/articulo_t7.pdf`); su
+texto conserva las palabras «Docling» de la época en que se generó, pero el
+extractor bajo prueba es markitdown. No hay aserciones de tiempo (regla
+anti-flake: la medición vive en `tests/benchmarks/`).
 """
 
 from __future__ import annotations
 
-import os
 import shutil
-from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from docling.exceptions import ConversionError
 from tepochcalli_flow import citation, parsers, source
 
-# Deprecations INTERNAS de Docling al usarse su propia API default: su pipeline
-# serializa opciones por hash en cada `convert` (`force_full_page_ocr`) y su
-# `_init_models` lee el campo deprecado `generate_table_images` una vez. No son
-# de este código ni del flow; se filtran AQUÍ (scope de este módulo) para
-# preservar la regla de la suite: exactamente UN warning (TD-9, FutureWarning).
-pytestmark = [
-    pytest.mark.filterwarnings("ignore:`force_full_page_ocr` is deprecated:DeprecationWarning"),
-    pytest.mark.filterwarnings(
-        "ignore:This field is deprecated. Use `generate_page_images=True`:DeprecationWarning"
-    ),
-]
-
-# Cache de modelos estable fuera del repo (ver docstring del módulo). `setdefault`
-# deja mandar un `HF_HOME` externo sin romper la hermeticidad del payload.
-SPIKE_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
-FALLBACK_CACHE = Path("/tmp/opencode/tepochcalli-t7-models")
-DOCLING_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/docling")
-FALLBACK_DOCLING_CACHE = Path("/tmp/opencode/tepochcalli-t7-docling")
-
-
-@pytest.fixture(autouse=True)
-def _stable_model_caches() -> Iterator[None]:
-    """Manda `HF_HOME`/`DOCLING_CACHE_DIR` al cache estable si nadie externo lo fija.
-
-    Fixturerizado (no a nivel de import): los `setdefault` a nivel de módulo
-    ALTERABAN el entorno global para la SUITE ENTERA tan pronto este módulo
-    se importara, sin restauración. Guarda y restaura el entorno por test;
-    sigue respetando un `HF_HOME` externo (semántica del `setdefault`).
-    """
-    prev: dict[str, str | None] = {k: os.environ.get(k) for k in ("HF_HOME", "DOCLING_CACHE_DIR")}
-    os.environ.setdefault("HF_HOME", str(SPIKE_CACHE if SPIKE_CACHE.exists() else FALLBACK_CACHE))
-    os.environ.setdefault(
-        "DOCLING_CACHE_DIR",
-        str(DOCLING_CACHE if DOCLING_CACHE.exists() else FALLBACK_DOCLING_CACHE),
-    )
-    yield
-    for key, value in prev.items():
-        if value is None:
-            os.environ.pop(key, None)
-        else:
-            os.environ[key] = value
-
-
 FIXTURE_PDF = Path(__file__).parents[1] / "fixtures" / "pdf" / "articulo_t7.pdf"
-"""PDF real de 1 página escrito a mano (sin dependencias de autoría).
-
-Título 20pt + secciones 14pt en Helvetica-Bold: el layout model de Docling
-los clasifica como headings y el markdown emitido conserva la jerarquía.
-Regenerable con `fixtures/pdf/gen_fixture_pdf.py`.
-"""
+"""PDF real de 1 página (título + secciones en texto plano)."""
 
 TITLE = "Tepochcalli Fixture Document"
-"""Título del documento — el heading que encabeza el markdown extraído."""
+"""Título del documento — texto presente en el extracto de markitdown."""
 
 SECTIONS = {"Metodo de prueba", "Resultados", "Implicaciones"}
-"""Secciones del fixture — la jerarquía de headings debe sobrevivir al parseo."""
+"""Secciones del fixture — presentes como texto, SIN jerarquía de headings (D54)."""
+
+CORRUPT_BYTES = bytes(range(256)) * 4
+"""Binario que ningún convertidor de markitdown puede decodificar."""
 
 
 def _skips(items: list[source.WalkItem]) -> list[source.SkippedSource]:
@@ -111,36 +49,23 @@ def _entries(items: list[source.WalkItem]) -> list[source.SourceEntry]:
     return [item for item in items if isinstance(item, source.SourceEntry)]
 
 
-# --- extract_text: la rama PDF de Docling (§Ruta PDF) ---------------------------
+# --- extract_text: markitdown sin jerarquía ------------------------------------
 
 
-def test_extract_text_converts_a_pdf_to_markdown_with_heading_hierarchy() -> None:
-    """El PDF produce markdown con la jerarquía de headings intacta (AC; §Ruta PDF).
-
-    Los headings ATX son lo que `citation.heading_before` citará después
-    (spec-markitdown §fallback: Docling y no markitdown por esta estructura).
-    """
+def test_extract_text_reads_a_pdf_with_markitdown_and_without_headings() -> None:
+    """El PDF se extrae como texto plano: título/secciones presentes, cero ATX (D54)."""
     markdown = parsers.extract_text(FIXTURE_PDF)
 
-    assert markdown.startswith(f"## {TITLE}\n")
-    assert citation.heading_before(markdown, markdown.index("Segundo apartado")) == (
-        "Metodo de prueba"
-    )
-    assert citation.heading_before(markdown, markdown.index("Los chunks producidos")) == (
-        "Resultados"
+    assert TITLE in markdown
+    assert SECTIONS <= set(markdown.splitlines())
+    assert not any(line.lstrip().startswith("#") for line in markdown.splitlines()), (
+        "markitdown no emite jerarquía de headings para el PDF (D54)"
     )
     assert "%PDF" not in markdown  # jamás el binario crudo
 
 
 def test_extract_text_pdf_is_deterministic_and_strictly_unicode() -> None:
-    """Contrato de decodificador único (AC añadido CP-B): mismo string estricto en ambas rutas.
-
-    La ruta md/txt (`read_text(encoding="utf-8")`, errors strict por
-    defecto) y la rama Docling deben producir strings con la misma
-    semántica: Unicode estricto —sin U+FFFD de `errors="replace"`, sin
-    strip de BOM— y deterministas entre corridas, porque los offsets F1 se
-    miden sobre ESTE string (un decoder distinto rompería M2).
-    """
+    """Mismo string en dos corridas, sin U+FFFD (los offsets F1 se miden sobre él)."""
     first = parsers.extract_text(FIXTURE_PDF)
     second = parsers.extract_text(FIXTURE_PDF)
 
@@ -152,14 +77,8 @@ def test_extract_text_pdf_is_deterministic_and_strictly_unicode() -> None:
 # --- chunk_document: chunks citados de un PDF -----------------------------------
 
 
-def test_chunk_document_yields_pdf_chunks_with_non_null_heading_and_f1_identity() -> None:
-    """`doc_kind="pdf"`, `heading` de sección no nulo e identidad F1 sobre el MARKDOWN (AC).
-
-    Los offsets `char_start`/`char_end` se miden sobre el markdown
-    extraído por Docling —decisión documentada de T7—, nunca sobre el
-    binario PDF: la identidad `markdown[char_start:char_end] == chunk.text`
-    debe cumplirse sobre el string que devuelve `extract_text`.
-    """
+def test_chunk_document_yields_pdf_chunks_with_null_heading_and_f1_identity() -> None:
+    """`doc_kind="pdf"`, `heading is None` (D54) e identidad F1 sobre el extracto."""
     markdown = parsers.extract_text(FIXTURE_PDF)
 
     chunks = parsers.chunk_document(markdown, "00-Resources/articulo.pdf")
@@ -168,27 +87,18 @@ def test_chunk_document_yields_pdf_chunks_with_non_null_heading_and_f1_identity(
     for chunk in chunks:
         assert chunk.doc_kind == "pdf"
         assert chunk.source_path == "00-Resources/articulo.pdf"
+        assert chunk.heading is None, "D54: el PDF pierde la jerarquía de headings"
         assert citation.verify_slice_identity(
             markdown, chunk.char_start, chunk.char_end, chunk.text
         ), f"identidad F1 rota en [{chunk.char_start}, {chunk.char_end})"
-        assert chunk.char_end <= len(markdown)  # sobre el markdown, no sobre el binario
-    cited = {chunk.heading for chunk in chunks if chunk.heading is not None}
-    assert cited & SECTIONS, f"heading de sección no citado en ningún chunk: {cited}"
+        assert chunk.char_end <= len(markdown)  # sobre el extracto, no sobre el binario
 
 
-# --- walk/classify: el skip `pdf_parser_pending` retirado (hallazgo CP-B #5) -----
+# --- walk/classify: el PDF es un indexable más --------------------------------
 
 
-def test_walk_sources_indexes_a_real_pdf_now_that_docling_landed_t7(
-    tmp_path: Path,
-) -> None:
-    """AC de revisión: un PDF real YA NO se salta en `classify_file`; el pase lo indexa.
-
-    Antes de T7 el walk emitía `skipped(pdf_parser_pending)` y el PDF
-    jamás alcanzaba `extract_text`; ahora es una `SourceEntry` como
-    cualquier archivo de la whitelist y su ruta vertical completa
-    (walk → extract → chunk) produce citas F1 válidas.
-    """
+def test_walk_sources_indexes_a_real_pdf(tmp_path: Path) -> None:
+    """Un PDF real es una `SourceEntry` como cualquier archivo de la whitelist."""
     recursos = tmp_path / citation.RESOURCES_DIR
     recursos.mkdir(parents=True)
     shutil.copy(FIXTURE_PDF, recursos / "articulo.pdf")
@@ -201,11 +111,10 @@ def test_walk_sources_indexes_a_real_pdf_now_that_docling_landed_t7(
         ("00-Resources/articulo.pdf", "pdf"),
         ("00-Resources/notas.md", "md"),
     ]
-    assert not hasattr(source.SkipReason, "PDF_PARSER_PENDING")  # motivo retirado
 
 
 def test_walk_extract_chunk_end_to_end_over_a_real_pdf(tmp_path: Path) -> None:
-    """Camino vertical #3: el PDF del walk se parsea, parte y cita sin roturas (CP-C)."""
+    """Camino vertical #3: el PDF del walk se extrae, parte y cita sin roturas."""
     recursos = tmp_path / citation.RESOURCES_DIR
     papers = recursos / "sub" / "papers"
     papers.mkdir(parents=True)
@@ -221,6 +130,7 @@ def test_walk_extract_chunk_end_to_end_over_a_real_pdf(tmp_path: Path) -> None:
 
     assert chunks
     assert all(chunk.doc_kind == "pdf" for chunk in chunks)
+    assert all(chunk.heading is None for chunk in chunks)
     assert all(
         citation.verify_slice_identity(markdown, chunk.char_start, chunk.char_end, chunk.text)
         for chunk in chunks
@@ -230,12 +140,7 @@ def test_walk_extract_chunk_end_to_end_over_a_real_pdf(tmp_path: Path) -> None:
 def test_oversized_pdf_is_skipped_with_reason_and_the_pass_completes(
     tmp_path: Path,
 ) -> None:
-    """PDF sobre el umbral → `skipped(oversized)` con motivo y el delta NO se aborta (AC, F5).
-
-    El umbral reutiliza el inyectable `max_file_bytes` de `§Fuentes`
-    (DEFAULT_MAX_FILE_BYTES = 100MB); aquí se inyecta por debajo del
-    tamaño real del fixture para no generar ficheros de 100MB.
-    """
+    """PDF sobre el umbral → `skipped(oversized)` con motivo y el delta NO se aborta (F5)."""
     recursos = tmp_path / citation.RESOURCES_DIR
     recursos.mkdir(parents=True)
     shutil.copy(FIXTURE_PDF, recursos / "grande.pdf")
@@ -251,16 +156,12 @@ def test_oversized_pdf_is_skipped_with_reason_and_the_pass_completes(
     assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
 
 
-def test_corrupt_pdf_raises_conversion_error_and_never_raw_binary(
+def test_corrupt_document_is_reported_as_extraction_failed_and_never_raw_binary(
     tmp_path: Path,
 ) -> None:
-    """Un PDF corrupto lanza `ConversionError` de Docling: nunca devuelve el binario como texto.
-
-    Cubre el lado de error de la rama añadida en `extract_text` (T5
-    cubría el rechazo previo con `PdfParserPendingError`, hoy retirado).
-    """
+    """Un binario corrupto lanza `ExtractionError`: nunca se devuelve el binario como texto."""
     corrupto = tmp_path / "corrupto.pdf"
-    corrupto.write_bytes(b"%PDF-1.4 fake")
+    corrupto.write_bytes(CORRUPT_BYTES)
 
-    with pytest.raises(ConversionError):
+    with pytest.raises(parsers.ExtractionError, match="corrupto"):
         parsers.extract_text(corrupto)

@@ -210,7 +210,7 @@ def backend(adversarial_vault: IndexedVault) -> Iterator[_VaultSearchBackend]:
 
 @pytest.fixture(scope="module")
 def pdf_markdown() -> str:
-    """Markdown del PDF tabular extraído POR DOCLING (rama real de `parsers`)."""
+    """Texto del PDF tabular extraído por markitdown (rama real de `parsers`)."""
     return parsers.extract_text(TABLE_PDF)
 
 
@@ -396,18 +396,17 @@ def test_multibyte_chunks_survive_retrieval_within_budget(backend: SearchBackend
     _assert_within_budget(payload)
 
 
-def test_pdf_with_table_is_extracted_as_markdown_table_by_docling(
+def test_pdf_with_table_is_extracted_as_markdown_table_by_markitdown(
     pdf_markdown: str,
 ) -> None:
-    """Premisa «PDF con tablas»: Docling emite la rejilla como TABLA markdown.
+    """Premisa «PDF con tablas»: markitdown emite la rejilla como TABLA markdown.
 
     ≥10 líneas que empiezan por `|` (13 filas + separador de la rejilla de
-    `gen_fixture_pdf.py --tabla`) con sus celdas: la tabla SE EXTRAE; lo que
-    antes no llegaba al índice era por F-T7-2 (hoy cerrado), no por Docling.
+    `gen_fixture_pdf.py --tabla`) con sus celdas: la tabla SE EXTRAE.
     """
     pipe_lines = [line for line in pdf_markdown.splitlines() if line.strip().startswith("|")]
 
-    assert len(pipe_lines) >= 10, f"Docling no emitió tabla markdown: {pdf_markdown!r}"
+    assert len(pipe_lines) >= 10, f"markitdown no emitió tabla markdown: {pdf_markdown!r}"
     assert "Etapa" in pdf_markdown and "120 ms" in pdf_markdown
 
 
@@ -416,8 +415,8 @@ def test_pdf_table_chunks_flow_through_the_real_handler_within_budget(
 ) -> None:
     """«PDF con tablas» en el handler REAL: citas sobre `tablas.pdf`, ≤1600, D11 intacto.
 
-    Los chunks REALES del PDF (Docling → `chunk_document`) entran al handler a
-    través del puerto `SearchBackend` con scores sintéticos (patrón T2 de
+    Los chunks REALES del PDF (markitdown → `chunk_document`) entran al handler
+    a través del puerto `SearchBackend` con scores sintéticos (patrón T2 de
     presupuesto): el corte es POST-retrieval, así que el budget ejercitado es
     el de producción — el retrieval REAL sobre el mismo PDF indexado lo cubre
     `test_search_over_the_indexed_pdf_returns_its_table_chunks`.
@@ -459,8 +458,8 @@ def test_pdf_is_indexed_as_rows_whose_offsets_cite_the_extracted_markdown(
     """AC de aceptación (F-T7-2 cerrado): el PDF dentro de `00-Resources/` queda INDEXADO.
 
     Cada fila de `tablas.pdf` existe en la tabla con `doc_kind="pdf"` y su
-    identidad F1 se cumple sobre el markdown que Docling extrajo — nunca sobre
-    el binario (decisión T7). El buscado va aparte, en
+    identidad F1 se cumple sobre el texto que markitdown extrajo — nunca sobre
+    el binario (D50). El buscado va aparte, en
     `test_search_over_the_indexed_pdf_returns_its_table_chunks`.
     """
     rows = _read_pdf_rows(adversarial_vault.vault)

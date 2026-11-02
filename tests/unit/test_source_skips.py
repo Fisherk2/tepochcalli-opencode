@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import cast
 
 import pytest
-from tepochcalli_flow import citation, source
+from tepochcalli_flow import citation, source, walk_skips
 
 # --- F1: FileNotFoundError de un archivo REGULAR ≠ symlink roto ----------------
 
@@ -123,8 +123,8 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
                 onerror(cast(OSError, error))
             return []
 
-        monkeypatch.setattr(source.os, "walk", fake_walk)
-        return source._unreadable_dir_skips(tmp_path, recursos, matcher)
+        monkeypatch.setattr(walk_skips.os, "walk", fake_walk)
+        return walk_skips._unreadable_dir_skips(tmp_path, recursos, matcher)
 
     ignorados: list[BaseException] = [
         OSError(5, "error de E/S que el conector NO traga", str(recursos / "sub")),

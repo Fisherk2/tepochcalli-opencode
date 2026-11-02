@@ -19,10 +19,8 @@ Decisiones de test, documentadas a propósito:
 * **Cierra el punto 2 heredado de CP-B**: el corte DIRECTO «slice del
   original reproduce `text`» partiendo de un resultado de `search` por el
   WIRE (md) — lo que CP-B aprobó heredado y encargó a T8 — más
-  `offsets_ref == "extract"` en el PDF (los offsets citan el markdown de
-  Docling, nunca el binario: decisión T7 congelada; la identidad F1 fila a
-  fila sobre el extract vive en `test_mcp_budget_adversarial` y NO se
-  repite aquí — este test gradúa el contrato del wire).
+  `offsets_ref == "extract"` y `heading` nulo en el PDF (los offsets citan el
+  texto extraído por markitdown, nunca el binario: D50/D54).
 * **Cero red y cero LLM**: el hijo corre con el canario `nonet` y
   `HF_HUB_OFFLINE=1`; la única ventana sin canario es el indexado del
   fixture en su subproceso (donde en frío se permite la descarga que el
@@ -60,7 +58,7 @@ MD_QUERY = "espectrómetro de partículas y reducción de datos"
 """Pregunta sobre el md golden — vocabulario real de `nota_dorada.md`."""
 
 PDF_QUERY = "metodo de prueba y resultados del parseo con Docling"
-"""Pregunta sobre el PDF golden — vocabulario de las secciones del extract de Docling."""
+"""Pregunta sobre el PDF golden — vocabulario de sus secciones extraídas."""
 
 
 def test_journey_from_question_to_cited_json_over_the_stdio_process(
@@ -69,9 +67,9 @@ def test_journey_from_question_to_cited_json_over_the_stdio_process(
     """e2e T8: proceso real por stdio → ciclo Δ → pregunta → JSON citado reproducible.
 
     Cada resultado trae `source_path` real (el fichero EXISTE en el vault
-    golden), `heading` derivado y offsets reproducibles: en md el slice del
-    archivo original reproduce `text` byte a byte; en el PDF
-    `offsets_ref == "extract"` (AC explícito de T8, punto 2 de CP-B).
+    golden), `heading` derivado en md y offsets reproducibles: en md el slice
+    del archivo original reproduce `text` byte a byte; en el PDF
+    `offsets_ref == "extract"` y `heading` nulo (D54; AC de T3).
     """
     vault = tmp_path_factory.mktemp("vault-t8-golden")
     shutil.copytree(GOLDEN_VAULT, vault, dirs_exist_ok=True)
@@ -125,7 +123,7 @@ def test_journey_from_question_to_cited_json_over_the_stdio_process(
         "algún chunk md debe citar su heading ATX (D13: heading nullable, no anulado)"
     )
 
-    # 3) PDF: source_path real + heading + offsets_ref == "extract" (AC explícito T8).
+    # 3) PDF: source_path real + heading NULO (D54) + offsets_ref == "extract".
     assert list(pdf) == SEARCH_TOP_LEVEL_FIELDS
     pdf_results = pdf["results"]
     assert pdf_results, "la pregunta pdf debe devolver citas del golden"
@@ -133,9 +131,8 @@ def test_journey_from_question_to_cited_json_over_the_stdio_process(
         assert list(item) == SEARCH_RESULT_FIELDS
         assert (vault / str(item["source_path"])).is_file(), item["source_path"]
         assert item["offsets_ref"] == "extract", (
-            "el PDF cita el markdown extraído por Docling, jamás el binario (T7 congelado)"
+            "el PDF cita el texto extraído por markitdown, jamás el binario (D50)"
         )
-        assert item["heading"] is None or isinstance(item["heading"], str)
-    assert any(item["heading"] is not None for item in pdf_results), (
-        "el extract de Docling conserva la jerarquía: algún chunk cita su sección"
-    )
+        assert item["heading"] is None, (
+            "D54: markitdown no conserva headings; el PDF no inventa uno"
+        )

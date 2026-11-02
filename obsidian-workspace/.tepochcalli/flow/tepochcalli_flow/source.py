@@ -40,10 +40,11 @@ Sirve specs/spec-rag-engine.md §Fuentes (ADR-010):
 * **`source_path` es relativo al VAULT (D41):** con N raíces, el relativo a la
   raíz colisionaría (`materiales/a.pdf` y `documentos/a.pdf` ⇒ `a.pdf`).
 
-Decisión T7: los `.pdf` se parsean con Docling en `parsers.extract_text` — el
-walk ya NO los descarta, así que `classify_file` trata un PDF exactamente como
-cualquier archivo de la whitelist (whitelist de cuatro extensiones, umbral de
-tamaño incluido).
+Decisión T3 (reemplaza la de T7): los documentos binarios (`pdf/docx/pptx/xlsx/
+xls`) se extraen con markitdown en `parsers.extract_text`; el walk los entrega
+como cualquier archivo de la whitelist y un fallo del extractor se reporta como
+`SkipReason.EXTRACTION_FAILED` (con `probe_extraction=True`) sin abortar el
+pase. Los `.md/.markdown/.txt` conservan la lectura UTF-8 estricta.
 
 Esta capa ES infraestructura (a diferencia de `citation`/`config`, dominio con
 frontera prohibida para el motor): importa `cocoindex` deliberadamente — el
@@ -63,14 +64,24 @@ from typing import Final
 from cocoindex.connectors import localfs
 from cocoindex.resources.file import FilePathMatcher, PatternFilePathMatcher
 
-from .citation import DocKind, doc_kind_for, normalize_source_path
+from .citation import SOURCE_OFFSETS_DOC_KINDS, DocKind, doc_kind_for, normalize_source_path
 from .roots import IndexRoot, normalize_roots
+from .walk_skips import unvisited_skips
 
 DEFAULT_MAX_FILE_BYTES: Final = 100 * 1024 * 1024
 """Umbral `>100MB → skipped` de spec-rag-engine.md §Fuentes (F5); inyectable en tests."""
 
-WHITELIST_PATTERNS: Final[tuple[str, ...]] = ("**/*.md", "**/*.markdown", "**/*.txt", "**/*.pdf")
-"""Whitelist de extensiones del recurso (§Fuentes). Un solo lugar para ampliarla."""
+WHITELIST_PATTERNS: Final[tuple[str, ...]] = (
+    "**/*.md",
+    "**/*.markdown",
+    "**/*.txt",
+    "**/*.pdf",
+    "**/*.docx",
+    "**/*.pptx",
+    "**/*.xlsx",
+    "**/*.xls",
+)
+"""Whitelist de las 8 extensiones soportadas (§Fuentes, D43). Un solo lugar."""
 
 EXCLUDED_PATTERNS: Final[tuple[str, ...]] = ("**/.*", "**/.git/**")
 """Exclusiones obligatorias: segmentos-punto y `.git/` (F3).
@@ -107,6 +118,15 @@ class SkipReason(StrEnum):
     ni sus archivos ni un motivo, lo que subestimaba `scanned`. Lo contamos como
     UNA entrada de la pasada —sus archivos internos son inenumerables y no se
     inventan— para que `{scanned, indexed, skipped}` no mienta (spec-mcp-server).
+    """
+
+    EXTRACTION_FAILED = "extraction_failed"
+    """markitdown no pudo extraer texto (corrupto, cifrado, o sin capa de texto).
+
+    T3/D48: un documento binario cuyo extractor falla no aborta el pase; se
+    emite con este motivo y `detail` distingue «corrupto/cifrado» de «sin capa
+    de texto (posible escaneado, OCR manual)». Un documento sin texto JAMÁS se
+    indexa como fila vacía (OM-11).
     """
 
 
@@ -169,6 +189,7 @@ def walk_sources(
     *,
     max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
     path_matcher: FilePathMatcher | None = None,
+    probe_extraction: bool = True,
 ) -> list[WalkItem]:
     """Recorre las `roots` del vault (recursivo) y clasifica cada archivo (§Fuentes).
 
@@ -183,6 +204,11 @@ def walk_sources(
     descartes con `SkipReason`— ordenada por `source_path` (pase determinista).
     Un archivo problemático jamás aborta el pase: se emite como `SkippedSource`.
 
+    `probe_extraction` (default True, T3): prueba a extraer los documentos
+    binarios para reportar `EXTRACTION_FAILED` en el walk de diagnóstico. El
+    engine lo deja en False — la extracción vive DENTRO de `index_file` y el
+    memo por fichero evita re-parsear: un probe en el walk duplicaría el coste.
+
     `max_file_bytes` hace inyectable el umbral de 100MB de la spec para poder
     probar «oversized» con ficheros diminutos (F5); `path_matcher` permite
     reproducir el control F3 con un matcher de solo-inclusión. Una raíz
@@ -195,6 +221,7 @@ def walk_sources(
             roots,
             max_file_bytes=max_file_bytes,
             path_matcher=path_matcher,
+            probe_extraction=probe_extraction,
         )
     )
     return sorted(items, key=lambda item: item.source_path)
@@ -206,6 +233,7 @@ async def scan_items(
     *,
     max_file_bytes: int = DEFAULT_MAX_FILE_BYTES,
     path_matcher: FilePathMatcher | None = None,
+    probe_extraction: bool = False,
 ) -> tuple[list[WalkItem], int]:
     """Core del pase multi-raíz: candidatos + clasificación + entradas silenciosas.
 
@@ -215,16 +243,28 @@ async def scan_items(
     ilegible—), más el total visitado para la identidad
     `scanned == indexed + skipped` del RefreshReport (hallazgo #5 de CP-B).
     Una raíz-fichero se emite como entrada única y NUNCA se pasa a `walk_dir`.
+
+    `probe_extraction` desactivado por defecto: el engine extrae dentro de
+    `index_file` (memoizado); el walk no duplica el parseo de documentos.
     """
     matcher = build_path_matcher() if path_matcher is None else path_matcher
     items: list[WalkItem] = []
     scanned = 0
     for root in normalize_roots(vault_root, roots):
         if root.is_file:
-            items.append(classify_file(vault_root, root.path, max_file_bytes=max_file_bytes))
+            items.append(
+                classify_file(
+                    vault_root,
+                    root.path,
+                    max_file_bytes=max_file_bytes,
+                    probe_extraction=probe_extraction,
+                )
+            )
             scanned += 1
             continue
-        scanned += await _scan_directory(vault_root, root, items, max_file_bytes, matcher)
+        scanned += await _scan_directory(
+            vault_root, root, items, max_file_bytes, matcher, probe_extraction
+        )
     return items, scanned
 
 
@@ -234,42 +274,22 @@ async def _scan_directory(
     items: list[WalkItem],
     max_file_bytes: int,
     matcher: FilePathMatcher,
+    probe_extraction: bool,
 ) -> int:
     """Camina UNA raíz-directorio: candidatos + clasificación + silenciosas."""
     candidates = await _connector_candidates(root.path, matcher)
     items.extend(
-        classify_file(vault_root, candidate, max_file_bytes=max_file_bytes)
+        classify_file(
+            vault_root,
+            candidate,
+            max_file_bytes=max_file_bytes,
+            probe_extraction=probe_extraction,
+        )
         for candidate in candidates
     )
     silent = unvisited_skips(vault_root, root.path, path_matcher=matcher)
     items.extend(silent)
     return len(candidates) + len(silent)
-
-
-def unvisited_skips(
-    vault_root: Path,
-    root: Path,
-    *,
-    path_matcher: FilePathMatcher | None = None,
-) -> list[SkippedSource]:
-    """Entradas que el walk del conector NUNCA entrega, recuperadas con motivo (T8).
-
-    El conector se traga dos casos en silencio —sin candidato y sin `SkipReason`—
-    y la métrica `scanned` del refresh los dejaría invisibles (hallazgo #5 de
-    CP-B): el **symlink roto** (ni `is_file()` lo sigue) y el **directorio
-    ilegible** (`except PermissionError: continue` en `localfs/_source.py`).
-    Este barrido ligero —solo dirents, nunca contenidos— los emite con su
-    motivo para que `app._indexable_items` los cuente en `scanned`/`skipped`.
-
-    `root` es el directorio de la raíz; `vault_root` ancla la cita (D41).
-    `path_matcher` respeta la misma whitelist/exclusiones que el walk real
-    (default: `build_path_matcher()`): un symlink apuntando fuera de la
-    whitelist o un directorio-punto no son asunto de esta capa.
-    """
-    matcher = build_path_matcher() if path_matcher is None else path_matcher
-    skips = _broken_symlink_skips(vault_root, root, matcher)
-    skips.extend(_unreadable_dir_skips(vault_root, root, matcher))
-    return skips
 
 
 def classify_file(
@@ -278,15 +298,21 @@ def classify_file(
     *,
     max_file_bytes: int,
     size_bytes: int | None = None,
+    probe_extraction: bool = False,
 ) -> WalkItem:
     """Aplica la regla F5 a un archivo y devuelve su entrada o su skip con motivo.
 
     `source_path` se cita relativo al VAULT (D41) y la frontera de symlinks es
     el vault (D47). Orden de motivos: objetivo fuera del vault → ilegible →
-    oversized. Cualquier error de `stat()`/lectura se traduce en un
-    `SkipReason` en vez de propagarse (§Fuentes: «se registran como `skipped`,
-    no fallan el delta»). `size_bytes` permite reutilizar un tamaño ya conocido
-    (p. ej. `FileLike.size()` en T6) sin volver a hacer `stat()`.
+    oversized → extracción fallida (solo con `probe_extraction=True`). Cualquier
+    error de `stat()`/lectura se traduce en un `SkipReason` en vez de propagarse
+    (§Fuentes: «se registran como `skipped`, no fallan el delta»). `size_bytes`
+    permite reutilizar un tamaño ya conocido (p. ej. `FileLike.size()` en T6)
+    sin volver a hacer `stat()`.
+
+    `probe_extraction` (T3): para los binarios, ejecuta el extractor y convierte
+    un fallo en `EXTRACTION_FAILED`. El engine lo deja en False — la extracción
+    real ocurre una sola vez, dentro de `index_file` memoizado.
     """
     escaped = _symlink_escape_target(file_path, vault_root.resolve())
     if escaped is not None:
@@ -326,6 +352,18 @@ def classify_file(
             SkipReason.OVERSIZED,
             f"{observed_size} bytes superan el umbral de {max_file_bytes} bytes (F5)",
         )
+    if probe_extraction and kind not in SOURCE_OFFSETS_DOC_KINDS:
+        from .parsers import ExtractionError, extract_text
+
+        try:
+            extract_text(file_path)
+        except ExtractionError as exc:
+            return SkippedSource(
+                file_path,
+                source_path,
+                SkipReason.EXTRACTION_FAILED,
+                exc.detail,
+            )
     return SourceEntry(file_path, source_path, kind, observed_size)
 
 
@@ -401,74 +439,3 @@ async def _connector_candidates(resources_dir: Path, matcher: FilePathMatcher) -
     """Candidatos del walk REAL de cocoindex: `localfs.walk_dir` recursivo (§Fuentes)."""
     walker = localfs.walk_dir(resources_dir, recursive=True, path_matcher=matcher)
     return [Path(os.fspath(entry.file_path)) async for entry in walker]
-
-
-def _broken_symlink_skips(
-    vault_root: Path, root: Path, matcher: FilePathMatcher
-) -> list[SkippedSource]:
-    """Barrido ligero de symlinks rotos que el conector traga en silencio (F5).
-
-    Solo lee dirents (nunca contenidos) y respeta el matcher: un symlink
-    apuntando fuera de la whitelist o hacia un directorio excluido no es
-    asunto de esta capa. Los directorios-punto se podan del descenso para no
-    recorrer `.obsidian/` ni `.git/`. La cita es relativa al vault (D41).
-    """
-    skips: list[SkippedSource] = []
-    for dirpath, dirnames, filenames in os.walk(root):
-        relative_dir = Path(dirpath).relative_to(root)
-        dirnames[:] = [name for name in dirnames if matcher.is_dir_included(relative_dir / name)]
-        for name in filenames:
-            path = Path(dirpath) / name
-            if not path.is_symlink() or path.exists():
-                continue
-            relative = path.relative_to(root)
-            if not matcher.is_file_included(relative):
-                continue
-            skips.append(
-                SkippedSource(
-                    path,
-                    normalize_source_path(path.relative_to(vault_root)),
-                    SkipReason.BROKEN_SYMLINK,
-                    "symlink roto: el objetivo no existe — el conector lo omite en silencio (F5)",
-                )
-            )
-    return skips
-
-
-def _unreadable_dir_skips(
-    vault_root: Path, root: Path, matcher: FilePathMatcher
-) -> list[SkippedSource]:
-    """Directorios que `localfs.walk_dir` descarta con `except PermissionError` (T8).
-
-    El conector hace `continue` SIN entregar el directorio ni sus archivos
-    (verificado en la fuente `connectors/localfs/_source.py`); este barrido
-    usa el `onerror` de `os.walk` para emitir cada uno como UNA entrada
-    `SkipReason.UNREADABLE_DIR`. Solo cuenta `PermissionError` —el único error
-    que el conector traga— para que una carrera `ENOENT` no se finja descarte.
-    """
-    skips: list[SkippedSource] = []
-
-    def _onerror(exc: OSError) -> None:
-        if not isinstance(exc, PermissionError) or not exc.filename:
-            return
-        dirpath = Path(exc.filename)
-        try:
-            relative = dirpath.relative_to(root)
-        except ValueError:
-            return
-        if not matcher.is_dir_included(relative):
-            return
-        skips.append(
-            SkippedSource(
-                dirpath,
-                normalize_source_path(dirpath.relative_to(vault_root)),
-                SkipReason.UNREADABLE_DIR,
-                f"directorio ilegible ({exc.strerror or exc}) — el conector lo omite en "
-                "silencio; sus archivos no enumerables se representan con esta entrada (T8)",
-            )
-        )
-
-    for dirpath, dirnames, _filenames in os.walk(root, onerror=_onerror):
-        relative_dir = Path(dirpath).relative_to(root)
-        dirnames[:] = [name for name in dirnames if matcher.is_dir_included(relative_dir / name)]
-    return skips

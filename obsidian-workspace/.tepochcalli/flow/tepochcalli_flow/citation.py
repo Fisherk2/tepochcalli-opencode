@@ -26,8 +26,11 @@ from typing import Final, Literal
 
 from .config import DEFAULT_EMBEDDING_MODEL, Config
 
-type DocKind = Literal["md", "markdown", "txt", "pdf"]
-"""Conjunto cerrado de `doc_kind` (spec-rag-engine.md §Chunking; T4 AC)."""
+type DocKind = Literal["md", "markdown", "txt", "pdf", "docx", "pptx", "xlsx", "xls"]
+"""Conjunto cerrado de `doc_kind` (spec-rag-engine.md §Fuentes; D43/D50)."""
+
+SOURCE_OFFSETS_DOC_KINDS: Final[frozenset[DocKind]] = frozenset({"md", "markdown", "txt"})
+"""Formats read verbatim: their offsets cite the ORIGINAL (`offsets_ref="source"`)."""
 
 RESOURCES_DIR: Final = "00-Resources"
 """Raíz por omisión del índice y destino por omisión de `add_source` (ADR-010)."""
@@ -50,26 +53,31 @@ _DOC_KIND_BY_SUFFIX: Final[dict[str, DocKind]] = {
     "markdown": "markdown",
     "txt": "txt",
     "pdf": "pdf",
+    "docx": "docx",
+    "pptx": "pptx",
+    "xlsx": "xlsx",
+    "xls": "xls",
 }
 
 OFFSETS_REF_SOURCE: Final = "source"
 """`offsets_ref` de un doc ingestado texto-a-texto: los offsets F1 citan el
-archivo ORIGINAL (md/markdown/txt) — identidad de slice directa (decisión T7)."""
+archivo ORIGINAL (md/markdown/txt) — identidad de slice directa (D50)."""
 
 OFFSETS_REF_EXTRACT: Final = "extract"
-"""`offsets_ref` de un PDF: los offsets citan el markdown EXTRAÍDO por Docling,
-no el binario (el binario no es texto; decisión T7, spec-rag-engine §Ruta PDF)."""
+"""`offsets_ref` de un documento binario extraído por markitdown
+(pdf/docx/pptx/xlsx/xls): los offsets citan el texto extraído, no el binario
+(que no es espacio de cita) — D50/D54."""
 
 
 def offsets_ref_for(doc_kind: DocKind) -> str:
-    """Espacio de coordenadas de los offsets F1 según `doc_kind` (decisión T7, congelada).
+    """Espacio de coordenadas de los offsets F1 según `doc_kind` (D50, congelado).
 
-    `"source"` para {md, markdown, txt} —el slice del archivo reproduce `text`
-    byte a byte— y `"extract"` para `pdf`, cuyo espacio de offsets es el
-    markdown que Docling exporta (el binario del PDF jamás se lee como texto).
-    La decisión T7 queda congelada aquí y en `ports.CitedChunk.offsets_ref`.
+    `"source"` para {md, markdown, txt} —el slice del archivo original reproduce
+    `text`— y `"extract"` para el resto (pdf/docx/pptx/xlsx/xls), cuyo espacio de
+    offsets es el texto que markitdown extrajo. La decisión queda congelada aquí
+    y en `ports.CitedChunk.offsets_ref`.
     """
-    return OFFSETS_REF_EXTRACT if doc_kind == "pdf" else OFFSETS_REF_SOURCE
+    return OFFSETS_REF_SOURCE if doc_kind in SOURCE_OFFSETS_DOC_KINDS else OFFSETS_REF_EXTRACT
 
 
 class CitationError(ValueError):
@@ -77,7 +85,7 @@ class CitationError(ValueError):
 
 
 class UnsupportedDocKindError(CitationError):
-    """Extensión fuera del conjunto soportado {md, markdown, txt, pdf} (§Chunking)."""
+    """Extensión fuera del conjunto cerrado de `DocKind` (D43, 8 formatos)."""
 
 
 def normalize_source_path(path: str | Path) -> str:
@@ -259,18 +267,18 @@ def verify_slice_identity(text: str, char_start: int, char_end: int, chunk_text:
 
 
 def doc_kind_for(path: str | Path) -> DocKind:
-    """Deriva `doc_kind` de la extensión del path, en minúsculas (§Chunking).
+    """Deriva `doc_kind` de la extensión del path, en minúsculas (§Fuentes, D43).
 
-    ∈ {md, markdown, txt, pdf}. Una extensión desconocida o ausente LANZA
-    `UnsupportedDocKindError` — nunca se asume `txt`, para que T5 falle temprano
-    sobre material fuera de la whitelist.
+    ∈ {md, markdown, txt, pdf, docx, pptx, xlsx, xls}. Una extensión desconocida
+    o ausente LANZA `UnsupportedDocKindError` — nunca se asume `txt`, para que
+    el walk falle temprano sobre material fuera de la whitelist.
     """
     suffix = Path(os.fspath(path)).suffix.lower().removeprefix(".")
     kind = _DOC_KIND_BY_SUFFIX.get(suffix)
     if kind is None:
         raise UnsupportedDocKindError(
             f"Extensión desconocida {suffix!r} en {os.fspath(path)!r}; "
-            "doc_kind ∈ {md, markdown, txt, pdf}"
+            "doc_kind ∈ {md, markdown, txt, pdf, docx, pptx, xlsx, xls}"
         )
     return kind
 

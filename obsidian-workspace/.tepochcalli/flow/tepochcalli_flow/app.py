@@ -266,21 +266,23 @@ async def index_file(
     normalizado con `citation.normalize_source_path` — nunca a mano. El texto
     sale de `parsers.extract_text`, el ÚNICO decodificador: md/txt en UTF-8
     estricto (BOM incluido, byte a byte equivalente a la lectura directa) y
-    PDF vía Docling, cuyos offsets F1 se miden sobre el markdown extraído
-    (decisión T7, `offsets_ref="extract"`).
+    los binarios vía markitdown, cuyos offsets F1 se miden sobre el texto
+    extraído (D50, `offsets_ref="extract"`). Un extractor que falla lanza
+    `ExtractionError`: el componente de ESTE fichero falla aislado, queda
+    contado en `skipped` y NUNCA escribe una fila vacía (OM-11).
     """
     file_path = Path(os.fspath(file.file_path))
     # Re-chequeo TOCTOU classify→read: el archivo pudo crecer (o conmutarse) tras
     # el classifier; superarlo aquí falla el componente de ESTE fichero (aislado,
     # el pase continúa) en vez de indexar >100MB. ANTES de extraer el texto:
-    # Docling sobre un PDF que creció costaría minutos antes de fallar igual.
+    # markitdown sobre un documento que creció costaría más antes de fallar igual.
     if (size := os.stat(file_path).st_size) > source.DEFAULT_MAX_FILE_BYTES:
         raise ValueError(
             f"{file_path}: creció a {size} bytes tras el classify "
             f"(> {source.DEFAULT_MAX_FILE_BYTES}); cambió durante el pase"
         )
-    # `extract_text` es síncrono (en PDF ejecuta Docling en CPU, segundos a
-    # minutos): en un thread para no saturar el loop del environment, que
+    # `extract_text` es síncrono (markitdown parsea documentos en CPU, segundos
+    # por documento): en un thread para no saturar el loop del environment, que
     # comparte proceso con el server MCP.
     text = await asyncio.to_thread(extract_text, file_path)
     chunks = chunk_document(

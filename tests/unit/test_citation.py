@@ -181,12 +181,21 @@ def test_heading_ignores_a_hash_after_a_mismatched_backtick_run_inside_an_open_s
 
 @pytest.mark.parametrize(
     ("doc_kind", "expected"),
-    [("md", "source"), ("markdown", "source"), ("txt", "source"), ("pdf", "extract")],
+    [
+        ("md", "source"),
+        ("markdown", "source"),
+        ("txt", "source"),
+        ("pdf", "extract"),
+        ("docx", "extract"),
+        ("pptx", "extract"),
+        ("xlsx", "extract"),
+        ("xls", "extract"),
+    ],
 )
 def test_offsets_ref_for_pins_the_t7_coordinate_space(
     doc_kind: citation.DocKind, expected: str
 ) -> None:
-    """Decisión T7 congelada: `source` para md/markdown/txt, `extract` para pdf."""
+    """Decisión T7/D50 congelada: `source` para texto plano; `extract` para binarios."""
     assert citation.offsets_ref_for(doc_kind) == expected
 
 
@@ -265,17 +274,23 @@ def test_verify_slice_identity_is_false_on_out_of_bounds_offsets() -> None:
         ("nota.markdown", "markdown"),
         ("nota.txt", "txt"),
         ("paper.pdf", "pdf"),
+        ("informe.docx", "docx"),
+        ("presentacion.pptx", "pptx"),
+        ("hoja.xlsx", "xlsx"),
+        ("viejo.xls", "xls"),
         ("NOTA.MD", "md"),
     ],
 )
 def test_doc_kind_from_extension(filename: str, expected: citation.DocKind) -> None:
-    """`doc_kind` ∈ {md, markdown, txt, pdf} en minúsculas, derivado de la extensión."""
+    """`doc_kind` ∈ las 8 extensiones soportadas, en minúsculas, derivado de la extensión."""
     assert citation.doc_kind_for(filename) == expected
 
 
 def test_doc_kind_raises_on_unknown_extension() -> None:
     """Extensión desconocida → `UnsupportedDocKindError`; nunca se asume `txt`."""
-    with pytest.raises(citation.UnsupportedDocKindError, match="md, markdown, txt, pdf"):
+    with pytest.raises(
+        citation.UnsupportedDocKindError, match="md, markdown, txt, pdf, docx, pptx, xlsx, xls"
+    ):
         citation.doc_kind_for("pagina.html")
 
 

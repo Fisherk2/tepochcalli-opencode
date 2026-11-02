@@ -277,6 +277,27 @@ def test_default_max_file_bytes_is_the_spec_threshold_of_100_mb() -> None:
     assert source.DEFAULT_MAX_FILE_BYTES == 100 * 1024 * 1024
 
 
+def test_whitelist_covers_the_eight_supported_formats_in_one_place() -> None:
+    """D43: las 8 extensiones viven en `WHITELIST_PATTERNS` y el matcher real las acepta."""
+    expected = {
+        "**/*.md",
+        "**/*.markdown",
+        "**/*.txt",
+        "**/*.pdf",
+        "**/*.docx",
+        "**/*.pptx",
+        "**/*.xlsx",
+        "**/*.xls",
+    }
+
+    assert set(source.WHITELIST_PATTERNS) == expected
+
+    matcher = source.build_path_matcher()
+    for name in ("a.docx", "a.pptx", "a.xlsx", "a.xls"):
+        assert matcher.is_file_included(Path(name)), f"{name} debe estar en la whitelist"
+    assert not matcher.is_file_included(Path("a.rtf"))
+
+
 # --- extract_text ---------------------------------------------------------------
 
 

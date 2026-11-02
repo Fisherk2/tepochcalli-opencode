@@ -74,7 +74,7 @@ class ChunkRow:
     """Cita POSIX relativa al VAULT con anidamiento intacto (no nulo; D41/D13)."""
 
     doc_kind: str
-    """`md|markdown|txt|pdf` (no nulo, dominio `citation.DocKind`; D13)."""
+    """`md|markdown|txt|pdf|docx|pptx|xlsx|xls` (no nulo, dominio `citation.DocKind`; D13/D43)."""
 
     heading: str | None
     """Último heading ATX previo; `None` sin padre (nullable presente; D13)."""
