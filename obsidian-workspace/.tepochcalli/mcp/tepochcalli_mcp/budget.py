@@ -2,7 +2,7 @@
 
 Dominio puro del server: sin `mcp` ni infraestructura — solo el puerto
 congelado `tepochcalli_flow.ports.CitedChunk` y los defaults del flow (nada de
-literales duplicados: `TOP_K_DEFAULT` es `config.DEFAULT_TOP_K`).
+literales duplicados: `TOP_K_DEFAULT` sale de `config.DEFAULT_TOP_K`).
 
 Fuentes de verdad:
 
@@ -13,14 +13,21 @@ Fuentes de verdad:
   ES/EN a razón de 4 chars/token; revisión Phase 2 (eje 9): CJK/emoji pesa 1
   token POR CARÁCTER — el margen ≥400 tokens deja la pregunta y la respuesta
   del agente dentro de la cota 2000 de UH.md (criterio 4) en los cuatro scripts.
+
+**Default de `top_k` (`TEPOCHCALLI_TOP_K`):** `TOP_K_DEFAULT` se deriva del
+entorno en IMPORT (`opencode.json` → `environment`), jamás del toml: en import
+no se conoce el vault. Rango ÚTIL 1–8 — `effective_top_k` recorta a
+`TOP_K_CAP = 8` todo lo que pase de ahí (el `default` del schema lo refleja,
+pero el corte es duro); valores no enteros o ≤ 0 caen a `DEFAULT_TOP_K`.
 """
 
 from __future__ import annotations
 
+import os
 from collections.abc import Sequence
 from typing import Final
 
-from tepochcalli_flow.config import DEFAULT_TOP_K
+from tepochcalli_flow.config import DEFAULT_TOP_K, TOP_K_ENV
 from tepochcalli_flow.ports import CitedChunk
 
 CITATION_OVERHEAD_TOKENS: Final = 25
@@ -38,8 +45,27 @@ TOP_K_MAX: Final = 20
 TOP_K_CAP: Final = 8
 """Tope duro del `top_k` efectivo: `min(solicitado, 8)` (plan §5)."""
 
-TOP_K_DEFAULT: Final = DEFAULT_TOP_K
-"""Por omisión, 5 — el default canónico del flow, sin duplicar el literal."""
+
+def _top_k_from_env(raw: str | None) -> int:
+    """`TEPOCHCALLI_TOP_K` crudo → entero > 0; ausente, vacío o inválido ⇒ `DEFAULT_TOP_K`.
+
+    Puro: el import del módulo lo llama con `os.environ.get(TOP_K_ENV)`. Solo
+    entorno — en import no hay vault del que leer el toml, y una env mal puesta
+    no puede tumbar el arranque del server.
+    """
+    try:
+        value = int((raw or "").strip())
+    except ValueError:
+        return DEFAULT_TOP_K
+    return value if value > 0 else DEFAULT_TOP_K
+
+
+TOP_K_DEFAULT: Final = _top_k_from_env(os.environ.get(TOP_K_ENV))
+"""Por omisión, `TEPOCHCALLI_TOP_K` (declarada en `opencode.json`) o 5.
+
+Es el `default` del schema de `search`; `effective_top_k` sigue recortando a
+`TOP_K_CAP` (rango útil 1–8).
+"""
 
 
 def _is_cjk(char: str) -> bool:

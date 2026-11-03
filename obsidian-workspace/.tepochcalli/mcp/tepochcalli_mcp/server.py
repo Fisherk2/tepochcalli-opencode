@@ -348,10 +348,10 @@ def _refresh_once(directories: tuple[str, ...] | None = None) -> dict[str, objec
     `asdict` copia los campos EN SU ORDEN — el handler devuelve ese dict tal
     cual, sin recalcular.
 
-    **Raíces (T8):** `None` ⇒ `00-Resources/` (default del motor, D42); una
-    tupla indexa esas raíces y el reporte las declara. Solo un refresh que
-    EFECTIVAMENTE indexó anota `_last_refresh_roots_state` — un candado
-    retenido no es una indexación.
+    **Raíces (T8):** `None` ⇒ `Config.indexer_roots` (`INDEXER_DIR`, por omisión
+    `00-Resources/`, D42); una tupla indexa esas raíces y el reporte las
+    declara. Solo un refresh que EFECTIVAMENTE indexó anota
+    `_last_refresh_roots_state` — un candado retenido no es una indexación.
 
     **Traducción T6 (aquí, en el composition root — dirección correcta flow→mcp):**
     `EmbeddingApiKeyMissingError` del flow (litellm sin `api_key_env`) ⇒
@@ -372,6 +372,20 @@ def _refresh_once(directories: tuple[str, ...] | None = None) -> dict[str, objec
     if not report["locked"]:
         _last_refresh_roots_state = tuple(str(root) for root in report["roots"])
     return report
+
+
+def _add_source_refresh() -> dict[str, object]:
+    """Seam de refresh de `add_source`: raíces configuradas MÁS `00-Resources/`.
+
+    `add_source` escribe SIEMPRE en `00-Resources/` (D9.1) y el target del flow
+    reconcilia el conjunto DECLARADO de raíces (spec-rag-engine §Δ): un refresh
+    sin esa raíz purgaría las filas del `.md` recién escrito. Orden preservado
+    (primero las de `INDEXER_DIR`, luego la contractual si falta) y sin duplicar.
+    """
+    configured = load_config(_vault_root()).indexer_roots
+    if citation.RESOURCES_DIR in configured:
+        return _refresh_once(configured)
+    return _refresh_once((*configured, citation.RESOURCES_DIR))
 
 
 def _convert_seam(uri: str) -> str:
@@ -419,6 +433,16 @@ def _embedder_available() -> bool:
 def _last_refresh_roots_seam() -> tuple[str, ...]:
     """Seam T8: raíces de la última indexación de la sesión (en memoria, no persistidas)."""
     return _last_refresh_roots_state
+
+
+def _indexer_roots_seam() -> tuple[str, ...]:
+    """Seam de raíces por omisión: `Config.indexer_roots` (`INDEXER_DIR` de `opencode.json`).
+
+    Se lee del entorno en CADA llamada (mismo criterio que `_embedder_available`):
+    cambiar `INDEXER_DIR` no exige reiniciar el server. `load_config` nunca
+    lanza, y la validación de cada raíz sigue en el borde del handler.
+    """
+    return load_config(_vault_root()).indexer_roots
 
 
 def _available_roots_seam() -> tuple[str, ...]:
@@ -492,14 +516,15 @@ async def index_refresh(directories: list[str] | None = None) -> CallToolResult:
     segunda llamada sin cambios reporta `indexed: 0` (spec-mcp-server §Tool
     `index_refresh`). `directories` son las raíces a indexar, **recursivas** y
     relativas al vault (una raíz puede ser un fichero suelto); omitido ⇒
-    `["00-Resources"]`. Las raíces se validan ANTES de tocar el motor: una
-    inexistente, de otro tipo o fuera del vault ⇒ `VALIDATION_ERROR` con
-    `details.suggestions` y no se indexa NINGUNA (fail-fast atómico). Un
-    directorio vacío no es error: `scanned: 0`.
+    las raíces de `INDEXER_DIR` (por omisión `["00-Resources"]`). Las raíces se
+    validan ANTES de tocar el motor: una inexistente, de otro tipo o fuera del
+    vault ⇒ `VALIDATION_ERROR` con `details.suggestions` y no se indexa NINGUNA
+    (fail-fast atómico). Un directorio vacío no es error: `scanned: 0`.
     """
     payload = await index_refresh_handler.index_refresh(
         directories,
         vault_root=_vault_root,
+        default_roots=_indexer_roots_seam,
         refresh=_refresh_once,
         embedder_available=_embedder_available,
         index_exists=_index_exists,
@@ -515,7 +540,9 @@ async def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
     `file:` fuera del vault ⇒ `VALIDATION_ERROR`), conversión con markitdown
     EN PROCESO (D-b, costura `_convert_seam`), escritura atómica en
     `00-Resources/<subdir|_inbox>/` con frontmatter de trazabilidad
-    (`source_uri`, `converted_at`) y ciclo Δ de `index_refresh` interno.
+    (`source_uri`, `converted_at`) y ciclo Δ interno sobre las raíces
+    configuradas MÁS `00-Resources/` (el destino se declara siempre: si no,
+    el target purgaría el .md recién escrito).
     Fetch/convert fallido ⇒ `SOURCE_UNREACHABLE` con la guía de
     spec-markitdown; refresh bloqueado ⇒ `ENGINE_LOCKED` (el archivo sí
     quedó; ver `tools/add_source.py` para el detalle del `locked`).
@@ -525,7 +552,7 @@ async def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
         subdir,
         vault_root=_vault_root,
         convert=_convert_seam,
-        refresh=_refresh_once,
+        refresh=_add_source_refresh,
         embedder_available=_embedder_available,
     )
     return tepochcalli_mcp.tools.json_result(payload)

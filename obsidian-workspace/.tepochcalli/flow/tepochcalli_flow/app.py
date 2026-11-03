@@ -408,8 +408,15 @@ def _update_blocking_with_stats() -> tuple[_ScanTally, coco.UpdateStats]:
 
 
 def _roots_for(directories: Sequence[str] | None) -> tuple[str, ...]:
-    """Raíces de la pasada: `None` ⇒ `("00-Resources",)` (ADR-010 §4.1, D32)."""
-    return DEFAULT_ROOTS if directories is None else tuple(directories)
+    """Raíces de la pasada: `None` ⇒ `Config.indexer_roots` (ADR-010 §4.1, D32).
+
+    El default sale de `INDEXER_DIR` (`opencode.json` → entorno del proceso),
+    por omisión `("00-Resources",)`. Se relee en cada pasada: cambiar la
+    variable no exige reiniciar el proceso.
+    """
+    if directories is None:
+        return flow_config.load_config(resolve_vault_root()).indexer_roots
+    return tuple(directories)
 
 
 def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
@@ -419,7 +426,8 @@ def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
     tool `index_refresh` de Phase 2, que lo invoca y serializa este retorno
     TAL CUAL (spec-mcp-server §Tool `index_refresh`).
 
-    * **Raíces (ADR-010 §4.1):** `directories=None` indexa `00-Resources/`; una
+    * **Raíces (ADR-010 §4.1):** `directories=None` indexa `Config.indexer_roots`
+      (`INDEXER_DIR`, por omisión `00-Resources/`); una
       secuencia indexa esas raíces **recursivamente** y el reporte las declara
       en `roots`. Viven solo en la llamada (D32): no se escriben en
       `tepochcalli.toml` ni sobreviven al proceso. La validación de borde

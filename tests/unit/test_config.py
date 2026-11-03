@@ -59,7 +59,6 @@ def test_defaults_when_no_config_file(tmp_path: Path, caplog: pytest.LogCaptureF
     assert cfg.embedding.api_key_env == "TEPOCHCALLI_EMBED_API_KEY"
     assert cfg.chunking.max_chunk_size == 1536  # BYTES, no chars (F4/D11)
     assert cfg.chunking.overlap == 192
-    assert cfg.search.top_k_default == 5
     assert cfg.models_dir == tmp_path / ".tepochcalli" / "models"
     assert _module_messages(caplog) == []
 
@@ -74,7 +73,6 @@ def test_partial_section_merges_with_defaults(tmp_path: Path) -> None:
     assert cfg.chunking.overlap == 192  # default de la misma sección
     assert cfg.embedding.model == "paraphrase-multilingual-MiniLM-L12-v2"
     assert cfg.embedding.device == "cpu"
-    assert cfg.search.top_k_default == 5
 
 
 def test_malformed_toml_warns_and_falls_back_to_defaults(
@@ -123,11 +121,11 @@ def test_empty_model_string_falls_back_to_default(
 def test_unknown_key_warns_and_is_ignored(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
     """Clave fuera del contrato canónico (p.ej. typo): warning + default del campo."""
     caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
-    _write_config(tmp_path, "[search]\ntopk = 9\n")
+    _write_config(tmp_path, "[chunking]\nmaxsize = 1024\n")
 
     cfg = flow_config.load_config(tmp_path)
 
-    assert cfg.search.top_k_default == 5
+    assert cfg.chunking.max_chunk_size == 1536
     assert any("desconocida" in message for message in _module_messages(caplog))
 
 
@@ -141,6 +139,23 @@ def test_unknown_section_warns_and_is_ignored(
     cfg = flow_config.load_config(tmp_path)
 
     assert cfg.embedding.model == "paraphrase-multilingual-MiniLM-L12-v2"
+    assert any("Sección desconocida" in message for message in _module_messages(caplog))
+
+
+def test_legacy_search_section_warns_and_the_loader_still_loads(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Migración: `[search]` ya no es sección del contrato ⇒ warning, defaults y NO lanza.
+
+    `top_k` se declara en `opencode.json` (`TEPOCHCALLI_TOP_K`); un
+    `tepochcalli.toml` viejo con `[search]` sigue arrancando (invariante del loader).
+    """
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    _write_config(tmp_path, "[search]\ntop_k_default = 9\n")
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg == flow_config.load_config(tmp_path / "sin-archivo")
     assert any("Sección desconocida" in message for message in _module_messages(caplog))
 
 
@@ -163,11 +178,11 @@ def test_invalid_value_type_warns_and_uses_default(
 ) -> None:
     """Tipo erróneo (texto donde debe haber entero) → warning + default del campo."""
     caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
-    _write_config(tmp_path, '[search]\ntop_k_default = "5"\n')
+    _write_config(tmp_path, '[chunking]\nmax_chunk_size = "1536"\n')
 
     cfg = flow_config.load_config(tmp_path)
 
-    assert cfg.search.top_k_default == 5
+    assert cfg.chunking.max_chunk_size == 1536
     assert _module_messages(caplog)
 
 
@@ -337,7 +352,11 @@ def test_section_that_is_not_a_table_warns_and_is_ignored(
 
 
 def test_example_file_matches_canonical_template() -> None:
-    """El `.example` commiteado reproduce exactamente las claves de la spec (D11)."""
+    """El `.example` commiteado reproduce exactamente las claves de la spec (D11).
+
+    `[search]` NO va en el ejemplo: `top_k` se declara en `opencode.json`
+    (`TEPOCHCALLI_TOP_K`) como el resto de la config por entorno.
+    """
     raw = tomllib.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
 
     assert raw["embedding"] == {
@@ -346,4 +365,45 @@ def test_example_file_matches_canonical_template() -> None:
         "device": "cpu",
     }
     assert raw["chunking"] == {"max_chunk_size": 1536, "overlap": 192}
-    assert raw["search"] == {"top_k_default": 5}
+    assert "search" not in raw, "[search] vive en el entorno (opencode.json), no en el toml"
+
+
+# --- config por entorno: INDEXER_DIR ---------------------------------------------------
+
+
+def test_indexer_dir_env_is_split_on_commas(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    r"""`INDEXER_DIR` multi-valor: split por `,` (nunca `os.pathsep`: `:` rompe `C:\\`)."""
+    monkeypatch.setenv("INDEXER_DIR", "00-Resources,03-Citations")
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.indexer_roots == ("00-Resources", "03-Citations")
+
+
+def test_indexer_dir_env_trims_spaces_and_drops_empty_values(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Espacios recortados y segmentos vacíos descartados."""
+    monkeypatch.setenv("INDEXER_DIR", " 00-Resources , , 03-Citations ")
+
+    assert flow_config.load_config(tmp_path).indexer_roots == ("00-Resources", "03-Citations")
+
+
+def test_indexer_roots_default_when_env_is_absent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sin `INDEXER_DIR`: el default del producto es `00-Resources`."""
+    monkeypatch.delenv("INDEXER_DIR", raising=False)
+
+    assert flow_config.load_config(tmp_path).indexer_roots == ("00-Resources",)
+
+
+def test_indexer_roots_default_when_env_is_blank(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`INDEXER_DIR` vacío o solo espacios/separadores ⇒ default."""
+    monkeypatch.setenv("INDEXER_DIR", " , ")
+
+    assert flow_config.load_config(tmp_path).indexer_roots == ("00-Resources",)

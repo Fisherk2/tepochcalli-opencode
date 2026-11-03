@@ -13,6 +13,11 @@ overrides); clave/sección desconocida, tipo erróneo o `provider` fuera de
 {local, litellm, none} = warning + default de ese campo (las overrides hermanas se
 respetan). Todo se loggea con `logging.getLogger(__name__)`.
 
+Config por entorno: además del toml, `load_config` lee `INDEXER_DIR` (raíces
+indexables por omisión, `Config.indexer_roots`). `TEPOCHCALLI_TOP_K` (el default
+de `search`) NO se lee aquí: lo consume `tepochcalli_mcp.budget` en import,
+donde tampoco hay vault del que leer el toml.
+
 Seguridad: dos fuentes de clave, env > fichero (fix cross-layer 2026-10-28). `api_key_env` es el
 NOMBRE de la variable; `api_key` es la clave literal que el wizard escribe en el
 toml gitignored. Ninguna de las dos se renderiza: `api_key` lleva `repr=False` y
@@ -45,6 +50,26 @@ DEFAULT_API_KEY_ENV: Final = "TEPOCHCALLI_EMBED_API_KEY"
 DEFAULT_MAX_CHUNK_SIZE: Final = 1536
 DEFAULT_CHUNK_OVERLAP: Final = 192
 DEFAULT_TOP_K: Final = 5
+DEFAULT_INDEXER_ROOTS: Final[tuple[str, ...]] = ("00-Resources",)
+"""Raíces indexadas cuando `INDEXER_DIR` no declara ninguna (`citation.RESOURCES_DIR`).
+
+Literal propio porque `citation` importa este módulo (el dominio apunta hacia
+dentro): un import inverso sería circular.
+"""
+
+INDEXER_DIR_ENV: Final = "INDEXER_DIR"
+"""Raíces a indexar declaradas en `opencode.json` (`mcp.servers.*.environment`).
+
+Multi-valor separado por COMAS — nunca `os.pathsep`: `:` colisiona con `C:\\`.
+Las rutas son relativas al vault; el borde (`paths.validate_roots`) rechaza las
+que caen fuera (B′).
+"""
+
+TOP_K_ENV: Final = "TEPOCHCALLI_TOP_K"
+"""Nombre de la env con el default de `search.top_k` (`opencode.json` → `environment`).
+
+La consume `tepochcalli_mcp.budget` en import (aquí no: el toml no la declara).
+"""
 
 MODEL_REVISION: Final = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
 """SHA del commit del modelo HF default (`paraphrase-multilingual-MiniLM-L12-v2`,
@@ -72,7 +97,7 @@ T6: el loader lo advertía y caía a `local` EN SILENCIO justamente cuando la
 config degradada lo escribe. Es corrección de hechos (ADR-007 ya había
 decidido el estado `none`) ⇒ sin ADR nuevo (plan §2 D15).
 """
-_KNOWN_SECTIONS: Final = ("embedding", "chunking", "search")
+_KNOWN_SECTIONS: Final = ("embedding", "chunking")
 
 
 @dataclass(frozen=True)
@@ -126,13 +151,6 @@ class ChunkingConfig:
 
 
 @dataclass(frozen=True)
-class SearchConfig:
-    """Sección `[search]` — spec-mcp-server.md §presupuestos."""
-
-    top_k_default: int = DEFAULT_TOP_K
-
-
-@dataclass(frozen=True)
 class Config:
     """Configuración resuelta del flow para un vault.
 
@@ -143,7 +161,8 @@ class Config:
     models_dir: Path = field(compare=False)
     embedding: EmbeddingConfig = EmbeddingConfig()
     chunking: ChunkingConfig = ChunkingConfig()
-    search: SearchConfig = SearchConfig()
+    indexer_roots: tuple[str, ...] = DEFAULT_INDEXER_ROOTS
+    """Raíces indexables por omisión (`INDEXER_DIR`), relativas al vault (ADR-010)."""
 
     @property
     def embedding_model_path(self) -> Path:
@@ -178,6 +197,10 @@ def load_config(vault_root: Path) -> Config:
     sobre los defaults canónicos; devuelve un `Config` inmutable listo para el
     entrypoint, que debe llamar a `config.apply_model_cache_env()` antes de
     construir el embedder.
+
+    Migración: `[search]` ya no es una sección del contrato (`top_k` se declara
+    en `opencode.json` vía `TEPOCHCALLI_TOP_K`); un toml viejo que la traiga
+    solo recibe el warning de sección desconocida — el loader sigue sin lanzar.
     """
     config_path = vault_root / CONFIG_RELPATH
     raw = _read_toml(config_path)
@@ -188,9 +211,7 @@ def load_config(vault_root: Path) -> Config:
         chunking=_merge_section(
             "chunking", ChunkingConfig(), _section(raw, "chunking", config_path), config_path
         ),
-        search=_merge_section(
-            "search", SearchConfig(), _section(raw, "search", config_path), config_path
-        ),
+        indexer_roots=_indexer_roots_from_env(),
     )
     logger.debug(
         "Config de %s: provider=%s model=%s device=%s api_key_env=%s "
@@ -202,6 +223,19 @@ def load_config(vault_root: Path) -> Config:
         resolved.embedding.api_key_env,
     )
     return resolved
+
+
+def _indexer_roots_from_env() -> tuple[str, ...]:
+    """Raíces de `INDEXER_DIR`: split por `,`, `strip()` y descarta vacíos.
+
+    Ausente, vacía o solo separadores ⇒ `DEFAULT_INDEXER_ROOTS`. No se valida
+    ninguna ruta aquí (el loader no hace I/O ni lanza): el borde MCP
+    (`paths.validate_roots`) exige existencia y que la raíz caiga dentro del
+    vault, aceptando una absoluta que resuelva dentro (B′/D47).
+    """
+    raw = os.environ.get(INDEXER_DIR_ENV, "")
+    roots = tuple(part.strip() for part in raw.split(",") if part.strip())
+    return roots or DEFAULT_INDEXER_ROOTS
 
 
 def _read_toml(config_path: Path) -> dict[str, object]:

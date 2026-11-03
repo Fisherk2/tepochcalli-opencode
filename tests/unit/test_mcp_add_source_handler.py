@@ -24,7 +24,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from tepochcalli_mcp import paths
+from tepochcalli_mcp import paths, server
 from tepochcalli_mcp.tools import add_source as handler
 
 REPORT = {"scanned": 3, "indexed": 1, "skipped": 2, "elapsed_ms": 800, "locked": False}
@@ -212,3 +212,44 @@ def test_slug_and_subdir_are_reused_from_paths_domain(
     payload, _calls = _run(uri, vault=tmp_path)
 
     assert payload["written_to"] == f"00-Resources/_inbox/{paths.slugify_uri(uri)}.md"
+
+
+# --- wiring de reindexación: el refresh declara TAMBIÉN el destino de escritura ----------
+
+
+def _seam_calls(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, indexer_dir: str | None
+) -> list[tuple[str, ...]]:
+    """Espía `server._refresh_once` y ejecuta el seam de refresh de `add_source`."""
+    monkeypatch.setenv("TEPOCHCALLI_VAULT_ROOT", str(tmp_path))
+    if indexer_dir is None:
+        monkeypatch.delenv("INDEXER_DIR", raising=False)
+    else:
+        monkeypatch.setenv("INDEXER_DIR", indexer_dir)
+    seen: list[tuple[str, ...]] = []
+
+    def _spy(directories: tuple[str, ...] | None = None) -> dict[str, object]:
+        seen.append(() if directories is None else directories)
+        return {}
+
+    monkeypatch.setattr(server, "_refresh_once", _spy)
+    server._add_source_refresh()
+    return seen
+
+
+def test_add_source_refresh_declares_the_write_destination_too(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`INDEXER_DIR="materiales"` ⇒ el refresh declara `("materiales", "00-Resources")`.
+
+    `add_source` escribe SIEMPRE en `00-Resources/` (D9.1): sin declararla, el
+    target reconciliaría el conjunto y purgaría las filas del .md recién escrito.
+    """
+    assert _seam_calls(monkeypatch, tmp_path, "materiales") == [("materiales", "00-Resources")]
+
+
+def test_add_source_refresh_does_not_duplicate_the_default_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sin `INDEXER_DIR`, una sola raíz: `("00-Resources",)` — sin duplicar."""
+    assert _seam_calls(monkeypatch, tmp_path, None) == [("00-Resources",)]

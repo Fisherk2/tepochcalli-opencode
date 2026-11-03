@@ -135,6 +135,34 @@ def test_tools_list_returns_exactly_four_tools_with_expected_schemas() -> None:
         assert tool["output_schema"] is None, name
 
 
+def test_top_k_default_follows_the_environment_without_touching_the_schema() -> None:
+    """`TEPOCHCALLI_TOP_K=7` ⇒ `search.top_k` con `default: 7`; firma y required intactos.
+
+    El default sale de `budget.TOP_K_DEFAULT` (derivado del entorno en import):
+    la firma de la tool no cambia, solo su valor por omisión.
+    """
+    env = {**os.environ, "TEPOCHCALLI_TOP_K": "7"}
+
+    async def go() -> dict[str, object]:
+        async with running_server(env) as session:
+            search = next(t for t in (await session.list_tools()).tools if t.name == "search")
+            schema = search.input_schema
+            properties = schema.get("properties", {})
+            return {
+                "default": properties["top_k"]["default"],
+                "properties": list(properties),
+                "required": schema.get("required", []),
+            }
+
+    listed = asyncio.run(go())
+
+    assert listed == {
+        "default": 7,
+        "properties": ["query", "top_k", "path_filter"],
+        "required": ["query"],
+    }
+
+
 def test_stdout_carries_only_jsonrpc_frames() -> None:
     """Cada línea de stdout del proceso parsea como JSON-RPC (AC T1: logs a stderr).
 

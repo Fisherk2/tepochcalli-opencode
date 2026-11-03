@@ -33,7 +33,11 @@ TPOCHCALLI_RAG_ENTRY = {
     "type": "local",
     "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
     "cwd": ".",
-    "environment": {"TEPOCHCALLI_ROOT": "."},
+    "environment": {
+        "TEPOCHCALLI_ROOT": ".",
+        "INDEXER_DIR": "00-Resources",
+        "TEPOCHCALLI_TOP_K": "5",
+    },
     "disabled": False,
 }
 # Claves gestionadas por el wizard: se POPean en AMBOS lados del contrato

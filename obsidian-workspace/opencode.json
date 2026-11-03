@@ -104,7 +104,9 @@
         "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
         "cwd": ".",
         "environment": {
-          "TEPOCHCALLI_ROOT": "."
+          "TEPOCHCALLI_ROOT": ".",
+          "INDEXER_DIR": "00-Resources",
+          "TEPOCHCALLI_TOP_K": "5"
         },
         "disabled": false
       },

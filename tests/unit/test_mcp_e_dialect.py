@@ -511,6 +511,7 @@ def test_index_refresh_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
     payload = asyncio.run(
         refresh_handler.index_refresh(
             vault_root=lambda: tmp_path,
+            default_roots=lambda: ("00-Resources",),
             refresh=_auth_refresh,
             embedder_available=lambda: True,
             index_exists=lambda: True,

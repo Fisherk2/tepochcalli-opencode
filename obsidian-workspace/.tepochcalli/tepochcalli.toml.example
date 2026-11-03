@@ -20,6 +20,3 @@ device = "cpu"                # device explícito para SentenceTransformerEmbedd
 [chunking]
 max_chunk_size = 1536         # unidad: BYTES, no chars (el splitter mide bytes) — ver F4, spec-rag-engine.md §Chunking
 overlap = 192                 # 12,5% de max_chunk_size (mismo ratio que el 128/1024 original en chars)
-
-[search]
-top_k_default = 5

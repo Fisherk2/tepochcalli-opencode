@@ -157,3 +157,24 @@ def test_a_single_oversized_chunk_is_still_returned_not_dropped() -> None:
 
     assert kept == huge
     assert truncated is False, "nada se descartó: no hay corte que reportar"
+
+
+# --- `TEPOCHCALLI_TOP_K`: el default de `search` se declara en el entorno -------------
+
+
+def test_top_k_from_env_reads_a_positive_integer() -> None:
+    """`TEPOCHCALLI_TOP_K=7` ⇒ default 7 (leído en import; nunca del toml)."""
+    assert budget._top_k_from_env("7") == 7
+
+
+def test_top_k_from_env_falls_back_without_a_value() -> None:
+    """Sin valor (o vacío/solo espacios) ⇒ `DEFAULT_TOP_K`."""
+    assert budget._top_k_from_env(None) == 5
+    assert budget._top_k_from_env("") == 5
+    assert budget._top_k_from_env("   ") == 5
+
+
+@pytest.mark.parametrize("bad", ["0", "-3", "siete"])
+def test_top_k_from_env_ignores_values_outside_the_useful_range(bad: str) -> None:
+    """No entero o ≤ 0 ⇒ default: el import del server nunca cae por una env mal puesta."""
+    assert budget._top_k_from_env(bad) == 5

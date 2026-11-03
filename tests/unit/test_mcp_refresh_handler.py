@@ -34,7 +34,7 @@ from __future__ import annotations
 import asyncio
 import json
 import threading
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
@@ -75,12 +75,14 @@ def _call(
     refresh: Callable[[tuple[str, ...]], dict[str, object]],
     embedder_available: Callable[[], bool],
     index_exists: Callable[[], bool],
+    default_roots: Callable[[], tuple[str, ...]] = lambda: ("00-Resources",),
 ) -> dict[str, object]:
     """Invoca el handler en su propio loop (cada test, aislado)."""
     return asyncio.run(
         refresh_tool.index_refresh(
             directories,
             vault_root=lambda: vault_root,
+            default_roots=default_roots,
             refresh=refresh,
             embedder_available=embedder_available,
             index_exists=index_exists,
@@ -181,6 +183,64 @@ def test_default_directories_are_00_resources(vault: Path) -> None:
 
     assert seen == [("00-Resources",)]
     assert payload["roots"] == ["00-Resources"]
+
+
+def test_default_directories_come_from_the_seam_not_from_the_literal(
+    vault: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Sin `directories`, el borde valida las raíces de la costura (`config.indexer_roots`).
+
+    `INDEXER_DIR` se declara en `opencode.json`; el handler no repite el literal
+    `("00-Resources",)` — lo recibe por costura, igual que `last_refresh_roots`.
+    """
+    (vault / "materiales").mkdir()
+    validated: list[Sequence[str] | None] = []
+    real_validate_roots = refresh_tool.paths.validate_roots
+
+    def _spy(directories: Sequence[str] | None, vault_root: Path) -> tuple[str, ...]:
+        validated.append(directories)
+        return real_validate_roots(directories, vault_root)
+
+    monkeypatch.setattr(refresh_tool.paths, "validate_roots", _spy)
+    seen: list[tuple[str, ...]] = []
+
+    def _refresh(roots: tuple[str, ...]) -> dict[str, object]:
+        seen.append(roots)
+        return {**WELL_FORMED_REPORT, "roots": list(roots)}
+
+    payload = _call(
+        vault_root=vault,
+        refresh=_refresh,
+        embedder_available=_const(True),
+        index_exists=_const(True),
+        default_roots=_const(("materiales",)),
+    )
+
+    assert validated == [("materiales",)], "el borde valida la raíz de la costura tal cual"
+    assert seen == [("materiales",)]
+    assert payload["roots"] == ["materiales"]
+
+
+def test_explicit_directories_win_over_the_seam(vault: Path) -> None:
+    """Con `directories` explícitas, la costura no se usa (el argumento manda)."""
+    (vault / "materiales").mkdir()
+    (vault / "documentos").mkdir()
+    seen: list[tuple[str, ...]] = []
+
+    def _refresh(roots: tuple[str, ...]) -> dict[str, object]:
+        seen.append(roots)
+        return {**WELL_FORMED_REPORT, "roots": list(roots)}
+
+    _call(
+        ["documentos"],
+        vault_root=vault,
+        refresh=_refresh,
+        embedder_available=_const(True),
+        index_exists=_const(True),
+        default_roots=_const(("materiales",)),
+    )
+
+    assert seen == [("documentos",)]
 
 
 def test_directories_are_normalized_and_forwarded_to_the_seam(vault: Path) -> None:

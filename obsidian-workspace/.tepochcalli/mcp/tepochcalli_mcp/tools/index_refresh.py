@@ -27,6 +27,11 @@ vault; su `VaultPathError` se mapea a `VALIDATION_ERROR` con
 raíz mala ⇒ no se indexa ninguna. `VALIDATION_ERROR` precede a
 `E_NO_EMBEDDER` — el argumento se juzga antes de mirar el provider.
 
+**Raíces por omisión (`default_roots`):** `directories` vacío/`None` ⇒ las
+raíces de la costura (`Config.indexer_roots`, que sale de `INDEXER_DIR` en
+`opencode.json`), validadas igual que las explícitas. El handler no repite el
+literal `("00-Resources",)`: el composition root pasa la costura.
+
 La guarda compartida `@errors.internal_guard` (G1) envuelve el handler
 completo: cualquier fallo inesperado (refresh, seams) → `INTERNAL` canónico
 con traceback en el log stderr, nunca texto libre al cliente (T4/T5 reusan
@@ -47,6 +52,7 @@ async def index_refresh(
     directories: list[str] | None = None,
     *,
     vault_root: Callable[[], Path],
+    default_roots: Callable[[], tuple[str, ...]],
     refresh: Callable[[tuple[str, ...]], dict[str, object]],
     embedder_available: Callable[[], bool],
     index_exists: Callable[[], bool],
@@ -58,10 +64,11 @@ async def index_refresh(
     refresh (con candado ⇒ tres ceros, sin mirar el índice) → `INDEX_EMPTY` si
     la tabla sigue ausente → si no, el reporte DEVUELTO TAL CUAL. Un
     directorio vacío no es error: sale `scanned: 0` y el agente no lo lee como
-    fallo.
+    fallo. `directories` omitido/vacío ⇒ raíces de `default_roots`
+    (`Config.indexer_roots`, declaradas en `INDEXER_DIR`).
     """
     try:
-        roots = paths.validate_roots(directories, vault_root())
+        roots = paths.validate_roots(directories or default_roots(), vault_root())
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
     if not embedder_available():

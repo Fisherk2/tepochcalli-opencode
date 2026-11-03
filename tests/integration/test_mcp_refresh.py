@@ -363,6 +363,34 @@ def test_directories_index_two_roots_recursively_and_report_them(tmp_path: Path)
     assert status["index"]["available_roots"] == ["00-Resources", "documentos", "materiales"]
 
 
+def test_indexer_dir_env_supplies_the_default_roots(tmp_path: Path) -> None:
+    """`INDEXER_DIR` de `opencode.json` ⇒ `index_refresh()` sin argumentos indexa esas raíces.
+
+    La declaración vive en el entorno del proceso (string→string, multi-valor
+    por comas), no en el toml ni en el argumento de la llamada.
+    """
+    (tmp_path / "materiales").mkdir()
+    (tmp_path / "documentos").mkdir()
+    (tmp_path / "materiales" / "clima.md").write_text(
+        "# Clima\n\nLa aridez del altiplano condiciona el calendario agrícola.\n", encoding="utf-8"
+    )
+    (tmp_path / "documentos" / "articulo.md").write_text(
+        "# Artículo\n\nTexto bajo documentos: debe entrar por `INDEXER_DIR`.\n", encoding="utf-8"
+    )
+    models_link = warm_model(tmp_path)
+    env = {**server_env(tmp_path, models_link), "INDEXER_DIR": "materiales,documentos"}
+
+    async def go() -> dict[str, object]:
+        async with running_server(env) as session:
+            return await _call_refresh(session)
+
+    report = asyncio.run(go())
+
+    _assert_contract(report)
+    assert report["roots"] == ["materiales", "documentos"]
+    assert _counts(report) == (2, 2, 0), "las dos raíces del entorno, recursivas"
+
+
 def test_missing_root_is_validation_error_and_indexes_nothing(tmp_path: Path) -> None:
     """Raíz inexistente ⇒ `VALIDATION_ERROR` (nunca `INTERNAL`) antes de la costura.
 
