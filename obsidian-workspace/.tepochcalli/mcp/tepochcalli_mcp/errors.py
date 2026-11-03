@@ -132,16 +132,31 @@ def internal() -> dict[str, object]:
 GUIDE_MANUAL_SAVE: Final = "Guárdalo manualmente en `00-Resources/` y ejecuta `index_refresh`."
 """Guía literal de spec-markitdown §Cadena de fallback paso 3 para `SOURCE_UNREACHABLE`."""
 
+GUIDE_OCR: Final = (
+    "Sin OCR: el documento no tiene capa de texto; guárdalo como `.md` a mano o "
+    "pásalo por un OCR y reintenta la conversión."
+)
+"""Guía de `SOURCE_UNREACHABLE` cuando la causa es un escaneado (T7, OM-11/D39).
+
+El conversor la pasa por `guide=` sin cambiar la forma del payload: se informa al
+usuario y se le ofrece el camino manual, nunca una conversión vacía.
+"""
+
 GUIDE_RETRY_SECONDS: Final = "Reintenta en segundos o ejecuta `index_refresh` después."
 """Guía de spec-mcp-server §Manejo de errores para `ENGINE_LOCKED` («reintentar en segundos»)."""
 
 
-def source_unreachable(uri: str, cause: str | None = None) -> dict[str, object]:
+def source_unreachable(
+    uri: str, cause: str | None = None, *, guide: str | None = None
+) -> dict[str, object]:
     """`SOURCE_UNREACHABLE` legado (T5): fetch/convert falló; la guía es la literal de la spec.
 
     `cause` es SOLO el nombre del tipo de la excepción (nunca el traceback ni
     texto arbitrario): accionable para el agente y seguro para el cliente —
     el traceback completo vive en el log stderr del server.
+
+    `guide` sustituye la guía por defecto por la que corresponda a la causa
+    (p. ej. `GUIDE_OCR`): la forma del payload no cambia (T7 AC (g)).
 
     Review Phase 2 (eje 4): el URI entra REDACTADO (`paths.redact_uri`) — el
     payload es la superficie de observabilidad del fallo y jamás ecoa
@@ -150,7 +165,9 @@ def source_unreachable(uri: str, cause: str | None = None) -> dict[str, object]:
     return {
         "error": {
             "code": "SOURCE_UNREACHABLE",
-            "message": f"No se pudo convertir {redact_uri(uri)} a Markdown. {GUIDE_MANUAL_SAVE}",
+            "message": (
+                f"No se pudo convertir {redact_uri(uri)} a Markdown. {guide or GUIDE_MANUAL_SAVE}"
+            ),
             "details": {"cause": cause} if cause else None,
         }
     }

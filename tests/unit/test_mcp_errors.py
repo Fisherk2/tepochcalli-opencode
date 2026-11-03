@@ -208,3 +208,23 @@ def test_offline_no_cache_uses_the_e_dialect_with_actionable_fix() -> None:
     assert error["code"] == "E_OFFLINE_NO_CACHE"
     assert error["fix_hint"] == errors.FIX_OFFLINE_NO_CACHE
     assert "offline" in error["fix_hint"].lower()
+
+
+# --- T7: la guía de OCR viaja sin cambiar la forma del payload ------------------------
+
+
+def test_source_unreachable_accepts_the_ocr_guide_without_changing_the_shape() -> None:
+    """T7 AC (g): `guide=` sustituye la guía por defecto; la forma sigue siendo la legada.
+
+    La usa el conversor cuando el documento existe y es del tipo pedido pero no
+    tiene capa de texto (D39: `SOURCE_UNREACHABLE` sin inventar un código nuevo).
+    """
+    payload = errors.source_unreachable("00-Resources/escaneado.pdf", guide=errors.GUIDE_OCR)
+
+    error = payload["error"]
+    assert list(error) == ["code", "message", "details"]
+    assert error["code"] == "SOURCE_UNREACHABLE"
+    assert error["details"] is None
+    assert errors.GUIDE_OCR in error["message"]
+    assert errors.GUIDE_MANUAL_SAVE not in error["message"], "la guía por defecto se sustituye"
+    assert "OCR" in error["message"]

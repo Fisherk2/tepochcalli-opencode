@@ -21,6 +21,15 @@ el glob a SQL — la traducción `*`→`%` vive y se congela en
 adaptador la aplica (importarla aquí arrastraría `lancedb` al paquete del
 server; test de arquitectura). El adaptador además re-valida en su propio
 borde: defensa en profundidad SIN duplicar la traducción.
+
+**Frontera B′ (T7, D31/D64/D65).** `validate_vault_path` cubre entrada y salida
+de las 3 tools del conversor: dentro del vault ⇒ ruta absoluta; absoluta
+externa, `..` o symlink que escapa ⇒ `VaultPathError` (el borde lo mapea a
+`VALIDATION_ERROR`). Existencia y tipo se deciden AQUÍ, antes de tocar el
+disco, porque el `ValueError` de `walk_dir` del motor saldría como `INTERNAL`
+por una ruta mal escrita (D64). `validate_roots` aplica las mismas reglas a N
+raíces con fail-fast atómico (D65) y `vault_dirs` publica lo que sí existe
+(D67, reutilizado por `rag_status` en T8).
 """
 
 from __future__ import annotations
@@ -28,12 +37,14 @@ from __future__ import annotations
 import ipaddress
 import re
 import socket
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from pathlib import Path, PurePosixPath
-from typing import Final
+from typing import Final, Literal
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 from tepochcalli_flow.citation import RESOURCES_DIR
+
+from tepochcalli_mcp.suggestions import suggest_names
 
 DEFAULT_SUBDIR: Final = "_inbox"
 """Subdirectorio canónico de destino de `add_source` cuando no se nombra uno (plan §T5)."""
@@ -301,3 +312,156 @@ def ensure_within(base: Path, target: Path) -> Path:
     if not resolved.is_relative_to(base.resolve()):
         raise ValueError(f"destino fuera de {base}: {target}")
     return resolved
+
+
+# --- Frontera B′: entrada y salida dentro del vault (T7, D31/D64/D65) --------------
+
+
+class VaultPathError(ValueError):
+    """Ruta rechazada en el borde B′: el handler la mapea a `VALIDATION_ERROR`.
+
+    Subclase de `ValueError` para que los bordes existentes que ya capturan
+    `ValueError` sigan funcionando; `details` es el `details` del payload
+    (forma de spec-mcp-server §Manejo de errores).
+    """
+
+    def __init__(self, message: str, details: dict[str, object] | None = None) -> None:
+        """Fija el mensaje accionable y el `details` estructurado (opcional)."""
+        super().__init__(message)
+        self.details = details
+
+
+def vault_dirs(vault_root: Path) -> tuple[str, ...]:
+    """Directorios de PRIMER nivel del vault, ordenados y sin los de punto (D67).
+
+    `.tepochcalli/`, `.obsidian/` y `.trash/` no son raíces indexables; el resto
+    es lo que `rag_status.index.available_roots` publica y lo que el agente usa
+    para corregir una raíz mal escrita.
+    """
+    if not vault_root.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            entry.name
+            for entry in vault_root.iterdir()
+            if entry.is_dir() and not entry.name.startswith(".")
+        )
+    )
+
+
+def _kind(path: Path) -> str:
+    """Tipo de una ruta en los términos del contrato: `file`, `directory` u `other`."""
+    if path.is_dir():
+        return "directory"
+    return "file" if path.is_file() else "other"
+
+
+def _first_missing(resolved: Path, root: Path) -> str:
+    """Segmento que falta, el primero que no existe desde la raíz del vault (D64).
+
+    Es el nombre con el que se compara para sugerir: en `Documentos/x.docx` el
+    typo está en `Documentos`, no en el fichero — `informe.docx` no se parece a
+    ninguna carpeta y no habría sugerencia útil.
+    """
+    current = root
+    for part in resolved.relative_to(root).parts:
+        current = current / part
+        if not current.exists():
+            return part
+    return resolved.name
+
+
+def _missing_details(requested: str, resolved: Path, vault_root: Path) -> dict[str, object]:
+    """`details` del cubo «no existe»: qué se pidió, qué se parece y qué hay (D64)."""
+    dirs = vault_dirs(vault_root)
+    return {
+        "requested": requested,
+        "exists": False,
+        "suggestions": suggest_names(_first_missing(resolved, vault_root), dirs),
+        "vault_dirs": list(dirs),
+    }
+
+
+def _wrong_type_details(requested: str, expected: str, found: Path) -> dict[str, object]:
+    """`details` del cubo «existe pero no es del tipo pedido» (D64)."""
+    return {
+        "requested": requested,
+        "exists": True,
+        "expected": expected,
+        "found": _kind(found),
+    }
+
+
+def validate_vault_path(
+    raw: str | Path,
+    vault_root: Path,
+    *,
+    must_exist: bool,
+    expect: Literal["file", "directory"] | None = None,
+) -> Path:
+    """Valida una ruta contra el vault y devuelve su forma ABSOLUTA resuelta.
+
+    `must_exist=True` es una ENTRADA (archivo o directorio, D46): inexistente ⇒
+    `VaultPathError` con `details.suggestions`; `expect` exige además el tipo
+    (el conversor pide `file`, una raíz no exige nada). `must_exist=False` es un
+    DESTINO: se valida el **padre**, que debe existir y ser directorio — el
+    fichero todavía no existe. Absoluta externa, `..` o symlink que escapa ⇒
+    `VaultPathError` sin `details` (el mensaje lleva la ruta y el motivo).
+    """
+    root = vault_root.resolve()
+    text = str(raw).strip()
+    if not text:
+        raise VaultPathError("ruta vacía: indica un path dentro del vault")
+    candidate = Path(text.replace("\\", "/"))
+    if ".." in candidate.parts:
+        raise VaultPathError(f"ruta con segmentos '..' (escape del vault): {text!r}")
+    resolved = (candidate if candidate.is_absolute() else root / candidate).resolve()
+    if not resolved.is_relative_to(root):
+        raise VaultPathError(f"fuera del vault (B′): {text!r} no resuelve dentro de {root}")
+    if not must_exist:
+        parent = resolved.parent
+        if not parent.is_dir():
+            if parent.exists():
+                raise VaultPathError(
+                    f"el padre de {text!r} no es un directorio",
+                    _wrong_type_details(text, "directory", parent),
+                )
+            raise VaultPathError(
+                f"el directorio padre de {text!r} no existe",
+                _missing_details(text, parent, root),
+            )
+        return resolved
+    if not resolved.exists():
+        raise VaultPathError(f"la ruta no existe: {text!r}", _missing_details(text, resolved, root))
+    if expect is not None and _kind(resolved) != expect:
+        raise VaultPathError(
+            f"se esperaba un {expect} y es un {_kind(resolved)}: {text!r}",
+            _wrong_type_details(text, expect, resolved),
+        )
+    return resolved
+
+
+def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple[str, ...]:
+    """Valida N raíces indexables y devuelve sus rutas RELATIVAS al vault (D32/D44/D65).
+
+    `None` o lista vacía ⇒ `("00-Resources",)` (el default del producto, D42).
+    Cada raíz pasa las mismas reglas que una entrada (`validate_vault_path`) y
+    además debe existir: una raíz puede ser un **fichero suelto** (D46). El
+    fallo es **atómico**: se lanzan `VaultPathError` —que nombra la raíz mala,
+    sus `suggestions` y `vault_dirs`— antes de devolver ninguna, así una raíz
+    mal escrita no deja media indexación hecha (D65).
+    """
+    entries = [str(item).strip() for item in (directories or ())]
+    roots: list[str] = []
+    for entry in [entry for entry in entries if entry] or [RESOURCES_DIR]:
+        relative = (
+            validate_vault_path(entry, vault_root, must_exist=True)
+            .relative_to(vault_root.resolve())
+            .as_posix()
+        )
+        if relative == ".":
+            raise VaultPathError(
+                f"la raíz debe ser una subruta del vault, no el vault entero: {entry!r}"
+            )
+        roots.append(relative)
+    return tuple(roots)

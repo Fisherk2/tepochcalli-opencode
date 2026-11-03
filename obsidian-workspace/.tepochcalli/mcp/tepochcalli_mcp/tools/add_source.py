@@ -31,8 +31,8 @@ Contrato y precedencia, en orden:
    traceback va al log stderr, nunca al cliente);
 4. **escritura atómica** — slug + `.md` con sufijo numérico ante colisión
    (`paths`), temporal en el MISMO directorio de destino + `os.replace`
-   (mismo filesystem ⇒ rename atómico), con `ensure_within` como última
-   defensa antes de escribir;
+   (`writer.write_atomic`, la MISMA función del conversor — D63/D66), con
+   `ensure_within` como última defensa antes de escribir;
 5. **reindexación** — el MISMO seam de refresh de T3; reporte con `locked`
    ⇒ `ENGINE_LOCKED` (la forma congelada de §5 no tiene campo `locked` en
    su sub-objeto `indexed`, así que el candado viaja COMO ERROR con
@@ -46,46 +46,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
-import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
-from tepochcalli_mcp import embedder, errors, paths
+from tepochcalli_mcp import embedder, errors, paths, writer
 
 logger = logging.getLogger(__name__)
 
 INDEXED_FIELDS: tuple[str, ...] = ("scanned", "indexed", "skipped", "elapsed_ms")
 """Los 4 campos del sub-objeto `indexed` de §5 — SIN `locked` (contrato congelado)."""
-
-
-def _write_atomic(target: Path, content: str) -> None:
-    """Escritura atómica: temporal en el MISMO directorio de destino + `os.replace`.
-
-    El temporal NO va a `/tmp`: renombrar cruza dispositivos y dejaría de ser
-    atómico. Ante cualquier fallo el temporal se limpia y la excepción sube
-    (el guard la convierte en `INTERNAL`).
-
-    Revisión Phase 2 (eje 5, TOCTOU): si el target APARECIÓ tras la carrera
-    con `available_name`, se ABORTA con `RuntimeError` ⇒ `INTERNAL` — jamás
-    `ok: true` borrando un material que otra rama convirtió.
-    """
-    if target.exists():
-        raise RuntimeError(
-            f"add_source: carrera TOCTOU — {target} apareció tras elegir el nombre; "
-            "nada se sobrescribe"
-        )
-    fd, tmp_name = tempfile.mkstemp(dir=target.parent, prefix=f".{target.name}.", suffix=".tmp")
-    tmp_path = Path(tmp_name)
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
-            handle.write(content)
-        os.replace(tmp_path, target)
-    except BaseException:  # limpiar el temporal y re-lanzar (Ctrl-C incluido; el guard no lo toca)
-        tmp_path.unlink(missing_ok=True)
-        raise
 
 
 @errors.internal_guard
@@ -129,7 +100,7 @@ async def add_source(
         paths.slugify_uri(uri), lambda candidate: (dest_dir / candidate).exists()
     )
     final = paths.ensure_within(root / RESOURCES_DIR, dest_dir / name)
-    _write_atomic(final, content)
+    writer.write_atomic(final, content)
     written_to = final.relative_to(root).as_posix()
     try:
         report = await asyncio.to_thread(refresh)

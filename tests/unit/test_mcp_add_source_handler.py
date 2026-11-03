@@ -110,49 +110,6 @@ def test_atomic_write_leaves_no_temporary_behind(tmp_path: Path) -> None:
     assert sorted(p.name for p in inbox.iterdir()) == ["notas.md"]
 
 
-def test_atomic_write_cleans_the_temporary_and_reraises_on_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Fallo ANTES del rename ⇒ el `.tmp` se limpia y la excepción sube (⇒ `INTERNAL`).
-
-    Sin esta rama, un rename fallido (disco lleno, permisos) dejaría basura
-    `.tmp` en `00-Resources/` — material que el walk de indexación vería.
-    """
-    inbox = tmp_path / "00-Resources" / "_inbox"
-    inbox.mkdir(parents=True)
-    target = inbox / "notas.md"
-
-    def _broken_replace(_src: object, _dst: object) -> None:
-        raise OSError("cross-device link")
-
-    monkeypatch.setattr(handler.os, "replace", _broken_replace)
-
-    with pytest.raises(OSError, match="cross-device"):
-        handler._write_atomic(target, "# contenido\n")
-
-    assert not target.exists(), "el destino no existe: el rename no llegó a correr"
-    assert list(inbox.iterdir()) == [], "el temporal se limpia en la rama de fallo"
-
-
-def test_write_atomic_refuses_to_overwrite_a_target_appeared_in_a_race(
-    tmp_path: Path,
-) -> None:
-    """Review Phase 2 (eje 5, TOCTOU): target en carrera ⇒ RuntimeError, nada se borra.
-
-    `available_name` vio el hueco, la carrera lo ocupó ⇒ `RuntimeError`, que
-    sube al guard ⇒ `INTERNAL`; jamás `ok: true` borrando el material.
-    """
-    inbox = tmp_path / "00-Resources" / "_inbox"
-    inbox.mkdir(parents=True)
-    target = inbox / "notas.md"
-    target.write_text("previa", encoding="utf-8")
-
-    with pytest.raises(RuntimeError, match="TOCTOU|sobrescribe"):
-        handler._write_atomic(target, "# nuevo\n")
-
-    assert target.read_text(encoding="utf-8") == "previa", "nada se sobrescribió"
-
-
 def test_traversal_subdir_is_validation_error_and_writes_nothing(tmp_path: Path) -> None:
     """`subdir` con `..` ⇒ `VALIDATION_ERROR`; ni convert ni refresh se ejecutan."""
     payload, calls = _run(_notas_uri(tmp_path), "../escape", vault=tmp_path)
