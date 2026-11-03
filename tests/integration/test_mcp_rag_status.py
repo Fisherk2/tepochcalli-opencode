@@ -101,7 +101,7 @@ def test_sane_install_reports_the_full_block_contract(
         "last_refresh_roots",
         "available_roots",
     ]
-    assert list(payload["config"]) == ["path", "valid"]
+    assert list(payload["config"]) == ["path", "valid", "problems", "unknown_env"]
     assert list(payload["health"]) == ["state", "reason", "fix_hint"]
 
     embedder_block = payload["embedder"]
@@ -129,6 +129,8 @@ def test_sane_install_reports_the_full_block_contract(
     config_block = payload["config"]
     assert config_block["path"] == TOML_RELPATH, "relativo y con / en todo SO (spec literal)"
     assert config_block["valid"] is True, "toml AUSENTE ⇒ true: es opcional (decisión T4)"
+    assert config_block["problems"] == [], "vault con 00-Resources: sin problemas de entorno"
+    assert config_block["unknown_env"] == []
 
     _assert_tokens_under_200(payload)
 
@@ -145,6 +147,7 @@ def test_malformed_toml_reports_valid_false_without_degrading_health(tmp_path: P
     toml_path = tmp_path / TOML_RELPATH
     toml_path.parent.mkdir(parents=True)
     toml_path.write_text("[embedding\nmodel = 'roto", encoding="utf-8")  # TOML malformado
+    (tmp_path / citation.RESOURCES_DIR).mkdir()  # raíz por omisión presente: sin problemas
     env = server_env(tmp_path)
 
     try:
@@ -157,7 +160,12 @@ def test_malformed_toml_reports_valid_false_without_degrading_health(tmp_path: P
     finally:
         toml_path.unlink(missing_ok=True)
 
-    assert payload["config"] == {"path": TOML_RELPATH, "valid": False}
+    assert payload["config"] == {
+        "path": TOML_RELPATH,
+        "valid": False,
+        "problems": [],
+        "unknown_env": [],
+    }
     assert payload["embedder"]["mode"] == "local", "el loader cae a defaults con warning"
     assert payload["health"] == {"state": "ok", "reason": None, "fix_hint": None}, (
         "ningún E_* cubre un toml roto: valid es informativo, no degrada"
@@ -168,6 +176,42 @@ def test_malformed_toml_reports_valid_false_without_degrading_health(tmp_path: P
         "last_refresh": None,
         "db_size_bytes": 0,
         "last_refresh_roots": [],
-        "available_roots": [],
+        "available_roots": ["00-Resources"],
     }
     _assert_tokens_under_200(payload)
+
+
+# --- estado 3: `INDEXER_DIR` mal escrito (diagnóstico en la 1.ª llamada) ---------------
+
+
+def test_bad_indexer_dir_is_visible_in_rag_status_and_still_validation_error(
+    tmp_path: Path,
+) -> None:
+    """Raíz mal escrita ⇒ `config.valid: false` + `problems`; `index_refresh` da `VALIDATION_ERROR`.
+
+    Antes el fallo solo aparecía al indexar y `rag_status` decía `valid: true`;
+    ahora es visible en la primera llamada SIN indexar nada, y `health` sigue
+    `ok` (un índice existente seguiría sirviendo: ningún `E_*` nuevo, D39).
+    """
+    (tmp_path / citation.RESOURCES_DIR).mkdir()
+    env = {**server_env(tmp_path), "INDEXER_DIR": "no-existe"}
+
+    async def go() -> tuple[dict, object]:
+        async with running_server(env) as session:
+            status = await _call(session, "rag_status", {})
+            result = await session.call_tool("index_refresh", {})
+            return status, result
+
+    status, result = asyncio.run(go())
+
+    config_block = status["config"]
+    assert config_block["valid"] is False
+    problems = config_block["problems"]
+    assert isinstance(problems, list) and problems
+    assert str(problems[0]).startswith("INDEXER_DIR: 'no-existe'")
+    assert status["health"] == {"state": "ok", "reason": None, "fix_hint": None}
+
+    assert result.is_error  # type: ignore[attr-defined]
+    error = json.loads(result.content[0].text)["error"]  # type: ignore[attr-defined]
+    assert error["code"] == "VALIDATION_ERROR", "nunca INTERNAL: el borde juzga la raíz"
+    _assert_tokens_under_200(status)

@@ -93,7 +93,7 @@ RAG_STATUS_INNER_KEYS = {
         "last_refresh_roots",
         "available_roots",
     ],
-    "config": ["path", "valid"],
+    "config": ["path", "valid", "problems", "unknown_env"],
     "health": ["state", "reason", "fix_hint"],
 }
 """Orden exacto DENTRO de cada bloque de `rag_status` — spec §rag_status literal."""

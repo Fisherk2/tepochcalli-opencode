@@ -48,6 +48,9 @@ un **fichero suelto**, y las solapadas se deduplican. Fuera del vault, con `..` 
 * **`TEPOCHCALLI_TOP_K` se lee al arrancar el proceso MCP**: cambiarla exige **reiniciar el
   server** (el `default` del schema de `search` refleja el valor de arranque). Rango útil 1–8 —el
   tope efectivo recorta a 8—; un valor no entero o ≤0 cae a 5.
+* **Si algo está mal escrito, `rag_status()` lo dice** antes de indexar nada: `config.valid` pasa a
+  `false` y `config.problems` / `config.unknown_env` nombran el fallo (raíz inexistente, nombre mal
+  escrito tipo `INDEXER_DRI`). No hay que adivinar por qué el índice no cambia.
 
 ### Qué vive en `tepochcalli.toml` (y por qué el modelo no está en `environment`)
 

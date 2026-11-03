@@ -26,9 +26,18 @@ descripción de la tool (lo que el agente lee):**
   filas no hay evidencia de desajuste), con filas ⇒ todas del modelo esperado
   (equivale al `==` del AC en el único caso no vacío).
 * **`config.valid`** — `true` si el toml está AUSENTE (opcional: los defaults
-  son canónicos) o se parseó limpio; `false` SOLO si existe y no se pudo
-  leer/parsear. **No es un chequeo de existencia** — el loader nunca falla, el
-  campo mide PARSEO, y `load_config` no da señal: la checa el composition root.
+  son canónicos) o se parseó limpio **y** `problems` está vacío; `false` si
+  existe y no se pudo leer/parsear o si hay problemas de entorno. **No es un
+  chequeo de existencia** — el loader nunca falla, el campo mide PARSEO +
+  coherencia de la config, y `load_config` no da señal: la checa el
+  composition root (`_config_valid` + `_config_problems_seam`).
+* **`config.problems`** — mensajes cortos de `diagnostics.config_problems`
+  (raíz contractual, cada raíz de `INDEXER_DIR`, `TEPOCHCALLI_TOP_K`), tope 3.
+  Hace visible en la PRIMERA llamada lo que antes solo estallaba al indexar.
+* **`config.unknown_env`** — nombres que parecen nuestros y no lo son
+  (`INDEXER_DRI`, `TEPOCHALLI_ROOT`…): una clave mal escrita no se ignora en
+  silencio. Tope 3. Ninguno de los dos degrada `health` (un `INDEXER_DIR` malo
+  no rompe `search`: el índice existente sigue sirviendo, D39).
 * **`health`** — precedencia `E_NO_EMBEDDER` > `E_MODEL_MISMATCH` > `ok`.
   `reason` solo admite `E_*` (spec §Códigos): un índice vacío con embedder
   sano es `ok` (ningún `E_*` aplica) y `config.valid=false` NO degrada la
@@ -104,6 +113,8 @@ async def rag_status(
     config_valid: Callable[[], bool],
     last_refresh_roots: Callable[[], tuple[str, ...]],
     available_roots: Callable[[], tuple[str, ...]],
+    problems: Callable[[], tuple[str, ...]],
+    unknown_env: Callable[[], tuple[str, ...]],
 ) -> dict[str, object]:
     """`{embedder, index, config, health}` — los 4 bloques congelados de §rag_status.
 
@@ -117,6 +128,8 @@ async def rag_status(
     mode = embedder.mode(config)
     model = None if mode == "none" else citation.model_id(config)
     meta = await index_meta()
+    config_problems = problems()
+    config_unknown = unknown_env()
     matches = meta["models"].issubset({citation.model_id(config)})
     if mode == "none":
         state: Literal["ok", "degraded"] = "degraded"
@@ -147,6 +160,11 @@ async def rag_status(
         },
         # `CONFIG_RELPATH.as_posix()`: relativo POR CONSTRUCCIÓN y siempre con
         # `/` — jamás filtra el home ni cambia de forma con el SO (spec literal).
-        "config": {"path": CONFIG_RELPATH.as_posix(), "valid": config_valid()},
+        "config": {
+            "path": CONFIG_RELPATH.as_posix(),
+            "valid": config_valid() and not config_problems,
+            "problems": list(config_problems),
+            "unknown_env": list(config_unknown),
+        },
         "health": {"state": state, "reason": reason, "fix_hint": fix_hint},
     }

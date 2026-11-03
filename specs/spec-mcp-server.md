@@ -111,7 +111,8 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
                 "last_refresh": "2026-10-21T14:32:10Z", "db_size_bytes": 18400000,
                 "last_refresh_roots": ["00-Resources"],
                 "available_roots": ["00-Resources", "documentos", "materiales"] },
-  "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true },
+  "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true,
+                "problems": [], "unknown_env": [] },
   "health":   { "state": "ok", "reason": null, "fix_hint": null } }
 
 // response — instalación con "Configurar después" (salida 5 del menú embedder)
@@ -119,7 +120,8 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
   "index":    { "rows": 0, "model_matches_config": true,
                 "last_refresh": null, "db_size_bytes": 0,
                 "last_refresh_roots": [], "available_roots": ["00-Resources"] },
-  "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true },
+  "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true,
+                "problems": [], "unknown_env": [] },
   "health":   { "state": "degraded", "reason": "E_NO_EMBEDDER",
                 "fix_hint": "Ejecuta `tepochcalli config embedder` y luego `index_refresh()`" } }
 ```
@@ -131,6 +133,10 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
 * `embedder.mode`: `local` (peso en `.tepochcalli/models/`), `api` (LiteLLM: `provider` nombra el proveedor, `model` su id) o `none` (sin provider — salida 5).
 * `index.model_matches_config`: `false` cuando el campo `model` de los metadatos del índice ≠ `[embedding].model` de config (gate anti-cruce de dims; el índice registra `model + dims` en la instalación, D7.1).
 * `health.reason` usa exclusivamente los códigos de §Códigos de error estructurados; `fix_hint` es la solución exacta para el usuario (la regla del vault en specs/spec-agent-workflow.md obliga al agente a reportarla, no el error crudo).
+* `config.valid` = el toml parsea **y** `config.problems` está vacío. Mide coherencia de la configuración, no existencia del fichero: ausente ⇒ `true` (los defaults son canónicos).
+* `config.problems`: mensajes cortos (≤80 chars, tope 3 + `"… y N más"`) de lo que el usuario escribió mal en el `environment` — `TEPOCHCALLI_ROOT` inexistente o que no es directorio, **cada** raíz de `INDEXER_DIR` que falle (con la sugerencia cuando la hay) y `TEPOCHCALLI_TOP_K` no entero o ≤0. Es diagnóstico completo: `index_refresh` sigue siendo fail-fast y nombra solo la primera raíz mala (D65).
+* `config.unknown_env`: nombres que **parecen** nuestras variables y no lo son (`INDEXER_DRI`, `TEPOCHALLI_ROOT`…), tope 3. Es el único error de configuración que ningún validador de valor puede cazar: una clave mal escrita se ignoraría en silencio.
+* Ni `problems` ni `unknown_env` degradan `health`: un `INDEXER_DIR` malo no rompe `search` (el índice ya construido sigue sirviendo) y un estado `degraded` exigiría un `E_*` nuevo, que D39 prohíbe.
 
 ### Tools del conversor (D28/ADR-009)
 
@@ -244,6 +250,8 @@ Diseño determinista en el server (no depende del modelo):
   | `TEPOCHCALLI_ROOT` | sí | — | raíz del vault; toda ruta del contrato se valida contra ella (B′) |
   | `INDEXER_DIR` | no | `00-Resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-Resources`. Se relee en cada llamada |
   | `TEPOCHCALLI_TOP_K` | no | `5` | entero > 0; no entero o ≤ 0 ⇒ `5`. Se lee **al arrancar** el proceso: es el `default` del schema de `search` (rango efectivo 1–8) y cambiarla exige reiniciar el MCP |
+
+* Una variable **mal escrita** no se ignora en silencio: su nombre aparece en `rag_status().config.unknown_env` (el filtro es estrecho — `TEPOCH*` o cualquier nombre con `INDEXER`—, así que no escupe el entorno del harness). Un **valor** inválido aparece en `config.problems` y deja `config.valid: false`. Ambas señales llegan en la primera llamada, sin indexar nada.
 
 ### Empaquetado en el venv
 

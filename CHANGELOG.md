@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   enmendado).
 - **`TEPOCHCALLI_TOP_K`**: default de `top_k` en `search` (5), sobreescribible por llamada; rango
   útil 1–8 y un valor no entero o ≤0 cae a 5. Se lee al arrancar el MCP.
+- **Diagnóstico de configuración en `rag_status`**: el bloque `config` gana `problems` (raíz de
+  `INDEXER_DIR` inexistente o fuera del vault, `TEPOCHCALLI_ROOT` mal, `TEPOCHCALLI_TOP_K`
+  inválido) y `unknown_env` (nombres que parecen nuestros y no lo son: `INDEXER_DRI`,
+  `TEPOCHALLI_ROOT`…). `config.valid` pasa a `false` cuando hay problemas, así que un error de
+  configuración se ve en la **primera** llamada, sin indexar. No añade códigos `E_*` ni degrada
+  `health`.
 
 ### Changed (config por entorno)
 

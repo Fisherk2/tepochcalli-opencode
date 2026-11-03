@@ -88,6 +88,11 @@ Pídelo al usuario antes de usarlo y, si el `.md` debe quedar guardado, escríbe
   `documentos`) — un reintento, no cinco.
 - **Cualquier `E_*`** ⇒ `rag_status()` y reporta al usuario el `fix_hint` exacto, nunca
   el error crudo.
+- **`rag_status().config.valid == false`** ⇒ antes de indexar, lee `config.problems`
+  (raíz inexistente, `TEPOCHCALLI_TOP_K` inválido) y `config.unknown_env` (nombre mal
+  escrito, p. ej. `INDEXER_DRI`) y **dile al usuario qué corregir** en `opencode.json`.
+  Un `unknown_env` significa que su `INDEXER_DIR` **no se está aplicando**: no reintentes
+  a ciegas.
 - **`index_refresh` es atómico**: si una de las raíces está mal, no se indexa ninguna.
 
 | Código | Cuándo | Qué haces |

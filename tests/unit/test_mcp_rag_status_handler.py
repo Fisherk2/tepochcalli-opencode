@@ -74,6 +74,8 @@ def _call(
     meta_error: Exception | None = None,
     last_refresh_roots: tuple[str, ...] = (),
     available_roots: tuple[str, ...] = ("00-Resources",),
+    problems: tuple[str, ...] = (),
+    unknown_env: tuple[str, ...] = (),
 ) -> dict[str, object]:
     """Invoca el handler en su propio loop con seams de doble (cada test, aislado)."""
     resolved = config if config is not None else _config()
@@ -91,6 +93,8 @@ def _call(
             config_valid=lambda: config_valid,
             last_refresh_roots=lambda: last_refresh_roots,
             available_roots=lambda: available_roots,
+            problems=lambda: problems,
+            unknown_env=lambda: unknown_env,
         )
     )
 
@@ -112,7 +116,7 @@ def test_four_blocks_with_exact_key_order_inside_each_block() -> None:
         "last_refresh_roots",
         "available_roots",
     ]
-    assert list(payload["config"]) == ["path", "valid"]
+    assert list(payload["config"]) == ["path", "valid", "problems", "unknown_env"]
     assert list(payload["health"]) == ["state", "reason", "fix_hint"]
 
 
@@ -158,8 +162,24 @@ def test_config_path_is_the_relative_toml_literal() -> None:
     payload = _call()
 
     config_block = payload["config"]
-    assert config_block["path"] == ".tepochcalli/config/tepochcalli.toml"
-    assert config_block["valid"] is True
+    assert config_block == {
+        "path": ".tepochcalli/config/tepochcalli.toml",
+        "valid": True,
+        "problems": [],
+        "unknown_env": [],
+    }
+
+
+def test_config_problems_flip_valid_false_and_are_listed_verbatim() -> None:
+    """Un `INDEXER_DIR` malo ⇒ `valid: false` y el mensaje en `problems` (diagnóstico)."""
+    message = "INDEXER_DIR: 'documentos' no existe (¿'documentos'?)"
+    payload = _call(problems=(message,), unknown_env=("INDEXER_DRI",))
+
+    config_block = payload["config"]
+    assert config_block["valid"] is False  # type: ignore[index]
+    assert config_block["problems"] == [message]  # type: ignore[index]
+    assert config_block["unknown_env"] == ["INDEXER_DRI"]  # type: ignore[index]
+    assert payload["health"]["state"] == "ok"  # type: ignore[index]
 
 
 def test_empty_index_is_ok_with_null_last_refresh() -> None:
@@ -281,6 +301,15 @@ def test_payload_stays_under_200_tokens_in_every_state() -> None:
         _call(
             last_refresh_roots=("00-Resources", "documentos", "materiales"),
             available_roots=("00-Resources", "documentos", "materiales"),
+        ),
+        # Diagnóstico: 3 problemas (el tope) + 3 variables desconocidas siguen bajo el techo.
+        _call(
+            problems=(
+                "INDEXER_DIR: 'documentos' no existe (¿'documentos'?)",
+                "INDEXER_DIR: fuera del vault: '/etc'",
+                "TEPOCHCALLI_TOP_K: 'cinco' no es un entero > 0 (se usa 5)",
+            ),
+            unknown_env=("INDEXER_DRI", "TEPOCHALLI_ROOT", "TEPOCHALLI_TOPX"),
         ),
     ):
         cost = budget.estimate_tokens(json.dumps(payload, ensure_ascii=False))

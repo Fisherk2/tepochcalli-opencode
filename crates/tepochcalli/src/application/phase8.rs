@@ -49,11 +49,12 @@ const CONTRACT_ROOT_ENV: &str = "TEPOCHCALLI_ROOT";
 /// not this probe — owns the backend wiring (ADR-005).
 pub const RAG_STATUS_PROBE: &str = "import asyncio, json; \
  from tepochcalli_mcp.server import _vault_config, _meta_seam, _config_valid, \
- _last_refresh_roots_seam, _available_roots_seam; \
+ _last_refresh_roots_seam, _available_roots_seam, _config_problems_seam, _unknown_env_seam; \
  from tepochcalli_mcp.tools import rag_status as _rs; \
  print(json.dumps(asyncio.run(_rs.rag_status(\
  config_factory=_vault_config, index_meta=_meta_seam, config_valid=_config_valid, \
- last_refresh_roots=_last_refresh_roots_seam, available_roots=_available_roots_seam))))";
+ last_refresh_roots=_last_refresh_roots_seam, available_roots=_available_roots_seam, \
+ problems=_config_problems_seam, unknown_env=_unknown_env_seam))))";
 
 /// `rag_status` health, the only F8 outcome the install summary needs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

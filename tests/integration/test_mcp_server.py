@@ -293,7 +293,7 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(
                 "last_refresh_roots",
                 "available_roots",
             ]
-            assert list(status["config"]) == ["path", "valid"]
+            assert list(status["config"]) == ["path", "valid", "problems", "unknown_env"]
             assert list(status["health"]) == ["state", "reason", "fix_hint"]
             payloads["rag_status"] = list(status)
         return payloads

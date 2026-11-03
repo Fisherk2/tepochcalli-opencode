@@ -77,7 +77,7 @@ if TYPE_CHECKING:
     from lancedb.table import AsyncTable
 
 import tepochcalli_mcp.tools
-from tepochcalli_mcp import __version__, budget, embedder, paths, summary
+from tepochcalli_mcp import __version__, budget, diagnostics, embedder, paths, summary
 from tepochcalli_mcp.tools import add_source as add_source_handler
 from tepochcalli_mcp.tools import convert_base64 as convert_base64_handler
 from tepochcalli_mcp.tools import convert_document as convert_document_handler
@@ -479,6 +479,9 @@ def _config_valid() -> bool:
     puede señalárnoslo: nunca lanza). El parsing DUPLICADO aquí es
     deliberado: es la única forma de obtener la señal sin tocar el loader
     vedado de `flow/config.py`.
+
+    `rag_status` combina esta señal con `_config_problems_seam`: `valid` es
+    `parseo OK y problems vacío` (un `INDEXER_DIR` malo ⇒ `false`).
     """
     toml_path = _vault_root() / CONFIG_RELPATH
     try:
@@ -488,6 +491,21 @@ def _config_valid() -> bool:
     except (tomllib.TOMLDecodeError, UnicodeDecodeError, OSError):
         return False
     return True
+
+
+def _config_problems_seam() -> tuple[str, ...]:
+    """Seam de diagnóstico: problemas de entorno/raíces visibles en la 1.ª llamada.
+
+    Se recalcula por llamada (mismo criterio que `_indexer_roots_seam`):
+    cambiar `INDEXER_DIR` no exige reiniciar el server.
+    """
+    vault_root = _vault_root()
+    return diagnostics.config_problems(load_config(vault_root), vault_root)
+
+
+def _unknown_env_seam() -> tuple[str, ...]:
+    """Seam de diagnóstico: variables de entorno que parecen nuestras y no lo son."""
+    return diagnostics.unknown_env(os.environ)
 
 
 @server.tool()
@@ -649,9 +667,16 @@ async def rag_status() -> CallToolResult:
     * `available_roots` = directorios de primer nivel del vault que son
       indexables (los de punto —`.tepochcalli/`, `.obsidian/`, `.trash/`—
       quedan fuera): pregunta qué hay en vez de adivinar qué indexar.
-    * `config.valid` = el `tepochcalli.toml` se pudo leer y parsear; `false`
-      SOLO si existe y está malformado — ausente ⇒ `true` (fichero opcional,
-      defaults canónicos; no es un chequeo de existencia).
+    * `config.valid` = el `tepochcalli.toml` se pudo leer y parsear **y**
+      `problems` está vacío; `false` si existe y está malformado o si hay
+      problemas de entorno — ausente ⇒ `true` (fichero opcional, defaults
+      canónicos; no es un chequeo de existencia).
+    * `config.problems` = qué está mal en el entorno de la config (raíz
+      `TEPOCHCALLI_ROOT`, cada raíz de `INDEXER_DIR`, `TEPOCHCALLI_TOP_K`),
+      mensajes cortos, tope 3 — visible en la PRIMERA llamada, sin indexar.
+    * `config.unknown_env` = variables que parecen nuestras y no lo son
+      (`INDEXER_DRI`, `TEPOCHALLI_ROOT`…): una clave mal escrita no se ignora
+      en silencio. Tope 3. Ninguno de los dos degrada `health`.
     * `mode`: `local` (peso en `.tepochcalli/models/`), `api` (LiteLLM:
       `provider` nombra el proveedor —hoy la clave `litellm` que la config
       puede expresar—, `model` su id) o `none` (T6/D15).
@@ -669,5 +694,7 @@ async def rag_status() -> CallToolResult:
         config_valid=_config_valid,
         last_refresh_roots=_last_refresh_roots_seam,
         available_roots=_available_roots_seam,
+        problems=_config_problems_seam,
+        unknown_env=_unknown_env_seam,
     )
     return tepochcalli_mcp.tools.json_result(payload)
