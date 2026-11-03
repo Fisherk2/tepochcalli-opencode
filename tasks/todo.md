@@ -139,7 +139,7 @@
   - Verificar: `just python-test` verde · el test transversal falla si alguien devuelve el markdown (comprobado rompiéndolo y revirtiendo) · `just coverage` ≥95 %
   - Dep.: T2, T3, T5, T6, T9, T10, T11 · Tamaño: L
 
-- [ ] **T13 · e2e bulk ~1 000 páginas + re-medición (Δ, RSS, venv, métricas)**
+- [x] **T13 · e2e bulk ~1 000 páginas + re-medición (Δ, RSS, venv, métricas)**
   - Subagentes: `test-automation-engineer` (lead), `performance-benchmarker` · Skills: `test-driven-development`, `performance-analysis` · Herramientas: `codebase-memory-mcp`
   - AC: (a) fixture sintético de **~1 000 páginas** (≥1 MB, generado en el test) + 20 ficheros de familias distintas; (b) las **21 conversiones** devuelven el resumen y ningún cuerpo; (c) el contenido íntegro queda en disco y el `preview` es ≤500 chars; (d) presupuesto verificado por respuesta y por suma; (e) **re-medición del motor** (n=20, nearest-rank, publicando n y método): Δ p95 con raíces múltiples y metadatos de cita al 100 % con `source_path` vault-relativo; (f) el **RSS pico** del Δ con documentos binarios (el perfil de TD-2 cambia: sin Docling) y el coste de los documentos **medido aparte** (D51); (g) el tamaño del venv y el nº de paquetes **medidos** (M9); (h) el tiempo del bulk se mide y se publica, sin aserción de latencia (regla anti-flake); (i) el test queda `slow`
   - Verificar: `just python-test-slow` verde · el informe publica n, corpus, presupuesto, Δ p95, RSS pico, coste de documentos y tamaño del venv · si algo se degrada, **se reporta**

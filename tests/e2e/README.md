@@ -9,6 +9,7 @@ verdad y el contrato afirmado donde lo ve el harness. Poblado en **T8**
 |---|---|
 | `test_mcp_contract.py` | Contract tests D7.3: shape exacto (claves y orden) de las 4 tools request/response en el wire; errores `is_error` + JSON canónico; los 5 `E_*` con escenarios REALES (config `none`, litellm sin clave, modelo ajeno, cache vacío offline/inválido); `rag_status` 4 bloques + <200 tokens; `path_filter` globs válidos e inválidos |
 | `test_mcp_journey.py` | e2e «pregunta → tool-call → JSON citado» sobre el vault golden **grabado** (`tests/fixtures/golden_vault/`, md + PDF): `source_path` real, `heading` y offsets reproducibles — slice del original en md, `offsets_ref == "extract"` en PDF |
+| `test_phase35_bulk.py` | **`slow`** (T13): 21 conversiones reales (20 familias + bulk de 1 000 páginas ≥1 MB generado en el test) con resumen-only y presupuesto por respuesta y por suma; re-medición del motor (Δ p95 n=20 nearest-rank sobre raíces múltiples, citas al 100 %, RSS `VmHWM`, coste de documentos aparte — D51) y venv medido (`du` + `*.dist-info`). Solo `just python-test-slow` |
 
 ## Contexto
 
