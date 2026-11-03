@@ -93,6 +93,7 @@ Embebido en el binario Rust del wizard vía `include_str!`. Actualizar modelos =
 | --- | --- | --- |
 | `name` | string | Etiqueta mostrada en el menú |
 | `hf_id` | string | ID en HuggingFace (p.ej. `BAAI/bge-m3`) |
+| `revision` | string | (T6/D59) SHA del commit HF que se materializa; es lo que se escribe en `[embedding].revision` y lo que fija el path `<slug>@<sha>` |
 | `dims` | integer | Dimensiones del vector (384, 1024…) |
 | `size_mb` | integer | Peso estimado de la descarga (blob HF) |
 | `gpu_recommended` | boolean | Muestra aviso de GPU recomendada (no bloquea) |
@@ -106,6 +107,7 @@ Embebido en el binario Rust del wizard vía `include_str!`. Actualizar modelos =
 [[preset]]
 name = "MiniLM multilingüe (default)"
 hf_id = "paraphrase-multilingual-MiniLM-L12-v2"
+revision = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"   # T6/D59
 dims = 384
 size_mb = 470
 disk_mb = 500
@@ -183,6 +185,7 @@ specs/spec-mcp-server.md §Códigos de error estructurados (ADR-007 §4.3).
 [embedding]
 provider = "local"            # local | litellm | none (D15: none aceptado desde T6)
 model = "paraphrase-multilingual-MiniLM-L12-v2"
+revision = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"   # SHA HF del modelo (T6/D59); el path estable se deriva de model+revision
 device = "cpu"                # device explícito para SentenceTransformerEmbedder(..., device=...); sobre-escribible por el usuario (ADR-008)
 # provider = "litellm"
 # model = "openai/text-embedding-3-small"
@@ -200,7 +203,8 @@ top_k_default = 5
 
 ### Cache de modelos (`models/`)
 
-* `SENTENCE_TRANSFORMERS_HOME` y `HF_HOME` se exportan apuntando a `.tepochcalli/models/` (env del venv vía archivo `.env` interno del venv o wrapper del entrypoint — decisión Phase 1).
+* **Un solo snapshot, dos caminos (T6/D59).** El modelo se materializa en `<models>/<slug>@<revision>/` (`slug` = id con `/`→`__`) y **ambos** caminos cargan ese directorio con `cocoindex.ops.sentence_transformers.SentenceTransformerEmbedder`: el write path lo materializa (descarga pineada + `save` + rename atómico) y el read path **lo exige** sin descargar — si falta, `E_MODEL_INVALID` con guía `tepochcalli config embedder`. Consecuencia: ya no hay «índice con main y query con SHA»; `[embedding].revision` es el pin único y `embedding.model` sigue siendo el id que se muestra en `rag_status`.
+* `SENTENCE_TRANSFORMERS_HOME` y `HF_HOME` se exportan apuntando a `.tepochcalli/models/` (env del venv vía archivo `.env` interno del venv o wrapper del entrypoint — decisión Phase 1). Esa caché es **temporal de descarga**; el directorio estable `<slug>@<revision>/` es el que se carga.
 * El wizard valida la presencia del modelo post-descarga (peso esperado ≈470MB) y ofrece reintento; la salida 5 del menú D7.1 (o `--skip-model`) la omite: el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config — `search` responderá `E_NO_EMBEDDER` hasta `tepochcalli config embedder`.
 * `models/` es eliminable en cualquier momento: se regenera (provenance HuggingFace documentada en docs/SECURITY.md).
 
@@ -239,7 +243,7 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 ## Security Considerations
 
 * API keys: solo `tepochcalli.toml` (gitignored) o variable de entorno; nunca en opencode.json commiteado — substitution `{env:VAR}` (docs/SECURITY.md).
-* La descarga del default es de HuggingFace (org `sentence-transformers`): el pin de la revisión del modelo queda documentado en SECURITY §provenance — concreta: `tepochcalli_flow.config.MODEL_REVISION` = `e8f8c211226b894fcb81acc59f3b34ba3efd5f42` (2026-10-23), usada por toda construcción `SentenceTransformer` del flow (ruta de lectura; la de escritura queda `SentenceTransformerEmbedder` de cocoindex, que aún no expone `revision`).
+* La descarga del default es de HuggingFace (org `sentence-transformers`): el pin de la revisión del modelo queda documentado en SECURITY §provenance — concreta: `tepochcalli_flow.config.MODEL_REVISION` = `e8f8c211226b894fcb81acc59f3b34ba3efd5f42` (2026-10-23), **default de `[embedding].revision`** y aplicado por igual a la ruta de escritura y a la de lectura desde T6/D59 (ambas cargan el mismo directorio `<models>/<slug>@<sha>/`).
 
 ## Rollback / Monitoring
 
