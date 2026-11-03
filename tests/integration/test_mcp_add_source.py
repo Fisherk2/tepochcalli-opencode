@@ -284,6 +284,42 @@ def test_unconvertible_format_maps_to_source_unreachable(source_vault: tuple[Pat
     )
 
 
+def test_missing_resources_root_in_indexer_dir_is_rejected_before_converting(
+    tmp_path: Path,
+) -> None:
+    """`INDEXER_DIR=documentos` sin `00-Resources` ⇒ `VALIDATION_ERROR` ANTES de convertir/escribir.
+
+    Gate de raíz declarada ejercitado en el WIRE (server real por stdio, sin
+    seams): el MCP no añade raíces al índice, así que sin `00-Resources` en
+    `INDEXER_DIR` la tool responde `details.{requested,allowed,hint}` y NADA
+    aparece en `00-Resources/` — snapshot byte a byte del vault completo
+    demuestra que ni el conversor ni la escritura corrieron. Sin modelo: el
+    gate precede a `E_NO_EMBEDDER`, así que el hijo corre con el canario
+    `nonet` y sin cache de modelo (patrón del edge de `index_refresh`).
+    """
+    (tmp_path / "documentos").mkdir()
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "notas.md").write_text(NOTAS, encoding="utf-8")
+    env = {**server_env(tmp_path), "INDEXER_DIR": "documentos"}
+    uri = (staging / "notas.md").as_uri()
+    before = _tree_snapshot(tmp_path)
+
+    async def call() -> tuple[dict[str, object], bool]:
+        async with running_server(env) as session:
+            return await _call_add_source(session, uri)
+
+    payload, is_error = asyncio.run(call())
+
+    assert is_error
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["details"]["requested"] == "00-Resources"
+    assert error["details"]["allowed"] == ["documentos"]
+    assert not (tmp_path / citation.RESOURCES_DIR).exists(), "nada escrito en 00-Resources/"
+    assert _tree_snapshot(tmp_path) == before, "el gate corre antes de convertir o escribir"
+
+
 def test_locked_refresh_reports_engine_locked_and_keeps_the_file(
     source_vault: tuple[Path, Path],
 ) -> None:

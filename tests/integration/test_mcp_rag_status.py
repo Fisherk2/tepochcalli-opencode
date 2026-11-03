@@ -215,3 +215,25 @@ def test_bad_indexer_dir_is_visible_in_rag_status_and_still_validation_error(
     error = json.loads(result.content[0].text)["error"]  # type: ignore[attr-defined]
     assert error["code"] == "VALIDATION_ERROR", "nunca INTERNAL: el borde juzga la raíz"
     _assert_tokens_under_200(status)
+
+
+def test_lookalike_indexer_env_is_listed_in_unknown_env(tmp_path: Path) -> None:
+    """`INDEXER_DRI` (typo de `INDEXER_DIR`) ⇒ `config.unknown_env` la lista en el wire.
+
+    Rama POSITIVA de `diagnostics.unknown_env` con server real: el typo no
+    lo lee nadie, pero el diagnóstico lo caza en la primera llamada
+    (spec-mcp-server §rag_status). `health` sigue `ok` — un nombre
+    desconocido es informativo, no degrada nada (D39).
+    """
+    (tmp_path / citation.RESOURCES_DIR).mkdir()
+    env = {**server_env(tmp_path), "INDEXER_DRI": "00-Resources"}
+
+    async def go() -> dict:
+        async with running_server(env) as session:
+            return await _call(session, "rag_status", {})
+
+    payload = asyncio.run(go())
+
+    assert payload["config"]["unknown_env"] == ["INDEXER_DRI"]
+    assert payload["health"] == {"state": "ok", "reason": None, "fix_hint": None}
+    _assert_tokens_under_200(payload)
