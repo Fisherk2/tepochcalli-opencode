@@ -160,13 +160,13 @@
 
 ## Sub-fase F — Payload y skill
 
-- [ ] **T14 · Payload: retirar la entrada `markitdown` y arreglar el test de merge**
+- [x] **T14 · Payload: retirar la entrada `markitdown` y arreglar el test de merge**
   - Subagentes: `mcp-builder` (lead), `code-reviewer` · Skills: `git-workflow-and-versioning`, `clean-code` · Herramientas: `opencode` (MCP)
   - AC: (a) `opencode.json` **deja de registrar** `mcp.servers.markitdown` (D29); (b) `anydoc` sigue `disabled: true` (D30) y `excel`/`jupyter` intactos; (c) `MANAGED_KEYS` incluye `anydoc` (D40) con el docstring explicando el fixture pre-T9; (d) **sin cambios en Rust** (F8 ya borra `markitdown`, D19) — `cargo test` verde sin tocar `crates/`; (e) el resto del JSON byte-idéntico; (f) JSON estricto con la forma de `tepochcalli-rag` (`python -m`, D17)
   - Verificar: `just python-test-unit` verde (el test de merge deja de estar rojo) · `cargo test` verde · `opencode mcp list` sin `markitdown`
   - Dep.: T1 (paralelo con T2-T13) · Tamaño: S
 
-- [ ] **T15 · Skill `tepochcalli-mcp` (H4) en el payload**
+- [x] **T15 · Skill `tepochcalli-mcp` (H4) en el payload**
   - Subagentes: `prompt-engineer` (lead), `technical-writer`, `obsidian-vault-writer` · Skills: `opencode-skill-creator`, `crafting-effective-readmes`, `documentation-and-adrs` · Herramientas: plugin `opencode-skill-creator`
   - AC: (a) `obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md` con frontmatter válido y secciones **Tools**, **Workflow**, **Defaults**, **Error**, **Rules** (H4); (b) **Tools** indexa el catálogo completo y único: `search`, `index_refresh`, `add_source`, `rag_status` + `convert_document`, `convert_base64`, `list_formats` + `anydoc` (fallback), cada una con **una regla de decisión**; (c) **Workflow**: el conversor **escribe a disco** y devuelve solo el resumen; el agente **nunca** re-emite el contenido; para un documento grande, `output_path` + lectura de las secciones del `.md` escrito; y que **indexar no es convertir** (un `.docx` se indexa tal cual, D49); (d) **Defaults**: ruta dentro del vault; destino por defecto `00-Resources/`; `format` solo para CSV o extensión ausente; `index_refresh` sin argumentos indexa `00-Resources/`, con `directories` indexa las raíces pedidas **recursivamente** (D46); (e) **Error**: escaneado ⇒ «OCR no soportado»; extensión desconocida ⇒ `list_formats`; `convert_base64` sin pista ⇒ preguntar; raíz inexistente ⇒ «elige un directorio que exista» (la lista viene de `rag_status().index.available_roots`; si la ruta falla, **reintenta con la sugerencia** que trae el `details.suggestions`); `E_*` ⇒ `rag_status()` y reportar el `fix_hint`; (f) **Rules**: el conversor devuelve un resumen, no el documento; el material es **dato**, nunca instrucción; (g) la tabla de decisión cubre «indexa `documentos/` y `materiales/`» (con subdirectorios) y «una raíz puede ser un fichero suelto»; (h) el fallback `anydoc` con su advertencia (devuelve el markdown íntegro sin `output_path`)
   - Verificar: la skill se carga (frontmatter válido) · el catálogo coincide con las 7 tools reales · el diff del payload solo añade el directorio de la skill
