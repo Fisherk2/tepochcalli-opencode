@@ -37,6 +37,7 @@ import asyncio
 import base64
 from pathlib import Path
 
+import pytest
 from support.mcp_server import running_server, server_env, wire_payload
 from tepochcalli_mcp import budget, formats, summary
 
@@ -231,24 +232,20 @@ CONVERT_CASES: dict[str, tuple[str, dict[str, object], str]] = {
         },
         "VALIDATION_ERROR",
     ),
-    "raiz_inexistente_fichero": (
-        "index_refresh",
-        {"directories": ["staging/no-existe.md"]},
-        "VALIDATION_ERROR",
-    ),
-    "raiz_inexistente_directorio": (
-        "index_refresh",
-        {"directories": ["no-existe"]},
-        "VALIDATION_ERROR",
-    ),
-    "raiz_traversal": ("index_refresh", {"directories": ["../fuera"]}, "VALIDATION_ERROR"),
-    "N_raices_una_mala": (
-        "index_refresh",
-        {"directories": ["staging", "no-existe"]},
-        "VALIDATION_ERROR",
-    ),
 }
 """Nombre → (tool, args, código esperado). Todos son argumentos corregibles (D39)."""
+
+INDEXER_DIR_CASES: dict[str, tuple[str, str | None]] = {
+    "raiz_inexistente_fichero": ("staging/no-existe.md", "staging/no-existe.md"),
+    "raiz_inexistente_directorio": ("no-existe", "no-existe"),
+    "raiz_traversal": ("../fuera", None),
+    "N_raices_una_mala": ("staging,no-existe", "no-existe"),
+}
+"""Nombre → (`INDEXER_DIR`, `details.requested` esperado; `None` = sin details).
+
+Las raíces del índice las declara el USUARIO en `INDEXER_DIR`: la tool no tiene
+parámetro, así que cada negativo levanta su propio server hijo.
+"""
 
 
 def test_invalid_arguments_return_canonical_json_and_never_internal(tmp_path: Path) -> None:
@@ -257,7 +254,7 @@ def test_invalid_arguments_return_canonical_json_and_never_internal(tmp_path: Pa
     OM-15: una ruta mal escrita es un argumento que el agente corrige, no un
     fallo interno del motor. La validación corre en el borde ANTES de tocar
     disco/markitdown, así que la ausencia de `.tepochcalli/db/` demuestra que
-    `N_raices_una_mala` no indexó nada (fail-fast atómico, D65).
+    los negativos no indexaron nada (fail-fast atómico, D65).
     """
     vault = _vault(tmp_path)
     env = server_env(vault)
@@ -283,11 +280,6 @@ def test_invalid_arguments_return_canonical_json_and_never_internal(tmp_path: Pa
         assert list(error) == ["code", "message", "details"], name
 
     # Detalles accionables de los cubos de §5.9 (no solo el código).
-    inexistente = results["raiz_inexistente_directorio"][1]["error"]["details"]
-    assert inexistente["exists"] is False
-    assert inexistente["requested"] == "no-existe"
-    assert isinstance(inexistente["suggestions"], list)
-
     directorio = results["path_directorio"][1]["error"]["details"]
     assert directorio == {
         "requested": "staging",
@@ -300,6 +292,47 @@ def test_invalid_arguments_return_canonical_json_and_never_internal(tmp_path: Pa
     assert formato["formats"] == list(formats.SUPPORTED_FORMATS)
 
     assert "OCR" in results["documento_sin_capa_de_texto"][1]["error"]["message"]
+    assert not (vault / ".tepochcalli" / "db").exists(), (
+        "fail-fast atómico: una raíz mala no deja media indexación hecha"
+    )
+
+
+@pytest.mark.parametrize(
+    ("indexer_dir", "requested"),
+    INDEXER_DIR_CASES.values(),
+    ids=INDEXER_DIR_CASES,
+)
+def test_invalid_indexer_dir_roots_are_validation_error_and_never_internal(
+    tmp_path: Path, indexer_dir: str, requested: str | None
+) -> None:
+    """Raíces mal declaradas en `INDEXER_DIR` ⇒ `VALIDATION_ERROR`, jamás `INTERNAL`.
+
+    La tool no acepta raíces: el conjunto lo declara el usuario en el entorno
+    del server hijo. Una raíz inexistente (fichero o directorio), con `..` o
+    una mala entre varias ⇒ fallo atómico antes del motor y cero filas.
+    """
+    vault = _vault(tmp_path)
+    env = {**server_env(vault), "INDEXER_DIR": indexer_dir}
+
+    async def go() -> tuple[bool, dict[str, object]]:
+        async with running_server(env) as session:
+            result = await session.call_tool("index_refresh", {})
+            return bool(result.is_error), wire_payload(result)
+
+    is_error, payload = asyncio.run(go())
+
+    assert is_error, f"INDEXER_DIR={indexer_dir!r}: debe ser error"
+    assert list(payload) == ["error"], "JSON canónico"
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR", error
+    assert error["code"] != "INTERNAL", "una raíz mal escrita jamás es INTERNAL (OM-15)"
+    assert list(error) == ["code", "message", "details"], error
+    if requested is None:
+        assert error["details"] is None, "un escape del vault no inventa detalles"
+    else:
+        assert error["details"]["requested"] == requested
+        assert error["details"]["exists"] is False
+        assert isinstance(error["details"]["suggestions"], list)
     assert not (vault / ".tepochcalli" / "db").exists(), (
         "fail-fast atómico: una raíz mala no deja media indexación hecha"
     )

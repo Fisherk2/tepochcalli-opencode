@@ -178,13 +178,11 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
                 "filename",
             ]
             assert tools["convert_base64"].input_schema["required"] == ["data"]
-            assert list(tools["index_refresh"].input_schema["properties"]) == ["directories"]
-            assert tools["index_refresh"].input_schema.get("required", []) == []
+            refresh_schema = tools["index_refresh"].input_schema
+            assert refresh_schema["properties"] == {}, "sin `directories` ni parámetros"
+            assert refresh_schema.get("required", []) == []
             assert tools["list_formats"].input_schema["properties"] == {}
             assert tools["list_formats"].input_schema.get("required", []) == []
-            assert (
-                tools["index_refresh"].input_schema["properties"]["directories"]["default"] is None
-            )
             assert tools["rag_status"].input_schema["properties"] == {}
             # H6: handlers `-> CallToolResult` ⇒ sin outputSchema; el shape vive
             # en content[0].text y `structured_content` queda None (lo afirma wire_payload).

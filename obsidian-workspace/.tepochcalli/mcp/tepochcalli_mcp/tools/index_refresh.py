@@ -19,18 +19,19 @@ El composition root (`server.py`, exento) inyecta cuatro seams:
 * `index_exists`: ¿queda la tabla `chunks` tras el refresh? False ⇒
   `INDEX_EMPTY` (vault sin indexables: la tool lo dice en vez de mentir).
 
-**`directories` se valida en el BORDE, ANTES de la costura** (T8/D44/D64/D65):
-`paths.validate_roots` es puro y comprueba existencia, tipo, `..` y escape del
-vault; su `VaultPathError` se mapea a `VALIDATION_ERROR` con
+**Las raíces son propiedad del USUARIO** (`Config.indexer_roots`, que sale de
+`INDEXER_DIR` en `opencode.json`): la tool no tiene argumento de raíces — el MCP
+no añade ni quita raíces del índice. Se validan en el BORDE, ANTES de la costura
+(T8/D44/D64/D65): `paths.validate_roots` es puro y comprueba existencia, tipo,
+`..` y escape del vault; su `VaultPathError` se mapea a `VALIDATION_ERROR` con
 `details.suggestions`. Dejarlo al motor convertiría una carpeta mal escrita en
 `INTERNAL` por el `ValueError` de `walk_dir` (OM-15). El fallo es atómico: una
-raíz mala ⇒ no se indexa ninguna. `VALIDATION_ERROR` precede a
-`E_NO_EMBEDDER` — el argumento se juzga antes de mirar el provider.
+raíz mala ⇒ no se indexa ninguna. `VALIDATION_ERROR` precede a `E_NO_EMBEDDER` —
+la configuración se juzga antes de mirar el provider.
 
-**Raíces por omisión (`default_roots`):** `directories` vacío/`None` ⇒ las
-raíces de la costura (`Config.indexer_roots`, que sale de `INDEXER_DIR` en
-`opencode.json`), validadas igual que las explícitas. El handler no repite el
-literal `("00-Resources",)`: el composition root pasa la costura.
+**La validación corre SIEMPRE**, también cuando el conjunto es el fallback
+`00-Resources`: el handler no repite el literal, lo recibe de la costura
+`default_roots` y lo pasa por el mismo borde.
 
 La guarda compartida `@errors.internal_guard` (G1) envuelve el handler
 completo: cualquier fallo inesperado (refresh, seams) → `INTERNAL` canónico
@@ -49,7 +50,6 @@ from tepochcalli_mcp import embedder, errors, paths
 
 @errors.internal_guard
 async def index_refresh(
-    directories: list[str] | None = None,
     *,
     vault_root: Callable[[], Path],
     default_roots: Callable[[], tuple[str, ...]],
@@ -59,16 +59,17 @@ async def index_refresh(
 ) -> dict[str, object]:
     """Devuelve `{scanned, indexed, skipped, elapsed_ms, locked, roots}`.
 
-    Precedencia: `VALIDATION_ERROR` (raíces mal escritas, antes de tocar el
-    motor) → `E_NO_EMBEDDER` (sin embedder ni se refresca) → reporte del
+    Precedencia: `VALIDATION_ERROR` (raíces configuradas mal escritas, antes de
+    tocar el motor) → `E_NO_EMBEDDER` (sin embedder ni se refresca) → reporte del
     refresh (con candado ⇒ tres ceros, sin mirar el índice) → `INDEX_EMPTY` si
     la tabla sigue ausente → si no, el reporte DEVUELTO TAL CUAL. Un
     directorio vacío no es error: sale `scanned: 0` y el agente no lo lee como
-    fallo. `directories` omitido/vacío ⇒ raíces de `default_roots`
-    (`Config.indexer_roots`, declaradas en `INDEXER_DIR`).
+    fallo. Las raíces salen SIEMPRE de `default_roots`
+    (`Config.indexer_roots`, declaradas en `INDEXER_DIR`): la tool no acepta
+    raíces, el conjunto lo posee el usuario.
     """
     try:
-        roots = paths.validate_roots(directories or default_roots(), vault_root())
+        roots = paths.validate_roots(default_roots(), vault_root())
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
     if not embedder_available():

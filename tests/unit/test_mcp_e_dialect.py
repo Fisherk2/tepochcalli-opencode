@@ -534,6 +534,7 @@ def test_add_source_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
             convert=lambda uri: "# convertido\n",
             refresh=_auth_refresh,
             embedder_available=lambda: True,
+            allowed_roots=lambda: ("00-Resources",),
         )
     )
 

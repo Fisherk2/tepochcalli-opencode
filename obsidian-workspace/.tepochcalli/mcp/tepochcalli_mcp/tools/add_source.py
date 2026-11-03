@@ -23,20 +23,27 @@ Contrato y precedencia, en orden:
 1. **Borde de validación** — esquema (`http(s):`/`file:`; D16: `file:` fuera
    del vault ⇒ `VALIDATION_ERROR`, decidido ANTES de que el conversor vea
    la ruta) y `subdir` (`paths.validate_subdir`, anti-traversal);
-2. **corte `E_NO_EMBEDDER`** — sin embedder no hay indexación, y escribir sin
+2. **raíz declarada** — `add_source` escribe SIEMPRE en `00-Resources/`
+   (D9.1): si esa raíz no está en `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con
+   `details.{requested,allowed,hint}` ANTES de convertir o escribir. La
+   comparación normaliza ambos lados (`./00-Resources/` ≡ `00-Resources`);
+   `details.allowed` muestra lo declarado tal cual. El MCP no añade raíces al
+   índice (el conjunto lo posee el usuario);
+3. **corte `E_NO_EMBEDDER`** — sin embedder no hay indexación, y escribir sin
    indexar deja un huérfano en el vault: se corta ANTES de convertir y de
    escribir (spec-mcp-server §Códigos lista también esta tool);
-3. **conversión** — la costura inyectada; cualquier fallo de fetch/convert
+4. **conversión** — la costura inyectada; cualquier fallo de fetch/convert
    ⇒ `SOURCE_UNREACHABLE` con la guía literal de spec-markitdown (el
    traceback va al log stderr, nunca al cliente);
-4. **escritura atómica** — slug + `.md` con sufijo numérico ante colisión
+5. **escritura atómica** — slug + `.md` con sufijo numérico ante colisión
    (`paths`), temporal en el MISMO directorio de destino + `os.replace`
    (`writer.write_atomic`, la MISMA función del conversor — D63/D66), con
    `ensure_within` como última defensa antes de escribir;
-5. **reindexación** — el MISMO seam de refresh de T3; reporte con `locked`
-   ⇒ `ENGINE_LOCKED` (la forma congelada de §5 no tiene campo `locked` en
-   su sub-objeto `indexed`, así que el candado viaja COMO ERROR con
-   `details.written_to`: el archivo sí quedó, el ciclo Δ es reintentable).
+6. **reindexación** — el MISMO seam de refresh de T3, con EXACTAMENTE las
+   raíces configuradas; reporte con `locked` ⇒ `ENGINE_LOCKED` (la forma
+   congelada de §5 no tiene campo `locked` en su sub-objeto `indexed`, así
+   que el candado viaja COMO ERROR con `details.written_to`: el archivo sí
+   quedó, el ciclo Δ es reintentable).
 
 `@errors.internal_guard` (G1) envuelve el handler completo — arranque de
 `vault_root` incluido—: cualquier fallo no mapeado ⇒ `INTERNAL` canónico.
@@ -47,7 +54,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Callable
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
@@ -59,6 +66,16 @@ INDEXED_FIELDS: tuple[str, ...] = ("scanned", "indexed", "skipped", "elapsed_ms"
 """Los 4 campos del sub-objeto `indexed` de §5 — SIN `locked` (contrato congelado)."""
 
 
+def _normalized_root(entry: str) -> str:
+    """Raíz comparable: `PurePosixPath` resuelve `./` y barras finales.
+
+    `..` NO se normaliza aquí: el borde (`paths.validate_roots`) lo rechaza
+    antes de indexar; este helper solo iguala formas equivalentes de la misma
+    raíz (`./00-Resources/` ≡ `00-Resources`).
+    """
+    return PurePosixPath(entry.strip().replace("\\", "/")).as_posix()
+
+
 @errors.internal_guard
 async def add_source(
     uri: str,
@@ -68,13 +85,18 @@ async def add_source(
     convert: Callable[[str], str],
     refresh: Callable[[], dict[str, object]],
     embedder_available: Callable[[], bool],
+    allowed_roots: Callable[[], tuple[str, ...]],
 ) -> dict[str, object]:
     """`{ok, written_to, indexed:{scanned, indexed, skipped, elapsed_ms}}` — forma §5.
 
     `convert` es la costura de markitdown inyectada por el composition root
     (ver módulo: el plan §5 dibuja `TOOLS → CONV`, la puerta de arquitectura
     impone la costura); `refresh` es el MISMO seam de T3 — el handler no
-    importa `tepochcalli_flow.app` (test de arquitectura).
+    importa `tepochcalli_flow.app` (test de arquitectura). `allowed_roots` son
+    las raíces declaradas por el usuario (`INDEXER_DIR`), comparadas
+    NORMALIZADAS (`./00-Resources/` ≡ `00-Resources`): `add_source` escribe
+    SIEMPRE en `00-Resources/`, así que si esa raíz no está declarada se
+    rechaza ANTES de escribir nada — el MCP no añade raíces al índice.
     """
     root = vault_root().resolve()
     try:
@@ -82,6 +104,20 @@ async def add_source(
         subdir_rel = paths.validate_subdir(subdir)
     except ValueError as exc:
         return errors.validation_error(str(exc))
+    allowed = allowed_roots()
+    if _normalized_root(RESOURCES_DIR) not in {_normalized_root(root) for root in allowed}:
+        return errors.validation_error(
+            f"add_source escribe en {RESOURCES_DIR}/, pero esa raíz no está declarada "
+            f"en INDEXER_DIR; el MCP no añade raíces al índice: {list(allowed)}",
+            {
+                "requested": RESOURCES_DIR,
+                "allowed": list(allowed),
+                "hint": (
+                    f"Declara {RESOURCES_DIR} en INDEXER_DIR (opencode.json) para usar "
+                    "add_source; el conjunto de raíces lo define el usuario."
+                ),
+            },
+        )
     if not embedder_available():
         # VALIDATION_ERROR precede: el borde ya validó, y sin indexación
         # convertir/escribir solo fabricaría huérfanos. Igual que los hermanos.

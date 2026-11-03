@@ -42,7 +42,7 @@ from tepochcalli_flow import citation
 # propiedades lo fija la firma de cada tool.
 _EXPECTED_INPUT_KEYS: dict[str, list[str]] = {
     "search": ["query", "top_k", "path_filter"],
-    "index_refresh": ["directories"],
+    "index_refresh": [],
     "add_source": ["uri", "subdir"],
     "rag_status": [],
     "convert_document": ["path", "output_path", "format"],

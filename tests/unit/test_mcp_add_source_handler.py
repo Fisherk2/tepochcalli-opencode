@@ -46,6 +46,7 @@ def _run(
     vault: Path,
     convert: Callable[[str], str] | None = None,
     report: dict[str, object] | None = None,
+    allowed_roots: Callable[[], tuple[str, ...]] = lambda: ("00-Resources",),
 ) -> tuple[dict[str, object], list[str]]:
     """Ejecuta el handler con seams falsos; devuelve `(payload, llamadas a seams)`."""
     calls: list[str] = []
@@ -66,6 +67,7 @@ def _run(
             convert=convert or fake_convert,
             refresh=fake_refresh,
             embedder_available=lambda: True,
+            allowed_roots=allowed_roots,
         ),
     )
     return payload, calls
@@ -214,7 +216,7 @@ def test_slug_and_subdir_are_reused_from_paths_domain(
     assert payload["written_to"] == f"00-Resources/_inbox/{paths.slugify_uri(uri)}.md"
 
 
-# --- wiring de reindexación: el refresh declara TAMBIÉN el destino de escritura ----------
+# --- wiring de reindexación: el refresh declara EXACTAMENTE el conjunto configurado ------
 
 
 def _seam_calls(
@@ -233,23 +235,61 @@ def _seam_calls(
         return {}
 
     monkeypatch.setattr(server, "_refresh_once", _spy)
-    server._add_source_refresh()
+    server._refresh_configured()
     return seen
 
 
-def test_add_source_refresh_declares_the_write_destination_too(
+def test_add_source_refresh_declares_exactly_the_configured_roots(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """`INDEXER_DIR="materiales"` ⇒ el refresh declara `("materiales", "00-Resources")`.
+    """`INDEXER_DIR="materiales"` ⇒ el refresh declara SOLO `("materiales",)`.
 
-    `add_source` escribe SIEMPRE en `00-Resources/` (D9.1): sin declararla, el
-    target reconciliaría el conjunto y purgaría las filas del .md recién escrito.
+    Ya no se une `00-Resources/`: si no está declarada, `add_source` se rechaza
+    en el borde antes de escribir, así que el conjunto configurado es el que el
+    target del flow debe reconciliar.
     """
-    assert _seam_calls(monkeypatch, tmp_path, "materiales") == [("materiales", "00-Resources")]
+    assert _seam_calls(monkeypatch, tmp_path, "materiales") == [("materiales",)]
 
 
-def test_add_source_refresh_does_not_duplicate_the_default_root(
+def test_add_source_refresh_uses_the_default_root_without_duplicating_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Sin `INDEXER_DIR`, una sola raíz: `("00-Resources",)` — sin duplicar."""
     assert _seam_calls(monkeypatch, tmp_path, None) == [("00-Resources",)]
+
+
+# --- borde: add_source exige que `00-Resources/` esté declarada en INDEXER_DIR ------------
+
+
+def test_add_source_rejects_when_resources_is_not_indexed(tmp_path: Path) -> None:
+    """`INDEXER_DIR="documentos"` ⇒ `VALIDATION_ERROR` y NADA se escribe ni convierte."""
+    payload, calls = _run(
+        _notas_uri(tmp_path), vault=tmp_path, allowed_roots=lambda: ("documentos",)
+    )
+
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["details"]["requested"] == "00-Resources"
+    assert error["details"]["allowed"] == ["documentos"]
+    assert isinstance(error["details"]["hint"], str) and error["details"]["hint"]
+    assert calls == [], "sin raíz declarada no se convierte ni se reindexa"
+    assert not (tmp_path / "00-Resources").exists(), "no se escribe nada en 00-Resources/"
+
+
+def test_add_source_accepts_resources_declared_with_dot_slash(tmp_path: Path) -> None:
+    """`INDEXER_DIR="./00-Resources/"` declara la raíz: se normaliza antes de comparar."""
+    payload, calls = _run(
+        _notas_uri(tmp_path), vault=tmp_path, allowed_roots=lambda: ("./00-Resources/",)
+    )
+
+    assert payload["ok"] is True
+    assert payload["written_to"] == "00-Resources/_inbox/notas.md"
+    assert calls[-1] == "refresh", "con la raíz declarada el ciclo Δ sí corre"
+    assert (tmp_path / "00-Resources" / "_inbox" / "notas.md").is_file()
+
+
+def test_refresh_receives_resources_declared_with_dot_slash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El refresh recibe el conjunto declarado TAL CUAL (la normalización es solo del gate)."""
+    assert _seam_calls(monkeypatch, tmp_path, "./00-Resources/") == [("./00-Resources/",)]

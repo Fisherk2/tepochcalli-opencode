@@ -1,14 +1,15 @@
-"""T3+T8: handler `index_refresh` — reporte tal cual, `directories` y precedencias (plan §6).
+"""T3+T8: handler `index_refresh` — reporte tal cual, raíces configuradas y precedencias.
 
 Fuentes de verdad:
 
 * tasks/plan.md §6 T3 — `asdict(RefreshReport)` SIN recalcular; `locked:true`
   ⇒ tres ceros y sin update; `E_NO_EMBEDDER` precede a `INDEX_EMPTY`;
   idempotencia; handler no bloqueante.
-* tasks/todo.md T8 AC (a)-(j) — `directories` se valida en el borde ANTES de
-  la costura (`paths.validate_roots`, puro) ⇒ `VALIDATION_ERROR`, nunca
-  `INTERNAL` (OM-15); fail-fast atómico (D65); `VALIDATION_ERROR` precede a
-  `E_NO_EMBEDDER`; la respuesta conserva las 5 claves y añade `roots`.
+* tasks/todo.md T8 AC (a)-(j) — las raíces configuradas (`INDEXER_DIR`) se
+  validan en el borde ANTES de la costura (`paths.validate_roots`, puro) ⇒
+  `VALIDATION_ERROR`, nunca `INTERNAL` (OM-15); fail-fast atómico (D65);
+  `VALIDATION_ERROR` precede a `E_NO_EMBEDDER`; la respuesta conserva las 5
+  claves y añade `roots`.
 * specs/spec-mcp-server.md §Tool `index_refresh`.
 
 Decisiones de capa, documentadas:
@@ -38,7 +39,8 @@ from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
-from tepochcalli_mcp import errors
+from mcp.server.mcpserver.utilities.func_metadata import func_metadata
+from tepochcalli_mcp import errors, server
 from tepochcalli_mcp.tools import index_refresh as refresh_tool
 from tepochcalli_mcp.tools import json_result
 
@@ -69,7 +71,6 @@ def vault(tmp_path: Path) -> Path:
 
 
 def _call(
-    directories: list[str] | None = None,
     *,
     vault_root: Path,
     refresh: Callable[[tuple[str, ...]], dict[str, object]],
@@ -77,10 +78,9 @@ def _call(
     index_exists: Callable[[], bool],
     default_roots: Callable[[], tuple[str, ...]] = lambda: ("00-Resources",),
 ) -> dict[str, object]:
-    """Invoca el handler en su propio loop (cada test, aislado)."""
+    """Invoca el handler sin argumentos (el conjunto lo fija la costura)."""
     return asyncio.run(
         refresh_tool.index_refresh(
-            directories,
             vault_root=lambda: vault_root,
             default_roots=default_roots,
             refresh=refresh,
@@ -163,11 +163,11 @@ def test_locked_report_short_circuits_without_consulting_the_index(vault: Path) 
     assert consulted == [], "el estado del índice no se consulta con el candado puesto"
 
 
-# --- T8: `directories` en el borde (D42/D44/D65) --------------------------------------
+# --- raíces del índice: SOLO las declaradas por el usuario (INDEXER_DIR) --------------
 
 
-def test_default_directories_are_00_resources(vault: Path) -> None:
-    """AC (a): `None` ⇒ `("00-Resources",)` — compatibilidad con los agentes existentes."""
+def test_default_roots_are_00_resources(vault: Path) -> None:
+    """AC (a): costura por omisión ⇒ `("00-Resources",)` — el default del producto."""
     seen: list[tuple[str, ...]] = []
 
     def _refresh(roots: tuple[str, ...]) -> dict[str, object]:
@@ -185,10 +185,10 @@ def test_default_directories_are_00_resources(vault: Path) -> None:
     assert payload["roots"] == ["00-Resources"]
 
 
-def test_default_directories_come_from_the_seam_not_from_the_literal(
+def test_default_roots_come_from_the_seam_not_from_the_literal(
     vault: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sin `directories`, el borde valida las raíces de la costura (`config.indexer_roots`).
+    """El borde valida las raíces de la costura (`config.indexer_roots`), no un literal.
 
     `INDEXER_DIR` se declara en `opencode.json`; el handler no repite el literal
     `("00-Resources",)` — lo recibe por costura, igual que `last_refresh_roots`.
@@ -221,8 +221,8 @@ def test_default_directories_come_from_the_seam_not_from_the_literal(
     assert payload["roots"] == ["materiales"]
 
 
-def test_explicit_directories_win_over_the_seam(vault: Path) -> None:
-    """Con `directories` explícitas, la costura no se usa (el argumento manda)."""
+def test_no_arguments_index_the_configured_two_roots(vault: Path) -> None:
+    """Sin argumentos en el wire, se indexa EXACTAMENTE el conjunto configurado."""
     (vault / "materiales").mkdir()
     (vault / "documentos").mkdir()
     seen: list[tuple[str, ...]] = []
@@ -231,19 +231,55 @@ def test_explicit_directories_win_over_the_seam(vault: Path) -> None:
         seen.append(roots)
         return {**WELL_FORMED_REPORT, "roots": list(roots)}
 
-    _call(
-        ["documentos"],
+    payload = _call(
         vault_root=vault,
         refresh=_refresh,
         embedder_available=_const(True),
         index_exists=_const(True),
-        default_roots=_const(("materiales",)),
+        default_roots=_const(("materiales", "documentos")),
     )
 
-    assert seen == [("documentos",)]
+    assert seen == [("materiales", "documentos")]
+    assert payload["roots"] == ["materiales", "documentos"]
 
 
-def test_directories_are_normalized_and_forwarded_to_the_seam(vault: Path) -> None:
+def test_removed_directories_argument_is_ignored_by_the_sdk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """El argumento retirado NO tiene efecto: el SDK descarta claves desconocidas.
+
+    `FuncMetadata.validate_arguments` hace `model_validate` sobre una firma vacía
+    y `model_dump_one_level`; `{"directories": [...]}` se descarta y la tool se
+    llama sin argumentos ⇒ indexa el conjunto declarado en `INDEXER_DIR`, no lo
+    pedido. Si una versión futura del SDK lo rechazara, este test lo delata
+    (fallaría la validación). No se añade un guard que devuelva error: el fallo
+    seguro —indexar el conjunto declarado— ya es el comportamiento correcto.
+    """
+    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "documentos").mkdir()
+    monkeypatch.setenv("TEPOCHCALLI_VAULT_ROOT", str(tmp_path))
+    monkeypatch.setenv("INDEXER_DIR", "00-Resources")
+    seen: list[tuple[str, ...]] = []
+
+    def _refresh(roots: tuple[str, ...]) -> dict[str, object]:
+        seen.append(roots)
+        return {**WELL_FORMED_REPORT, "roots": list(roots)}
+
+    monkeypatch.setattr(server, "_refresh_once", _refresh)
+    monkeypatch.setattr(server, "_embedder_available", lambda: True)
+    monkeypatch.setattr(server, "_index_exists", lambda: True)
+
+    meta = func_metadata(server.index_refresh)
+    kwargs = meta.validate_arguments({"directories": ["documentos"]})
+    assert kwargs == {}, "el SDK descarta la clave desconocida (firma vacía)"
+    result = asyncio.run(meta.call_fn(server.index_refresh, True, kwargs))
+    payload = json.loads(result.content[0].text)
+
+    assert seen == [("00-Resources",)], "indexa el conjunto configurado, no lo pedido"
+    assert payload["roots"] == ["00-Resources"]
+
+
+def test_configured_roots_are_normalized_and_forwarded_to_the_seam(vault: Path) -> None:
     """AC (d): las raíces validadas (relativas al vault) llegan al motor tal cual."""
     (vault / "materiales").mkdir()
     (vault / "documentos").mkdir()
@@ -254,11 +290,11 @@ def test_directories_are_normalized_and_forwarded_to_the_seam(vault: Path) -> No
         return {**WELL_FORMED_REPORT, "roots": list(roots)}
 
     payload = _call(
-        ["materiales", "documentos"],
         vault_root=vault,
         refresh=_refresh,
         embedder_available=_const(True),
         index_exists=_const(True),
+        default_roots=_const(("materiales", "documentos")),
     )
 
     assert seen == [("materiales", "documentos")]
@@ -266,7 +302,7 @@ def test_directories_are_normalized_and_forwarded_to_the_seam(vault: Path) -> No
 
 
 def test_missing_root_is_validation_error_before_the_seam(vault: Path) -> None:
-    """AC (b)/(h): raíz inexistente ⇒ `VALIDATION_ERROR` con `details` — nunca `INTERNAL`.
+    """AC (b)/(h): raíz inexistente en la costura ⇒ `VALIDATION_ERROR` — nunca `INTERNAL`.
 
     El pre-chequeo corre en el borde ANTES de la costura: `walk_dir` del motor
     lanzaría `ValueError` y el `internal_guard` lo volvería `INTERNAL` (OM-15).
@@ -275,11 +311,11 @@ def test_missing_root_is_validation_error_before_the_seam(vault: Path) -> None:
     calls: list[tuple[str, ...]] = []
 
     payload = _call(
-        ["Documentos"],
         vault_root=vault,
         refresh=lambda roots: calls.append(roots) or WELL_FORMED_REPORT,
         embedder_available=_const(True),
         index_exists=_const(True),
+        default_roots=_const(("Documentos",)),
     )
 
     assert payload["error"]["code"] == "VALIDATION_ERROR"
@@ -299,11 +335,11 @@ def test_one_bad_root_among_three_indexes_nothing(vault: Path) -> None:
     calls: list[tuple[str, ...]] = []
 
     payload = _call(
-        ["materiales", "documentos", "no-existe"],
         vault_root=vault,
         refresh=lambda roots: calls.append(roots) or WELL_FORMED_REPORT,
         embedder_available=_const(True),
         index_exists=_const(True),
+        default_roots=_const(("materiales", "documentos", "no-existe")),
     )
 
     assert payload["error"]["code"] == "VALIDATION_ERROR"
@@ -312,28 +348,28 @@ def test_one_bad_root_among_three_indexes_nothing(vault: Path) -> None:
 
 
 def test_validation_error_precedes_e_no_embedder(vault: Path) -> None:
-    """AC (g): el argumento se juzga ANTES de mirar el provider."""
+    """AC (g): la configuración se juzga ANTES de mirar el provider."""
     payload = _call(
-        ["no-existe"],
         vault_root=vault,
         refresh=lambda _roots: WELL_FORMED_REPORT,
         embedder_available=_const(False),
         index_exists=_const(False),
+        default_roots=_const(("no-existe",)),
     )
 
     assert payload["error"]["code"] == "VALIDATION_ERROR", (
-        "un argumento mal escrito es corregible: no lo tapa `E_NO_EMBEDDER`"
+        "una raíz mal escrita es corregible: no la tapa `E_NO_EMBEDDER`"
     )
 
 
 def test_escaped_root_is_validation_error_not_internal(vault: Path) -> None:
     """`..` fuera del vault ⇒ `VALIDATION_ERROR` en el borde (frontera B′)."""
     payload = _call(
-        ["../fuera"],
         vault_root=vault,
         refresh=lambda _roots: WELL_FORMED_REPORT,
         embedder_available=_const(True),
         index_exists=_const(True),
+        default_roots=_const(("../fuera",)),
     )
 
     assert payload["error"]["code"] == "VALIDATION_ERROR"

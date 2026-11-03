@@ -142,6 +142,7 @@ def test_add_source_uses_the_shared_writer(tmp_path: Path, monkeypatch: pytest.M
             convert=lambda _uri: CONTENT,
             refresh=lambda: dict(REPORT),
             embedder_available=lambda: True,
+            allowed_roots=lambda: ("00-Resources",),
         )
     )
 
