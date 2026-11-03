@@ -500,15 +500,17 @@ def test_real_offline_factory_failure_surfaces_as_e_offline_in_search(
 # --- E_API_AUTH desde index_refresh y add_source (mismo seam de refresh) -----------------
 
 
-def _auth_refresh() -> dict[str, object]:
+def _auth_refresh(_roots: tuple[str, ...] = ()) -> dict[str, object]:
     """El seam de refresh del composition root tradujo la clave ausente (server._refresh_once)."""
     raise embedder.EmbedderAuthError(DEFAULT_API_KEY_ENV)
 
 
-def test_index_refresh_maps_key_missing_to_e_api_auth() -> None:
+def test_index_refresh_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
     """`index_refresh` emite `E_API_AUTH` cuando el flow rechaza la clave faltante."""
+    (tmp_path / "00-Resources").mkdir()
     payload = asyncio.run(
         refresh_handler.index_refresh(
+            vault_root=lambda: tmp_path,
             refresh=_auth_refresh,
             embedder_available=lambda: True,
             index_exists=lambda: True,

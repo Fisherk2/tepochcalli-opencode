@@ -155,7 +155,14 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
         async with running_server(env) as session:
             # --- request shape: exactamente las 4 tools y sus input schemas ---
             tools = {tool.name: tool for tool in (await session.list_tools()).tools}
-            assert sorted(tools) == ["add_source", "index_refresh", "rag_status", "search"]
+            assert sorted(tools) == [
+                "add_source",
+                "convert_base64",
+                "convert_document",
+                "index_refresh",
+                "rag_status",
+                "search",
+            ]
             search_schema = tools["search"].input_schema
             assert list(search_schema["properties"]) == ["query", "top_k", "path_filter"]
             assert search_schema["required"] == ["query"]
@@ -163,7 +170,18 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
             assert search_schema["properties"]["path_filter"]["default"] is None
             assert list(tools["add_source"].input_schema["properties"]) == ["uri", "subdir"]
             assert tools["add_source"].input_schema["required"] == ["uri"]
-            assert tools["index_refresh"].input_schema["properties"] == {}
+            assert list(tools["convert_base64"].input_schema["properties"]) == [
+                "data",
+                "output_path",
+                "format",
+                "filename",
+            ]
+            assert tools["convert_base64"].input_schema["required"] == ["data"]
+            assert list(tools["index_refresh"].input_schema["properties"]) == ["directories"]
+            assert tools["index_refresh"].input_schema.get("required", []) == []
+            assert (
+                tools["index_refresh"].input_schema["properties"]["directories"]["default"] is None
+            )
             assert tools["rag_status"].input_schema["properties"] == {}
             # H6: handlers `-> CallToolResult` ⇒ sin outputSchema; el shape vive
             # en content[0].text y `structured_content` queda None (lo afirma wire_payload).
@@ -306,6 +324,7 @@ def test_degraded_install_returns_e_no_embedder_and_degraded_rag_status(tmp_path
     regla del vault obliga al agente a reportar la guía, no el error crudo.
     """
     _write_toml(tmp_path, '[embedding]\nprovider = "none"\n')
+    (tmp_path / "00-Resources").mkdir()  # el default `index_refresh()` exige la raíz (T8)
     env = server_env(tmp_path)  # la degradación jamás debe cargar pesos
 
     async def journey() -> tuple[
@@ -338,6 +357,8 @@ def test_degraded_install_returns_e_no_embedder_and_degraded_rag_status(tmp_path
         "model_matches_config": True,
         "last_refresh": None,
         "db_size_bytes": 0,
+        "last_refresh_roots": [],
+        "available_roots": ["00-Resources"],
     }
     assert status["health"] == {
         "state": "degraded",

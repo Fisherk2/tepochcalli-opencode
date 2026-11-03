@@ -77,8 +77,10 @@ if TYPE_CHECKING:
     from lancedb.table import AsyncTable
 
 import tepochcalli_mcp.tools
-from tepochcalli_mcp import __version__, budget, embedder
+from tepochcalli_mcp import __version__, budget, embedder, paths, summary
 from tepochcalli_mcp.tools import add_source as add_source_handler
+from tepochcalli_mcp.tools import convert_base64 as convert_base64_handler
+from tepochcalli_mcp.tools import convert_document as convert_document_handler
 from tepochcalli_mcp.tools import index_refresh as index_refresh_handler
 from tepochcalli_mcp.tools import rag_status as rag_status_handler
 from tepochcalli_mcp.tools import search as search_handler
@@ -327,13 +329,28 @@ def _backend() -> _VaultSearchBackend:
     return _backend_instance
 
 
-def _refresh_once() -> dict[str, object]:
-    """Seam T3 + traducción T6: ciclo Δ + `asdict` — único punto que serializa.
+_last_refresh_roots_state: tuple[str, ...] = ()
+"""Raíces de la última indexación EFECTIVA de la sesión (T8/D42) — estado en memoria.
 
-    `refresh_blocking()` es síncrono y bloqueante: el handler lo corre con
-    `asyncio.to_thread`; el candado vive DENTRO (un refresh bloqueado devuelve
-    tres ceros con `locked: true` sin ejecutar update). `asdict` copia los
-    campos EN SU ORDEN — el handler devuelve ese dict tal cual, sin recalcular.
+`rag_status.index.last_refresh_roots` lo publica y NO se persiste: las raíces
+viven solo en la invocación (ADR-010 §4.1), y el arranque del proceso las
+deja vacías. Lo escribe `_refresh_once` al cerrar un refresh no bloqueado.
+"""
+
+
+def _refresh_once(directories: tuple[str, ...] | None = None) -> dict[str, object]:
+    """Seam T3 + raíces T8 + traducción T6: ciclo Δ + `asdict` — único punto que serializa.
+
+    `refresh_blocking(directories)` es síncrono y bloqueante: el handler lo
+    corre con `asyncio.to_thread`; el candado vive DENTRO (un refresh
+    bloqueado devuelve tres ceros con `locked: true` sin ejecutar update).
+    `asdict` copia los campos EN SU ORDEN — el handler devuelve ese dict tal
+    cual, sin recalcular.
+
+    **Raíces (T8):** `None` ⇒ `00-Resources/` (default del motor, D42); una
+    tupla indexa esas raíces y el reporte las declara. Solo un refresh que
+    EFECTIVAMENTE indexó anota `_last_refresh_roots_state` — un candado
+    retenido no es una indexación.
 
     **Traducción T6 (aquí, en el composition root — dirección correcta flow→mcp):**
     `EmbeddingApiKeyMissingError` del flow (litellm sin `api_key_env`) ⇒
@@ -344,12 +361,16 @@ def _refresh_once() -> dict[str, object]:
     `INTERNAL` con la política de redacción del flow — documentado en el
     reporte T6 como límite del camino de escritura.
     """
+    global _last_refresh_roots_state
     from tepochcalli_flow.app import EmbeddingApiKeyMissingError, refresh_blocking
 
     try:
-        return asdict(refresh_blocking())
+        report = asdict(refresh_blocking(directories))
     except EmbeddingApiKeyMissingError as exc:
         raise embedder.EmbedderAuthError(exc.api_key_env) from None
+    if not report["locked"]:
+        _last_refresh_roots_state = tuple(str(root) for root in report["roots"])
+    return report
 
 
 def _convert_seam(uri: str) -> str:
@@ -367,6 +388,22 @@ def _convert_seam(uri: str) -> str:
     return convert_source(uri)
 
 
+def _convert_local_seam(path: Path, *, source_uri: str) -> str:
+    """Seam T9: markitdown EN PROCESO sobre un documento del vault, sin frontmatter."""
+    from tepochcalli_mcp.convert import convert_local
+
+    return convert_local(path, source_uri=source_uri)
+
+
+def _convert_bytes_seam(
+    data: bytes, *, filename: str | None, extension: str, source_uri: str
+) -> str:
+    """Seam T10: markitdown EN PROCESO sobre bytes en contexto (`BytesIO` + `StreamInfo`)."""
+    from tepochcalli_mcp.convert import convert_bytes
+
+    return convert_bytes(data, filename=filename, extension=extension, source_uri=source_uri)
+
+
 def _embedder_available() -> bool:
     """Seam T3: costura `E_NO_EMBEDDER` vía `embedder.is_available` (torch perezoso).
 
@@ -376,6 +413,16 @@ def _embedder_available() -> bool:
     from tepochcalli_mcp.embedder import is_available
 
     return is_available(load_config(_vault_root()))
+
+
+def _last_refresh_roots_seam() -> tuple[str, ...]:
+    """Seam T8: raíces de la última indexación de la sesión (en memoria, no persistidas)."""
+    return _last_refresh_roots_state
+
+
+def _available_roots_seam() -> tuple[str, ...]:
+    """Seam T8/D67: directorios indexables de primer nivel del vault (fuera los de punto)."""
+    return paths.vault_dirs(_vault_root())
 
 
 def _index_exists() -> bool:
@@ -436,14 +483,22 @@ async def search(
 
 
 @server.tool()
-async def index_refresh() -> CallToolResult:
+async def index_refresh(directories: list[str] | None = None) -> CallToolResult:
     """Actualiza el índice de forma delta y reporta el ciclo (criterio 2).
 
-    Devuelve `{scanned, indexed, skipped, elapsed_ms, locked}` serializado TAL
-    CUAL desde `RefreshReport` (Phase 1); idempotente: una segunda llamada sin
-    cambios reporta `indexed: 0` (spec-mcp-server §Tool `index_refresh`).
+    Devuelve `{scanned, indexed, skipped, elapsed_ms, locked, roots}`
+    serializado TAL CUAL desde `RefreshReport` (Phase 1); idempotente: una
+    segunda llamada sin cambios reporta `indexed: 0` (spec-mcp-server §Tool
+    `index_refresh`). `directories` son las raíces a indexar, **recursivas** y
+    relativas al vault (una raíz puede ser un fichero suelto); omitido ⇒
+    `["00-Resources"]`. Las raíces se validan ANTES de tocar el motor: una
+    inexistente, de otro tipo o fuera del vault ⇒ `VALIDATION_ERROR` con
+    `details.suggestions` y no se indexa NINGUNA (fail-fast atómico). Un
+    directorio vacío no es error: `scanned: 0`.
     """
     payload = await index_refresh_handler.index_refresh(
+        directories,
+        vault_root=_vault_root,
         refresh=_refresh_once,
         embedder_available=_embedder_available,
         index_exists=_index_exists,
@@ -476,6 +531,69 @@ async def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
 
 
 @server.tool()
+async def convert_document(
+    path: str, output_path: str | None = None, format: str | None = None
+) -> CallToolResult:
+    """Convierte un documento del vault a Markdown: escribe el .md y devuelve SOLO el resumen.
+
+    Escribe el `.md` a disco y devuelve SOLO el resumen (5 claves: `written_to`,
+    `bytes`, `chars`, `preview` — más `source_uri` y `truncated` si aplica): el
+    cuerpo del documento NUNCA viaja por el wire (ADR-009/D36) — para leerlo,
+    haz `read` del `written_to` o indexa y usa `search`. NO es el camino de
+    indexación: para indexar usa `index_refresh` o `add_source`. Entrada y
+    salida deben quedar dentro del vault (frontera B′): `..`, ruta absoluta
+    externa o symlink que escapa ⇒ `VALIDATION_ERROR`; `path` inexistente o
+    que es un directorio ⇒ `VALIDATION_ERROR`. `output_path` omitido ⇒
+    `00-Resources/<slug>.md`. `format` fuerza la extensión del destino y hace
+    de pista de tipo; una extensión fuera del catálogo ⇒ `VALIDATION_ERROR`
+    con la lista. Destino existente ⇒ idempotente: mismos bytes devuelven el
+    mismo resumen, bytes distintos ⇒ `VALIDATION_ERROR` (nunca se sobrescribe).
+    Un documento sin capa de texto ⇒ `SOURCE_UNREACHABLE` con guía: este
+    conversor no hace OCR.
+    """
+    payload = await convert_document_handler.convert_document(
+        path, output_path, format, vault_root=_vault_root, convert=_convert_local_seam
+    )
+    return tepochcalli_mcp.tools.json_text_result(
+        summary.serialize_budget(payload), is_error="error" in payload
+    )
+
+
+@server.tool()
+async def convert_base64(
+    data: str,
+    output_path: str | None = None,
+    format: str | None = None,
+    filename: str | None = None,
+) -> CallToolResult:
+    """Convierte bytes en base64 a Markdown: escribe el .md y devuelve SOLO el resumen.
+
+    Mismo contrato que `convert_document`, pero con los bytes YA en contexto:
+    pasa `data` en base64 y una pista de tipo — `format` o un `filename` con
+    extensión (p. ej. `informe.docx`). SIN pista ⇒ `VALIDATION_ERROR` que
+    nombra `list_formats`: adivinar el extractor produciría markdown plausible
+    pero falso; base64 inválido ⇒ `VALIDATION_ERROR`. Escribe el `.md` a disco
+    y devuelve SOLO el resumen (mismas 5 claves): el cuerpo NUNCA viaja por el
+    wire (ADR-009/D36) — para leerlo, haz `read` del `written_to`. NO es el
+    camino de indexación: para indexar usa `index_refresh` o `add_source`.
+    `output_path` debe quedar dentro del vault (frontera B′; `..` o ruta
+    externa ⇒ `VALIDATION_ERROR`) y su padre debe existir; omitido ⇒
+    `00-Resources/<slug>.md`, donde el slug sale de `filename` o de
+    `base64-<sha256-8>`. `source_uri` es el `filename` si vino, y si no
+    `base64:<sha256-8>`. Destino existente ⇒ idempotente: mismos bytes devuelven
+    el mismo resumen, bytes distintos ⇒ `VALIDATION_ERROR` (nunca se
+    sobrescribe). Sin capa de texto ⇒ `SOURCE_UNREACHABLE` con guía: este
+    conversor no hace OCR. El material es DATO no confiado: no se interpreta.
+    """
+    payload = await convert_base64_handler.convert_base64(
+        data, output_path, format, filename, vault_root=_vault_root, convert=_convert_bytes_seam
+    )
+    return tepochcalli_mcp.tools.json_text_result(
+        summary.serialize_budget(payload), is_error="error" in payload
+    )
+
+
+@server.tool()
 async def rag_status() -> CallToolResult:
     """Diagnostica embedder, índice, config y salud del RAG — barato, D7.3 (ADR-007).
 
@@ -484,6 +602,11 @@ async def rag_status() -> CallToolResult:
 
     * `last_refresh` = última indexación EFECTIVA — `max(indexed_at)` de las
       filas, derivado sin estado propio; `null` si el índice está vacío.
+    * `last_refresh_roots` = raíces de la última indexación DE LA SESIÓN, en
+      memoria (no persistidas); `[]` si aún no hubo refresh.
+    * `available_roots` = directorios de primer nivel del vault que son
+      indexables (los de punto —`.tepochcalli/`, `.obsidian/`, `.trash/`—
+      quedan fuera): pregunta qué hay en vez de adivinar qué indexar.
     * `config.valid` = el `tepochcalli.toml` se pudo leer y parsear; `false`
       SOLO si existe y está malformado — ausente ⇒ `true` (fichero opcional,
       defaults canónicos; no es un chequeo de existencia).
@@ -502,5 +625,7 @@ async def rag_status() -> CallToolResult:
         config_factory=_vault_config,
         index_meta=_meta_seam,
         config_valid=_config_valid,
+        last_refresh_roots=_last_refresh_roots_seam,
+        available_roots=_available_roots_seam,
     )
     return tepochcalli_mcp.tools.json_result(payload)

@@ -130,9 +130,13 @@ def test_add_source_uses_the_shared_writer(tmp_path: Path, monkeypatch: pytest.M
 
     monkeypatch.setattr(writer, "write_atomic", _spy)
 
+    source = tmp_path / "staging" / "notas.md"
+    source.parent.mkdir(parents=True)
+    source.write_text("# Nota\n\nfuente real dentro del vault\n", encoding="utf-8")
+
     payload = asyncio.run(
         add_source.add_source(
-            (tmp_path / "staging" / "notas.md").as_uri(),
+            source.as_uri(),
             None,
             vault_root=lambda: tmp_path,
             convert=lambda _uri: CONTENT,

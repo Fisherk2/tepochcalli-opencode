@@ -85,7 +85,14 @@ RAG_STATUS_BLOCKS = ["embedder", "index", "config", "health"]
 
 RAG_STATUS_INNER_KEYS = {
     "embedder": ["mode", "model", "dims", "provider"],
-    "index": ["rows", "model_matches_config", "last_refresh", "db_size_bytes"],
+    "index": [
+        "rows",
+        "model_matches_config",
+        "last_refresh",
+        "db_size_bytes",
+        "last_refresh_roots",
+        "available_roots",
+    ],
     "config": ["path", "valid"],
     "health": ["state", "reason", "fix_hint"],
 }

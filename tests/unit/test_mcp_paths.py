@@ -174,8 +174,19 @@ def test_resolve_file_uri_accepts_paths_inside_the_vault(tmp_path: Path) -> None
     """`file:` absoluto DENTRO del vault resuelve a la ruta pedida (D16, versión estricta)."""
     vault = tmp_path / "vault"
     inside = vault / "staging" / "nota.md"
+    inside.parent.mkdir(parents=True)
+    inside.write_text("nota", encoding="utf-8")
     resolved = paths.resolve_file_uri(inside.as_uri(), vault)
     assert resolved == inside.resolve()
+
+
+def test_resolve_file_uri_rejects_a_missing_file(tmp_path: Path) -> None:
+    """`file:` inexistente ⇒ `ValueError` (D64: ruta mal escrita, no documento ilegible)."""
+    vault = tmp_path / "vault"
+    (vault / "staging").mkdir(parents=True)
+
+    with pytest.raises(ValueError, match="inexistente"):
+        paths.resolve_file_uri((vault / "staging" / "fantasma.md").as_uri(), vault)
 
 
 def test_resolve_file_uri_rejects_paths_outside_the_vault(tmp_path: Path) -> None:
@@ -281,6 +292,8 @@ def test_validate_source_uri_accepts_http_and_https(
 def test_validate_source_uri_accepts_file_inside_the_vault(tmp_path: Path) -> None:
     """`file:` DENTRO del vault pasa el borde (la ruta se resuelve, D16 solo expulsa fuera)."""
     inside = tmp_path / "staging" / "nota.md"
+    inside.parent.mkdir(parents=True)
+    inside.write_text("nota", encoding="utf-8")
     paths.validate_source_uri(inside.as_uri(), tmp_path)  # no lanza
 
 

@@ -24,7 +24,14 @@ def json_result(payload: dict[str, object]) -> CallToolResult:
     preserva en el dumps (Python 3.7+). El campo Python es `is_error` y viaja
     en el wire como `isError` (alias de `mcp_types`, spike T1).
     """
-    return CallToolResult(
-        content=[TextContent(type="text", text=json.dumps(payload, ensure_ascii=False))],
-        is_error="error" in payload,
-    )
+    return json_text_result(json.dumps(payload, ensure_ascii=False), is_error="error" in payload)
+
+
+def json_text_result(text: str, *, is_error: bool = False) -> CallToolResult:
+    """Empaqueta un JSON YA serializado (presupuesto aplicado) en `content[0].text`.
+
+    Lo usa el conversor: `summary.serialize_budget` decide el recorte del
+    `preview` sobre el texto final, y volver a serializar aquí podría cambiar
+    el tamaño medido (ADR-009 D36/M3).
+    """
+    return CallToolResult(content=[TextContent(type="text", text=text)], is_error=is_error)

@@ -138,6 +138,8 @@ MCP_TOOL_MODULES: Final[tuple[str, ...]] = (
     f"{MCP_PACKAGE}.tools.index_refresh",
     f"{MCP_PACKAGE}.tools.rag_status",
     f"{MCP_PACKAGE}.tools.add_source",
+    f"{MCP_PACKAGE}.tools.convert_document",
+    f"{MCP_PACKAGE}.tools.convert_base64",
 )
 """Handlers T2-T5: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
 
@@ -413,6 +415,27 @@ def test_walker_covers_the_second_package_transitively() -> None:
     )
     assert "markitdown" not in {target.split(".")[0] for target in reached_add}, (
         "add_source es dominio del server: el conversor se cablea desde el composition root"
+    )
+
+    reached_convert = {
+        target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.convert_document")
+    }
+    assert f"{MCP_PACKAGE}.summary" in reached_convert, "T9: el resumen vive en summary.py"
+    assert f"{MCP_PACKAGE}.writer" in reached_convert, "T9: la escritura es la compartida"
+    assert "markitdown" not in {target.split(".")[0] for target in reached_convert}, (
+        "convert_document (T9) va por costura: tools/ NUNCA importa markitdown"
+    )
+
+    reached_base64 = {
+        target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.convert_base64")
+    }
+    assert f"{MCP_PACKAGE}.summary" in reached_base64, "T10: el resumen vive en summary.py"
+    assert f"{MCP_PACKAGE}.writer" in reached_base64, "T10: la escritura es la compartida"
+    assert f"{MCP_PACKAGE}.convert" not in reached_base64, (
+        "convert_base64 (T10) va por costura: tools/ NUNCA importa convert.py"
+    )
+    assert "markitdown" not in {target.split(".")[0] for target in reached_base64}, (
+        "convert_base64 (T10) va por costura: tools/ NUNCA importa markitdown"
     )
 
 

@@ -72,6 +72,8 @@ def _call(
     meta: status_handler.IndexMeta | None = None,
     config_valid: bool = True,
     meta_error: Exception | None = None,
+    last_refresh_roots: tuple[str, ...] = (),
+    available_roots: tuple[str, ...] = ("00-Resources",),
 ) -> dict[str, object]:
     """Invoca el handler en su propio loop con seams de doble (cada test, aislado)."""
     resolved = config if config is not None else _config()
@@ -87,6 +89,8 @@ def _call(
             config_factory=lambda: resolved,
             index_meta=_meta_seam,
             config_valid=lambda: config_valid,
+            last_refresh_roots=lambda: last_refresh_roots,
+            available_roots=lambda: available_roots,
         )
     )
 
@@ -105,6 +109,8 @@ def test_four_blocks_with_exact_key_order_inside_each_block() -> None:
         "model_matches_config",
         "last_refresh",
         "db_size_bytes",
+        "last_refresh_roots",
+        "available_roots",
     ]
     assert list(payload["config"]) == ["path", "valid"]
     assert list(payload["health"]) == ["state", "reason", "fix_hint"]
@@ -126,6 +132,25 @@ def test_sane_install_reports_ok_with_the_spec_values() -> None:
     assert index["db_size_bytes"] == 18_400_000
     health = payload["health"]
     assert health == {"state": "ok", "reason": None, "fix_hint": None}
+
+
+def test_index_reports_the_session_roots_and_the_available_roots() -> None:
+    """AC (e)/(j): `last_refresh_roots` de la sesión y `available_roots` del vault (D67)."""
+    payload = _call(
+        last_refresh_roots=("materiales", "documentos"),
+        available_roots=("00-Resources", "documentos", "materiales"),
+    )
+
+    index = payload["index"]
+    assert index["last_refresh_roots"] == ["materiales", "documentos"]  # type: ignore[index]
+    assert index["available_roots"] == ["00-Resources", "documentos", "materiales"]  # type: ignore[index]
+
+
+def test_index_roots_are_empty_before_any_refresh() -> None:
+    """Sin refresh en la sesión ⇒ `last_refresh_roots: []` (en memoria, no persistido)."""
+    payload = _call(last_refresh_roots=())
+
+    assert payload["index"]["last_refresh_roots"] == []  # type: ignore[index]
 
 
 def test_config_path_is_the_relative_toml_literal() -> None:
@@ -251,6 +276,11 @@ def test_payload_stays_under_200_tokens_in_every_state() -> None:
         _call(config=_config(provider="none")),
         _call(
             meta={"rows": 3, "models": {"modelo-viejo"}, "last_refresh": None, "db_size_bytes": 0}
+        ),
+        # T8: tres raíces en ambos arrays siguen bajo el techo (sin recorte).
+        _call(
+            last_refresh_roots=("00-Resources", "documentos", "materiales"),
+            available_roots=("00-Resources", "documentos", "materiales"),
         ),
     ):
         cost = budget.estimate_tokens(json.dumps(payload, ensure_ascii=False))

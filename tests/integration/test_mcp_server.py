@@ -42,15 +42,19 @@ from tepochcalli_flow import citation
 # propiedades lo fija la firma de cada tool.
 _EXPECTED_INPUT_KEYS: dict[str, list[str]] = {
     "search": ["query", "top_k", "path_filter"],
-    "index_refresh": [],
+    "index_refresh": ["directories"],
     "add_source": ["uri", "subdir"],
     "rag_status": [],
+    "convert_document": ["path", "output_path", "format"],
+    "convert_base64": ["data", "output_path", "format", "filename"],
 }
 _EXPECTED_REQUIRED: dict[str, list[str]] = {
     "search": ["query"],
     "index_refresh": [],
     "add_source": ["uri"],
     "rag_status": [],
+    "convert_document": ["path"],
+    "convert_base64": ["data"],
 }
 
 
@@ -256,6 +260,8 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(
                 "model_matches_config",
                 "last_refresh",
                 "db_size_bytes",
+                "last_refresh_roots",
+                "available_roots",
             ]
             assert list(status["config"]) == ["path", "valid"]
             assert list(status["health"]) == ["state", "reason", "fix_hint"]

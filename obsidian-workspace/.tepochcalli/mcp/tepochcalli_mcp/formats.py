@@ -41,6 +41,16 @@ NOTES: Final = (
 """La nota del wire (H1): el catálogo es honesto sobre lo que la instalación NO hace."""
 
 
+class UnsupportedFormatError(ValueError):
+    """Extensión sin convertidor en `markitdown`: el borde responde `VALIDATION_ERROR`.
+
+    La infraestructura (`convert.py`) traduce aquí la `UnsupportedFormatException`
+    de markitdown: `tools/` no puede importar la librería (test de arquitectura),
+    así que la costura devuelve un tipo de dominio — mismo patrón que el dialecto
+    `E_*` de `embedder`.
+    """
+
+
 def is_supported(suffix: str) -> bool:
     """¿La extensión (`.pdf`, `pdf` o `PDF`) está en el catálogo? Normaliza antes de mirar."""
     normalized = suffix.strip().lower()

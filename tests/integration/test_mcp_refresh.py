@@ -95,6 +95,14 @@ async def _call_refresh(session: ClientSession) -> dict[str, object]:
     return report
 
 
+async def _call_refresh_with(
+    session: ClientSession, directories: list[str]
+) -> tuple[bool, dict[str, object]]:
+    """`index_refresh(directories=…)` por stdio: `(is_error, payload)` sin exigir éxito."""
+    result = await session.call_tool("index_refresh", {"directories": directories})
+    return bool(result.is_error), json.loads(result.content[0].text)
+
+
 def _counts(report: dict[str, object]) -> tuple[int, int, int]:
     """Devuelve `(scanned, indexed, skipped)` — la tripleta exacta de Phase 1."""
     return (report["scanned"], report["indexed"], report["skipped"])  # type: ignore[return-value]
@@ -294,6 +302,7 @@ def test_refresh_without_api_key_for_litellm_reports_e_api_auth(
     """
     config_dir = tmp_path / ".tepochcalli" / "config"
     config_dir.mkdir(parents=True)
+    (tmp_path / citation.RESOURCES_DIR).mkdir()  # el default exige la raíz (T8)
     (config_dir / "tepochcalli.toml").write_text(
         '[embedding]\nprovider = "litellm"\nmodel = "openai/text-embedding-3-small"\n',
         encoding="utf-8",
@@ -315,3 +324,90 @@ def test_refresh_without_api_key_for_litellm_reports_e_api_auth(
     assert "TEPOCHCALLI_EMBED_API_KEY" in error["message"], "nombra la variable, no un valor"
     assert error["fix_hint"] == errors.FIX_API_AUTH
     assert "sk-" not in json.dumps(payload)
+
+
+# --- T8: raíces por llamada (D42/D44/D65/D67) -----------------------------------------------
+
+
+def test_directories_index_two_roots_recursively_and_report_them(tmp_path: Path) -> None:
+    """Dos raíces reales ⇒ se indexan ambas, `roots` las declara y `rag_status` las recuerda."""
+    (tmp_path / citation.RESOURCES_DIR).mkdir()
+    (tmp_path / citation.RESOURCES_DIR / "nota.md").write_text(
+        "# Nota por omisión\n\nNo entra: la llamada pide otras raíces.\n", encoding="utf-8"
+    )
+    (tmp_path / "materiales" / "1-geografia").mkdir(parents=True)
+    (tmp_path / "materiales" / "1-geografia" / "clima.md").write_text(
+        "# Clima\n\nLa aridez del altiplano condiciona el calendario agrícola.\n", encoding="utf-8"
+    )
+    (tmp_path / "documentos" / "pdf").mkdir(parents=True)
+    (tmp_path / "documentos" / "pdf" / "articulo.md").write_text(
+        "# Artículo\n\nTexto bajo documentos/pdf: la recursión debe alcanzarlo.\n", encoding="utf-8"
+    )
+    models_link = warm_model(tmp_path)
+    env = server_env(tmp_path, models_link)
+
+    async def go() -> tuple[dict[str, object], dict]:
+        async with running_server(env) as session:
+            is_error, report = await _call_refresh_with(session, ["materiales", "documentos"])
+            assert not is_error, report
+            result = await session.call_tool("rag_status", {})
+            assert not result.is_error, result.content[0].text
+            return report, json.loads(result.content[0].text)
+
+    report, status = asyncio.run(go())
+
+    _assert_contract(report)
+    assert report["roots"] == ["materiales", "documentos"]
+    assert _counts(report) == (2, 2, 0), "solo las dos raíces pedidas (00-Resources queda fuera)"
+    assert status["index"]["last_refresh_roots"] == ["materiales", "documentos"]
+    assert status["index"]["available_roots"] == ["00-Resources", "documentos", "materiales"]
+
+
+def test_missing_root_is_validation_error_and_indexes_nothing(tmp_path: Path) -> None:
+    """Raíz inexistente ⇒ `VALIDATION_ERROR` (nunca `INTERNAL`) antes de la costura.
+
+    Sin modelo: el borde corre antes que `E_NO_EMBEDDER` y antes que el motor,
+    así que el pool de modelos no se toca (el canario `nonet` lo confirma).
+    """
+    (tmp_path / "materiales").mkdir()
+    (tmp_path / "documentos").mkdir()
+    (tmp_path / "materiales" / "x.md").write_text("# X\n\nMaterial existente.\n", encoding="utf-8")
+    env = server_env(tmp_path)
+
+    async def go() -> tuple[bool, dict[str, object]]:
+        async with running_server(env) as session:
+            return await _call_refresh_with(session, ["materiales", "Documentos"])
+
+    is_error, payload = asyncio.run(go())
+
+    assert is_error is True
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert error["details"] == {
+        "requested": "Documentos",
+        "exists": False,
+        "suggestions": ["documentos"],
+        "vault_dirs": ["documentos", "materiales"],
+    }
+    assert not (tmp_path / ".tepochcalli" / "db").exists(), (
+        "fail-fast atómico: una raíz mala no deja media indexación hecha"
+    )
+
+
+def test_empty_directory_is_not_an_error(tmp_path: Path) -> None:
+    """Directorio vacío ⇒ `ok` con `scanned: 0` — el agente no lo lee como fallo."""
+    (tmp_path / citation.RESOURCES_DIR).mkdir()
+    models_link = warm_model(tmp_path)
+    env = server_env(tmp_path, models_link)
+
+    async def go() -> dict[str, object]:
+        async with running_server(env) as session:
+            is_error, report = await _call_refresh_with(session, [citation.RESOURCES_DIR])
+            assert not is_error, report
+            return report
+
+    report = asyncio.run(go())
+
+    _assert_contract(report)
+    assert _counts(report) == (0, 0, 0)
+    assert report["roots"] == [citation.RESOURCES_DIR]

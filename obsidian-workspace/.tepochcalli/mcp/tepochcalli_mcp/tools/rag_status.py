@@ -36,6 +36,14 @@ descripción de la tool (lo que el agente lee):**
 * **`last_refresh`** — `max(indexed_at)` DERIVADO en el composition root (sin
   estado nuevo); `null` si el índice está vacío. Semántica declarada en la
   descripción de la tool: «última indexación efectiva».
+* **`last_refresh_roots`** (T8/D42) — raíces de la última indexación **de la
+  sesión**, en memoria: `[]` si aún no hubo refresh. NO se persiste (las
+  raíces viven solo en la invocación, ADR-010 §4.1); el composition root las
+  anota al cerrar un refresh no bloqueado y las entrega por costura.
+* **`available_roots`** (T8/D67) — directorios de primer nivel del vault que
+  son indexables (`paths.vault_dirs`: fuera los de punto). El agente pregunta
+  qué hay en vez de adivinar qué carpeta indexar. Con tres raíces el payload
+  sigue bajo el techo de 200 tokens (lo pina el test de presupuesto).
 """
 
 from __future__ import annotations
@@ -94,6 +102,8 @@ async def rag_status(
     config_factory: Callable[[], Config],
     index_meta: Callable[[], Awaitable[IndexMeta]],
     config_valid: Callable[[], bool],
+    last_refresh_roots: Callable[[], tuple[str, ...]],
+    available_roots: Callable[[], tuple[str, ...]],
 ) -> dict[str, object]:
     """`{embedder, index, config, health}` — los 4 bloques congelados de §rag_status.
 
@@ -132,6 +142,8 @@ async def rag_status(
             "model_matches_config": matches,
             "last_refresh": meta["last_refresh"],
             "db_size_bytes": meta["db_size_bytes"],
+            "last_refresh_roots": list(last_refresh_roots()),
+            "available_roots": list(available_roots()),
         },
         # `CONFIG_RELPATH.as_posix()`: relativo POR CONSTRUCCIÓN y siempre con
         # `/` — jamás filtra el home ni cambia de forma con el SO (spec literal).

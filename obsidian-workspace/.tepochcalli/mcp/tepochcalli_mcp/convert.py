@@ -29,11 +29,15 @@ con `requests` y `timeout=` (también soportado por `convert(source)`).
 
 from __future__ import annotations
 
+import io
 import json
 from datetime import UTC, datetime
+from pathlib import Path
 
-from markitdown import MarkItDown
+from markitdown import MarkItDown, StreamInfo
+from markitdown._exceptions import UnsupportedFormatException
 
+from tepochcalli_mcp import formats
 from tepochcalli_mcp.paths import redact_uri
 
 
@@ -52,3 +56,58 @@ def convert_source(uri: str) -> str:
     source = json.dumps(redact_uri(uri), ensure_ascii=False)
     stamp = datetime.now(UTC).isoformat(timespec="seconds")
     return f"---\nsource_uri: {source}\nconverted_at: {stamp}\n---\n\n{markdown}\n"
+
+
+def convert_local(path: Path, *, source_uri: str) -> str:
+    """Convierte un documento del vault a Markdown, SIN frontmatter (D36/T9).
+
+    `source_uri` es la entrada tal como la dio el agente: no se usa para leer
+    —la frontera B′ ya resolvió `path`— sino para nombrar el fallo tipado. El
+    artefacto de `add_source` lleva frontmatter de trazabilidad; este no: un
+    `converted_at` haría que dos conversiones idénticas difirieran siempre y
+    D66 (idempotencia) sería inalcanzable.
+
+    `UnsupportedFormatException` no cruza la costura: se traduce a
+    `formats.UnsupportedFormatError` (dominio), que el handler mapea a
+    `VALIDATION_ERROR` con el catálogo. Cualquier otro fallo sube como
+    excepción markitdown ⇒ `SOURCE_UNREACHABLE` en el handler.
+    """
+    try:
+        return MarkItDown().convert(str(path)).markdown
+    except UnsupportedFormatException:
+        raise formats.UnsupportedFormatError(
+            f"formato no soportado para {source_uri!r}; "
+            f"usa uno de {', '.join(formats.SUPPORTED_FORMATS)}"
+        ) from None
+
+
+def convert_bytes(data: bytes, *, filename: str | None, extension: str, source_uri: str) -> str:
+    """Convierte bytes en contexto a Markdown, SIN frontmatter (T10/D36).
+
+    Anclado al paquete INSTALADO (`markitdown==0.1.9`): `StreamInfo` es
+    `@dataclass(kw_only=True, frozen=True)` con `extension`/`filename`
+    (`markitdown/_stream_info.py:5-16`) y `MarkItDown().convert(source,
+    *, stream_info=None)` acepta un `BinaryIO` (`_markitdown.py:322-366`,
+    `convert_stream`). `extension` es la pista que elige el extractor — va con
+    punto (`.docx`), igual que la que `convert_local` deriva del path—;
+    `filename` solo refuerza la identidad y el tipo.
+
+    `source_uri` nombra el fallo tipado (la entrada tal como llegó); el
+    artefacto no lleva frontmatter: lo haría distinto en cada llamada y D66
+    (idempotencia) sería inalcanzable. Mismo mapeo de error que
+    `convert_local`: `UnsupportedFormatException` ⇒ `formats.
+    UnsupportedFormatError`; el resto sube ⇒ `SOURCE_UNREACHABLE` en el borde.
+    """
+    try:
+        return (
+            MarkItDown()
+            .convert(
+                io.BytesIO(data), stream_info=StreamInfo(extension=extension, filename=filename)
+            )
+            .markdown
+        )
+    except UnsupportedFormatException:
+        raise formats.UnsupportedFormatError(
+            f"formato no soportado para {source_uri!r}; "
+            f"usa uno de {', '.join(formats.SUPPORTED_FORMATS)}"
+        ) from None

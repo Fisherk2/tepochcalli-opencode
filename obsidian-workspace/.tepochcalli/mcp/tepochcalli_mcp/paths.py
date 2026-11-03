@@ -279,7 +279,9 @@ def resolve_file_uri(uri: str, vault_root: Path) -> Path:
     canal), así que este borde aplica la versión estricta ratificada en D16 —
     TODO lo que quede fuera del vault se RECHAZA aquí, antes de convertir.
     `resolve()` (no-strict) colapsa `..` y symlinks: un enlace DENTRO del
-    vault que apunta FUERA también cae rechazado.
+    vault que apunta FUERA también cae rechazado. Inexistente o no-fichero ⇒
+    `ValueError`: una ruta mal escrita es `VALIDATION_ERROR` (D64), nunca un
+    documento ilegible (`SOURCE_UNREACHABLE`).
     """
     parsed = urlsplit(uri)
     if parsed.scheme != "file":
@@ -292,6 +294,8 @@ def resolve_file_uri(uri: str, vault_root: Path) -> Path:
     resolved = local.resolve()
     if not resolved.is_relative_to(vault_root.resolve()):
         raise ValueError(f"D16: `file:` fuera del vault rechazado: {uri!r}")
+    if not resolved.is_file():
+        raise ValueError(f"`file:` inexistente o no es un fichero (ruta mal escrita): {uri!r}")
     return resolved
 
 

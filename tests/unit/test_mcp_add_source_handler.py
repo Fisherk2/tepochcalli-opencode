@@ -32,8 +32,11 @@ REPORT = {"scanned": 3, "indexed": 1, "skipped": 2, "elapsed_ms": 800, "locked":
 
 
 def _notas_uri(vault: Path) -> str:
-    """Uri de ejemplo DENTRO del vault: el fichero no existe — los seams falsos no leen nada."""
-    return (vault / "staging" / "notas.md").as_uri()
+    """Uri de ejemplo DENTRO del vault; el fichero existe (D64: ruta inexistente ⇒ VALIDATION)."""
+    source = vault / "staging" / "notas.md"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_text("# Nota\n\nfuente real dentro del vault\n", encoding="utf-8")
+    return source.as_uri()
 
 
 def _run(
@@ -140,6 +143,20 @@ def test_non_http_file_scheme_is_validation_error(tmp_path: Path) -> None:
     payload, _calls = _run("ftp://example.org/x.docx", vault=tmp_path)
 
     assert payload["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_file_uri_that_does_not_exist_is_validation_error(tmp_path: Path) -> None:
+    """T9 AC (l): `file:` inexistente ⇒ `VALIDATION_ERROR` (ruta mal escrita, D64).
+
+    Antes moría como `SOURCE_UNREACHABLE` culpando al documento; el agente debe
+    poder corregir la ruta con `details.suggestions` en un reintento.
+    """
+    uri = (tmp_path / "staging" / "fantasma.md").as_uri()
+
+    payload, calls = _run(uri, vault=tmp_path)
+
+    assert payload["error"]["code"] == "VALIDATION_ERROR"
+    assert calls == [], "el borde decide antes de que markitdown vea la ruta"
 
 
 def test_convert_failure_maps_to_source_unreachable_with_the_literal_guide(

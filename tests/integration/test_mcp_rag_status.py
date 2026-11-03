@@ -98,6 +98,8 @@ def test_sane_install_reports_the_full_block_contract(
         "model_matches_config",
         "last_refresh",
         "db_size_bytes",
+        "last_refresh_roots",
+        "available_roots",
     ]
     assert list(payload["config"]) == ["path", "valid"]
     assert list(payload["health"]) == ["state", "reason", "fix_hint"]
@@ -117,6 +119,12 @@ def test_sane_install_reports_the_full_block_contract(
     last_refresh = index_block["last_refresh"]
     assert isinstance(last_refresh, str) and last_refresh, "derivado de indexed_at real"
     assert index_block["db_size_bytes"] > 0, "el walk de .tepochcalli/db/ encuentra la DB"
+    assert index_block["last_refresh_roots"] == ["00-Resources"], (
+        "el refresh de la tool anotó su raíz de sesión (D42)"
+    )
+    assert index_block["available_roots"] == ["00-Resources"], (
+        "primer nivel indexable del vault (D67); los de punto quedan fuera"
+    )
 
     config_block = payload["config"]
     assert config_block["path"] == TOML_RELPATH, "relativo y con / en todo SO (spec literal)"
@@ -159,5 +167,7 @@ def test_malformed_toml_reports_valid_false_without_degrading_health(tmp_path: P
         "model_matches_config": True,
         "last_refresh": None,
         "db_size_bytes": 0,
+        "last_refresh_roots": [],
+        "available_roots": [],
     }
     _assert_tokens_under_200(payload)
