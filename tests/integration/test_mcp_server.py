@@ -163,6 +163,33 @@ def test_top_k_default_follows_the_environment_without_touching_the_schema() -> 
     }
 
 
+def test_top_k_out_of_range_env_does_not_break_the_search_default(tmp_path: Path) -> None:
+    """`TEPOCHCALLI_TOP_K=21` ⇒ default 5 en el wire: `search` sin `top_k` no valida mal.
+
+    Regresión (hueco #4): el default 21 del schema hacía estallar
+    `effective_top_k(21)` ⇒ CADA `search` sin argumento devolvía
+    `VALIDATION_ERROR`. Vault vacío sin modelo: el camino termina en
+    `INDEX_EMPTY` (o éxito), jamás en validación.
+    """
+    (tmp_path / "00-Resources").mkdir()
+    env = {**os.environ, "TEPOCHCALLI_TOP_K": "21", "TEPOCHCALLI_VAULT_ROOT": str(tmp_path)}
+
+    async def go() -> tuple[object, str | None]:
+        async with running_server(env) as session:
+            tools = (await session.list_tools()).tools
+            search_tool = next(t for t in tools if t.name == "search")
+            default = search_tool.input_schema["properties"]["top_k"]["default"]
+            result = await session.call_tool("search", {"query": "pregunta de prueba"})
+            payload = json.loads(result.content[0].text)
+            error = payload.get("error")
+            return default, error.get("code") if isinstance(error, dict) else None
+
+    default, code = asyncio.run(go())
+
+    assert default == 5, f"el default del schema fue {default}, no 5"
+    assert code != "VALIDATION_ERROR", f"search sin top_k devolvió {code}"
+
+
 def test_stdout_carries_only_jsonrpc_frames() -> None:
     """Cada línea de stdout del proceso parsea como JSON-RPC (AC T1: logs a stderr).
 

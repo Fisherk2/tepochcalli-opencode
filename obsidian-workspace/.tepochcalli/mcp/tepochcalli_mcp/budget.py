@@ -18,7 +18,9 @@ Fuentes de verdad:
 entorno en IMPORT (`opencode.json` → `environment`), jamás del toml: en import
 no se conoce el vault. Rango ÚTIL 1–8 — `effective_top_k` recorta a
 `TOP_K_CAP = 8` todo lo que pase de ahí (el `default` del schema lo refleja,
-pero el corte es duro); valores no enteros o ≤ 0 caen a `DEFAULT_TOP_K`.
+pero el corte es duro); valores no enteros o fuera de [1,20] caen a
+`DEFAULT_TOP_K` — un default fuera del contrato rompería TODA `search` sin
+`top_k` explícito (hueco #4).
 """
 
 from __future__ import annotations
@@ -47,17 +49,18 @@ TOP_K_CAP: Final = 8
 
 
 def _top_k_from_env(raw: str | None) -> int:
-    """`TEPOCHCALLI_TOP_K` crudo → entero > 0; ausente, vacío o inválido ⇒ `DEFAULT_TOP_K`.
+    """`TEPOCHCALLI_TOP_K` crudo → entero en `[TOP_K_MIN, TOP_K_MAX]`; el resto ⇒ `DEFAULT_TOP_K`.
 
     Puro: el import del módulo lo llama con `os.environ.get(TOP_K_ENV)`. Solo
     entorno — en import no hay vault del que leer el toml, y una env mal puesta
-    no puede tumbar el arranque del server.
+    (no entero, ≤ 0 o fuera del contrato como `21`) no puede tumbar el
+    arranque del server ni romper `search` con un default inválido.
     """
     try:
         value = int((raw or "").strip())
     except ValueError:
         return DEFAULT_TOP_K
-    return value if value > 0 else DEFAULT_TOP_K
+    return value if TOP_K_MIN <= value <= TOP_K_MAX else DEFAULT_TOP_K
 
 
 TOP_K_DEFAULT: Final = _top_k_from_env(os.environ.get(TOP_K_ENV))

@@ -178,3 +178,14 @@ def test_top_k_from_env_falls_back_without_a_value() -> None:
 def test_top_k_from_env_ignores_values_outside_the_useful_range(bad: str) -> None:
     """No entero o ≤ 0 ⇒ default: el import del server nunca cae por una env mal puesta."""
     assert budget._top_k_from_env(bad) == 5
+
+
+def test_top_k_from_env_falls_back_above_the_contract_range() -> None:
+    """`TEPOCHCALLI_TOP_K=21` ⇒ 5: el default no puede exceder el contrato [1,20].
+
+    Regresión (hueco #4): un entero > 0 fuera del rango se aceptaba como
+    default; el schema de `search` heredaba 21 y `effective_top_k(21)` lanzaba
+    `ValueError` — TODA `search` sin `top_k` explícito devolvía
+    `VALIDATION_ERROR` sin diagnóstico alguno.
+    """
+    assert budget._top_k_from_env("21") == 5

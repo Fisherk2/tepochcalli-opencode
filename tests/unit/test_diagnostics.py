@@ -104,6 +104,23 @@ def test_valid_top_k_is_not_reported(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert diagnostics.config_problems(_config(), tmp_path) == ()
 
 
+def test_top_k_above_the_contract_range_is_reported(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`TEPOCHCALLI_TOP_K=21` (entero, pero fuera de [1,20]) ⇒ problema visible.
+
+    Regresión (hueco #4): sin esta entrada el usuario veía su búsqueda rota
+    (default 21 ⇒ `VALIDATION_ERROR`) sin ninguna pista en
+    `rag_status.config.problems`.
+    """
+    (tmp_path / "00-Resources").mkdir()
+    monkeypatch.setenv("TEPOCHCALLI_TOP_K", "21")
+
+    problems = diagnostics.config_problems(_config(), tmp_path)
+
+    assert problems == ("TEPOCHCALLI_TOP_K: '21' fuera de [1,20] (se usa 5)",)
+
+
 def test_unknown_env_catches_lookalikes_and_spares_known_names() -> None:
     """Caza typos del namespace; no toca PATH/HOME ni las variables del contrato."""
     environ = {

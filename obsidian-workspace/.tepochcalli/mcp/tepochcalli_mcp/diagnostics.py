@@ -26,7 +26,7 @@ from typing import Final
 
 from tepochcalli_flow.config import TOP_K_ENV, Config
 
-from tepochcalli_mcp import paths
+from tepochcalli_mcp import budget, paths
 
 PROBLEM_LIMIT: Final = 3
 """Máximo de elementos por lista (el último es el contador `… y N más`)."""
@@ -65,11 +65,16 @@ def config_problems(config: Config, vault_root: Path) -> tuple[str, ...]:
     top_k = os.environ.get(TOP_K_ENV)
     if top_k is not None:
         try:
-            valid = int(top_k.strip()) > 0
+            value: int | None = int(top_k.strip())
         except ValueError:
-            valid = False
-        if not valid:
+            value = None
+        if value is None or value < budget.TOP_K_MIN:
             problems.append(f"TEPOCHCALLI_TOP_K: {top_k!r} no es un entero > 0 (se usa 5)")
+        elif value > budget.TOP_K_MAX:
+            problems.append(
+                f"TEPOCHCALLI_TOP_K: {top_k!r} fuera de "
+                f"[{budget.TOP_K_MIN},{budget.TOP_K_MAX}] (se usa 5)"
+            )
     return _capped(problems)
 
 

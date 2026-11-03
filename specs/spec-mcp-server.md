@@ -61,7 +61,7 @@ Contrato: `search(query: str, top_k: int = TEPOCHCALLI_TOP_K (5), path_filter: s
 ```
 
 * `path_filter`: glob relativo a la raíz del vault; se aplica como pre-filtro en la query LanceDB (`WHERE source_path LIKE …` traducido de `*`→`%`).
-* `top_k`: por omisión el valor de **`TEPOCHCALLI_TOP_K`** (5) — es el `default` del schema, fijado **al arrancar** el proceso MCP. El agente puede sobreescribirlo por llamada; `budget.effective_top_k` acepta 1–20 y recorta el efectivo a **8** (fuera de rango ⇒ `VALIDATION_ERROR`). Un `TEPOCHCALLI_TOP_K` no entero o ≤0 cae a 5.
+* `top_k`: por omisión el valor de **`TEPOCHCALLI_TOP_K`** (5) — es el `default` del schema, fijado **al arrancar** el proceso MCP. El agente puede sobreescribirlo por llamada; `budget.effective_top_k` acepta 1–20 y recorta el efectivo a **8** (fuera de rango ⇒ `VALIDATION_ERROR`). Un `TEPOCHCALLI_TOP_K` no entero o fuera de `[1,20]` cae a 5.
 * `source_path`: ruta POSIX **relativa al vault** (D41/ADR-010 §4.2). Con N raíces, `materiales/a.pdf` y `documentos/a.pdf` son citas distintas; el prefijo `00-Resources/` solo aparece cuando el material vive ahí. Es un cambio *breaking* del campo, asumido por el dueño.
 * `score`: similitud normalizada [0,1] del híbrido ANN+FTS; orden descendente garantizado.
 * Campo aditivo (T7, 2026-10-23): `offsets_ref: "source" | "extract"` — `source` si el slice del archivo original reproduce `text` (`md/markdown/txt`), `extract` si los offsets citan el markdown extraído por **markitdown** (`pdf/docx/pptx/xlsx/xls`; el binario jamás es el espacio de cita). No hay Docling (ADR-011/D53).
@@ -137,7 +137,7 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
 * `index.model_matches_config`: `false` cuando el campo `model` de los metadatos del índice ≠ `[embedding].model` de config (gate anti-cruce de dims; el índice registra `model + dims` en la instalación, D7.1).
 * `health.reason` usa exclusivamente los códigos de §Códigos de error estructurados; `fix_hint` es la solución exacta para el usuario (la regla del vault en specs/spec-agent-workflow.md obliga al agente a reportarla, no el error crudo).
 * `config.valid` = el toml parsea **y** `config.problems` está vacío. Mide coherencia de la configuración, no existencia del fichero: ausente ⇒ `true` (los defaults son canónicos).
-* `config.problems`: mensajes cortos (≤80 chars, tope 3 + `"… y N más"`) de lo que el usuario escribió mal en el `environment` — `TEPOCHCALLI_ROOT` inexistente o que no es directorio, **cada** raíz de `INDEXER_DIR` que falle (con la sugerencia cuando la hay) y `TEPOCHCALLI_TOP_K` no entero o ≤0. Es diagnóstico completo: `index_refresh` sigue siendo fail-fast y nombra solo la primera raíz mala (D65).
+* `config.problems`: mensajes cortos (≤80 chars, tope 3 + `"… y N más"`) de lo que el usuario escribió mal en el `environment` — `TEPOCHCALLI_ROOT` inexistente o que no es directorio, **cada** raíz de `INDEXER_DIR` que falle (con la sugerencia cuando la hay) y `TEPOCHCALLI_TOP_K` no entero o fuera de `[1,20]`. Es diagnóstico completo: `index_refresh` sigue siendo fail-fast y nombra solo la primera raíz mala (D65).
 * `config.unknown_env`: nombres que **parecen** nuestras variables y no lo son (`INDEXER_DRI`, `TEPOCHALLI_ROOT`…), tope 3. Es el único error de configuración que ningún validador de valor puede cazar: una clave mal escrita se ignoraría en silencio.
 * Ni `problems` ni `unknown_env` degradan `health`: un `INDEXER_DIR` malo no rompe `search` (el índice ya construido sigue sirviendo) y un estado `degraded` exigiría un `E_*` nuevo, que D39 prohíbe.
 
@@ -252,7 +252,7 @@ Diseño determinista en el server (no depende del modelo):
   | --- | --- | --- | --- |
   | `TEPOCHCALLI_ROOT` | sí | — | raíz del vault; toda ruta del contrato se valida contra ella (B′) |
   | `INDEXER_DIR` | no | `00-Resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-Resources`. Es el **único** conjunto de raíces del índice: `index_refresh()` no lo recibe y el MCP no lo modifica; el proceso lo recibe al arrancar, así que editarlo exige reiniciar el MCP |
-  | `TEPOCHCALLI_TOP_K` | no | `5` | entero > 0; no entero o ≤ 0 ⇒ `5`. Se lee **al arrancar** el proceso: es el `default` del schema de `search` (rango efectivo 1–8) y cambiarla exige reiniciar el MCP |
+  | `TEPOCHCALLI_TOP_K` | no | `5` | entero en [1,20]; no entero o fuera de rango ⇒ `5` + `problems`. Se lee **al arrancar** el proceso: es el `default` del schema de `search` (rango efectivo 1–8) y cambiarla exige reiniciar el MCP |
 
 * Una variable **mal escrita** no se ignora en silencio: su nombre aparece en `rag_status().config.unknown_env` (el filtro es estrecho — `TEPOCH*` o cualquier nombre con `INDEXER`—, así que no escupe el entorno del harness). Un **valor** inválido aparece en `config.problems` y deja `config.valid: false`. Ambas señales llegan en la primera llamada, sin indexar nada.
 
@@ -276,7 +276,7 @@ Diseño determinista en el server (no depende del modelo):
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
 * Contract tests multi-raíz: `INDEXER_DIR` con dos raíces, dedup de solapadas, raíz-fichero; `roots` en el reporte y `scanned == indexed + skipped` en todos los casos. `index_refresh` llamado con el retirado `directories` ⇒ se indexa el conjunto de `INDEXER_DIR`, **sin error**: el SDK descarta la clave desconocida.
-* Contract tests de entorno: `INDEXER_DIR` multi-valor (coma, `strip`, vacíos), fallback `00-Resources` con la env vacía, y `TEPOCHCALLI_TOP_K` inválido ⇒ `5` con el `default` del schema de `search` igual al valor de arranque.
+* Contract tests de entorno: `INDEXER_DIR` multi-valor (coma, `strip`, vacíos), fallback `00-Resources` con la env vacía, y `TEPOCHCALLI_TOP_K` inválido (no entero, ≤0 o >20) ⇒ `5` con el `default` del schema de `search` igual al valor de arranque.
 * Raíz inexistente en `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details.suggestions` no vacías y **nunca** `INTERNAL`; atomicidad: el recuento de filas del índice no cambia (D65).
 * `add_source` con `00-Resources` fuera de `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details: {requested, allowed, hint}` y **ningún fichero escrito** (se comprueba el árbol antes/después).
 * Directorio vacío ⇒ tres ceros, **no** error. `rag_status` expone `available_roots`/`last_refresh_roots` y cabe en <200 tokens; `file:` inexistente ⇒ `VALIDATION_ERROR`.
