@@ -1,6 +1,6 @@
 # ADR-010: Indexar múltiples raíces del vault y citar rutas relativas al vault
 
-* **Status:** Accepted (enmendado 2026-11-03)
+* **Status:** Accepted (enmendado 2026-11-03; **rev. 2** 2026-11-03 — editado **en sitio** por orden explícita del dueño, ver §4.1)
 * **Date:** 2026-11-02
 * **Decision Makers:** Dueño del repo (Product Owner), Arquitecto
 * **Consulted:** Fuente instalada de `cocoindex==1.0.25` (conector `localfs`), `docs/TRD.md` §presupuestos
@@ -12,8 +12,8 @@
 El motor indexa hoy una sola raíz fija —`00-Resources/`— y solo cuatro extensiones
 (`.md/.markdown/.txt/.pdf`); `citation.normalize_source_path` **prefija** `00-Resources/` a toda
 cita. El dueño decidió que el RAG indexe **cualquier** directorio del vault, recursivamente, con
-las raíces elegidas **en la llamada**, y que indexe los documentos **en su forma original** sin
-convertirlos antes a Markdown.
+las raíces declaradas por el usuario en `INDEXER_DIR` (rev. 2; originalmente se elegían en la
+llamada), y que indexe los documentos **en su forma original** sin convertirlos antes a Markdown.
 
 El cambio toca dos contratos congelados a la vez: la firma de `index_refresh` y la semántica de
 `source_path`. ¿Cómo se indexan N raíces arbitrarias sin introducir estado oculto y sin que dos
@@ -21,7 +21,8 @@ raíces distintas produzcan citas ambiguas?
 
 ## 2. Decision Drivers
 
-* **Sin estado (D32/D42):** la raíz es un argumento, no configuración; ni `tepochcalli.toml` ni el wizard cambian.
+* **Sin estado en el motor (D32/D42, rev. 2):** el conjunto de raíces lo declara el harness en
+  `INDEXER_DIR`; ni `tepochcalli.toml` ni el wizard cambian y el MCP no puede modificarlo.
 * **Cita inequívoca con N raíces (D41):** el `source_path` debe localizar el fichero sin ambigüedad posible.
 * **Documento original (D43/D49):** el RAG lee `.docx/.pptx/.xlsx/.xls/.pdf` directamente; el conversor sigue siendo el camino del artefacto `.md`.
 * **Contabilidad honesta:** `scanned == indexed + skipped` sigue siendo la identidad del reporte.
@@ -32,40 +33,47 @@ raíces distintas produzcan citas ambiguas?
 
 ## 3. Considered Options
 
-* **A — Raíces por llamada, sin estado, `source_path` relativo al vault.** `index_refresh(directories=[...])`; cada llamada valida y camina sus raíces; la cita se normaliza contra la raíz del vault.
+* **A — Raíces declaradas en el entorno, sin estado en el motor, `source_path` relativo al vault.** `index_refresh()` camina el conjunto que declara `INDEXER_DIR` (rev. 2; antes se pasaba por llamada); cada pasada valida y camina ese conjunto; la cita se normaliza contra la raíz del vault.
 * **B — Config persistente.** `index.roots` en `tepochcalli.toml`, escrita por el wizard; el MCP lee la lista al arrancar.
 * **C — `source_path` relativo a la raíz.** Se mantiene la forma actual y cada raíz aporta su propio prefijo lógico.
 * **D — Un índice por raíz.** Una tabla LanceDB (`chunks_<slug>`) por raíz; búsqueda federada entre tablas.
 
 ## 4. Decision Outcome
 
-**Chosen option: A**, porque es la única que satisface a la vez «sin estado» y «cita inequívoca»:
-las raíces viajan en la llamada (nada que reconfigurar) y la cita se ancla al vault, que es el
-único marco común a todas las raíces.
+**Chosen option: A**, porque es la única que satisface a la vez «sin estado en el motor» y «cita inequívoca»:
+el conjunto de raíces vive en la variable de entorno del harness (rev. 2; nada que persistir en el
+motor) y la cita se ancla al vault, que es el único marco común a todas las raíces.
 
-### 4.1 Contrato `index_refresh(directories=[...])`
+### 4.1 Contrato `index_refresh()`
 
-* `index_refresh(directories: list[str] | None = None)`. Sin argumento ⇒ las raíces declaradas
-  en **`INDEXER_DIR`** (variable de entorno del harness, `opencode.json` → `environment`;
-  multi-valor separado por comas, `strip`, vacíos descartados), con `00-Resources` como
-  **fallback** cuando está ausente o vacía: compatibilidad byte-a-byte con el contrato anterior y
-  con los agentes ya escritos (D32).
+* `index_refresh()` — **sin argumentos**. El conjunto de raíces lo declara **`INDEXER_DIR`**
+  (variable de entorno del harness, `opencode.json` → `environment`; multi-valor separado por
+  comas, `strip`, vacíos descartados), con `00-Resources` como **fallback** cuando está ausente o
+  vacía (D32). Las raíces viven **solo** en el entorno del proceso: no se escriben en
+  `tepochcalli.toml`, no tocan el wizard y el MCP no puede añadirlas ni quitarlas. Cambiar de
+  carpeta es editar la variable y reiniciar el MCP, no un reinstall.
 * **Enmienda 2026-11-03 — el default lo declara el harness, no lo persiste el motor.** El literal
   `00-Resources` deja de ser el default del contrato y pasa a ser el fallback de `INDEXER_DIR`.
-  Esa lista **no** se escribe en `tepochcalli.toml`, no la toca el wizard y el server la relee en
-  cada llamada. Razón: el dueño quiere cambiar las raíces por defecto sin editar el toml ni
+  Esa lista **no** se escribe en `tepochcalli.toml`, no la toca el wizard y el server la lee del
+  entorno del proceso. Razón: el dueño quiere cambiar las raíces por defecto sin editar el toml ni
   re-ejecutar el wizard, y sin devolverle estado al motor (la opción B sigue descartada: el toml
-  puede contener secretos y no es registro de una operación). El argumento `directories` sigue
-  siendo el **override** de la llamada y el multi-raíz/dedup de §4.4 no cambia.
-* Las raíces viven **solo** en la invocación o en el entorno del proceso: no se escriben en
-  `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso. Cambiar de carpeta es un
-  argumento (o una env), no un reinstall.
+  puede contener secretos y no es registro de una operación). El multi-raíz/dedup de §4.4 no cambia.
+* **Enmienda 2026-11-03 (rev. 2) — el override por llamada se retira.** `index_refresh` deja de
+  aceptar `directories`: el conjunto de raíces es **exclusivamente** `INDEXER_DIR`. Razón: con el
+  target de CocoIndex una pasada declara el estado completo del índice, así que aceptar un
+  subconjunto («indexa solo `documentos/`») **purgaría** las filas de las demás raíces — permitirlo
+  contradecía la regla de que solo el usuario cambia el conjunto. Además el delta ya es memoizado:
+  re-escanear el conjunto completo cuesta solo lo que cambió, así que no se pierde rendimiento.
+  Este ADR se **editó en sitio** —excepción explícita del dueño a la regla de no re-editar un ADR
+  *Accepted*— en lugar de crear un ADR-012 por decisión suya: el cambio solo retira el override de
+  D32 y no re-litiga D41/D43/D47/D50/D51/D54/D62/D64/D65/D67.
 * El reporte gana `roots` **aditivo** (`{scanned, indexed, skipped, elapsed_ms, locked, roots}`):
   un campo nuevo no rompe consumidores; quitarlo o renombrarlo, sí (ADR-005, Hyrum).
-* Cada pasada **declara el conjunto completo** de raíces; el índice refleja esa pasada (el target
-  de CocoIndex reconcilia el estado declarado). Por eso `rag_status` publica
+* Cada pasada **declara el conjunto completo** de raíces —el que fija `INDEXER_DIR`—; el índice
+  refleja esa pasada (el target de CocoIndex reconcilia el estado declarado). `rag_status` publica
   `index.last_refresh_roots` —de la sesión, D42— además de `index.available_roots` (D67): el
-  agente que quiere ampliar el alcance pregunta qué hay y qué está indexado en vez de adivinar.
+  agente que quiere ampliar el alcance pregunta qué hay y qué está indexado, y pide al usuario
+  editar la variable; no la cambia él.
 * **Fail-fast atómico (D65):** se validan las N raíces **antes** de caminar ninguna. Si una falla,
   no se indexa ninguna y el error nombra la raíz mala, las que sí existen y las sugerencias. Un
   índice parcial que nadie pidió es peor que un error: el usuario corrige y reintenta una vez, y
@@ -108,8 +116,9 @@ raíz del vault (`materiales/a.pdf`, `documentos/a.pdf`, `00-Resources/nota.md`)
 * Una raíz puede ser un **fichero suelto**: se emite como una entrada sin pasar por `walk_dir`
   (que lanza `ValueError` si no es directorio). El borde ya validó que existe y que su extensión
   está en la whitelist.
-* Raíces solapadas (una dentro de otra, o la misma dos veces) se **deduplican** antes de caminar:
-  sin dedup, el mismo fichero contaría dos veces y `scanned == indexed + skipped` mentiría.
+* Raíces solapadas del conjunto configurado (una dentro de otra, o la misma dos veces) se
+  **deduplican** antes de caminar: sin dedup, el mismo fichero contaría dos veces y
+  `scanned == indexed + skipped` mentiría.
 
 ### 4.5 La frontera de los symlinks es el VAULT (D47)
 
@@ -165,10 +174,12 @@ de symlink del vault, y la normalización de cita.
   reproduce `text`.
 * **Colisión imposible:** `materiales/a.md` y `documentos/a.md` en la misma pasada ⇒ dos filas,
   dos `source_path` distintos; ninguna se pierde.
-* **Compatibilidad:** `index_refresh()` sin argumentos y sin `INDEXER_DIR` declarada ⇒
-  `roots == ["00-Resources"]` y el mismo `scanned` que la versión anterior sobre el mismo vault.
-* **Atomicidad (D65):** `index_refresh(directories=["materiales", "no-existe"])` ⇒
-  `VALIDATION_ERROR` y el recuento de filas del índice **no cambia**.
+* **Compatibilidad:** `index_refresh()` con `INDEXER_DIR` ausente o vacía ⇒ `roots == ["00-Resources"]`
+  y el mismo `scanned` que la versión anterior sobre el mismo vault.
+* **Atomicidad (D65):** `INDEXER_DIR="materiales,no-existe"` ⇒ `VALIDATION_ERROR` y el recuento de
+  filas del índice **no cambia**.
+* **Sin override:** `index_refresh` con cualquier argumento (el retirado `directories` incluido) ⇒
+  `VALIDATION_ERROR` por argumento desconocido, y el índice no se toca.
 * **Nunca `INTERNAL`:** una raíz inexistente, un fichero con extensión no soportada y un
   directorio donde se esperaba un fichero devuelven `VALIDATION_ERROR` con
   `details.suggestions` no vacías.
@@ -177,18 +188,18 @@ de symlink del vault, y la normalización de cita.
 * **Poda:** indexar la raíz del vault no produce filas ni skips bajo `.tepochcalli/venv/`,
   `.obsidian/` ni `.trash/`, y el tiempo no escala con su tamaño.
 * **Symlink:** un directorio con un link a sí mismo termina el walk (sin visited-set propio).
-* **Dedup:** `directories=["00-Resources", "00-Resources/sub"]` ⇒ `scanned == indexed + skipped`
+* **Dedup:** `INDEXER_DIR="00-Resources,00-Resources/sub"` ⇒ `scanned == indexed + skipped`
   y ninguna entrada duplicada.
 * **`rag_status`:** expone `index.available_roots` con los directorios de primer nivel visibles y
   cabe en <200 tokens.
 
 ## 5. Pros and Cons of the Options
 
-### Opción A — Raíces por llamada, cita relativa al vault (elegida)
+### Opción A — Raíces declaradas en el entorno, cita relativa al vault (elegida)
 
-* ✅ **Pros:** Cero estado oculto; cambiar de carpeta es un argumento; la cita localiza el fichero aunque haya N raíces con el mismo relativo; el wizard no se toca; el reporte declara qué se indexó.
-* ⚠️ **Cons:** El agente debe **recordar** pasar las raíces en cada llamada (no hay memoria entre sesiones); `source_path` es un cambio breaking para `search` y `path_filter`; más casos de validación (N raíces, dedup).
-* ⚖️ **Neutral:** La raíz deja de ser constante del producto y pasa a ser dato de la operación.
+* ✅ **Pros:** Cero estado en el motor; cambiar de carpeta es editar una variable del harness; la cita localiza el fichero aunque haya N raíces con el mismo relativo; el wizard no se toca; el reporte declara qué se indexó.
+* ⚠️ **Cons:** El agente **no puede** ampliar ni reducir el alcance por llamada: cualquier cambio de carpeta exige editar `INDEXER_DIR` y reiniciar el MCP (rev. 2); `source_path` es un cambio breaking para `search` y `path_filter`; más casos de validación (N raíces, dedup).
+* ⚖️ **Neutral:** La raíz deja de ser constante del producto y pasa a ser dato de configuración del usuario.
 
 ### Opción B — Config persistente (`index.roots` en el toml)
 
@@ -211,8 +222,8 @@ de symlink del vault, y la normalización de cita.
 ## 6. Consequences
 
 * ✅ **Positives:** El usuario investiga sobre su estructura real (no solo `00-Resources/`); los ofimáticos entran sin paso de conversión; el agente descubre carpetas con `rag_status`; la cita sigue siendo un único string localizable; el índice incremental no se invalida al mover el vault.
-* ⚠️ **Negatives / Risks:** El PDF pierde la jerarquía de headings (D54) — el criterio 5 depende de `source_path` + offsets, no del heading. Los documentos binarios no entran en el Δ de 30 s (D51) y un vault lleno de `.docx` tendrá refreshes lentos y visibles. El agente **debe** pasar raíces explícitas: sin argumento solo indexa las de `INDEXER_DIR` (fallback `00-Resources/`), y un agente que asuma memoria entre sesiones indexará de menos. El target declarativo de CocoIndex reconcilia por pasada: una llamada que no declara una raíz puede purgar sus filas — T2 lo fija con el test de tres pasadas y `last_refresh_roots` lo hace observable. `source_path` breaking: los `path_filter` y prompts que asumían el prefijo `00-Resources/` hay que revisarlos.
-* ⚖️ **Neutral:** La raíz pasa de constante a argumento; el ledger de §4.9 se convierte en la referencia obligatoria antes de «optimizar» el walk; la whitelist y `DocKind` crecen juntos o no crecen.
+* ⚠️ **Negatives / Risks:** El PDF pierde la jerarquía de headings (D54) — el criterio 5 depende de `source_path` + offsets, no del heading. Los documentos binarios no entran en el Δ de 30 s (D51) y un vault lleno de `.docx` tendrá refreshes lentos y visibles. **El conjunto de raíces lo declara el usuario**: el agente no puede ampliarlo ni reducirlo, y para indexar otra carpeta hay que editar `INDEXER_DIR` y reiniciar el MCP (rev. 2). El target declarativo de CocoIndex reconcilia por pasada, que es justo la razón de no aceptar subconjuntos: una llamada con menos raíces purgaría las demás. `source_path` breaking: los `path_filter` y prompts que asumían el prefijo `00-Resources/` hay que revisarlos.
+* ⚖️ **Neutral:** La raíz pasa de constante a configuración del usuario; el ledger de §4.9 se convierte en la referencia obligatoria antes de «optimizar» el walk; la whitelist y `DocKind` crecen juntos o no crecen.
 
 ## 7. Related Decisions
 
@@ -227,7 +238,7 @@ de symlink del vault, y la normalización de cita.
 
 * **Success metrics:** 0 respuestas con `source_path` ambiguo sobre un vault con dos raíces homónimas; 0 `INTERNAL` por raíz mal escrita; Δ de texto p95 <30 s tras el cambio; `scanned == indexed + skipped` en el 100 % de los refreshes de la suite.
 * **Next review date:** 2027-05-02
-* **Revisit triggers:** El agente falla repetidamente por no repetir raíces entre llamadas ⇒ reevaluar B con estado explícito y visible; el ranking se degrada al crecer el número de raíces ⇒ reevaluar D; aparece un formato que markitdown no extrae con fidelidad ⇒ reevaluar la whitelist, no el contrato.
+* **Revisit triggers:** El usuario pide cambiar el conjunto de raíces sin reiniciar el MCP (editar `opencode.json` exige respawn) ⇒ evaluar recarga en caliente de la variable; el ranking se degrada al crecer el número de raíces ⇒ reevaluar D; aparece un formato que markitdown no extrae con fidelidad ⇒ reevaluar la whitelist, no el contrato.
 
 ---
 *Template based on [MADR v4.0](https://adr.github.io/madr/) and [Nygard's ADR format](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions).*

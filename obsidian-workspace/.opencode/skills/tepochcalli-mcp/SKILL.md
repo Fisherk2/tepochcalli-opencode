@@ -16,7 +16,7 @@ the standalone one no longer exists.
 | Tool | When to use it |
 | --- | --- |
 | `search(query, top_k=5, path_filter=None)` | **Use it** to answer with citations over already-indexed material. **Don't** use it to read a whole file, nor for material added but not yet indexed (`index_refresh` first). |
-| `index_refresh(directories=None)` | **Use it** when new or modified material must enter the index. **Don't** use it to produce a readable `.md` (that is the converter) nor to "see if it works" (that is `rag_status`). |
+| `index_refresh()` | **Use it** when new or modified material must enter the index: it walks the set the user declared in `INDEXER_DIR`. **Don't** use it to produce a readable `.md` (that is the converter), to pick folders (you can't), nor to "see if it works" (that is `rag_status`). |
 | `add_source(uri, subdir=None)` | **Use it** when the source lives outside the vault (URL, `file:` inside the vault) and you want it ingested in one step: convert, write with traceability frontmatter into `00-Resources/`, index. **Don't** use it for a file already in the vault, nor just to look at the markdown. |
 | `convert_document(path, output_path=None, format=None)` | **Use it** when the document is already in the vault and the user wants a `.md` on disk. **Don't** use it to index (it doesn't) nor for bytes that are not on disk (`convert_base64`). |
 | `convert_base64(data, output_path=None, format=None, filename=None)` | **Use it** when the bytes are already in context (base64) and a type hint exists: `format` **or** `filename`. **Don't** use it if the file exists in the vault: pass the path instead. |
@@ -50,29 +50,29 @@ must be kept.
 
 ## Defaults
 
-- **The index set belongs to the user, not to you.** `INDEXER_DIR` (`opencode.json` →
-  `mcp.servers.tepochcalli-rag.environment`) declares which vault paths the engine
-  indexes. `index_refresh()` **with no arguments** indexes exactly that set.
-  `00-Resources` is only the fallback value when the variable is absent or empty —
-  never assume it is what the user configured.
+- **The index set belongs to the user, and only to the user.** `INDEXER_DIR` (`opencode.json` →
+  `mcp.servers.tepochcalli-rag.environment`) declares which vault paths the engine indexes.
+  `index_refresh()` takes **no arguments** and walks exactly that set. `00-Resources` is only the
+  fallback value when the variable is absent or empty — never assume it is what the user
+  configured.
+- **Hard rule: you cannot add or remove roots.** No tool takes roots. A pass declares the **whole**
+  index state, so indexing a subset would purge the other roots' rows — which is why the argument
+  that used to allow it was retired. If the user wants another folder indexed, **they** edit
+  `INDEXER_DIR` and **restart the MCP**; then call `index_refresh()`. Passing the retired
+  `directories` argument has **no effect** — the SDK drops unknown keys and the call indexes the
+  configured set; it does not error.
 - **Never guess the roots.** `rag_status().index.available_roots` lists the vault's
-  top-level directories; `index.last_refresh_roots` tells you what the last pass
+  top-level folders; `index.last_refresh_roots` tells you what the last pass
   actually indexed. Ask, don't assume.
-- **`directories` replaces the declared set for that call** (recursive at any depth; a
-  root may be a single file: `directories: ["materiales/x.pdf"]`; overlapping roots are
-  deduplicated). **Every pass declares the complete set**, so a refresh that omits a
-  root drops that root's rows. To add a folder persistently, the user edits
-  `INDEXER_DIR`; for a one-off, pass the whole set they want and say which roots you
-  are leaving out.
 - **Paths** are always POSIX and **vault-relative**. Input and `output_path` must stay
   inside the vault; `..`, an external absolute path or an escaping symlink ⇒
   `VALIDATION_ERROR` (boundary B′).
-- **Tool-fixed destinations** (these are *not* the index set): `add_source` always
-  writes into `00-Resources/<subdir>` (`_inbox` when omitted) and its refresh declares
-  `INDEXER_DIR ∪ 00-Resources` so the file it just wrote is searchable. The converter
-  defaults to `00-Resources/<slug>.md`, and `output_path` may be any path inside the
-  vault. If the user does not index `00-Resources`, use `convert_document` with an
-  explicit `output_path` inside an indexed root.
+- **Tool-fixed destinations** (these are *not* the index set): `add_source` always writes into
+  `00-Resources/<subdir>` (`_inbox` when omitted) and **requires `00-Resources` to be declared in
+  `INDEXER_DIR`** — otherwise it rejects with `VALIDATION_ERROR` (`details: {requested, allowed,
+  hint}`) **before writing anything**. The fix belongs to the user: add it to the variable, or use
+  `convert_document` with an `output_path` inside an indexed root. The converter defaults to
+  `00-Resources/<slug>.md`, and `output_path` may be any path inside the vault.
 - **`format`** is a type hint, not a converter: pass it only when the name has no
   extension or for CSV; it also fixes the destination extension (`format: "md"` ⇒
   `.md`). In `convert_base64` it is required together with `filename` or instead of it.
@@ -95,10 +95,13 @@ must be kept.
   converter, the format error carries the catalogue in `details.formats`.
 - **`convert_base64` without a type hint** ⇒ **ask** the user for the file name or
   format. Do not guess: markitdown would produce plausible but false markdown.
-- **Missing root** ⇒ "pick a directory that exists" and offer
-  `rag_status().index.available_roots` (or `details.vault_dirs`). If the call fails,
-  **retry once with the suggestion** in `details.suggestions` (`Documentos` →
-  `documentos`) — one retry, not five.
+- **A root declared in `INDEXER_DIR` does not exist** ⇒ `VALIDATION_ERROR` with
+  `details.suggestions`: tell the user **which entry of the variable** is wrong and what does exist
+  (`details.vault_dirs`). The fix is editing `INDEXER_DIR` in `opencode.json` and restarting the
+  MCP — not retrying the call. Nothing was indexed (atomic pass).
+- **`add_source` rejected because `00-Resources` is not indexed** ⇒ report `details.hint` to the
+  user: add `00-Resources` to `INDEXER_DIR` (and restart), or convert with an `output_path` inside
+  an indexed root. Nothing was written, so there is no orphan file to clean up.
 - **Any `E_*`** ⇒ `rag_status()` and report the exact `fix_hint` to the user, never the
   raw error.
 - **`rag_status().config.valid == false`** ⇒ before indexing, read `config.problems`
@@ -106,11 +109,11 @@ must be kept.
   e.g. `INDEXER_DRI`) and **tell the user what to fix** in `opencode.json`. An
   `unknown_env` entry means their `INDEXER_DIR` is **not being applied**: do not retry
   blindly.
-- **`index_refresh` is atomic**: if one root is wrong, none is indexed.
+- **`index_refresh` is atomic**: if one root of the declared set is wrong, none is indexed.
 
 | Code | When | What you do |
 | --- | --- | --- |
-| `VALIDATION_ERROR` | fixable argument: missing or out-of-vault path/root, wrong type, unsupported format, base64 without a hint, occupied destination with different content | fix with `details.suggestions`/`details.formats` and retry |
+| `VALIDATION_ERROR` | fixable argument or config: missing or out-of-vault path/root, wrong type, unsupported format, base64 without a hint, occupied destination with different content | fix with `details.suggestions`/`details.formats`; a bad `INDEXER_DIR` entry is the user's edit, not a retry |
 | `SOURCE_UNREACHABLE` | the document exists and is of the requested type but cannot be read (scanned, corrupt, encrypted) | inform and offer manual OCR or a hand-made `.md` |
 | `INDEX_EMPTY` | no index and the embedder is configured | `index_refresh()` and retry |
 | `E_MODEL_MISMATCH` (alias `INDEX_STALE_MODEL`) | the index model ≠ the configured one | warn: requires `tepochcalli reindex --confirm` |
@@ -133,24 +136,25 @@ must be kept.
   RAG is local.
 - Do not convert in order to index, and do not index the converted `.md` as if it
   replaced the original.
-- **Do not change the user's index set on your own.** Which folders are indexed is their
-  configuration decision, not an agent default.
+- **You cannot change the user's index set.** Which folders are indexed is their configuration
+  decision (`INDEXER_DIR`), not an agent default. Never promise "I'll index just this folder for
+  one call": that argument does not exist.
 
 ## Decision table
 
 | User request | Tool and arguments |
 | --- | --- |
 | "index my new notes" / "update the index" | `index_refresh()` → the roots declared by `INDEXER_DIR` (not necessarily `00-Resources`) |
-| "index `documentos/` and `materiales/`, everything inside" | `index_refresh(directories=["documentos", "materiales"])` — warn that these replace the declared set |
-| "add this folder to what you already index" | the user edits `INDEXER_DIR` and restarts; or `index_refresh(directories=[…index.last_refresh_roots, "nueva"])` for one pass |
-| "index this loose PDF too" / "only `materiales/x.pdf`" | `index_refresh(directories=["materiales/x.pdf"])` |
+| "index `documentos/` and `materiales/`, everything inside" | you can't pick roots: the user sets `INDEXER_DIR="documentos,materiales"` and restarts the MCP, then `index_refresh()` |
+| "add this folder to what you already index" | the user appends it to `INDEXER_DIR` and restarts the MCP, then `index_refresh()` |
+| "index this loose PDF too" / "only `materiales/x.pdf`" | the user sets `INDEXER_DIR` to that file (a root may be a single file) and restarts, then `index_refresh()` |
 | "what is actually indexed?" | `rag_status()` → `index.last_refresh_roots` and `index.available_roots` |
 | "I have the file in base64" | `convert_base64(data, filename="informe.docx")` or `format: "docx"` |
 | "convert this docx to markdown" | `convert_document("00-Resources/informe.docx")` → summary; read `written_to` if needed |
 | "convert it and keep it in `05-outputs/`" | `convert_document(path, output_path="05-outputs/informe.md")` |
 | "search my sources for what they say about X" | `search("X")`; if the index is empty, `index_refresh()` first |
 | "the index is empty" / `INDEX_EMPTY` | `index_refresh()`, then `search`; if it persists, `rag_status()` and its `fix_hint` |
-| "add this paper from the web" | `add_source("https://…")` |
+| "add this paper from the web" | `add_source("https://…")` — needs `00-Resources` in `INDEXER_DIR`; otherwise it rejects **before writing** (`VALIDATION_ERROR`, `details.hint`): report it, don't retry |
 | "which formats do you accept?" | `list_formats()` |
 | "it won't convert, use the other thing" (format outside the catalogue) | `anydoc` fallback — warn: whole markdown in the response and nothing written to disk |
 | "something is wrong with the RAG" | `rag_status()` → report `health.reason` + `fix_hint`, and `config.problems` if `valid` is false |

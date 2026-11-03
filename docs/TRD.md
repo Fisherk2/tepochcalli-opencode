@@ -85,7 +85,7 @@ serializada; definición en spec-mcp-server §latencia).
 
 | Criterio | Protocolo de test | Pass |
 | --- | --- | --- |
-| 2. Δ indexación <30s | Corridas ×20: tocar/crear 1-50 archivos md en las raíces indexadas, luego `index_refresh(directories=…)`; registrar `elapsed_ms` | p95 < 30000ms; documentos binarios (`pdf/docx/pptx/xlsx/xls`) medidos y publicados **aparte** (D51) |
+| 2. Δ indexación <30s | Corridas ×20: tocar/crear 1-50 archivos md en las raíces indexadas (`INDEXER_DIR`), luego `index_refresh()`; registrar `elapsed_ms` | p95 < 30000ms; documentos binarios (`pdf/docx/pptx/xlsx/xls`) medidos y publicados **aparte** (D51) |
 | 3. Búsqueda <500ms | 100 queries muestreadas del corpus 10k/1k, `search(top_k=5)`, tras índice estable | p95 < 500ms en HW mínimo |
 | 4. ≤2000 tokens/consulta | Fixture adversa (unicode, tablas, listas largas): estimador chars/4 sobre payload `search` + overhead cita + query del usuario; validar contra tokenizador real del harness en e2e | payload ≤1600 tokens garantizado por server + e2e total <2000 |
 | 6. Escala 10k/1k sin degradación | Bench delta tras stress: latencia búsqueda y refresh en corpus lleno vs 10% | sin regresión >2× entre tamaños; índices ANN/FTS rebuild < presupuesto |

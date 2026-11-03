@@ -29,7 +29,7 @@ graph TB
     end
 
     subgraph MCP["Capa de Comunicación"]
-        RAG["MCP server tepochcalli-rag<br/>7 tools: search · index_refresh(directories?) · add_source · rag_status<br/>convert_document · convert_base64 · list_formats<br/>stdio local, sin puerto"]
+        RAG["MCP server tepochcalli-rag<br/>7 tools: search · index_refresh() · add_source · rag_status<br/>convert_document · convert_base64 · list_formats<br/>stdio local, sin puerto"]
     end
 
     subgraph ENGINE["Capa de Procesamiento"]
@@ -68,7 +68,7 @@ sequenceDiagram
 
     U->>U: escribe nota / añade PDF en una raíz del vault
     U->>A: "estado del arte sobre X" (+/research)
-    A->>S: index_refresh(directories=["00-Resources/"])
+    A->>S: index_refresh()
     S->>F: ciclo delta multi-raíz (memo/update)
     F->>D: upsert solo de archivos nuevos/modificados
     S-->>A: {scanned, indexed, skipped, elapsed_ms, locked, roots} (Δ texto p95 <30s)
@@ -95,7 +95,7 @@ sequenceDiagram
     M-->>S: markdown (nunca viaja al wire)
     S-->>A: resumen de 5 claves {written_to, source_uri, bytes, chars, preview}
     S->>S: (o add_source: escribe en 00-Resources/ + frontmatter de trazabilidad)
-    A->>S: index_refresh(directories=["00-Resources/"])
+    A->>S: index_refresh()
     S->>F: ciclo delta
     F-->>S: {scanned, indexed, skipped, elapsed_ms, roots}
     A-->>U: confirmación con ruta citable
@@ -109,7 +109,7 @@ sequenceDiagram
 | AGENTS.md del vault (MCP-first) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
 | `opencode.json` (`mcp.servers`) | Agente | `<vault>/opencode.json` | spec-markitdown §config |
-| `tepochcalli-rag` (**7 tools**: `search`/`index_refresh(directories=?)`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` — Phase 3.5) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — 4 tools entregadas en Phase 2 (T1-T8); 3 del conversor en Phase 3.5 (ADR-009) | spec-mcp-server, ADR-005, ADR-009, ADR-010 |
+| `tepochcalli-rag` (**7 tools**: `search`/`index_refresh()`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` — Phase 3.5) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — 4 tools entregadas en Phase 2 (T1-T8); 3 del conversor en Phase 3.5 (ADR-009) | spec-mcp-server, ADR-005, ADR-009, ADR-010 |
 | `markitdown` (librería) | Comunicación/Procesamiento | venv del vault — **en proceso** en `convert.py` y en `parsers.py`; el server standalone `markitdown-mcp` queda **retirado del payload** (D29, ADR-011) | spec-markitdown, ADR-011 |
 | **Paquete `tepochcalli_mcp` (Phase 2 + 3.5):** `server.py` (MCPServer stdio, registro de las **7 tools**, `CallToolResult` explícito — nunca `ToolError`), `tools/{search,index_refresh,add_source,rag_status,convert_document,convert_base64,list_formats}.py` (handlers + validación de borde), `errors.py` (taxonomía `E_*` + `internal_guard`), `budget.py` (estimador `chars/4 + 25`, techo 1600), `paths.py` (B′: rutas y raíces dentro del vault — D16/D31/D64), `summary.py` (resumen de 5 claves, ≤1400 chars), `formats.py` (catálogo sin OCR), `writer.py` (escritura atómica idempotente — D66), `embedder.py` (fábrica `local`/`litellm`/`none` — D15/D59), `convert.py` (markitdown en proceso — D-b), `__main__.py` (entrypoint `python -m tepochcalli_mcp` — D17) | Comunicación | `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/` | spec-mcp-server, ADR-005, ADR-009 |
 | **Contract tests + e2e golden (Phase 2):** `tests/e2e/test_mcp_contract.py` (shapes en el wire, 5 `E_*`, instalación degradada, globs de `path_filter`), `tests/e2e/test_mcp_journey.py` (pregunta → tool-call → JSON citado), fixture grabada `tests/fixtures/golden_vault/` (md+PDF) | Verificación | repo `tests/e2e/`, `tests/fixtures/` | CP-C, CP-D, spec-mcp-server §Testing |
@@ -278,7 +278,7 @@ graph TB
 | [ADR-007](../specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4) | Accepted | 2026-10-21 |
 | [ADR-008](../specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico de modelo (refina ADR-007 capa UX) | Accepted | 2026-10-21 |
 | [ADR-009](../specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Accepted | 2026-11-03 |
-| [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada + `source_path` relativo al vault | Accepted | 2026-11-03 |
+| [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` + `source_path` relativo al vault (rev. 2 2026-11-03) | Accepted | 2026-11-03 |
 | [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
 
 ## Key decisions summary

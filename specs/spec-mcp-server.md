@@ -1,6 +1,6 @@
 # Spec: Servidor MCP `tepochcalli-rag` (capa de comunicación)
 
-* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4) · Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03)
+* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4) · Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) · Amended 2026-11-03 (rev. 2: `index_refresh` sin argumentos, orden del dueño)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -23,7 +23,7 @@ Sin una frontera tipada, el agente leería archivos crudos del vault (tokens por
 * Contratos D6 exactos con ejemplos JSON y errores tipados (formato único de error).
 * `search` end-to-end (tool-call→respuesta) **<500ms** p95 en CPU (criterio 3); punto de medición definido.
 * Presupuesto de tokens por respuesta: diseño determinista ≤~1600 tokens de payload (criterio 4, con margen).
-* `index_refresh` delta-only sobre las raíces pedidas, con reporte `{scanned, indexed, skipped, elapsed_ms, locked, roots}` y validación atómica `fail-fast` (criterio 2; ADR-010).
+* `index_refresh` delta-only sobre el conjunto de raíces declarado en **`INDEXER_DIR`**, con reporte `{scanned, indexed, skipped, elapsed_ms, locked, roots}` y validación atómica `fail-fast` (criterio 2; ADR-010).
 * `add_source` = conversión markitdown + escritura en `00-Resources/<subdir>/` + refresh (criterio 7).
 * `rag_status` = diagnóstico del provider/embedder e índice (estado `ok`/`degraded`, motivos `E_*` con `fix_hint` accionable, raíces disponibles e indexadas), coste <200 tokens por forma (D7.3/ADR-007, D67).
 * Las 3 tools del conversor devuelven **solo** el resumen de 5 claves; el cuerpo nunca cruza el wire (H1/H2, D36).
@@ -69,19 +69,21 @@ Contrato: `search(query: str, top_k: int = TEPOCHCALLI_TOP_K (5), path_filter: s
 
 ### Tool `index_refresh`
 
-Contrato: `index_refresh(directories: list[str] | None = None)` — ejecuta un ciclo de actualización delta del flow sobre las raíces pedidas (con lock de un solo proceso). Sin argumento ⇒ las raíces declaradas en **`INDEXER_DIR`** (multi-valor por **comas**, `strip`, vacíos descartados; ausente o vacía ⇒ `["00-Resources"]`, D32/D42): compatibilidad byte a byte con los agentes ya escritos. Las raíces viven **solo** en la invocación o en el entorno del proceso: no se escriben en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso — cambiar de carpeta es un argumento (o una env), no un reinstall. El argumento `directories` sigue siendo el **override** de la llamada.
+Contrato: `index_refresh()` — **sin argumentos**. Ejecuta un ciclo de actualización delta del flow (con lock de un solo proceso) sobre el conjunto de raíces que declara el usuario en **`INDEXER_DIR`** (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`; multi-valor por **comas**, `strip`, vacíos descartados; ausente o vacía ⇒ `["00-Resources"]`, D32/D42). El MCP **no puede añadir ni quitar raíces**: el conjunto vive solo en esa variable —no en la llamada y no en `tepochcalli.toml`—, y cambiarlo es editar la variable y reiniciar el MCP, nunca un argumento. El resto del contrato multi-raíz (recursión, raíz-fichero, dedup de solapadas) se aplica a ese conjunto.
+
+> **El argumento `directories` se retiró el 2026-11-03 (orden del dueño).** El argumento retirado **no tiene efecto**: el SDK valida por firma y descarta las claves desconocidas, así que la tool se ejecuta con el conjunto de `INDEXER_DIR`. No es un error — es la garantía de que el wire no puede cambiar el conjunto. Razón: con el target de CocoIndex una pasada **declara el estado completo del índice**, así que aceptar un subconjunto («indexa solo `documentos/`») **purgaría** las filas de las demás raíces — permitirlo contradecía la regla de que solo el usuario cambia el conjunto. El delta ya es memoizado, así que re-escanear el conjunto completo cuesta solo lo que cambió: no se pierde rendimiento.
 
 ```jsonc
 { "scanned": 214, "indexed": 3, "skipped": 211, "elapsed_ms": 8200, "locked": false,
-  "roots": ["materiales", "documentos"] }
+  "roots": ["00-Resources", "03-Citations"] }
 ```
 
 * `scanned`: archivos visitados en la pasada; `indexed`: (re)escritos al índice; `skipped`: memoizados/inalterados/excluidos; `elapsed_ms`: duración de la pasada. La identidad `scanned == indexed + skipped` se mantiene en toda pasada (incluido `locked` y directorio vacío).
-* `roots`: campo **aditivo** (ADR-005/Hyrum) con el conjunto completo declarado en la pasada. Añadirlo no rompe consumidores; quitarlo o renombrarlo, sí.
-* **Validación en el borde, antes de la costura** (`paths.validate_roots`, puro): raíz inexistente, tipo equivocado (un documento donde se espera un directorio o viceversa), fuera del vault o con `..` ⇒ `VALIDATION_ERROR` con `details: {requested, exists, suggestions[], vault_dirs[]}`. Las `suggestions` son por similitud sin distinguir mayúsculas (`Documentos` → `documentos`). Las raíces de `INDEXER_DIR` pasan por la **misma** validación que las explícitas; la env se relee en cada llamada (cambiarla no exige reiniciar el MCP).
-* **Fail-fast atómico (D65):** se validan las N raíces **antes** de caminar ninguna. Una raíz mala ⇒ no se indexa ninguna y el recuento del índice no cambia. Un índice parcial que nadie pidió es peor que un error corregible.
+* `roots`: campo **aditivo** (ADR-005/Hyrum) con el conjunto completo que declara `INDEXER_DIR` para esa pasada. Añadirlo no rompe consumidores; quitarlo o renombrarlo, sí.
+* **Validación en el borde, antes de la costura** (`paths.validate_roots`, puro): raíz inexistente, tipo equivocado (un documento donde se espera un directorio o viceversa), fuera del vault o con `..` ⇒ `VALIDATION_ERROR` con `details: {requested, exists, suggestions[], vault_dirs[]}`. Las `suggestions` son por similitud sin distinguir mayúsculas (`Documentos` → `documentos`). El server lee la variable de su propio entorno en cada llamada; editar `opencode.json` exige reiniciar el MCP para que el proceso reciba el valor nuevo.
+* **Fail-fast atómico (D65):** se valida el conjunto **completo** antes de caminar ninguna raíz. Una raíz mala ⇒ no se indexa ninguna y el recuento del índice no cambia. Un índice parcial que nadie pidió es peor que un error corregible.
 * **Directorio vacío no es error:** `{scanned: 0, indexed: 0, skipped: 0, …}` — el agente no debe leerlo como fallo.
-* Raíces solapadas o repetidas se **deduplican**; una raíz puede ser un fichero suelto (ADR-010 §4.4). La recursión y la poda de directorios de punto (`.tepochcalli/`, `.obsidian/`, `.trash/`) ya las resuelve el conector `localfs`.
+* Raíces solapadas o repetidas del conjunto se **deduplican**; una raíz puede ser un fichero suelto (ADR-010 §4.4). La recursión y la poda de directorios de punto (`.tepochcalli/`, `.obsidian/`, `.trash/`) ya las resuelve el conector `localfs`.
 * Los documentos binarios (`.pdf/.docx/.pptx/.xlsx/.xls`) quedan **fuera** del presupuesto Δ<30 s y se miden aparte (D51): el criterio 2 aplica a deltas de texto. Un delta grande puede exceder 30 s: el server responde al completar y el timeout del harness cubre 120 s (TRD).
 
 ### Tool `add_source`
@@ -93,6 +95,7 @@ Contrato: `add_source(uri: str, subdir: str | None = None)` — convierte URL/ar
   "indexed": { "scanned": 215, "indexed": 1, "skipped": 214, "elapsed_ms": 2600 } }
 ```
 
+* **`00-Resources` debe estar declarada en `INDEXER_DIR`:** si no lo está, `add_source` rechaza con `VALIDATION_ERROR` **antes de escribir**, con `details: {requested, allowed, hint}` — `requested` = `00-Resources`, `allowed` = el conjunto declarado, `hint` = añadirla a la variable o usar `convert_document` con un `output_path` dentro de una raíz indexada. Escribir un fichero que el índice no va a ver es una promesa falsa; antes la tool lo añadía a la unión del refresh de esa llamada, y con el conjunto fijado en la variable eso ya no es posible sin que el MCP modifique raíces.
 * Validación en el borde: `subdir` normalizado, sin `..`, queda dentro de `00-Resources/`; `uri` acepta `http(s):`, `file:` (ver advertencia de seguridad). Un `file:` **inexistente** ⇒ `VALIDATION_ERROR`: la ruta mal escrita es un argumento corregible, no un documento ilegible que merezca `SOURCE_UNREACHABLE` (D64). El shape de respuesta **no cambia**.
 
 ### Tool `rag_status` (D7.3/ADR-007)
@@ -248,7 +251,7 @@ Diseño determinista en el server (no depende del modelo):
   | Variable | Obligatoria | Default | Validación y efecto |
   | --- | --- | --- | --- |
   | `TEPOCHCALLI_ROOT` | sí | — | raíz del vault; toda ruta del contrato se valida contra ella (B′) |
-  | `INDEXER_DIR` | no | `00-Resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-Resources`. Se relee en cada llamada |
+  | `INDEXER_DIR` | no | `00-Resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-Resources`. Es el **único** conjunto de raíces del índice: `index_refresh()` no lo recibe y el MCP no lo modifica; el proceso lo recibe al arrancar, así que editarlo exige reiniciar el MCP |
   | `TEPOCHCALLI_TOP_K` | no | `5` | entero > 0; no entero o ≤ 0 ⇒ `5`. Se lee **al arrancar** el proceso: es el `default` del schema de `search` (rango efectivo 1–8) y cambiarla exige reiniciar el MCP |
 
 * Una variable **mal escrita** no se ignora en silencio: su nombre aparece en `rag_status().config.unknown_env` (el filtro es estrecho — `TEPOCH*` o cualquier nombre con `INDEXER`—, así que no escupe el entorno del harness). Un **valor** inválido aparece en `config.problems` y deja `config.valid: false`. Ambas señales llegan en la primera llamada, sin indexar nada.
@@ -272,9 +275,10 @@ Diseño determinista en el server (no depende del modelo):
 ## Testing Strategy
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
-* Contract tests multi-raíz: dos raíces en una pasada, dedup de solapadas, raíz-fichero; `roots` en el reporte y `scanned == indexed + skipped` en todos los casos.
+* Contract tests multi-raíz: `INDEXER_DIR` con dos raíces, dedup de solapadas, raíz-fichero; `roots` en el reporte y `scanned == indexed + skipped` en todos los casos. `index_refresh` llamado con el retirado `directories` ⇒ se indexa el conjunto de `INDEXER_DIR`, **sin error**: el SDK descarta la clave desconocida.
 * Contract tests de entorno: `INDEXER_DIR` multi-valor (coma, `strip`, vacíos), fallback `00-Resources` con la env vacía, y `TEPOCHCALLI_TOP_K` inválido ⇒ `5` con el `default` del schema de `search` igual al valor de arranque.
-* Raíz inexistente ⇒ `VALIDATION_ERROR` con `details.suggestions` no vacías y **nunca** `INTERNAL`; atomicidad: el recuento de filas del índice no cambia (D65).
+* Raíz inexistente en `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details.suggestions` no vacías y **nunca** `INTERNAL`; atomicidad: el recuento de filas del índice no cambia (D65).
+* `add_source` con `00-Resources` fuera de `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details: {requested, allowed, hint}` y **ningún fichero escrito** (se comprueba el árbol antes/después).
 * Directorio vacío ⇒ tres ceros, **no** error. `rag_status` expone `available_roots`/`last_refresh_roots` y cabe en <200 tokens; `file:` inexistente ⇒ `VALIDATION_ERROR`.
 * Contract tests de las 3 tools del conversor (mismo shape que spec-markitdown): 5 claves y orden, `preview` ≤500, cuerpo ausente de `content[0].text` con un documento ≥100 000 caracteres, idempotencia y frontera B′.
 * Contract tests D7.3: `rag_status` con shape exacto de los 4 bloques y <200 tokens; los cinco códigos `E_*` (`E_NO_EMBEDDER`, `E_API_AUTH`, `E_MODEL_MISMATCH`, `E_MODEL_INVALID`, `E_OFFLINE_NO_CACHE`) con payload `{error:{code,message,fix_hint}}`; instalación degraded (salida 5) → `search` = `E_NO_EMBEDDER` + `rag_status` = `degraded` con `fix_hint`.

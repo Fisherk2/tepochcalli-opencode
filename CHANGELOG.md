@@ -9,8 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added (config por entorno, 2026-11-03)
 
-- **`INDEXER_DIR`** (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`): raíces que
-  indexa `index_refresh()` cuando el agente lo llama **sin** `directories`. Multi-valor separado
+- **`INDEXER_DIR`** (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`): conjunto de
+  raíces que indexa `index_refresh()` (la tool no acepta argumentos). Multi-valor separado
   por **comas** (`"00-Resources,03-Citations"`), `strip` y vacíos descartados; rutas relativas al
   vault (una absoluta solo si cae dentro), dedup de solapadas y raíz-fichero. Fallback
   `00-Resources` si está ausente o vacía. Reemplaza el default, no lo suma (ADR-010 §4.1,
@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (config por entorno)
 
+- **`index_refresh` ya no acepta `directories`**: el conjunto de raíces es exclusivamente
+  `INDEXER_DIR` y el MCP no puede añadir ni quitar raíces. Una pasada declara el estado completo
+  del índice, así que un subconjunto purgaría las filas de las demás raíces; el delta memoizado
+  hace que re-escanear el conjunto completo cueste solo lo que cambió. Un agente que pase el
+  argumento recibe `VALIDATION_ERROR` por argumento desconocido (ADR-010 §4.1, rev. 2 — ADR
+  editado en sitio por orden del dueño).
 - La sección **`[search]` de `tepochcalli.toml` queda jubilada**: `top_k` se declara en
   `environment`. Un toml viejo que la traiga solo recibe el aviso de sección desconocida — el
   loader no lanza y el valor se ignora. El server relee el toml en cada llamada (sin caché), así
@@ -33,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (config por entorno)
 
+- **`add_source` rechaza con `VALIDATION_ERROR` si `00-Resources` no está declarada** en
+  `INDEXER_DIR` (`details: {requested, allowed, hint}`), **antes de escribir**: antes la añadía a
+  la unión del refresh de esa llamada, y con el conjunto fijado en la variable eso solo podía
+  hacerse modificando raíces. Escribir un fichero que el índice no va a ver era una promesa falsa.
 - **F8 del wizard borraba `environment` del usuario al reinstalar**: ahora conserva las claves que
   no gestiona e impone solo `TEPOCHCALLI_ROOT`, así que las ediciones de `INDEXER_DIR` y
   `TEPOCHCALLI_TOP_K` sobreviven a una reinstalación.
@@ -49,9 +59,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `list_formats` —: markitdown **en proceso**, escritura atómica dentro del vault y respuesta
   **summary-only** (5 claves: `written_to`, `source_uri`, `bytes`, `chars`, `preview` ≤500
   chars). El cuerpo convertido nunca viaja al LLM (ADR-009). El server pasa de **4 a 7 tools**.
-- **Índice multi-raíz por llamada**: `index_refresh(directories=[...])` indexa cualquier carpeta
-  del vault, recursiva y a cualquier profundidad; una raíz puede ser un fichero suelto; las
-  solapadas se deduplican; `source_path` es **relativo al vault** y `rag_status` publica
+- **Índice multi-raíz**: `index_refresh()` indexa el conjunto de raíces que declara `INDEXER_DIR`,
+  recursivo a cualquier profundidad; una raíz puede ser un fichero suelto; las solapadas se
+  deduplican; `source_path` es **relativo al vault** y `rag_status` publica
   `last_refresh_roots`/`available_roots` (ADR-010).
 - **RAG de documentos nativo**: `.pdf/.docx/.pptx/.xlsx/.xls` se indexan en su forma original
   (markitdown), con `doc_kind` propio y `offsets_ref="extract"` — sin convertirlos antes a `.md`

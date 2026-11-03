@@ -75,7 +75,7 @@ repo                                # este repositorio (producto + plantilla)
 | Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
 | Selección de embedder (wizard) | **menú "Embedding provider"** con default preseleccionado; `presets.toml` como datos; modo `degraded` + `rag_status` (D7) | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
 | Instalador | **TUI Rust + cargo-dist + GitHub Releases** (`curl\|sh`, `cargo binstall`); NO bunx | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) |
-| Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh(directories=?)`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` (Phase 3.5) | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md), [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md), [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) |
+| Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` (Phase 3.5); el conjunto de raíces del índice es solo `INDEXER_DIR` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md), [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md), [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) |
 | Conversor soporte | **markitdown** como librería **en proceso** en el venv (el server standalone `markitdown-mcp` se retira del payload) | specs/spec-markitdown.md, [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) |
 | Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) |
 
@@ -103,7 +103,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 
 | Spec | Status | Alcance |
 | --- | --- | --- |
-| [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | Flujo CocoIndex: N raíces por llamada, extracción markitdown (8 formatos, sin Docling), Δ<30s de texto y documentos aparte, escala |
+| [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | Flujo CocoIndex: N raíces declaradas en `INDEXER_DIR`, extracción markitdown (8 formatos, sin Docling), Δ<30s de texto y documentos aparte, escala |
 | [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | 7 contratos de tools, errores `E_*`, frontera B′, latencia/token budget, config |
 | [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-010 Accepted 2026-11-03) | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia, raíces indexables |
 | [specs/spec-embeddings.md](specs/spec-embeddings.md) | Approved | Modelo default, matriz local/externo, cache, swap+re-index |
@@ -131,7 +131,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4; reemplaza solo ADR-006 §4.1) | Accepted 2026-10-21 |
 | [ADR-008](specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico sin reinstalar (refina ADR-007 D7.1/D7.4) | Accepted 2026-10-21 |
 | [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: 3 tools en `tepochcalli-rag`, markitdown en proceso, resumen de 5 claves (D28/D31/D36/D39/D66) | Accepted 2026-11-03 |
-| [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada con `source_path` relativo al vault (D32/D41/D64/D65) | Accepted 2026-11-03 |
+| [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` con `source_path` relativo al vault (D32/D41/D64/D65; rev. 2 2026-11-03) | Accepted 2026-11-03 |
 | [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Accepted 2026-11-03 |
 
 ## Referencias

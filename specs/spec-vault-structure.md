@@ -121,14 +121,14 @@ El template de `.gitignore` del vault distribuido marca: `.tepochcalli/venv/`, `
 * Subcarpetas punto (`00-Resources/.privado/`) quedan excluidas — regla consistente con no-interferencia.
 * Es la raíz **por omisión**, no la única: ver la sección siguiente.
 
-### Raíces del índice: `00-Resources/` por omisión, cualquier directorio por llamada (D32, ADR-010)
+### Raíces del índice: el conjunto declarado en `INDEXER_DIR` (D32, ADR-010)
 
-* **(a) Convención + default.** `00-Resources/` es donde el usuario deja material nuevo y donde `add_source` escribe por defecto. Es también el **valor por omisión de `INDEXER_DIR`** — la variable de entorno del harness (`opencode.json` → `environment`) que declara las raíces de un `index_refresh()` invocado **sin argumentos** (`roots == ["00-Resources"]` cuando no se declara otra cosa): compatibilidad con los agentes y prompts ya escritos. El usuario puede declarar otras raíces (`"00-Resources,03-citations"`, multi-valor por comas) sin editar el toml ni re-ejecutar el wizard (ADR-010 §4.1, enmendado 2026-11-03).
-* **(b) Cualquier directorio indexable.** `index_refresh(directories=[...])` indexa las raíces elegidas, que viven **solo en esa llamada**: no hay `index.roots` en `tepochcalli.toml` ni paso por el wizard (ADR-010 §4.1). Cada raíz la valida el borde MCP (dentro del vault, existe, directorio o fichero soportado) y la cita resultante es **vault-relativa** (`materiales/a.pdf`, `00-Resources/nota.md`) para que dos raíces homónimas no colisionen (D41).
+* **(a) Convención + default.** `00-Resources/` es donde el usuario deja material nuevo y donde `add_source` escribe por defecto. Es también el **valor por omisión de `INDEXER_DIR`** — la variable de entorno del harness (`opencode.json` → `environment`) que declara el conjunto de raíces de `index_refresh()` (`roots == ["00-Resources"]` cuando no se declara otra cosa): compatibilidad con los agentes y prompts ya escritos. El usuario puede declarar otras raíces (`"00-Resources,03-citations"`, multi-valor por comas) sin editar el toml ni re-ejecutar el wizard (ADR-010 §4.1, enmendado 2026-11-03).
+* **(b) Cualquier directorio indexable, solo por configuración.** El conjunto lo declara el usuario en `INDEXER_DIR`: el MCP **no puede añadir ni quitar raíces** — el argumento `directories` se retiró el 2026-11-03 y **no tiene efecto**: el SDK valida por firma y descarta las claves desconocidas, así que la tool indexa el conjunto configurado (no es un error, es la garantía de que el wire no cambia el conjunto), porque una pasada declara el estado completo del índice y un subconjunto purgaría las demás raíces (ADR-010 §4.1 rev. 2). Tampoco hay `index.roots` en `tepochcalli.toml` ni paso por el wizard. Cada raíz la valida el borde MCP (dentro del vault, existe, directorio o fichero soportado) y la cita resultante es **vault-relativa** (`materiales/a.pdf`, `00-Resources/nota.md`) para que dos raíces homónimas no colisionen (D41).
 * **(c) Los directorios con prefijo punto nunca se indexan.** No es una lista nueva: la exclusión `**/.*` (más `**/.git/**`) hace que el conector **pode el subárbol** antes de descender (`is_dir_included` antes de encolar) ⇒ indexar la raíz del vault no recorre `.tepochcalli/venv/`, `.obsidian/` ni `.trash/` (ADR-010 §4.9).
 * **(d) Anidamiento libre y recursivo.** Dentro de una raíz no hay límite de profundidad ni de niveles; una raíz puede ser además un **fichero suelto**.
-* **(e) Fail-fast atómico.** Las N raíces se validan **antes** de caminar ninguna: si una falla, no se indexa ninguna y el error nombra la raíz mala; un índice parcial que nadie pidió es peor que un reintento (ADR-010 §4.1).
-* **Relación con D9.1 (sin contradicción).** D9.1 decía «solo `00-Resources/` es indexable»; esa convención se **replantea**: la responsabilidad pasa del nivel de la carpeta a la **raíz elegida en la llamada**. `00-Resources/` sigue siendo el default y el destino de `add_source`; las bandejas `01-…05-…` siguen siendo bandejas del agente (indexables si el usuario lo pide, no es el caso normal), y la biblioteca personal deja de exigir copiar el material a `00-Resources/` para consultarlo.
+* **(e) Fail-fast atómico.** El conjunto completo se valida **antes** de caminar ninguna raíz: si una falla, no se indexa ninguna y el error nombra la raíz mala; un índice parcial que nadie pidió es peor que un reintento (ADR-010 §4.1).
+* **Relación con D9.1 (sin contradicción).** D9.1 decía «solo `00-Resources/` es indexable»; esa convención se **replantea**: la responsabilidad pasa del nivel de la carpeta al **conjunto declarado en `INDEXER_DIR`**. `00-Resources/` sigue siendo el default y el destino de `add_source` (que exige tenerla declarada); las bandejas `01-…05-…` siguen siendo bandejas del agente (indexables si el usuario lo declara, no es el caso normal), y la biblioteca personal deja de exigir copiar el material a `00-Resources/` para consultarlo.
 
 ## Alternatives Considered
 
@@ -146,9 +146,10 @@ El template de `.gitignore` del vault distribuido marca: `.tepochcalli/venv/`, `
 
 * Test de criterio 1: abrir vault con `00-Resources` populado + motor corriendo refresh; assert: `.obsidian/` byte-idéntico, 0 procesos escuchando puertos nuevos, 0 archivos `.`-prefijados listados en la API de workspace de Obsidian.
 * Test de anidamiento: fixture con 3 niveles arbitrarios de subcarpetas → todos los elegibles indexados, todos los excluidos ausentes.
-* Test multi-raíz: `index_refresh(directories=["materiales", "documentos"])` indexa ambos con
+* Test multi-raíz: con `INDEXER_DIR="materiales,documentos"`, `index_refresh()` indexa ambos con
   `source_path` vault-relativo; una raíz que es el vault **no** produce filas bajo
-  `.tepochcalli/`, `.obsidian/` ni `.trash/` (la exclusión poda el subárbol).
+  `.tepochcalli/`, `.obsidian/` ni `.trash/` (la exclusión poda el subárbol); pasar `directories`
+  ⇒ se indexa el conjunto configurado, **sin error** (el SDK descarta la clave desconocida).
 * Test de idempotencia de instalación (wizard): dos corridas → sin duplicados ni diffs de gitignore.
 
 ## Security Considerations

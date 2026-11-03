@@ -8,7 +8,7 @@
 
 ## Summary
 
-Define el flujo de indexación declarativo de CocoIndex que vive en `.tepochcalli/flow/`: recibe **N raíces del vault por llamada** (`index_refresh(directories=…)`), extrae texto con markitdown de ocho formatos (texto plano y ofimáticos; Docling ya no participa), particiona con `RecursiveSplitter`, genera embeddings locales (`paraphrase-multilingual-MiniLM-L12-v2`) y materializa un índice LanceDB embebido en `.tepochcalli/db/` con índices vectorial (ANN) y full-text. `00-Resources/` es la raíz por omisión, no una imposición (D32, ADR-010). Es la Capa de Procesamiento del sistema y garantiza la semántica incremental "solo delta" exigida por UH.md.
+Define el flujo de indexación declarativo de CocoIndex que vive en `.tepochcalli/flow/`: recibe el **conjunto de raíces que declara el usuario** (`INDEXER_DIR`) cada vez que el agente llama `index_refresh()`, extrae texto con markitdown de ocho formatos (texto plano y ofimáticos; Docling ya no participa), particiona con `RecursiveSplitter`, genera embeddings locales (`paraphrase-multilingual-MiniLM-L12-v2`) y materializa un índice LanceDB embebido en `.tepochcalli/db/` con índices vectorial (ANN) y full-text. `00-Resources/` es el valor de omisión de esa variable, no una imposición (D32, ADR-010). Es la Capa de Procesamiento del sistema y garantiza la semántica incremental "solo delta" exigida por UH.md.
 
 ## Problem / Motivation
 
@@ -28,7 +28,7 @@ Un investigador deposita PDFs y notas con su propia organización arbitraria: po
 
 ### Non-Goals
 
-* Indexar fuera del **vault** (frontera B′, D16/D47): la raíz es un argumento, el límite de confianza no.
+* Indexar fuera del **vault** (frontera B′, D16/D47): las raíces son configuración del usuario, el límite de confianza no.
 * OCR de PDFs escaneados o imágenes (fuera de scope v1).
 * Un índice/tabla por raíz (opción D descartada en ADR-010: rompe el ranking único).
 * Búsqueda multi-usuario o servidor central.
@@ -36,7 +36,7 @@ Un investigador deposita PDFs y notas con su propia organización arbitraria: po
 
 ## Proposed Solution
 
-Un módulo Python declarativo `tepochcalli_flow` (en `.tepochcalli/flow/`) que recibe las raíces como argumento, monta un `localfs` source por raíz con clave de memo estable, transformaciones memoizadas con `@coco.fn(memo=True)` y un target `LanceDB`. La incrementalidad es estructural: CocoIndex firma el contenido de cada etapa y solo recomputa lo cambiado; los chunks hijos de un documento inmutable se reutilizan por memoización.
+Un módulo Python declarativo `tepochcalli_flow` (en `.tepochcalli/flow/`) que recibe el conjunto de raíces de la pasada —el que declara `INDEXER_DIR`—, monta un `localfs` source por raíz con clave de memo estable, transformaciones memoizadas con `@coco.fn(memo=True)` y un target `LanceDB`. La incrementalidad es estructural: CocoIndex firma el contenido de cada etapa y solo recomputa lo cambiado; los chunks hijos de un documento inmutable se reutilizan por memoización.
 
 **Versión pineada (spike verificado 2026-10-21):** `cocoindex==1.0.25` — extras `cocoindex[lancedb,sentence-transformers]`; entorno resuelto `lancedb==0.40.0`, `sentence-transformers==6.2.0`, `torch==2.14.1`, CPython 3.12.14. La CLI de v1 **no tiene paso `setup`**: subcomandos `drop, init, ls, show, update`, con el estado del engine en `COCOINDEX_DB`. La idempotencia se afirma sobre las estadísticas del data plane (`process_file: unchanged=N, adds=0, deletes=0, reprocess=0`), porque los componentes de traversa `app_main` reportan `reprocess=1` por diseño (E2).
 
@@ -143,15 +143,16 @@ async def build_flow(roots: list[str]) -> _ScanTally:
 
 ### Fuentes (sources)
 
-* **N raíces por llamada:** `index_refresh(directories=[...])`. Sin argumento ⇒ las raíces de
-  `INDEXER_DIR` (env del harness, multi-valor por comas; fallback `00-Resources`), compatibilidad
-  byte-a-byte. Las raíces viven **solo** en la invocación o en el entorno del proceso: no hay
-  `index.roots` en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso
-  (ADR-010 §4.1, D32/D42).
-* **Validación en el borde MCP, antes de tocar el disco:** cada raíz se valida en `paths.py`
-  (existe, es directorio o fichero con extensión soportada, dentro del vault, sin `..`) y un fallo
-  devuelve `VALIDATION_ERROR` con `details.suggestions` (D64, ADR-010 §4.8). Motivo verificado:
-  `localfs.walk_dir` lanza `ValueError("Path is not a directory: …")`
+* **N raíces, declaradas por el usuario:** `index_refresh()` no recibe argumentos; el conjunto sale
+  de `INDEXER_DIR` (env del harness, multi-valor por comas; fallback `00-Resources`). Las raíces
+  viven **solo** en el entorno del proceso: no hay `index.roots` en `tepochcalli.toml`, no tocan el
+  wizard, no sobreviven al proceso y el MCP no puede añadirlas ni quitarlas — cambiarlas es editar
+  la variable y reiniciar el MCP (ADR-010 §4.1, D32/D42). La recursión, la raíz-fichero y el dedup
+  se aplican a **ese** conjunto.
+* **Validación en el borde MCP, antes de tocar el disco:** cada raíz del conjunto declarado se
+  valida en `paths.py` (existe, es directorio o fichero con extensión soportada, dentro del vault,
+  sin `..`) y un fallo devuelve `VALIDATION_ERROR` con `details.suggestions` (D64, ADR-010 §4.8).
+  Motivo verificado: `localfs.walk_dir` lanza `ValueError("Path is not a directory: …")`
   (`connectors/localfs/_source.py:109-110`) y el `internal_guard` lo convertiría en un falso
   «fallo interno» por una carpeta mal escrita.
 * **Recursión a cualquier profundidad:** `localfs.walk_dir(..., recursive=True)` con `**/*` ya la
@@ -293,7 +294,7 @@ ejemplo solo localiza el PDF porque es vault-relativo: `clima.pdf` a secas serí
 
 ```mermaid
 flowchart LR
-    W["index_refresh(directories=[...])"] --> D{"firma de contenido cambio?"}
+    W["index_refresh()"] --> D{"firma de contenido cambio?"}
     D -- no --> S["skipped (memo)"]
     D -- si, nuevo/modificado --> P["parse -> chunk -> embed (solo este doc)"]
     D -- si, borrado --> R["purgar chunks del doc en LanceDB"]
@@ -315,10 +316,12 @@ flowchart LR
   **CWD del proceso** (`connectors/localfs/_common.py:69-75`), de modo que la clave de memo
   dependería de dónde se lanzó el server. Con la clave explícita, **mover el vault no invalida el
   índice**.
-* **Cada pasada declara el conjunto completo de raíces:** el target de CocoIndex reconcilia el
-  estado declarado, así que una llamada que no declara una raíz puede purgar sus filas. El reporte
-  gana `roots` (aditivo) y `rag_status` publica `last_refresh_roots`/`available_roots` para que el
-  agente vea qué está indexado en vez de adivinarlo (ADR-010 §4.1).
+* **Cada pasada declara el conjunto completo de raíces** —el que fija `INDEXER_DIR`—: el target de
+  CocoIndex reconcilia el estado declarado, así que una pasada que declarara un subconjunto
+  purgaría las filas del resto. Por eso no hay override por llamada: el agente no puede ampliar ni
+  reducir el alcance, y el reporte gana `roots` (aditivo) con `rag_status` publicando
+  `last_refresh_roots`/`available_roots` para que vea qué está indexado en vez de adivinarlo
+  (ADR-010 §4.1).
 * Concurrencia: un lockfile de un solo proceso en `.tepochcalli/flow/`; una segunda invocación devuelve `{scanned:0, indexed:0, skipped:0}` con nota `locked` en vez de correr dos escrituras (riesgo asumido en ADR-002 §6).
 
 ### Presupuesto de escala (criterio 6)
@@ -354,8 +357,8 @@ flowchart LR
 ## Trade-offs
 
 * ✅ **Pros:** Incremental real sobre cualquier carpeta del vault, cero LLM, cero puertos, targets intercambiables, flujo declarativo versionado; los ofimáticos entran sin paso de conversión previo.
-* ⚠️ **Cons / Risks:** **El PDF pierde la jerarquía de headings** (D54): la cita se apoya en `source_path` + offsets, no en el heading. **Los documentos binarios quedan fuera del Δ de 30 s** (D51): un vault lleno de `.docx` tendrá refreshes lentos y visibles, medidos aparte. **El agente debe pasar raíces explícitas**: sin argumento solo se indexa lo que declare `INDEXER_DIR` (fallback `00-Resources/`), y un agente que asuma memoria entre sesiones indexará de menos. `source_path` vault-relativo es un cambio breaking para `path_filter` y prompts. Dependencias de versiones tempranas de CocoIndex (pinea `pyproject.toml`).
-* ⚖️ **Neutral:** Modelo mental de "flujos" para quien mantenga el pipeline; la raíz pasa de constante del producto a dato de la operación.
+* ⚠️ **Cons / Risks:** **El PDF pierde la jerarquía de headings** (D54): la cita se apoya en `source_path` + offsets, no en el heading. **Los documentos binarios quedan fuera del Δ de 30 s** (D51): un vault lleno de `.docx` tendrá refreshes lentos y visibles, medidos aparte. **El conjunto de raíces lo declara el usuario** en `INDEXER_DIR`: el agente no puede ampliarlo ni reducirlo por llamada, y cambiar de carpeta exige editar la variable y reiniciar el MCP (si el usuario no la declara, se indexa `00-Resources/`). `source_path` vault-relativo es un cambio breaking para `path_filter` y prompts. Dependencias de versiones tempranas de CocoIndex (pinea `pyproject.toml`).
+* ⚖️ **Neutral:** Modelo mental de "flujos" para quien mantenga el pipeline; la raíz pasa de constante del producto a dato de configuración del usuario.
 
 ## Testing Strategy
 
@@ -364,10 +367,10 @@ flowchart LR
 * Integración — recursión a **2 niveles**: raíces `materiales/` y `documentos/` con
   `materiales/1-geografia/x.pdf` y `documentos/pdf/y.pdf` ⇒ dos filas con
   `source_path == "materiales/1-geografia/x.pdf"` y `"documentos/pdf/y.pdf"`.
-* Integración — **raíz-fichero**: `directories=["notas/suelta.md"]` indexa exactamente una entrada y
-  el motor no la pasa por `walk_dir`.
-* Integración — **dedup de raíces solapadas**: `["00-Resources", "00-Resources/sub"]` ⇒
-  `scanned == indexed + skipped` y ninguna entrada duplicada; también `["x", "x"]`.
+* Integración — **raíz-fichero**: con `INDEXER_DIR=notas/suelta.md` se indexa exactamente una
+  entrada y el motor no la pasa por `walk_dir`.
+* Integración — **dedup de raíces solapadas**: `INDEXER_DIR="00-Resources,00-Resources/sub"` ⇒
+  `scanned == indexed + skipped` y ninguna entrada duplicada; también `"x,x"`.
 * Integración — **identidad del reporte**: `scanned == indexed + skipped` en el 100 % de los
   refreshes de la suite (incluye oversized, symlink roto, directorio ilegible).
 * Golden-vault: 1 md + 1 PDF + 1 docx. Para el md, `original[char_start:char_end] == text` de la

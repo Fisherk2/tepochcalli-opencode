@@ -94,7 +94,7 @@ Un formato fuera del catálogo ⇒ `VALIDATION_ERROR` con la lista del catálogo
 
 ### Cadena de fallback de formatos (criterio 7)
 
-El motor indexa **originales** (D49): no existe el paso «convertir y luego indexar». El conversor produce el `.md` que el usuario pide; si además quiere citarlo, encadena `convert_document` + `index_refresh` (o usa `add_source`, que hace ambas cosas).
+El motor indexa **originales** (D49): no existe el paso «convertir y luego indexar». El conversor produce el `.md` que el usuario pide; si además quiere citarlo, encadena `convert_document` + `index_refresh` (o usa `add_source`, que hace ambas cosas y exige `00-Resources` declarada en `INDEXER_DIR`).
 
 ```mermaid
 flowchart LR

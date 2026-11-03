@@ -9,7 +9,7 @@
 | Investigador (humano) | Dueño del vault | Obsidian (notas/PDFs) + terminal OpenCode | abrir vault |
 | Itzamná | Orquestador del workspace | enrutamiento, estado, sugerencias | conversación |
 | Especialistas | Nezahualcóyotl · Pochteca · Chilam · Tlacuilo | comandos `/rubric…/update` | vía Itzamná |
-| tepochcalli-rag | MCP tools (7) | `search`, `index_refresh(directories=?)`, `add_source`, `rag_status`, `convert_document`, `convert_base64`, `list_formats` | tool-call del agente |
+| tepochcalli-rag | MCP tools (7) | `search`, `index_refresh()`, `add_source`, `rag_status`, `convert_document`, `convert_base64`, `list_formats` | tool-call del agente |
 | markitdown | biblioteca en proceso | conversión a Markdown dentro de `tepochcalli-rag` (motor + tools del conversor) | `add_source` / `convert_*` |
 
 Nota: la UI del producto es Obsidian + OpenCode; no hay pantallas propias (out of scope PRD §5).

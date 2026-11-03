@@ -51,12 +51,14 @@ permiso el usuario del proceso**. Reglas:
    con contenido idéntico ⇒ la misma respuesta de éxito sin reescribir; con contenido distinto
    ⇒ `VALIDATION_ERROR` («elige otro output_path»). **Nunca** se sobrescribe material del
    usuario; `add_source` restringe además la escritura a `00-Resources/`.
-3. **Raíces de indexación (ADR-010/D64/D65):** `index_refresh(directories=…)` valida en el
-   borde **existencia y tipo** (directorio, o fichero con extensión de la whitelist) y es
-   **fail-fast atómico**: una raíz mala ⇒ no se indexa ninguna y el error nombra la raíz, las
-   que existen y sugerencias. Motivo: `localfs.walk_dir` lanza `ValueError` para una ruta que
-   no es directorio y el `internal_guard` lo convertiría en un falso «fallo interno».
-   Las raíces por omisión se declaran **por entorno** en `opencode.json` (`INDEXER_DIR`, multi-valor
+3. **Raíces de indexación (ADR-010/D64/D65):** `index_refresh()` camina el conjunto declarado en
+   `INDEXER_DIR` y lo valida en el borde — **existencia y tipo** (directorio, o fichero con
+   extensión de la whitelist) y **fail-fast atómico**: una raíz mala ⇒ no se indexa ninguna y el
+   error nombra la raíz, las que existen y sugerencias. El MCP **no puede** añadir ni quitar raíces
+   (el argumento que lo permitía se retiró): el conjunto es del usuario. Motivo: `localfs.walk_dir`
+   lanza `ValueError` para una ruta que no es directorio y el `internal_guard` lo convertiría en un
+   falso «fallo interno».
+   El conjunto se declara **por entorno** en `opencode.json` (`INDEXER_DIR`, multi-valor
    por comas) y eso **no** relaja B′: una absoluta fuera del vault, un `..` o una ruta inexistente
    siguen siendo `VALIDATION_ERROR`.
 4. **El artefacto no viaja al LLM:** las tools del conversor devuelven solo el resumen de 5
