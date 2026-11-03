@@ -36,6 +36,14 @@ TPOCHCALLI_RAG_ENTRY = {
     "environment": {"TEPOCHCALLI_ROOT": "."},
     "disabled": False,
 }
+# Claves gestionadas por el wizard: se POPean en AMBOS lados del contrato
+# byte-idéntico para que la afirmación del merge conservador siga viva.
+#  * `markitdown` (D29): retirada del payload en la review Phase 2. Sigue en la
+#    tupla porque el fixture congelado es la copia PRE-T9 y todavía la contiene;
+#    el POP simétrico es lo que permite comparar el resto del JSON.
+#  * `anydoc` (D40/T14): el payload la trae como fallback `disabled: true`
+#    (D30) y no existía en el fixture pre-T9 ⇒ sin ella en la tupla, el merge
+#    parecería haber tocado una clave del usuario.
 MANAGED_KEYS = ("tepochcalli-rag", "markitdown", "anydoc")
 
 
