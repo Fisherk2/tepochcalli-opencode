@@ -159,7 +159,7 @@ fichero; CR-6 es límite externo documentado; CR-7/CR-8 solo activan con escala 
 ## Revisión Phase 3.5 (cierre T16, 2026-11-03)
 
 Re-review al cierre de la fase, con la implementación y las cifras medidas: suite de corrección
-**619 passed + 3 `slow`**, cobertura **97 %** (gate `fail_under=95`) en verificación **local**;
+**650 passed + 3 `slow`**, cobertura **97 %** (gate `fail_under=95`) en verificación **local**;
 GitHub Actions **sigue sin haber corrido** (M6). Cambios en este registro:
 
 | ID | Estado (2026-11-03) | Evidencia / próxima acción |
