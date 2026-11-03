@@ -8,7 +8,7 @@
 
 ## Summary
 
-Define la organización canónica del vault distribuible: carpetas numeradas de primer nivel visibles para Obsidian, directorios ocultos con prefijo punto (`.opencode/` para el harness, `.tepochcalli/` como runtime engine-neutral del RAG), y las reglas de no-interferencia que mantienen a Obsidian "sin percibir" al sistema. `00-Resources/` es la **carpeta de entrada del usuario y la raíz por omisión del índice**, con anidamiento libre; cualquier otro directorio del vault puede indexarse pidiéndolo en la llamada (ADR-010).
+Define la organización canónica del vault distribuible: carpetas numeradas de primer nivel visibles para Obsidian, directorios ocultos con prefijo punto (`.opencode/` para el harness, `.tepochcalli/` como runtime engine-neutral del RAG), y las reglas de no-interferencia que mantienen a Obsidian "sin percibir" al sistema. `00-Resources/` es la **carpeta de entrada del usuario** y el **valor por omisión de `INDEXER_DIR`** (las raíces que el harness declara), con anidamiento libre; cualquier otro directorio del vault puede indexarse pidiéndolo en la llamada o declarándolo en esa env (ADR-010).
 
 ## Problem / Motivation
 
@@ -23,8 +23,9 @@ Un vault de Obsidian es una carpeta que el usuario edita visualmente, sincroniza
 * Convención de carpetas numeradas clara y soportada por el scaffold existente (`obsidian-workspace/`).
 * Layout completo de `.tepochcalli/` (D2) documentado y con estrategia gitignore.
 * Reglas de no-interferencia observables (criterio 1) y testeables.
-* `00-Resources/` con subdirección libre, recursiva y **raíz por omisión** del índice; cualquier
-  directorio del vault indexable cuando la llamada lo pide (ADR-010).
+* `00-Resources/` con subdirección libre, recursiva y **default de `INDEXER_DIR`** (raíz por
+  omisión del índice); cualquier directorio del vault indexable cuando la llamada lo pide o la env
+  lo declara (ADR-010).
 
 ### Non-Goals
 
@@ -122,7 +123,7 @@ El template de `.gitignore` del vault distribuido marca: `.tepochcalli/venv/`, `
 
 ### Raíces del índice: `00-Resources/` por omisión, cualquier directorio por llamada (D32, ADR-010)
 
-* **(a) Convención + default.** `00-Resources/` es donde el usuario deja material nuevo y donde `add_source` escribe por defecto. Es también la raíz que el motor usa cuando `index_refresh()` se invoca **sin argumentos** (`roots == ["00-Resources"]`): compatibilidad con los agentes y prompts ya escritos.
+* **(a) Convención + default.** `00-Resources/` es donde el usuario deja material nuevo y donde `add_source` escribe por defecto. Es también el **valor por omisión de `INDEXER_DIR`** — la variable de entorno del harness (`opencode.json` → `environment`) que declara las raíces de un `index_refresh()` invocado **sin argumentos** (`roots == ["00-Resources"]` cuando no se declara otra cosa): compatibilidad con los agentes y prompts ya escritos. El usuario puede declarar otras raíces (`"00-Resources,03-citations"`, multi-valor por comas) sin editar el toml ni re-ejecutar el wizard (ADR-010 §4.1, enmendado 2026-11-03).
 * **(b) Cualquier directorio indexable.** `index_refresh(directories=[...])` indexa las raíces elegidas, que viven **solo en esa llamada**: no hay `index.roots` en `tepochcalli.toml` ni paso por el wizard (ADR-010 §4.1). Cada raíz la valida el borde MCP (dentro del vault, existe, directorio o fichero soportado) y la cita resultante es **vault-relativa** (`materiales/a.pdf`, `00-Resources/nota.md`) para que dos raíces homónimas no colisionen (D41).
 * **(c) Los directorios con prefijo punto nunca se indexan.** No es una lista nueva: la exclusión `**/.*` (más `**/.git/**`) hace que el conector **pode el subárbol** antes de descender (`is_dir_included` antes de encolar) ⇒ indexar la raíz del vault no recorre `.tepochcalli/venv/`, `.obsidian/` ni `.trash/` (ADR-010 §4.9).
 * **(d) Anidamiento libre y recursivo.** Dentro de una raíz no hay límite de profundidad ni de niveles; una raíz puede ser además un **fichero suelto**.

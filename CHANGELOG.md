@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (config por entorno, 2026-11-03)
+
+- **`INDEXER_DIR`** (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`): raíces que
+  indexa `index_refresh()` cuando el agente lo llama **sin** `directories`. Multi-valor separado
+  por **comas** (`"00-Resources,03-Citations"`), `strip` y vacíos descartados; rutas relativas al
+  vault (una absoluta solo si cae dentro), dedup de solapadas y raíz-fichero. Fallback
+  `00-Resources` si está ausente o vacía. Reemplaza el default, no lo suma (ADR-010 §4.1,
+  enmendado).
+- **`TEPOCHCALLI_TOP_K`**: default de `top_k` en `search` (5), sobreescribible por llamada; rango
+  útil 1–8 y un valor no entero o ≤0 cae a 5. Se lee al arrancar el MCP.
+
+### Changed (config por entorno)
+
+- La sección **`[search]` de `tepochcalli.toml` queda jubilada**: `top_k` se declara en
+  `environment`. Un toml viejo que la traiga solo recibe el aviso de sección desconocida — el
+  loader no lanza y el valor se ignora. El server relee el toml en cada llamada (sin caché), así
+  que un swap de modelo no exige reiniciar el MCP.
+
+### Fixed (config por entorno)
+
+- **F8 del wizard borraba `environment` del usuario al reinstalar**: ahora conserva las claves que
+  no gestiona e impone solo `TEPOCHCALLI_ROOT`, así que las ediciones de `INDEXER_DIR` y
+  `TEPOCHCALLI_TOP_K` sobreviven a una reinstalación.
+
 ### Added (Phase 3.5, 2026-11-03)
 
 - **Tres tools del conversor en `tepochcalli-rag`** — `convert_document`, `convert_base64` y

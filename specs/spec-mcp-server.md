@@ -44,7 +44,7 @@ Un paquete `tepochcalli_mcp` instalado en `.tepochcalli/venv/` (ADR-004), lanzad
 
 ### API / Interface Design — tool `search`
 
-Contrato: `search(query: str, top_k: int = 5, path_filter: str | None = None)`
+Contrato: `search(query: str, top_k: int = TEPOCHCALLI_TOP_K (5), path_filter: str | None = None)`
 
 ```jsonc
 // request (arguments del tool call)
@@ -61,6 +61,7 @@ Contrato: `search(query: str, top_k: int = 5, path_filter: str | None = None)`
 ```
 
 * `path_filter`: glob relativo a la raíz del vault; se aplica como pre-filtro en la query LanceDB (`WHERE source_path LIKE …` traducido de `*`→`%`).
+* `top_k`: por omisión el valor de **`TEPOCHCALLI_TOP_K`** (5) — es el `default` del schema, fijado **al arrancar** el proceso MCP. El agente puede sobreescribirlo por llamada; `budget.effective_top_k` acepta 1–20 y recorta el efectivo a **8** (fuera de rango ⇒ `VALIDATION_ERROR`). Un `TEPOCHCALLI_TOP_K` no entero o ≤0 cae a 5.
 * `source_path`: ruta POSIX **relativa al vault** (D41/ADR-010 §4.2). Con N raíces, `materiales/a.pdf` y `documentos/a.pdf` son citas distintas; el prefijo `00-Resources/` solo aparece cuando el material vive ahí. Es un cambio *breaking* del campo, asumido por el dueño.
 * `score`: similitud normalizada [0,1] del híbrido ANN+FTS; orden descendente garantizado.
 * Campo aditivo (T7, 2026-10-23): `offsets_ref: "source" | "extract"` — `source` si el slice del archivo original reproduce `text` (`md/markdown/txt`), `extract` si los offsets citan el markdown extraído por **markitdown** (`pdf/docx/pptx/xlsx/xls`; el binario jamás es el espacio de cita). No hay Docling (ADR-011/D53).
@@ -68,7 +69,7 @@ Contrato: `search(query: str, top_k: int = 5, path_filter: str | None = None)`
 
 ### Tool `index_refresh`
 
-Contrato: `index_refresh(directories: list[str] | None = None)` — ejecuta un ciclo de actualización delta del flow sobre las raíces pedidas (con lock de un solo proceso). Sin argumento ⇒ `["00-Resources"]` (D32/D42): compatibilidad byte a byte con los agentes ya escritos. Las raíces viven **solo** en la invocación: no se escriben en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso — cambiar de carpeta es un argumento, no un reinstall.
+Contrato: `index_refresh(directories: list[str] | None = None)` — ejecuta un ciclo de actualización delta del flow sobre las raíces pedidas (con lock de un solo proceso). Sin argumento ⇒ las raíces declaradas en **`INDEXER_DIR`** (multi-valor por **comas**, `strip`, vacíos descartados; ausente o vacía ⇒ `["00-Resources"]`, D32/D42): compatibilidad byte a byte con los agentes ya escritos. Las raíces viven **solo** en la invocación o en el entorno del proceso: no se escriben en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso — cambiar de carpeta es un argumento (o una env), no un reinstall. El argumento `directories` sigue siendo el **override** de la llamada.
 
 ```jsonc
 { "scanned": 214, "indexed": 3, "skipped": 211, "elapsed_ms": 8200, "locked": false,
@@ -77,7 +78,7 @@ Contrato: `index_refresh(directories: list[str] | None = None)` — ejecuta un c
 
 * `scanned`: archivos visitados en la pasada; `indexed`: (re)escritos al índice; `skipped`: memoizados/inalterados/excluidos; `elapsed_ms`: duración de la pasada. La identidad `scanned == indexed + skipped` se mantiene en toda pasada (incluido `locked` y directorio vacío).
 * `roots`: campo **aditivo** (ADR-005/Hyrum) con el conjunto completo declarado en la pasada. Añadirlo no rompe consumidores; quitarlo o renombrarlo, sí.
-* **Validación en el borde, antes de la costura** (`paths.validate_roots`, puro): raíz inexistente, tipo equivocado (un documento donde se espera un directorio o viceversa), fuera del vault o con `..` ⇒ `VALIDATION_ERROR` con `details: {requested, exists, suggestions[], vault_dirs[]}`. Las `suggestions` son por similitud sin distinguir mayúsculas (`Documentos` → `documentos`).
+* **Validación en el borde, antes de la costura** (`paths.validate_roots`, puro): raíz inexistente, tipo equivocado (un documento donde se espera un directorio o viceversa), fuera del vault o con `..` ⇒ `VALIDATION_ERROR` con `details: {requested, exists, suggestions[], vault_dirs[]}`. Las `suggestions` son por similitud sin distinguir mayúsculas (`Documentos` → `documentos`). Las raíces de `INDEXER_DIR` pasan por la **misma** validación que las explícitas; la env se relee en cada llamada (cambiarla no exige reiniciar el MCP).
 * **Fail-fast atómico (D65):** se validan las N raíces **antes** de caminar ninguna. Una raíz mala ⇒ no se indexa ninguna y el recuento del índice no cambia. Un índice parcial que nadie pidió es peor que un error corregible.
 * **Directorio vacío no es error:** `{scanned: 0, indexed: 0, skipped: 0, …}` — el agente no debe leerlo como fallo.
 * Raíces solapadas o repetidas se **deduplican**; una raíz puede ser un fichero suelto (ADR-010 §4.4). La recursión y la poda de directorios de punto (`.tepochcalli/`, `.obsidian/`, `.trash/`) ya las resuelve el conector `localfs`.
@@ -225,7 +226,7 @@ Punto de medición: desde que el server recibe `tools/call(search)` (marca en ha
 
 Diseño determinista en el server (no depende del modelo):
 
-* Payload máximo devuelto por `search`: `top_k` efectivo = min(solicitado, 5 por default; tope duro 8) × chunk ≤1024 chars ≈ 5×~260 tokens ≈ **1300 tokens**.
+* Payload máximo devuelto por `search`: `top_k` efectivo = min(solicitado, `TEPOCHCALLI_TOP_K` —5 por default—; tope duro 8) × chunk ≤1024 chars ≈ 5×~260 tokens ≈ **1300 tokens**.
 * Overhead de citación por resultado ≈25 tokens (path+heading+offsets compactos) → +125 tokens.
 * Techo duro: si la suma estimada (peso por carácter: CJK/emoji ⇒ 1 token/car, ES/EN ⇒ 4 chars/token — revisión Phase 2, 2026-10-27) excede 1600, se descartan resultados de menor `score` y se marca `truncated: true` — deja ≥400 tokens de margen para la pregunta del usuario y la respuesta generada dentro de los 2000 totales (criterio 4 REAL también en chino/japonés).
 * Fixtures de test assertan la cota con queries adversas (unicode, listas, PDFs con tablas).
@@ -234,8 +235,15 @@ Diseño determinista en el server (no depende del modelo):
 
 ### Carga de configuración
 
-* El server lee `.tepochcalli/config/tepochcalli.toml` al arrancar: `[embedding] provider/model`, `[chunking] sizes`, `[search] top_k_default, max_chunk_chars`. Claves de API externas solo vía `{env:VAR}` o ese archivo (gitignored).
+* El server lee `.tepochcalli/config/tepochcalli.toml` en **cada llamada** (sin caché; así un swap de modelo se recoge sin reiniciar el server): `[embedding] provider/model/revision/device`, `[chunking] sizes`. Claves de API externas solo vía `{env:VAR}` o ese archivo (gitignored). La sección `[search]` está **jubilada**: si un toml viejo la trae, el loader avisa de sección desconocida y **no lanza** — el valor se ignora.
 * Rutas derivadas de una única `TEPOCHCALLI_ROOT` (cwd del vault inyectado por `opencode.json` → `cwd`): `db/`, `flow/`, `models/`.
+* Variables de entorno del harness (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`):
+
+  | Variable | Obligatoria | Default | Validación y efecto |
+  | --- | --- | --- | --- |
+  | `TEPOCHCALLI_ROOT` | sí | — | raíz del vault; toda ruta del contrato se valida contra ella (B′) |
+  | `INDEXER_DIR` | no | `00-Resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-Resources`. Se relee en cada llamada |
+  | `TEPOCHCALLI_TOP_K` | no | `5` | entero > 0; no entero o ≤ 0 ⇒ `5`. Se lee **al arrancar** el proceso: es el `default` del schema de `search` (rango efectivo 1–8) y cambiarla exige reiniciar el MCP |
 
 ### Empaquetado en el venv
 
@@ -257,6 +265,7 @@ Diseño determinista en el server (no depende del modelo):
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
 * Contract tests multi-raíz: dos raíces en una pasada, dedup de solapadas, raíz-fichero; `roots` en el reporte y `scanned == indexed + skipped` en todos los casos.
+* Contract tests de entorno: `INDEXER_DIR` multi-valor (coma, `strip`, vacíos), fallback `00-Resources` con la env vacía, y `TEPOCHCALLI_TOP_K` inválido ⇒ `5` con el `default` del schema de `search` igual al valor de arranque.
 * Raíz inexistente ⇒ `VALIDATION_ERROR` con `details.suggestions` no vacías y **nunca** `INTERNAL`; atomicidad: el recuento de filas del índice no cambia (D65).
 * Directorio vacío ⇒ tres ceros, **no** error. `rag_status` expone `available_roots`/`last_refresh_roots` y cabe en <200 tokens; `file:` inexistente ⇒ `VALIDATION_ERROR`.
 * Contract tests de las 3 tools del conversor (mismo shape que spec-markitdown): 5 claves y orden, `preview` ≤500, cuerpo ausente de `content[0].text` con un documento ≥100 000 caracteres, idempotencia y frontera B′.

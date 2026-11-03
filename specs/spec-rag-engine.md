@@ -143,9 +143,11 @@ async def build_flow(roots: list[str]) -> _ScanTally:
 
 ### Fuentes (sources)
 
-* **N raíces por llamada:** `index_refresh(directories=[...])`. Sin argumento ⇒ `["00-Resources"]`
-  (compatibilidad byte-a-byte). Las raíces viven **solo** en la invocación: no hay `index.roots`
-  en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso (ADR-010 §4.1, D32/D42).
+* **N raíces por llamada:** `index_refresh(directories=[...])`. Sin argumento ⇒ las raíces de
+  `INDEXER_DIR` (env del harness, multi-valor por comas; fallback `00-Resources`), compatibilidad
+  byte-a-byte. Las raíces viven **solo** en la invocación o en el entorno del proceso: no hay
+  `index.roots` en `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso
+  (ADR-010 §4.1, D32/D42).
 * **Validación en el borde MCP, antes de tocar el disco:** cada raíz se valida en `paths.py`
   (existe, es directorio o fichero con extensión soportada, dentro del vault, sin `..`) y un fallo
   devuelve `VALIDATION_ERROR` con `details.suggestions` (D64, ADR-010 §4.8). Motivo verificado:
@@ -352,7 +354,7 @@ flowchart LR
 ## Trade-offs
 
 * ✅ **Pros:** Incremental real sobre cualquier carpeta del vault, cero LLM, cero puertos, targets intercambiables, flujo declarativo versionado; los ofimáticos entran sin paso de conversión previo.
-* ⚠️ **Cons / Risks:** **El PDF pierde la jerarquía de headings** (D54): la cita se apoya en `source_path` + offsets, no en el heading. **Los documentos binarios quedan fuera del Δ de 30 s** (D51): un vault lleno de `.docx` tendrá refreshes lentos y visibles, medidos aparte. **El agente debe pasar raíces explícitas**: sin argumento solo se indexa `00-Resources/`, y un agente que asuma memoria entre sesiones indexará de menos. `source_path` vault-relativo es un cambio breaking para `path_filter` y prompts. Dependencias de versiones tempranas de CocoIndex (pinea `pyproject.toml`).
+* ⚠️ **Cons / Risks:** **El PDF pierde la jerarquía de headings** (D54): la cita se apoya en `source_path` + offsets, no en el heading. **Los documentos binarios quedan fuera del Δ de 30 s** (D51): un vault lleno de `.docx` tendrá refreshes lentos y visibles, medidos aparte. **El agente debe pasar raíces explícitas**: sin argumento solo se indexa lo que declare `INDEXER_DIR` (fallback `00-Resources/`), y un agente que asuma memoria entre sesiones indexará de menos. `source_path` vault-relativo es un cambio breaking para `path_filter` y prompts. Dependencias de versiones tempranas de CocoIndex (pinea `pyproject.toml`).
 * ⚖️ **Neutral:** Modelo mental de "flujos" para quien mantenga el pipeline; la raíz pasa de constante del producto a dato de la operación.
 
 ## Testing Strategy

@@ -59,17 +59,17 @@ Pídelo al usuario antes de usarlo y, si el `.md` debe quedar guardado, escríbe
 - **`format`** es una pista de tipo, no un conversor: pásalo solo si el nombre no trae
   extensión o para CSV; fija también la extensión del destino (`format: "md"` ⇒ `.md`).
   En `convert_base64` es obligatorio junto con `filename` o en su lugar.
-- **`index_refresh()`** sin argumentos indexa `00-Resources/`. Con
-  `directories: ["documentos", "materiales"]` indexa esas raíces **recursivamente a
-  cualquier profundidad**, y una raíz puede ser un **fichero suelto**
+- **`index_refresh()`** sin argumentos indexa lo que declare `INDEXER_DIR` en `opencode.json`
+  (por omisión `00-Resources/`). Con `directories: ["documentos", "materiales"]` indexa esas raíces
+  **recursivamente a cualquier profundidad**, y una raíz puede ser un **fichero suelto**
   (`directories: ["materiales/x.pdf"]`). Raíces solapadas se deduplican.
 - **El índice solo recorre la whitelist del motor** (`md`, `markdown`, `txt`, `pdf`,
   `docx`, `pptx`, `xlsx`, `xls`); el resto de ficheros se cuenta como `skipped` — no es
   un fallo (un `.doc`/`.ppt` legacy tampoco se convierte: no está en el catálogo).
-- **`search`**: `top_k` por omisión 5 (tope efectivo 8); `path_filter` es un glob
-  relativo al vault (`00-Resources/lit/**/*.pdf`), no a la raíz pedida. El
-  `source_path` que vuelve también es vault-relativo: dos `a.pdf` en carpetas distintas
-  son dos citas distintas.
+- **`search`**: `top_k` por omisión viene de `TEPOCHCALLI_TOP_K` (5; tope efectivo 8);
+  `path_filter` es un glob relativo al vault (`00-Resources/lit/**/*.pdf`), no a la raíz pedida.
+  El `source_path` que vuelve también es vault-relativo: dos `a.pdf` en carpetas distintas son dos
+  citas distintas.
 - El conversor **nunca sobrescribe**: destino con los mismos bytes ⇒ mismo resumen;
   bytes distintos ⇒ `VALIDATION_ERROR` con un nombre alternativo propuesto.
 

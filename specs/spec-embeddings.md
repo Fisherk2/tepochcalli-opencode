@@ -196,10 +196,13 @@ device = "cpu"                # device explícito para SentenceTransformerEmbedd
 [chunking]
 max_chunk_size = 1536         # unidad: BYTES, no chars (el splitter mide bytes) — ver F4, spec-rag-engine.md §Chunking
 overlap = 192                 # 12,5% de max_chunk_size (mismo ratio que el 128/1024 original en chars)
-
-[search]
-top_k_default = 5
 ```
+
+`top_k` e `INDEXER_DIR` **no** son claves del toml: son variables de entorno del harness
+(`opencode.json` → `mcp.servers.tepochcalli-rag.environment`; contrato y validación en
+[spec-mcp-server](spec-mcp-server.md) §Carga de configuración). La sección `[search]` está
+**jubilada**: un toml viejo que la traiga solo recibe el aviso de sección desconocida y el valor
+se ignora (el loader nunca lanza).
 
 ### Cache de modelos (`models/`)
 

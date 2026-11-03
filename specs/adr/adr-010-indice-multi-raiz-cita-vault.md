@@ -1,6 +1,6 @@
 # ADR-010: Indexar múltiples raíces del vault y citar rutas relativas al vault
 
-* **Status:** Proposed
+* **Status:** Proposed (enmendado 2026-11-03)
 * **Date:** 2026-11-02
 * **Decision Makers:** Dueño del repo (Product Owner), Arquitecto
 * **Consulted:** Fuente instalada de `cocoindex==1.0.25` (conector `localfs`), `docs/TRD.md` §presupuestos
@@ -45,10 +45,21 @@ las raíces viajan en la llamada (nada que reconfigurar) y la cita se ancla al v
 
 ### 4.1 Contrato `index_refresh(directories=[...])`
 
-* `index_refresh(directories: list[str] | None = None)`. Sin argumento ⇒ `["00-Resources"]`:
-  compatibilidad byte-a-byte con el contrato actual y con los agentes ya escritos (D32).
-* Las raíces viven **solo** en la invocación: no se escriben en `tepochcalli.toml`, no tocan el
-  wizard y no sobreviven al proceso. Cambiar de carpeta es un argumento, no un reinstall.
+* `index_refresh(directories: list[str] | None = None)`. Sin argumento ⇒ las raíces declaradas
+  en **`INDEXER_DIR`** (variable de entorno del harness, `opencode.json` → `environment`;
+  multi-valor separado por comas, `strip`, vacíos descartados), con `00-Resources` como
+  **fallback** cuando está ausente o vacía: compatibilidad byte-a-byte con el contrato anterior y
+  con los agentes ya escritos (D32).
+* **Enmienda 2026-11-03 — el default lo declara el harness, no lo persiste el motor.** El literal
+  `00-Resources` deja de ser el default del contrato y pasa a ser el fallback de `INDEXER_DIR`.
+  Esa lista **no** se escribe en `tepochcalli.toml`, no la toca el wizard y el server la relee en
+  cada llamada. Razón: el dueño quiere cambiar las raíces por defecto sin editar el toml ni
+  re-ejecutar el wizard, y sin devolverle estado al motor (la opción B sigue descartada: el toml
+  puede contener secretos y no es registro de una operación). El argumento `directories` sigue
+  siendo el **override** de la llamada y el multi-raíz/dedup de §4.4 no cambia.
+* Las raíces viven **solo** en la invocación o en el entorno del proceso: no se escriben en
+  `tepochcalli.toml`, no tocan el wizard y no sobreviven al proceso. Cambiar de carpeta es un
+  argumento (o una env), no un reinstall.
 * El reporte gana `roots` **aditivo** (`{scanned, indexed, skipped, elapsed_ms, locked, roots}`):
   un campo nuevo no rompe consumidores; quitarlo o renombrarlo, sí (ADR-005, Hyrum).
 * Cada pasada **declara el conjunto completo** de raíces; el índice refleja esa pasada (el target
@@ -154,8 +165,8 @@ de symlink del vault, y la normalización de cita.
   reproduce `text`.
 * **Colisión imposible:** `materiales/a.md` y `documentos/a.md` en la misma pasada ⇒ dos filas,
   dos `source_path` distintos; ninguna se pierde.
-* **Compatibilidad:** `index_refresh()` sin argumentos ⇒ `roots == ["00-Resources"]` y el mismo
-  `scanned` que la versión anterior sobre el mismo vault.
+* **Compatibilidad:** `index_refresh()` sin argumentos y sin `INDEXER_DIR` declarada ⇒
+  `roots == ["00-Resources"]` y el mismo `scanned` que la versión anterior sobre el mismo vault.
 * **Atomicidad (D65):** `index_refresh(directories=["materiales", "no-existe"])` ⇒
   `VALIDATION_ERROR` y el recuento de filas del índice **no cambia**.
 * **Nunca `INTERNAL`:** una raíz inexistente, un fichero con extensión no soportada y un
@@ -200,7 +211,7 @@ de symlink del vault, y la normalización de cita.
 ## 6. Consequences
 
 * ✅ **Positives:** El usuario investiga sobre su estructura real (no solo `00-Resources/`); los ofimáticos entran sin paso de conversión; el agente descubre carpetas con `rag_status`; la cita sigue siendo un único string localizable; el índice incremental no se invalida al mover el vault.
-* ⚠️ **Negatives / Risks:** El PDF pierde la jerarquía de headings (D54) — el criterio 5 depende de `source_path` + offsets, no del heading. Los documentos binarios no entran en el Δ de 30 s (D51) y un vault lleno de `.docx` tendrá refreshes lentos y visibles. El agente **debe** pasar raíces explícitas: sin argumento solo indexa `00-Resources/`, y un agente que asuma memoria entre sesiones indexará de menos. El target declarativo de CocoIndex reconcilia por pasada: una llamada que no declara una raíz puede purgar sus filas — T2 lo fija con el test de tres pasadas y `last_refresh_roots` lo hace observable. `source_path` breaking: los `path_filter` y prompts que asumían el prefijo `00-Resources/` hay que revisarlos.
+* ⚠️ **Negatives / Risks:** El PDF pierde la jerarquía de headings (D54) — el criterio 5 depende de `source_path` + offsets, no del heading. Los documentos binarios no entran en el Δ de 30 s (D51) y un vault lleno de `.docx` tendrá refreshes lentos y visibles. El agente **debe** pasar raíces explícitas: sin argumento solo indexa las de `INDEXER_DIR` (fallback `00-Resources/`), y un agente que asuma memoria entre sesiones indexará de menos. El target declarativo de CocoIndex reconcilia por pasada: una llamada que no declara una raíz puede purgar sus filas — T2 lo fija con el test de tres pasadas y `last_refresh_roots` lo hace observable. `source_path` breaking: los `path_filter` y prompts que asumían el prefijo `00-Resources/` hay que revisarlos.
 * ⚖️ **Neutral:** La raíz pasa de constante a argumento; el ledger de §4.9 se convierte en la referencia obligatoria antes de «optimizar» el walk; la whitelist y `DocKind` crecen juntos o no crecen.
 
 ## 7. Related Decisions
@@ -210,7 +221,7 @@ de symlink del vault, y la normalización de cita.
 * **ADR-005** — el puerto `ChunkReader`/`search` consume estas citas: `source_path` vault-relativo es el campo que cruza la frontera y por eso el cambio se congela aquí.
 * **ADR-009** — conversor documento→Markdown: sigue siendo el camino del **artefacto**; este ADR es el camino del **índice** (no se indexa el `.md` convertido, se indexa el original).
 * **ADR-011** — política de dependencias y embedder único: la ampliación de formatos no añade librerías (markitdown ya está); el ledger de §4.9 complementa su ledger de no-reinvención.
-* **D9.1** — convención de carpetas: con multi-raíz, `00-Resources/` deja de ser la única indexable pero sigue siendo el default y el destino de `add_source`.
+* **D9.1** — convención de carpetas: con multi-raíz, `00-Resources/` deja de ser la única indexable pero sigue siendo el fallback de `INDEXER_DIR` (§4.1) y el destino de `add_source`.
 
 ## 8. Compliance and Review
 

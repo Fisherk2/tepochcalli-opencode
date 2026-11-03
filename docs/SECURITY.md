@@ -56,6 +56,9 @@ permiso el usuario del proceso**. Reglas:
    **fail-fast atómico**: una raíz mala ⇒ no se indexa ninguna y el error nombra la raíz, las
    que existen y sugerencias. Motivo: `localfs.walk_dir` lanza `ValueError` para una ruta que
    no es directorio y el `internal_guard` lo convertiría en un falso «fallo interno».
+   Las raíces por omisión se declaran **por entorno** en `opencode.json` (`INDEXER_DIR`, multi-valor
+   por comas) y eso **no** relaja B′: una absoluta fuera del vault, un `..` o una ruta inexistente
+   siguen siendo `VALIDATION_ERROR`.
 4. **El artefacto no viaja al LLM:** las tools del conversor devuelven solo el resumen de 5
    claves (`written_to`, `source_uri`, `bytes`, `chars`, `preview` ≤500 chars) — el cuerpo
    convertido se queda en disco (ADR-009). El material descargado/convertido es **no
