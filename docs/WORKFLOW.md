@@ -113,13 +113,13 @@
   | **M11** — motor re-medido | **Δ texto p95 = 4 299 ms** (n=20, nearest-rank 19.º; corpus 50 md/txt; raíces múltiples) — Phase 1: 5 385/5 466/5 952 ms · índice en frío **34 061 ms** (Phase 1: 34 227/33 358/70 694) · documentos **2 486 ms los 15 docs** (≈166 ms/doc; Δ de un `.docx` = **824 ms**) · RSS `VmHWM` texto **1 486 MiB** / documentos **1 601 MiB** (Phase 1 con Docling: 2 048–2 189 MiB) | `bench_delta.py`, 20 ciclos sobre rampa 1→50; `RefreshReport.elapsed_ms` (monótono, incluye lock + update); documentos medidos **aparte** (D51) |
   | **M12** — payload | sin `mcp.servers.markitdown`; `anydoc` sigue `disabled: true`; test de merge verde | `tests/unit/test_opencode_payload_registration.py` — **caveat TD-30**: el fixture está rebasado y compara el payload consigo mismo |
   | **M13** — skill | `SKILL.md` con las 7 tools, tabla de decisión, defaults, errores y fallback `anydoc` | frontmatter válido + catálogo contrastado contra `server.py` |
-  | **M14** — contratos y gate | ADR-009/010/011 + 4 specs enmendadas; `just ci` local: **650 passed + 3 `slow`** al cierre (619 a la altura de T16), cobertura **97 %** (gate 95 %) | suite + `just coverage`; GitHub Actions **nunca** ejecutada (M6) |
+  | **M14** — contratos y gate | ADR-009/010/011 + 4 specs enmendadas; `just ci` local: **658 passed + 3 `slow`** al cierre (619 a la altura de T16, 650 tras los añadidos post-plan), cobertura **97 %** (gate 95 %) | suite + `just coverage`; GitHub Actions **nunca** ejecutada (M6) |
   | **M15** — FTR | **cumplido 2026-11-03**: ADR-009/010/011 *Accepted* y las 4 specs enmendadas definitivas (`spec-vault-structure` → Approved) | esta sección + registro de lo no verificado |
 
 * **Lo NO verificado** (registro explícito):
   1. **CI**: `.github/workflows/*` nunca ha corrido en GitHub Actions (M6, heredado de Phase 1);
      no se declara CI verde. `just ci` es verde **local**.
-  2. **Suite `slow`**: los 3 tests `slow` (incluye el bulk de 1 000 páginas) no están en los 650;
+  2. **Suite `slow`**: los 3 tests `slow` (incluye el bulk de 1 000 páginas) no están en los 658;
      se corren con `just python-test-slow`.
   3. **Coste de un PDF de 30 páginas con markitdown**: **no medido**. La cifra de Docling
      (49–51 s/30 págs, 2 048–2 189 MiB) queda como histórico y no se extrapola (TD-2).
