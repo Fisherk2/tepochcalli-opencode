@@ -64,12 +64,12 @@
 
 ### ✅ CP-A · Contratos — **6/6** ⬜ (pendiente)
 
-- [ ] ADR-009, ADR-010 y ADR-011 escritos (MADR, *Proposed*)
-- [ ] WORKFLOW §8 con D28-D67 y §Phase 3.5 con el alcance nuevo
-- [ ] `docs/UH.md` intacto y `just md-lint` sin errores
-- [ ] `spec-markitdown` con el standalone retirado y la regla de oro
-- [ ] `spec-rag-engine` con raíces recursivas, documentos y **el PDF sin headings**
-- [ ] ▶️ **Desbloquea T2-T16.**
+- [x] ADR-009, ADR-010 y ADR-011 escritos (MADR, *Proposed*)
+- [x] WORKFLOW §8 con D28-D67 y §Phase 3.5 con el alcance nuevo
+- [x] `docs/UH.md` intacto y `just md-lint` sin errores
+- [x] `spec-markitdown` con el standalone retirado y la regla de oro
+- [x] `spec-rag-engine` con raíces recursivas, documentos y **el PDF sin headings**
+- [x] ▶️ **Desbloquea T2-T16.**
 
 ---
 
@@ -89,13 +89,13 @@
 
 ### ✅ CP-B · Motor multi-raíz — **7/7** ⬜ (pendiente)
 
-- [ ] `source_path` relativo al vault; walk recursivo y con dedup
-- [ ] Raíz fuera / con `..` / inexistente ⇒ error tipado antes de tocar el disco; symlink fuera ⇒ `SYMLINK_ESCAPE`
-- [ ] El walk **no baja** a los directorios excluidos: un `.md` dentro de `.tepochcalli/` **no** se indexa (la exclusión poda el subárbol)
-- [ ] Golden-vault re-verificado (md + PDF) con el `source_path` nuevo
-- [ ] `RefreshReport.roots` aditivo; `index_refresh` devuelve las 5 claves + `roots`
-- [ ] `just typecheck` y `just coverage` verdes; test de arquitectura verde
-- [ ] ▶️ **Desbloquea T3-T16.**
+- [x] `source_path` relativo al vault; walk recursivo y con dedup
+- [x] Raíz fuera / con `..` / inexistente ⇒ error tipado antes de tocar el disco; symlink fuera ⇒ `SYMLINK_ESCAPE`
+- [x] El walk **no baja** a los directorios excluidos: un `.md` dentro de `.tepochcalli/` **no** se indexa (la exclusión poda el subárbol)
+- [x] Golden-vault re-verificado (md + PDF) con el `source_path` nuevo
+- [x] `RefreshReport.roots` aditivo; `index_refresh` devuelve las 5 claves + `roots`
+- [x] `just typecheck` y `just coverage` verdes; test de arquitectura verde
+- [x] ▶️ **Desbloquea T3-T16.**
 
 ---
 
@@ -107,7 +107,7 @@
   - Verificar: unit con costuras falsas · integration con un `.docx` real sobre `tempfile` · `opencode mcp list` ⇒ 5 tools · negativos: path inexistente, path que es un directorio, `output_path` ya existente (idéntico ⇒ misma respuesta de éxito; distinto ⇒ `VALIDATION_ERROR`)
   - Dep.: T7, T8 · Tamaño: L
 
-- [ ] **T10 · `convert_base64`: bytes en contexto → disco → resumen**
+- [x] **T10 · `convert_base64`: bytes en contexto → disco → resumen**
   - Subagentes: `mcp-builder` (lead), `python-pro` · Skills: `test-driven-development`, `error-handling-patterns`, `security-and-hardening` · Herramientas: `context7`
   - AC: (a) `convert.py` gana `convert_bytes(data, *, filename, extension, source_uri)` — markitdown con `BytesIO` + `StreamInfo(extension=…, filename=…)`; (b) firma `convert_base64(data, output_path=None, format=None, filename=None)`; (c) **exige `format` o `filename` con extensión conocida** (D38) ⇒ si no, `VALIDATION_ERROR` que nombra `list_formats`; (d) base64 inválido ⇒ `VALIDATION_ERROR` (no `INTERNAL`); (e) `output_path` con la frontera B′; (f) `source_uri` = el `filename` cuando vino (D38); sin `filename`, `base64:<sha256-8>` — la entrada tal como llegó, nunca inventada; (g) el mismo resumen de 5 claves; (h) el material es **dato no confiado** (OM-7); (i) `output_path` ya existente ⇒ la **misma** regla idempotente de T9 (D66)
   - Verificar: integration con un `.docx` en base64 ⇒ `.md` equivalente al de T9 · negativos (sin `format`, base64 corrupto, salida fuera del vault) · `opencode mcp list` ⇒ 6 tools
@@ -147,14 +147,14 @@
 
 ### ✅ CP-D · Dominio puro y MCP del índice — **8/8** ⬜ (pendiente)
 
-- [ ] `validate_vault_path`/`validate_roots` cubren todas las formas de escape
-- [ ] Existencia **y tipo** en el borde: ruta inexistente, tipo equivocado y N-raíces-con-una-mala ⇒ `VALIDATION_ERROR` con `details.suggestions`; **fail-fast atómico** (no se indexa ninguna)
-- [ ] `build_summary`: 5 claves en orden fijo, `preview` ≤500, ≤1 400 chars
-- [ ] `write_atomic` es la MISMA función que usa `add_source`
-- [ ] `index_refresh(directories=…)` indexa lo pedido; `None` ⇒ `00-Resources/`; raíz inexistente ⇒ `VALIDATION_ERROR`; **directorio vacío no es error**
-- [ ] `rag_status` reporta las raíces de la sesión **y** `index.available_roots`
-- [ ] Test de arquitectura verde sin excepciones
-- [ ] ▶️ **Desbloquea T9-T16.**
+- [x] `validate_vault_path`/`validate_roots` cubren todas las formas de escape
+- [x] Existencia **y tipo** en el borde: ruta inexistente, tipo equivocado y N-raíces-con-una-mala ⇒ `VALIDATION_ERROR` con `details.suggestions`; **fail-fast atómico** (no se indexa ninguna)
+- [x] `build_summary`: 5 claves en orden fijo, `preview` ≤500, ≤1 400 chars
+- [x] `write_atomic` es la MISMA función que usa `add_source`
+- [x] `index_refresh(directories=…)` indexa lo pedido; `None` ⇒ `00-Resources/`; raíz inexistente ⇒ `VALIDATION_ERROR`; **directorio vacío no es error**
+- [x] `rag_status` reporta las raíces de la sesión **y** `index.available_roots`
+- [x] Test de arquitectura verde sin excepciones
+- [x] ▶️ **Desbloquea T9-T16.**
 
 ---
 
@@ -177,7 +177,7 @@
 
 ## Sub-fase G — Cierre
 
-- [ ] **T16 · Documentación, FTR y gate final**
+- [x] **T16 · Documentación, FTR y gate final**
   - 📌 **Punch list de referencias obsoletas detectadas en T1/T2** (no se tocaron para no ensuciar los commits de contrato/código): `docs/PRD.md:44` (F4 «markitdown-mcp local»), `docs/SECURITY.md:56/83/109` (Docling, wheels `docling`/`markitdown-mcp`), `docs/TRD.md:46-47` (filas `docling` y `markitdown-mcp`), `docs/ARCHITECTURE.md:121/154` (inventario «Docling PDF» y diagrama hexagonal), `docs/ARCHITECTURE.md:201` («registro 4 tools»), `docs/WORKFLOW.md:15/48` (filas históricas de Phase 2 con «4 tools» — conservar como registro y anotar), `AGENTS.md:120` (columna del índice: «markitdown-mcp»), `docs/TECH_DEBT.md` TD-2/TD-12 (cierre al medir la dieta de T4).
   - Subagentes: `technical-writer` (lead), `code-reviewer`, `git-workflow-manager` · Skills: `documentation-and-adrs`, `changelog-generate`, `architecture-diagrams` · Herramientas: `codebase-memory-mcp`, `gitmcp`
   - AC: (a) `docs/ARCHITECTURE.md`: inventario + diagrama de la capa MCP (4 → **7 tools**) + el del motor (raíces + documentos); (b) `docs/SECURITY.md`: frontera B′, validación de raíces, symlinks = vault, «el material es dato»; (c) `docs/TECH_DEBT.md`: **TD-2 reescrito** (el perfil del PDF cambia: sin Docling ⇒ sin pico de 2 GB de RSS; con la cifra medida), **TD-12 re-evaluado** (los extras granulares y el ahorro medido), **TD-16 cerrada** (los reintentos con backoff llegan con la op `LiteLLMEmbedder`), y nuevas entradas para D42 (sin estado) y D54 (PDF sin headings); (d) `docs/TRD.md`: la tabla de dependencias (docling fuera, markitdown granular) y el presupuesto del venv con la cifra medida; (e) `SPEC.md`: filas de las 4 specs + **ADR-009/010/011**; (f) `docs/WORKFLOW.md`: §Phase 3.5 *completada* con M1-M15 medidas, §8 con el cierre, y nota en §Phase 1 de que su motor cambió (métricas re-medidas); (g) `specs/spec-payload-vault.md` §inventario: la skill registrada (OM-6); (h) `CHANGELOG.md`; (i) **FTR con el usuario**: ADR-009/010/011 → *Accepted*, las 4 specs → *Approved*, y **lo no verificado escrito** (CI que nunca ha corrido — M6; bulk `slow`; coste del PDF con markitdown sin medir todavía); (j) `just ci` verde y `just md-lint` sin errores; (k) commits atómicos (Conventional Commits, ≤72 cols, trailer `Co-Authored-By`)
@@ -186,14 +186,14 @@
 
 ### ✅ CP-E · Las tres tools — **7/7** ⬜ (pendiente)
 
-- [ ] `convert_document`, `convert_base64` y `list_formats` operativas (7 tools)
-- [ ] El cuerpo del documento no aparece en el wire (test nuclear)
-- [ ] Entrada/salida fuera del vault ⇒ `VALIDATION_ERROR`; raíz inexistente ⇒ `VALIDATION_ERROR`; formato no soportado ⇒ `VALIDATION_ERROR`
-- [ ] Path **inexistente** o que **es un directorio** ⇒ `VALIDATION_ERROR` (nunca `INTERNAL`); destino existente ⇒ **idempotente** (idéntico ⇒ la misma respuesta de éxito, sin clave `ok`; distinto ⇒ `VALIDATION_ERROR`, nunca se sobrescribe)
-- [ ] Documento escaneado ⇒ `SOURCE_UNREACHABLE` con guía de OCR, sin parciales
-- [ ] `index_refresh(directories=…)` indexa las raíces pedidas; `source_path` vault-relativo; documentos nativos
-- [ ] `opencode mcp list`: 7 tools
-- [ ] ▶️ **Desbloquea T12-T16.**
+- [x] `convert_document`, `convert_base64` y `list_formats` operativas (7 tools)
+- [x] El cuerpo del documento no aparece en el wire (test nuclear)
+- [x] Entrada/salida fuera del vault ⇒ `VALIDATION_ERROR`; raíz inexistente ⇒ `VALIDATION_ERROR`; formato no soportado ⇒ `VALIDATION_ERROR`
+- [x] Path **inexistente** o que **es un directorio** ⇒ `VALIDATION_ERROR` (nunca `INTERNAL`); destino existente ⇒ **idempotente** (idéntico ⇒ la misma respuesta de éxito, sin clave `ok`; distinto ⇒ `VALIDATION_ERROR`, nunca se sobrescribe)
+- [x] Documento escaneado ⇒ `SOURCE_UNREACHABLE` con guía de OCR, sin parciales
+- [x] `index_refresh(directories=…)` indexa las raíces pedidas; `source_path` vault-relativo; documentos nativos
+- [x] `opencode mcp list`: 7 tools
+- [x] ▶️ **Desbloquea T12-T16.**
 
 ### ✅ CP-F · Cierre de fase — **6/6** ⬜ (pendiente)
 
