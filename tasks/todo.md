@@ -121,13 +121,13 @@
 
 ### ✅ CP-C · Documentos + dieta + embedder — **6/6** ⬜ (pendiente)
 
-- [ ] `.docx/.pptx/.xlsx/.xls` indexados en su forma original, `doc_kind` propio, `offsets_ref="extract"`
-- [ ] `uv.lock` regenerado; `uv sync --frozen` verde; `docling`/`torchvision`/`markitdown-mcp` fuera; venv ≤1,95 GB **medido**
-- [ ] Editar el parser o el troceo **invalida** el índice (test que lo demuestra)
-- [ ] Write y read resuelven **el mismo path** de modelo; sin snapshot ⇒ `E_MODEL_INVALID` (sin red)
-- [ ] El wizard materializa `<models>/<slug>@<sha>/`; import-check con `markitdown`
-- [ ] `just ci` verde
-- [ ] ▶️ **Desbloquea T9-T16.**
+- [x] `.docx/.pptx/.xlsx/.xls` indexados en su forma original, `doc_kind` propio, `offsets_ref="extract"`
+- [x] `uv.lock` regenerado; `uv sync --frozen` verde; `docling`/`torchvision`/`markitdown-mcp` fuera; venv ≤1,95 GB **medido**
+- [x] Editar el parser o el troceo **invalida** el índice (test que lo demuestra)
+- [x] Write y read resuelven **el mismo path** de modelo; sin snapshot ⇒ `E_MODEL_INVALID` (sin red)
+- [x] El wizard materializa `<models>/<slug>@<sha>/`; import-check con `markitdown`
+- [x] `just ci` verde
+- [x] ▶️ **Desbloquea T9-T16.**
 
 ---
 
@@ -197,9 +197,9 @@
 
 ### ✅ CP-F · Cierre de fase — **6/6** ⬜ (pendiente)
 
-- [ ] Contract tests e2e verdes (formas, presupuesto, transversal, multi-raíz, documentos, change detection, embedder)
-- [ ] Test transversal: ninguna de las 7 tools devuelve un artefacto
-- [ ] e2e bulk 1000 páginas + métricas del motor re-medidas y publicadas (n y método) + venv medido
-- [ ] Payload sin `mcp.servers.markitdown`; `anydoc` `disabled: true`; skill `tepochcalli-mcp` en el payload
-- [ ] `just ci` verde + `just md-lint` sin errores + **FTR con el usuario** (y lo no verificado, escrito)
-- [ ] ▶️ **Cierra Phase 3.5** y abre Phase 4 (blueprint) sin cambios en su alcance.
+- [x] Contract tests e2e verdes (formas, presupuesto, transversal, multi-raíz, documentos, change detection, embedder)
+- [x] Test transversal: ninguna de las 7 tools devuelve un artefacto
+- [x] e2e bulk 1000 páginas + métricas del motor re-medidas y publicadas (n y método) + venv medido
+- [x] Payload sin `mcp.servers.markitdown`; `anydoc` `disabled: true`; skill `tepochcalli-mcp` en el payload
+- [x] `just ci` verde + `just md-lint` sin errores + **FTR con el usuario** (y lo no verificado, escrito)
+- [x] ▶️ **Cierra Phase 3.5** y abre Phase 4 (blueprint) sin cambios en su alcance.
