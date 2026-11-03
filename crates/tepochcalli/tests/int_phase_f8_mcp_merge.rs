@@ -12,10 +12,14 @@
 //! venv into a `tempfile` vault and runs the unmodified `run_phase8`
 //! through `StdCommandRunner`, first bare (healthy `ok`, `rows: 0`) and
 //! then with `provider = "none"` (`degraded` + `E_NO_EMBEDDER`). Unix-only
-//! and skipped without the repo venv: a full `uv sync` per cargo run would
-//! be the T14/T18 matrix job, not a unit gate. The `ok`-with-rows>0 state
-//! (indexed vault) is covered by the Python e2e contract tests
-//! (`tests/e2e/test_mcp_contract.py`), which own the wire shape.
+//! and skipped without the repo venv — loudly, naming `just python-sync`:
+//! a full `uv sync` per cargo run would be the T14/T18 matrix job, not a
+//! unit gate. The probe↔`server.py` seam is guarded statically instead by
+//! `f8_probe_seams_exist_in_payload_server_py`, which runs everywhere (no
+//! Python) and fails if a seam the probe imports is renamed. The
+//! `ok`-with-rows>0 state (indexed vault) is covered by the Python e2e
+//! contract tests (`tests/e2e/test_mcp_contract.py`), which own the wire
+//! shape.
 
 #[allow(dead_code)]
 mod common;
@@ -568,7 +572,13 @@ fn f8_real_venv_loopback_ok_then_degraded() {
     if !repo_python.is_file() {
         // Documented constraint: without the repo dev venv (T14/T18 matrix
         // job does full `uv sync` runs) there is nothing real to loop back
-        // through — the scripted tests above own the shape.
+        // through — the scripted tests above own the shape. Never silent:
+        // this is the only Rust test that executes the probe, so a skip
+        // must say why and how to enable it (like `e2e_payload`).
+        println!(
+            "skip: repo dev venv missing at {} (the real Python↔Rust probe loopback needs it; run `just python-sync` to enable)",
+            repo_python.display()
+        );
         return;
     }
     let vault = tmp();
@@ -596,4 +606,48 @@ fn f8_real_venv_loopback_ok_then_degraded() {
     let merged_again =
         std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged again");
     assert_eq!(occurrences(&merged_again, MANAGED_RAG), 1);
+}
+
+/// Static cross-language guard: the loopback above is the only Rust test
+/// that EXECUTES `RAG_STATUS_PROBE`, and it skips without the repo venv —
+/// a seam renamed in `server.py` used to reach production as a `TypeError`
+/// (`99d8b38` and earlier). This check runs on every `cargo test` (no
+/// Python, no venv): every seam name the probe imports from
+/// `tepochcalli_mcp.server` must exist literally in the payload's
+/// `server.py`, so a rename fails here first.
+#[test]
+fn f8_probe_seams_exist_in_payload_server_py() {
+    let server_py = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../../obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/server.py");
+    let source = std::fs::read_to_string(&server_py).unwrap_or_else(|error| {
+        panic!(
+            "payload server.py must be readable at {}: {error}",
+            server_py.display()
+        )
+    });
+
+    // Seam list parsed straight out of the probe constant (no regex dep):
+    // `from tepochcalli_mcp.server import A, B, …; from …` — one import
+    // statement, so the first `;` after the marker closes the list.
+    let import_marker = "from tepochcalli_mcp.server import ";
+    let import_list = RAG_STATUS_PROBE
+        .split_once(import_marker)
+        .unwrap_or_else(|| panic!("probe must import seams from {import_marker}"))
+        .1
+        .split_once(';')
+        .expect("probe import list ends at `;`")
+        .0;
+    let seams: Vec<&str> = import_list.split(',').map(str::trim).collect();
+    assert!(!seams.is_empty(), "probe imports at least one seam");
+
+    let missing: Vec<&str> = seams
+        .iter()
+        .copied()
+        .filter(|seam| !source.contains(&format!("def {seam}")))
+        .collect();
+    assert!(
+        missing.is_empty(),
+        "RAG_STATUS_PROBE imports seams absent from {}: {missing:?}",
+        server_py.display()
+    );
 }
