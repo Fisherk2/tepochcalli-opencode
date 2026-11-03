@@ -1,6 +1,6 @@
 # Spec: Integración de MarkItDown (extractor del motor y conversor del wire)
 
-* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4) · Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Proposed, FTR en T16)
+* **Status:** Approved 2026-10-27 (FTR Phase 2→3, docs/WORKFLOW.md §4) · Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)

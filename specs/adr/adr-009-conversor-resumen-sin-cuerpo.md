@@ -1,6 +1,6 @@
 # ADR-009: El conversor escribe a disco y devuelve solo un resumen (sin cuerpo en el wire)
 
-* **Status:** Proposed
+* **Status:** Accepted (2026-11-03)
 * **Date:** 2026-11-02
 * **Decision Makers:** Dueño del repo, Arquitecto
 * **Consulted:** `docs/diagnosis/fix01-conversor-satura-contexto-llm.md` (defecto reproducido), `markitdown==0.1.9` instalado y `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/convert.py` (API real: `MarkItDown().convert(source).markdown`), `tasks/plan.md` §2.1/§2.2 (D28-D67) y §5.5-§5.9

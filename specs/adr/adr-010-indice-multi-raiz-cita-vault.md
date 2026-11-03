@@ -1,6 +1,6 @@
 # ADR-010: Indexar múltiples raíces del vault y citar rutas relativas al vault
 
-* **Status:** Proposed (enmendado 2026-11-03)
+* **Status:** Accepted (enmendado 2026-11-03)
 * **Date:** 2026-11-02
 * **Decision Makers:** Dueño del repo (Product Owner), Arquitecto
 * **Consulted:** Fuente instalada de `cocoindex==1.0.25` (conector `localfs`), `docs/TRD.md` §presupuestos

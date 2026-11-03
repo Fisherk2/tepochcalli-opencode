@@ -195,7 +195,7 @@
 - [x] `opencode mcp list`: 7 tools
 - [x] ▶️ **Desbloquea T12-T16.**
 
-### ✅ CP-F · Cierre de fase — **6/6** ⬜ (pendiente)
+### ✅ CP-F · Cierre de fase — **6/6** — CERRADA 2026-11-03 (FTR aprobado)
 
 - [x] Contract tests e2e verdes (formas, presupuesto, transversal, multi-raíz, documentos, change detection, embedder)
 - [x] Test transversal: ninguna de las 7 tools devuelve un artefacto

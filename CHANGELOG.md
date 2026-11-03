@@ -37,6 +37,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   no gestiona e impone solo `TEPOCHCALLI_ROOT`, así que las ediciones de `INDEXER_DIR` y
   `TEPOCHCALLI_TOP_K` sobreviven a una reinstalación.
 
+### Changed (estados, 2026-11-03)
+
+- **ADR-009/010/011 pasan a *Accepted*** (FTR 2026-11-03): las cuatro specs enmendadas
+  (`spec-mcp-server`, `spec-markitdown`, `spec-rag-engine`, `spec-vault-structure`) quedan
+  definitivas — la última promovida a *Approved* — y Phase 4 (blueprint) queda desbloqueada.
+
 ### Added (Phase 3.5, 2026-11-03)
 
 - **Tres tools del conversor en `tepochcalli-rag`** — `convert_document`, `convert_base64` y

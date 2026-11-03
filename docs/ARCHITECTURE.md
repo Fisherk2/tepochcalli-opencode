@@ -277,9 +277,9 @@ graph TB
 | [ADR-006](../specs/adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como embedding default (elección del modelo default; el comportamiento del wizard en §4.1 queda reemplazado por ADR-007) | Accepted | 2026-10-21 |
 | [ADR-007](../specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4) | Accepted | 2026-10-21 |
 | [ADR-008](../specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico de modelo (refina ADR-007 capa UX) | Accepted | 2026-10-21 |
-| [ADR-009](../specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Proposed | 2026-11-02 |
-| [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada + `source_path` relativo al vault | Proposed | 2026-11-02 |
-| [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Proposed | 2026-11-02 |
+| [ADR-009](../specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Accepted | 2026-11-03 |
+| [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada + `source_path` relativo al vault | Accepted | 2026-11-03 |
+| [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
 
 ## Key decisions summary
 

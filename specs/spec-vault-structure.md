@@ -1,6 +1,6 @@
 # Spec: Estructura del vault y aislamiento del runtime
 
-* **Status:** Proposed; Amended 2026-11-02 (Phase 3.5; ADR-010) — `00-Resources/` pasa de «única raíz indexable» a **valor por omisión del índice**.
+* **Status:** Approved; Amended 2026-11-02 (Phase 3.5; ADR-010 Accepted 2026-11-03) — `00-Resources/` pasa de «única raíz indexable» a **valor por omisión del índice**.
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)

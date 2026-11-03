@@ -1,6 +1,6 @@
 # Implementation Plan — Tepochcalli v1
 
-**Date:** 2026-10-21 (rev. 8 — Phase 3.5 **completada** 2026-11-03: 7 tools, índice multi-raíz, dieta y skill; ADR-009/010/011 siguen *Proposed* hasta el FTR del usuario. rev. 7 — Phase 3.5 planificada 2026-11-02: 3 ADR (009/010/011) + 4 specs enmendadas + D28-D67; rev. 6 estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
+**Date:** 2026-10-21 (rev. 8 — Phase 3.5 **cerrada con FTR aprobado** 2026-11-03: 7 tools, índice multi-raíz, dieta y skill; ADR-009/010/011 **Accepted**. rev. 7 — Phase 3.5 planificada 2026-11-02: 3 ADR (009/010/011) + 4 specs enmendadas + D28-D67; rev. 6 estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
@@ -18,7 +18,7 @@
 | 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e |
 | 6 | E2E Acceptance | Validar los 7 criterios de UH.md sobre sistema completo | Aceptación: tabla §6.3 toda verde en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 
-> **Estado (2026-11-03):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 3.5 (conversor + multi-raíz + dieta + skill) completada** 2026-11-03 — 7 tools, 619 passed + 3 `slow`, cobertura 97 % local, ADR-009/010/011 **Proposed** hasta el FTR del usuario (§Phase 3.5); **Phase 4 (blueprint) LISTO PARA PLANIFICAR** — dependencias satisfechas. GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
+> **Estado (2026-11-03):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 3.5 (conversor + multi-raíz + dieta + skill) completada y cerrada con FTR aprobado 2026-11-03** — 7 tools, suite completa verde, cobertura 97 % local (gate 95 %), ADR-009/010/011 **Accepted** y las 4 specs enmendadas definitivas (§Phase 3.5); **Phase 4 (blueprint) DESBLOQUEADA** — dependencias satisfechas. GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
 
 ## 2. Phase Breakdown
 
@@ -77,12 +77,12 @@
 
 ### Phase 3.5 — Conversor summary-only + skill `tepochcalli-mcp` (H1-H4)
 
-* **Estado (2026-11-03): COMPLETADA** (implementación y medición; el FTR que convierte los ADR en
-  *Accepted* sigue pendiente del usuario — M15). T1-T16 ejecutados; CP-A, CP-B, CP-C, CP-D, CP-E y
-  CP-F cerrados; plan y detalle en [`tasks/plan.md`](../tasks/plan.md) y [`tasks/todo.md`](../tasks/todo.md).
-  Contratos en **ADR-009** (conversor summary-only), **ADR-010** (índice multi-raíz + cita
-  vault-relativa) y **ADR-011** (dos librerías + ledger de no-reinvención), todavía *Proposed*;
-  `spec-markitdown`, `spec-mcp-server`, `spec-rag-engine` y `spec-vault-structure` enmendadas.
+* **Estado (2026-11-03): CERRADA — FTR aprobado.** T1-T16 ejecutados; CP-A, CP-B, CP-C, CP-D,
+  CP-E y CP-F cerrados; plan y detalle en [`tasks/plan.md`](../tasks/plan.md) y
+  [`tasks/todo.md`](../tasks/todo.md). Contratos en **ADR-009** (conversor summary-only),
+  **ADR-010** (índice multi-raíz + cita vault-relativa) y **ADR-011** (dos librerías + ledger de
+  no-reinvención), **Accepted 2026-11-03**; `spec-markitdown`, `spec-mcp-server`, `spec-rag-engine`
+  y `spec-vault-structure` enmendadas y definitivas.
   Nace del diagnóstico `docs/diagnosis/fix01-conversor-satura-contexto-llm.md` (saturación de la
   ventana de contexto: el MCP standalone `markitdown` devolvía el documento íntegro al LLM; una
   herramienta jamás devuelve el artefacto convertido, solo el resumen de su operación). Se ubica
@@ -112,8 +112,8 @@
   | **M11** — motor re-medido | **Δ texto p95 = 4 299 ms** (n=20, nearest-rank 19.º; corpus 50 md/txt; raíces múltiples) — Phase 1: 5 385/5 466/5 952 ms · índice en frío **34 061 ms** (Phase 1: 34 227/33 358/70 694) · documentos **2 486 ms los 15 docs** (≈166 ms/doc; Δ de un `.docx` = **824 ms**) · RSS `VmHWM` texto **1 486 MiB** / documentos **1 601 MiB** (Phase 1 con Docling: 2 048–2 189 MiB) | `bench_delta.py`, 20 ciclos sobre rampa 1→50; `RefreshReport.elapsed_ms` (monótono, incluye lock + update); documentos medidos **aparte** (D51) |
   | **M12** — payload | sin `mcp.servers.markitdown`; `anydoc` sigue `disabled: true`; test de merge verde | `tests/unit/test_opencode_payload_registration.py` — **caveat TD-30**: el fixture está rebasado y compara el payload consigo mismo |
   | **M13** — skill | `SKILL.md` con las 7 tools, tabla de decisión, defaults, errores y fallback `anydoc` | frontmatter válido + catálogo contrastado contra `server.py` |
-  | **M14** — contratos y gate | ADR-009/010/011 + 4 specs enmendadas; `just ci` local: **619 passed + 3 `slow`**, cobertura **97 %** (gate 95 %) | suite + `just coverage`; GitHub Actions **nunca** ejecutada (M6) |
-  | **M15** — FTR | **pendiente del usuario**: los ADR siguen *Proposed* y las specs enmendadas no se re-aprueban solas | esta sección + registro de lo no verificado |
+  | **M14** — contratos y gate | ADR-009/010/011 + 4 specs enmendadas; `just ci` local: **619 passed + 3 `slow`** a la altura de T16, cobertura **97 %** (gate 95 %); tras los añadidos post-plan, **suite completa verde** | suite + `just coverage`; GitHub Actions **nunca** ejecutada (M6) |
+  | **M15** — FTR | **cumplido 2026-11-03**: ADR-009/010/011 *Accepted* y las 4 specs enmendadas definitivas (`spec-vault-structure` → Approved) | esta sección + registro de lo no verificado |
 
 * **Lo NO verificado** (registro explícito):
   1. **CI**: `.github/workflows/*` nunca ha corrido en GitHub Actions (M6, heredado de Phase 1);
@@ -127,11 +127,23 @@
   6. **Instalación completa en VM limpia con el lock nuevo**: no re-ejecutada en esta fase; solo
      `uv sync --frozen` + import-check dentro del venv.
   7. **Fixture de merge**: rebasado; el test no demuestra un merge sintético (TD-30).
-  8. **FTR**: la conversión de los ADR a *Accepted* y la re-aprobación de las specs es del usuario.
+  8. **FTR**: **cerrado 2026-11-03** — ADR-009/010/011 *Accepted* y las 4 specs definitivas; el
+     resto de esta lista sigue abierto.
+
+* **Añadidos post-plan (2026-11-03)** — hechos fuera de los 16 calpullis, antes del FTR:
+  1. **`INDEXER_DIR` multi-valor por comas y `TEPOCHCALLI_TOP_K`** declarados en
+     `opencode.json` → `environment`: el default de raíces de `index_refresh()` pasa a ser la env
+     (`00-Resources` queda como fallback) — ADR-010 §4.1 enmendado antes del FTR.
+  2. La sección **`[search]` del `tepochcalli.toml` queda jubilada**: `top_k` se declara en
+     `environment`; un toml viejo solo recibe el aviso de sección desconocida.
+  3. **F8 del wizard conserva las claves de `environment` que no gestiona** (antes las borraba al
+     reinstalar): impone solo `TEPOCHCALLI_ROOT`.
+  4. **`rag_status.config` gana `problems` y `unknown_env`**, y `valid` pasa a medir coherencia de
+     la configuración, no solo que el toml parsee.
 
 ### Phase 4 — Diseño del agent workflow (blueprint)
 
-* **Estado (2026-11-03): LISTO PARA PLANIFICAR.** Dependencias satisfechas (Phase 0 contratos D9 congelados + Phase 3 y Phase 3.5 completadas); lienzo vivo `specs/spec-payload-vault.md` en **Proposed** (con la skill `tepochcalli-mcp` ya registrada en su matriz); arranque del diseño vía `/plan`. Sin gate BLUEPRINT APPROVED, Phase 5 no arranca.
+* **Estado (2026-11-03): DESBLOQUEADA — LISTO PARA PLANIFICAR.** Dependencias satisfechas (Phase 0 contratos D9 congelados + Phase 3 y Phase 3.5 cerradas con FTR aprobado); lienzo vivo `specs/spec-payload-vault.md` en **Proposed** (con la skill `tepochcalli-mcp` ya registrada en su matriz); arranque del diseño vía `/plan`. Sin gate BLUEPRINT APPROVED, Phase 5 no arranca.
 * Objetivo: completar specs/spec-payload-vault.md hasta estado **Approved**: system prompts definitivos de los 5 agentes, bloques YAML de permisos (last-match-wins), templates determinísticos de los 9 comandos. AGENDA: (i) §Tabla de invocación por comando — 9 filas × 4 columnas {skills concretas del inventario real, herramientas nativas, MCPs a ejecutar (`tepochcalli-rag` tools por comando, incluidas las 3 del conversor; `anydoc` solo como fallback disabled), subagentes permitidos}; (ii) §Matriz de conflictos/redundancias de skills contra el inventario REAL de `obsidian-workspace/.opencode/skills/` (lectura only).
 * Naturaleza: **documentación pura — cero escritura de payload**. `obsidian-workspace/` sigue vedado; la prohibición es un deliverable verbal de esta fase, no código.
 * Dependencias: Phase 0 (contratos D9); puede correr en paralelo a Phases 1-3 (no los necesita — los contratos MCP ya están Accepted).
@@ -326,7 +338,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 | **D25** (sin ADR — reparto de responsabilidades, decisión explícita del usuario) | **El wizard NO descarga modelos:** lo hace el flow Python, que reporta el RSS pico medido — implementado por T11/T12 | Usuario 2026-10-28 (plan Phase 3 D25) | specs/spec-installer-wizard.md (fase 6), docs/WORKFLOW.md (esta fila) |
 | **D26** (sin ADR — diseño hexagonal, decisión explícita del usuario) | **5 puertos** (`CommandRunner`, `HttpClient`, `HostProbe`, `PayloadSource`, `Ui`); **sin puerto de FS** (los tests usan `tempfile` real) — implementado por T4 | Usuario 2026-10-28 (plan Phase 3 D26) | `crates/tepochcalli/`, docs/WORKFLOW.md (esta fila) |
 | **D27** (sin ADR — reparto spec↔código, decisión explícita del usuario) | **Los rangos de exit code los fija la spec; el número exacto y el mapeo a `E_*` los elige el wizard** — implementado por T3/T15 | Usuario 2026-10-28 (plan Phase 3 D27) | specs/spec-installer-wizard.md (§UX de fallo), docs/WORKFLOW.md (esta fila) |
-| **D28-D67** (ADR-009/010/011, *Proposed* 2026-11-02; implementado y medido 2026-11-03, ADR pendientes del FTR) | **Phase 3.5 — conversor summary-only + índice multi-raíz + dieta de dos librerías.** (1) *Conversor*: 3 tools en `tepochcalli-rag` (`convert_document`/`convert_base64`/`list_formats`, markitdown en proceso, D28), resumen de 5 claves y cuerpo fuera del wire (D36), frontera B′ entrada **y** salida dentro del vault (D31), existencia y tipo validados en el borde MCP —`walk_dir` lanza `ValueError`, que saldría como `INTERNAL`— (D64), destino existente idempotente sin sobrescribir (D66), catálogo verificado contra `markitdown==0.1.9` (sin `.doc`/`.ppt`: no hay convertidor); standalone `markitdown` retirado del payload (D29) y `anydoc` sigue `disabled` como fallback (D30); el conversor **no** indexa (D49). (2) *Índice*: raíces por llamada sin estado (D32/D42), `source_path` relativo al vault (D41), whitelist de 8 extensiones (D43), recursión + raíz-fichero + dedup (D46), frontera de symlinks = vault (D47), `offsets_ref` source/extract (D50), documentos fuera del Δ de 30 s (D51), `ContextKey[Path]` estable ⇒ mover el vault no invalida el memo (D62), multi-raíz fail-fast atómico (D65), `rag_status.index.available_roots` (D67). (3) *Dieta*: dos librerías —`cocoindex` + `markitdown`— (D52); `docling`, `torchvision` y `markitdown-mcp` fuera (D53/D55); el PDF pierde headings (D54, coste aceptado y medido en el FTR); `@coco.fn` en los helpers para que editar un parser invalide el memo (D58); un solo embedder write+read (D59); `as_async` + batching (D60); sin memo de embeddings por chunk (D61); `litellm` por `cocoindex[litellm]` + `[tool.uv] constraint-dependencies` (D56, cierra TD-16); ledger de no-reinvención (D63). (4) *Payload*: skill `tepochcalli-mcp` con el catálogo de tools (D33/H4) | Usuario 2026-10-30 (entrevista `/plan`; D64-D67 vía question tool el mismo día) | specs/adr/adr-009/010/011\*, specs/spec-{markitdown,mcp-server,rag-engine,vault-structure}, tasks/plan.md, tasks/todo.md, docs/ARCHITECTURE.md, SPEC.md, docs/WORKFLOW.md (esta ola) |
+| **D28-D67** (ADR-009/010/011, *Accepted* 2026-11-03; implementado y medido 2026-11-02/03) | **Phase 3.5 — conversor summary-only + índice multi-raíz + dieta de dos librerías.** (1) *Conversor*: 3 tools en `tepochcalli-rag` (`convert_document`/`convert_base64`/`list_formats`, markitdown en proceso, D28), resumen de 5 claves y cuerpo fuera del wire (D36), frontera B′ entrada **y** salida dentro del vault (D31), existencia y tipo validados en el borde MCP —`walk_dir` lanza `ValueError`, que saldría como `INTERNAL`— (D64), destino existente idempotente sin sobrescribir (D66), catálogo verificado contra `markitdown==0.1.9` (sin `.doc`/`.ppt`: no hay convertidor); standalone `markitdown` retirado del payload (D29) y `anydoc` sigue `disabled` como fallback (D30); el conversor **no** indexa (D49). (2) *Índice*: raíces por llamada sin estado (D32/D42), `source_path` relativo al vault (D41), whitelist de 8 extensiones (D43), recursión + raíz-fichero + dedup (D46), frontera de symlinks = vault (D47), `offsets_ref` source/extract (D50), documentos fuera del Δ de 30 s (D51), `ContextKey[Path]` estable ⇒ mover el vault no invalida el memo (D62), multi-raíz fail-fast atómico (D65), `rag_status.index.available_roots` (D67). (3) *Dieta*: dos librerías —`cocoindex` + `markitdown`— (D52); `docling`, `torchvision` y `markitdown-mcp` fuera (D53/D55); el PDF pierde headings (D54, coste aceptado y medido en el FTR); `@coco.fn` en los helpers para que editar un parser invalide el memo (D58); un solo embedder write+read (D59); `as_async` + batching (D60); sin memo de embeddings por chunk (D61); `litellm` por `cocoindex[litellm]` + `[tool.uv] constraint-dependencies` (D56, cierra TD-16); ledger de no-reinvención (D63). (4) *Payload*: skill `tepochcalli-mcp` con el catálogo de tools (D33/H4) | Usuario 2026-10-30 (entrevista `/plan`; D64-D67 vía question tool el mismo día) | specs/adr/adr-009/010/011\*, specs/spec-{markitdown,mcp-server,rag-engine,vault-structure}, tasks/plan.md, tasks/todo.md, docs/ARCHITECTURE.md, SPEC.md, docs/WORKFLOW.md (esta ola) |
 
 **Nota de mapeo D10 (lectura de ADRs congelados):** los ADR-002 (§4.1 "bench de Phase 5"), ADR-006 (§4.1 "Benchmark Phase 5"), ADR-007 (§8) y ADR-008 (§8) citan "Phase 5" con la numeración PRE-D10, donde significaba **aceptación E2E** — hoy **Phase 6**. Los ADR son Accepted y congelados por la regla de §8/AGENTS (nunca re-editar un ADR Accepted): no se re-editan; este párrafo es el mapeo canónico para quien ejecute sus benchmarks (10k/1k, Δ<30s, <500ms, contract tests D7.3/D8 → correr en Phase 6).
 
@@ -356,6 +368,5 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
   regeneró sobre el payload actual, así que compara el payload consigo mismo (TD-30): el verde
   no demuestra el merge conservador hasta que exista un merge sintético. Lección: un golden se
   valida por cómo se genera, no por el color del test.
-* **(d) Cierre (2026-11-03):** Phase 3.5 completada; Phase 4 (blueprint) queda lista para
-  planificar. Los ADR-009/010/011 siguen **Proposed** — el FTR con el usuario es el único paso
-  que los convierte en *Accepted* y el que re-aprueba las 4 specs enmendadas.
+* **(d) Cierre (2026-11-03):** Phase 3.5 cerrada con el **FTR aprobado** — ADR-009/010/011
+  *Accepted* y las 4 specs enmendadas definitivas; Phase 4 (blueprint) desbloqueada.

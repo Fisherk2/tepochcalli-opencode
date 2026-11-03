@@ -55,7 +55,7 @@ repo                                # este repositorio (producto + plantilla)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
 │   ├── spec-*.md                   #   8 specs (motor, MCP, vault, embeddings, wizard…)
-│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Proposed 2026-11-02
+│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
     ├── 00-Resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10+ biblioteca personal
@@ -103,20 +103,20 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 
 | Spec | Status | Alcance |
 | --- | --- | --- |
-| [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved; Amended 2026-11-02 (Phase 3.5) | Flujo CocoIndex: N raíces por llamada, extracción markitdown (8 formatos, sin Docling), Δ<30s de texto y documentos aparte, escala |
-| [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved; Amended 2026-11-02 (Phase 3.5) | 7 contratos de tools, errores `E_*`, frontera B′, latencia/token budget, config |
-| [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Proposed; Amended 2026-11-02 (Phase 3.5) | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia, raíces indexables |
+| [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | Flujo CocoIndex: N raíces por llamada, extracción markitdown (8 formatos, sin Docling), Δ<30s de texto y documentos aparte, escala |
+| [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | 7 contratos de tools, errores `E_*`, frontera B′, latencia/token budget, config |
+| [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-010 Accepted 2026-11-03) | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia, raíces indexables |
 | [specs/spec-embeddings.md](specs/spec-embeddings.md) | Approved | Modelo default, matriz local/externo, cache, swap+re-index |
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Approved (FTR Phase 3→4, 2026-10-28) | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
-| [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
+| [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
 | [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | Blueprint Phase 4 (diseño del agent workflow) — ejecución literal en Phase 5; gate Approved usuario |
 
 (Plantillas: [specs/spec-template.md](specs/spec-template.md), [specs/adr/adr-template.md](specs/adr/adr-template.md).)
 
-> **Phase 3.5 (2026-11-02):** las cuatro filas marcadas *Amended* están enmendadas por
-> ADR-009/010/011, todavía **Proposed**: el FTR con el usuario es el paso que los convierte en
-> *Accepted* (y ese paso no lo hace esta documentación).
+> **Phase 3.5 cerrada (FTR 2026-11-03):** los ADR-009/010/011 pasan a *Accepted* y las cuatro
+> specs enmendadas quedan **definitivas** (`spec-vault-structure` promovida a *Approved*). Phase 4
+> (blueprint) queda desbloqueada.
 
 ## Log de decisiones
 
@@ -130,9 +130,9 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como modelo default | Accepted 2026-10-21 |
 | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4; reemplaza solo ADR-006 §4.1) | Accepted 2026-10-21 |
 | [ADR-008](specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico sin reinstalar (refina ADR-007 D7.1/D7.4) | Accepted 2026-10-21 |
-| [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: 3 tools en `tepochcalli-rag`, markitdown en proceso, resumen de 5 claves (D28/D31/D36/D39/D66) | Proposed 2026-11-02 |
-| [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada con `source_path` relativo al vault (D32/D41/D64/D65) | Proposed 2026-11-02 |
-| [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Proposed 2026-11-02 |
+| [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: 3 tools en `tepochcalli-rag`, markitdown en proceso, resumen de 5 claves (D28/D31/D36/D39/D66) | Accepted 2026-11-03 |
+| [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz por llamada con `source_path` relativo al vault (D32/D41/D64/D65) | Accepted 2026-11-03 |
+| [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Accepted 2026-11-03 |
 
 ## Referencias
 

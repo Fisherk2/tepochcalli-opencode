@@ -48,7 +48,7 @@ propia lógica (D56/D57 — cierran dos bugs vivos); (e) **la dieta de dependenc
 | M12 | Payload sin `mcp.servers.markitdown`; `anydoc` `disabled: true`; test de merge verde | T14 |
 | M13 | Skill `tepochcalli-mcp` en el payload con catálogo de 7 tools, tabla de decisión, fallback y summary-only | T15 |
 | M14 | ADR-009/010/011 + enmiendas a 4 specs + `just ci` verde (cobertura ≥95 %) + `just md-lint` sin errores | T1, T16 |
-| M15 | FTR con el usuario + registro explícito de lo que **no** se pudo verificar | T16 |
+| M15 | FTR con el usuario + registro explícito de lo que **no** se pudo verificar — **cumplido 2026-11-03** (ADR-009/010/011 *Accepted*; las 4 specs enmendadas definitivas) | T16 |
 
 > **Lo que este plan NO promete:** OCR (H1: «documento escaneado ⇒ OCR no soportado» es una respuesta);
 > que el MCP **recuerde** entre sesiones la raíz indexada (D42: sin estado); que los documentos binarios
@@ -506,7 +506,7 @@ qué hacer, no sólo qué pasó.
 - [ ] `opencode mcp list` ⇒ 7 tools
 - [ ] ▶️ **Desbloquea T12-T16.**
 
-### CP-F · Cierre de fase — 6/6
+### CP-F · Cierre de fase — 6/6 · CERRADA 2026-11-03 (FTR aprobado)
 
 - [ ] Contract tests e2e verdes (formas, presupuesto, transversal, multi-raíz, documentos)
 - [ ] Test transversal: ninguna de las 7 tools devuelve un artefacto

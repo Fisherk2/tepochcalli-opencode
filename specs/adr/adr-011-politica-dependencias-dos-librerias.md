@@ -1,6 +1,6 @@
 # ADR-011: Fijar la política de dependencias en dos librerías con un ledger de no-reinvención
 
-* **Status:** Proposed
+* **Status:** Accepted (2026-11-03)
 * **Date:** 2026-11-02
 * **Decision Makers:** Product Owner (dueño del repo), Arquitecto
 * **Consulted:** Backend instalado (`cocoindex==1.0.25`, `markitdown==0.1.9`), tasks/plan.md §2.1-§2.2 y §5.6

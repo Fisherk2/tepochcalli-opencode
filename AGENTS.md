@@ -119,7 +119,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Wizard Rust: fases, rollback, cargo-dist |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | markitdown en proceso: 3 tools del conversor (summary-only) + seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | 9 comandos, 5 agentes, auditoría de skills |
-| [specs/adr/](specs/adr/) | ADR-001…008 (Accepted, 2026-10-21) + ADR-009…011 (Proposed, 2026-11-02) |
+| [specs/adr/](specs/adr/) | ADR-001…008 (Accepted, 2026-10-21) + ADR-009…011 (Accepted, 2026-11-03) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagramas C4/secuencia + inventario + índice ADR |
 | [docs/PRD.md](docs/PRD.md) · [docs/TRD.md](docs/TRD.md) | Requisitos de producto / técnicos |
 | [docs/APPFLOW.md](docs/APPFLOW.md) | Journeys de usuario (diarios, wizard, fallo) |
