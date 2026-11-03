@@ -9,8 +9,8 @@
 | Investigador (humano) | Dueño del vault | Obsidian (notas/PDFs) + terminal OpenCode | abrir vault |
 | Itzamná | Orquestador del workspace | enrutamiento, estado, sugerencias | conversación |
 | Especialistas | Nezahualcóyotl · Pochteca · Chilam · Tlacuilo | comandos `/rubric…/update` | vía Itzamná |
-| tepochcalli-rag | MCP tools | `search`, `index_refresh`, `add_source`, `rag_status` | tool-call del agente |
-| markitdown | MCP conversor | `convert_to_markdown` | vía `add_source` o agente |
+| tepochcalli-rag | MCP tools (7) | `search`, `index_refresh(directories=?)`, `add_source`, `rag_status`, `convert_document`, `convert_base64`, `list_formats` | tool-call del agente |
+| markitdown | biblioteca en proceso | conversión a Markdown dentro de `tepochcalli-rag` (motor + tools del conversor) | `add_source` / `convert_*` |
 
 Nota: la UI del producto es Obsidian + OpenCode; no hay pantallas propias (out of scope PRD §5).
 
@@ -50,11 +50,13 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
 
 1. Usuario: "guarda https://…/informe como fuente en `lit-clima/`".
 2. Agente: `add_source(uri="https://…/informe", subdir="lit-clima/")`.
-3. Server: markitdown `convert_to_markdown(uri)` → markdown; escribe
-   `00-Resources/lit-clima/informe.md` con frontmatter `source_uri`/`converted_at`; ejecuta refresh.
+3. Server `add_source`: markitdown **en proceso** convierte el URI a Markdown; escribe
+   `00-Resources/lit-clima/informe.md` con frontmatter `source_uri`/`converted_at`; ejecuta
+   `index_refresh` y devuelve `{ok, written_to, indexed}`.
 4. Agente confirma ruta citable; la fuente ya entra en futuras `search`.
-5. (Si el usuario prefiriera conversión manual: la herramienta markitdown está expuesta
-   directamente; el resultado sigue requiriendo `index_refresh` — o `add_source` de un `file:` URI.)
+5. (Conversión sin indexar: `convert_document`/`convert_base64` escriben el `.md` dentro del
+   vault y devuelven **solo el resumen de 5 claves** — nunca el cuerpo; el `index_refresh` se
+   pide aparte cuando el usuario quiera buscar en él.)
 
 ## 5. Journey (d) — primer arranque con wizard
 

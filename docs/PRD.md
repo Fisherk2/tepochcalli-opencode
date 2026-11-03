@@ -40,8 +40,8 @@ nativas.
 | --- | --- | --- | --- |
 | F1 | Vault plantillado | Carpetas numeradas `00-Resources/` (indexable, anidamiento libre), `01-tasks/`, `02-drafts/`, `03-citations/`; `.opencode/` con agentes+comandos+skills; `AGENTS.md` con regla MCP-first; muestras md+PDF | spec-vault-structure, spec-agent-workflow |
 | F2 | Motor RAG incremental | CocoIndex flow: live-watch `00-Resources/**`, chunking RecursiveSplitter, embeddings locales MiniLM, LanceDB ANN+FTS; Δ-only | spec-rag-engine |
-| F3 | Herramientas MCP | `tepochcalli-rag`: `search` (chunks citables), `index_refresh` (delta+reporte), `add_source` (ingesta convertida) | spec-mcp-server |
-| F4 | Conversor Markdown | markitdown-mcp local: URL/DOCX/PPTX/XLSX/HTML → Markdown indexable; fallback de formato (criterio 7) | spec-markitdown |
+| F3 | Herramientas MCP | `tepochcalli-rag`: `search` (chunks citables), `index_refresh(directories=?)` (delta multi-raíz + reporte), `add_source` (ingesta convertida), `rag_status` (diagnóstico) | spec-mcp-server |
+| F4 | Conversor Markdown | markitdown **como librería en proceso** en el venv: `convert_document`/`convert_base64`/`list_formats` escriben a disco y devuelven solo el resumen (summary-only); URL/DOCX/PPTX/XLSX/XLS/PDF/HTML → Markdown indexable; fallback `anydoc` deshabilitado (criterio 7) | spec-markitdown, ADR-009, ADR-011 |
 | F5 | Wizard atomico | TUI Rust, 8 fases con rollback, bootstrap uv→venv→modelo→índice→config MCP; flags `--offline`, `--skip-model` | spec-installer-wizard |
 | F6 | Distribución versionada | cargo-dist + GitHub Releases: `curl \| sh` / `cargo binstall tepochcalli`; payload y wizard versionan juntos | ADR-003 |
 | F7 | Metodología de investigación | `/rubric /research /validate /synthesize /cite /draft /review /transform /update` con agentes Itzamná/Nezahualcóyotl/Pochteca/Chilam/Tlacuilo | spec-agent-workflow |
@@ -78,6 +78,6 @@ Verificación: metodología y fixtures en [docs/TRD.md](TRD.md); gate final en
 | Riesgo | Mitigación | Dónde |
 | --- | --- | --- |
 | CocoIndex API inestable (early-stage) | pin de versión en pyproject; escape hatch documentado | ADR-001/004, spec-rag-engine |
-| Docling lento en PDFs enormes | exclusión del criterio de 30s para casos extremos; progreso visible; TD-2 | TECH_DEBT |
+| Documentos binarios lentos de extraer | medidos aparte del criterio de 30s; el Δ de texto se publica separado del de documentos; TD-2 | TECH_DEBT |
 | Payload de skills inflado (208) | auditoría Anexo A → matriz de conflictos Phase 4 (blueprint) → aseo ejecutado en Phase 5 | spec-agent-workflow |
 | Usuario espera funcionamiento offline total | comunicación clara: primer arranque requiere internet; `--offline` solo con caché | TRD, wizard UX |

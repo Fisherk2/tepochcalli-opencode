@@ -188,8 +188,9 @@ async def build_flow(roots: list[str]) -> _ScanTally:
 * **F4 — el splitter mide en BYTES, no en chars** (verificado empírico con `chunk_size=200`: texto CJK cortado a 65 chars / **195 bytes**; español con `ñ` a 167 chars / **195 bytes** — la longitud en bytes sigue a `chunk_size`, la de chars no). Presupuesto reescrito en bytes, decisión de usuario 2026-10-21: **`chunk_size=1536`, `chunk_overlap=192`** — conserva la intención original de ~1024 caracteres de prosa española (1536 bytes con holgura para la expansión UTF-8 de acentos y `ñ`) y el ratio de overlap declarado (192/1536 = 128/1024 = **12,5%**; ~14% de chunks adicionales). El overlap cubre frases cortadas entre chunks sin inflar el índice. Fuente: [ops/text.md](https://cocoindex.io/docs/ops/text.md).
 * Por chunk se derivan metadatos de cita: `source_path` (POSIX **relativo al vault**, D41),
   `heading` (último heading ATX padre; `null` en documentos extraídos), `char_start`/`char_end`
-  (offsets en el espacio que declare `offsets_ref`), `doc_kind` (`md|markdown|txt|pdf|docx|pptx|xlsx|xls`),
-  `offsets_ref` (`source|extract`) y `model` (nombre del embedder, para detección de índice mixto — ADR-006).
+  (offsets en el espacio que declare `offsets_ref`), `doc_kind` (`md|markdown|txt|pdf|docx|pptx|xlsx|xls`)
+  y `model` (nombre del embedder, para detección de índice mixto — ADR-006). `offsets_ref`
+  (`source|extract`) **no se persiste**: se deriva de `doc_kind` al leer (§Target).
 * **F1 — offsets citables exactos:** `Chunk` (`from cocoindex.resources.chunk import Chunk`) es un dataclass congelado con `text: str` y `start`/`end: TextPosition` (`byte_offset`, `char_offset`, `line` 1-based, `column` 1-based). La cita se toma de `chunk.start.char_offset` / `chunk.end.char_offset`, sobre los que se cumple exactamente `text[chunk.start.char_offset : chunk.end.char_offset] == chunk.text` al indexar sobre la salida del extractor de §Ruta de documentos (verificado 51/51 filas sobre md). **`heading` NO es campo de `Chunk`** — se deriva escaneando las líneas previas a `char_start` para el texto plano (en un documento extraído no hay jerarquía que derivar; ver §Ruta de documentos). Fuente: [ops/text.md](https://cocoindex.io/docs/ops/text.md), [common_resources/data_types.md](https://cocoindex.io/docs/common_resources/data_types.md).
 
 ### Ruta de documentos (extractor: markitdown)
@@ -264,8 +265,10 @@ del venv y del flow (ADR-011 §4.3). `parse_document` despacha por `doc_kind`:
 * **`doc_kind` gana `docx/pptx/xlsx/xls`** como columna de texto (aditivo, sin migración de
   esquema ni enum de base de datos); `DocKind` es el conjunto cerrado compartido con la whitelist.
 * **`offsets_ref_for` (D50):** `{md, markdown, txt} → "source"`; el resto (`pdf/docx/pptx/xlsx/xls`)
-  → `"extract"`. Una columna por fila, para que `search` diga siempre contra qué se citan los offsets.
-* Esquema por fila: `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, offsets_ref, indexed_at}`. **Nulabilidad (D13):** `heading` es **nullable** — su valor es `null` cuando el documento no tiene heading padre (`.txt` plano, nota suelta, **cualquier documento extraído**) pero el campo **siempre está presente** (ADR-005: la cita es estructural, no opcional); `source_path`, `char_start`, `char_end`, `doc_kind` y `offsets_ref` son **no nulos**.
+  → `"extract"`. **No es una columna de la fila**: se deriva de `doc_kind` al leer (en
+  `ports.CitedChunk` y en `adapters/lancedb_reader.py`), para que `search` diga siempre contra qué
+  se citan los offsets sin persistir un dato redundante.
+* Esquema por fila: `{id, source_path, doc_kind, heading, char_start, char_end, text, vector[384], model, indexed_at}`. **Nulabilidad (D13):** `heading` es **nullable** — su valor es `null` cuando el documento no tiene heading padre (`.txt` plano, nota suelta, **cualquier documento extraído**) pero el campo **siempre está presente** (ADR-005: la cita es estructural, no opcional); `source_path`, `char_start`, `char_end` y `doc_kind` son **no nulos**. `offsets_ref` **no está en el esquema**: es derivado en lectura (D50).
 * Ejemplo de fila del puerto `ChunkReader` (las 6 claves congeladas, D41 + F1):
 
 ```json
@@ -279,9 +282,10 @@ del venv y del flow (ADR-011 §4.3). `parse_document` despacha por `doc_kind`:
 }
 ```
 
-`offsets_ref` viaja como campo **aditivo** junto a esas seis claves (Hyrum: nunca se retira una
-clave). El `source_path` del ejemplo solo localiza el PDF porque es vault-relativo: `clima.pdf`
-a secas sería ambiguo si `documentos/` tuviera otro.
+`offsets_ref` **se deriva en lectura** de `doc_kind` (no es columna) y viaja como campo
+**aditivo** junto a esas seis claves (Hyrum: nunca se retira una clave). El `source_path` del
+ejemplo solo localiza el PDF porque es vault-relativo: `clima.pdf` a secas sería ambiguo si
+`documentos/` tuviera otro.
 
 ### Semántica incremental Δ (criterio 2)
 

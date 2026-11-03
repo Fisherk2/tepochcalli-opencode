@@ -33,7 +33,9 @@ detecta e instruye, no instala).
 | Disco para `.tepochcalli/` | 3-4 GB libres | +0.5 GB por cada 1k PDFs (~150MB por 100k chunks + margen LanceDB) |
 | Red | Internet en primer arranque (wheels uv + modelo 470MB + payload release) | — (luego `--offline` posible) |
 
-Desglose v1: venv 1-2GB (torch CPU), modelo ~470MB, LanceDB inicial ~50MB muestra.
+Desglose v1 **medido** (Phase 3.5, host de desarrollo — no la VM de TRD §6): venv canónico
+**1,921 GiB** (`du -sb` 2 063 018 440 B; `du -sh` 2.1G) con **135 paquetes**; modelo ~470MB;
+LanceDB inicial ~50MB muestra. La cifra manda sobre el rango 1-2GB de la estimación original.
 
 ## 4. Versiones pineadas (plan de pin; valores concretos en Phase 1)
 
@@ -41,10 +43,9 @@ Desglose v1: venv 1-2GB (torch CPU), modelo ~470MB, LanceDB inicial ~50MB muestr
 | --- | --- | --- |
 | CPython | 3.12.x gestionado por uv (`uv python pin 3.12`) | `.tepochcalli/` (marker uv) |
 | uv | latest estable al construir release (binario en `.tepochcalli/bin/`) | wizard lock de release |
-| cocoindex | `cocoindex[lancedb] ~= 0.x` — pin exacto al cerrar Phase 1, bump solo con suite verde | `.tepochcalli/pyproject.toml` + `uv.lock` |
+| cocoindex | `cocoindex[lancedb,sentence-transformers,litellm]` (extras granulares; no `[all]`) — pin exacto al cerrar Phase 1, bump solo con suite verde | `.tepochcalli/pyproject.toml` + `uv.lock` |
 | sentence-transformers | `>=3,<4` con modelo `paraphrase-multilingual-MiniLM-L12-v2` (revisión pin en HF) | pyproject + `models/` |
-| docling | serie 2.x CPU, sin extra GPU | pyproject |
-| markitdown-mcp | oficial pypi, mismo venv | pyproject |
+| markitdown | `markitdown[docx,pptx,xlsx,xls,pdf]==0.1.9` — **librería en proceso** (motor + conversor); sin `markitdown-mcp` | pyproject + `uv.lock` |
 | lancedb | vía extra `[lancedb]` de cocoindex (no pinear aparte → evitar divergencia de versiones) | uv.lock |
 | OpenCode V2 | `>=` la versión mínima que soporta `mcp.servers` forma usada (ver §5) | detección wizard fase 1 |
 | tepochcalli (wizard) | semver propio; release por tag `v*` cargo-dist | GitHub Releases |
@@ -68,8 +69,11 @@ Estructura usada por el wizard (fuente: <https://opencode.ai/v2/docs/mcp-servers
 
 * El wizard **fusiona** estas entradas conservando servers previos del usuario (fase 8,
   spec-installer-wizard) y hace backup `.bak` atómico.
-* `tepochcalli-rag` y `markitdown` corren ambos bajo el venv del vault (ADR-004): el mismo
-  `uv sync` los instala; sin `uvx` en el default (razón offline en spec-markitdown).
+* `tepochcalli-rag` corre bajo el venv del vault (ADR-004): el mismo `uv sync` lo instala;
+  sin `uvx` en el default (razón offline en spec-markitdown). `markitdown` es una **librería
+  en proceso** de ese venv, no un server: no hay entrada `mcp.servers.markitdown` (ADR-011).
+* Regla de la dieta: dos librerías principales (`cocoindex` + `markitdown`) y sus extras
+  granulares; `docling`, `torchvision` y `markitdown-mcp` quedan fuera del venv (ADR-011).
 
 ## 6. Metodología de performance (criterios numéricos de UH.md)
 
@@ -81,7 +85,7 @@ serializada; definición en spec-mcp-server §latencia).
 
 | Criterio | Protocolo de test | Pass |
 | --- | --- | --- |
-| 2. Δ indexación <30s | Corridas ×20: tocar/crear 1-50 archivos md en `00-Resources/`, luego `index_refresh()`; registrar `elapsed_ms` | p95 < 30000ms; PDFs grandes excluidos y reportados aparte |
+| 2. Δ indexación <30s | Corridas ×20: tocar/crear 1-50 archivos md en las raíces indexadas, luego `index_refresh(directories=…)`; registrar `elapsed_ms` | p95 < 30000ms; documentos binarios (`pdf/docx/pptx/xlsx/xls`) medidos y publicados **aparte** (D51) |
 | 3. Búsqueda <500ms | 100 queries muestreadas del corpus 10k/1k, `search(top_k=5)`, tras índice estable | p95 < 500ms en HW mínimo |
 | 4. ≤2000 tokens/consulta | Fixture adversa (unicode, tablas, listas largas): estimador chars/4 sobre payload `search` + overhead cita + query del usuario; validar contra tokenizador real del harness en e2e | payload ≤1600 tokens garantizado por server + e2e total <2000 |
 | 6. Escala 10k/1k sin degradación | Bench delta tras stress: latencia búsqueda y refresh en corpus lleno vs 10% | sin regresión >2× entre tamaños; índices ANN/FTS rebuild < presupuesto |

@@ -5,7 +5,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (blueprint confirmado por el usuario 2026-10-21)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2, desviación Pochteca D9.3, reglas del AGENTS del vault), specs/spec-vault-structure.md (zonas D9.1), specs/spec-mcp-server.md (4 tools + taxonomía `E_*`), docs/UH.md (tabla Agentes Primarios — inmutable), docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución); reglas de formato OpenCode V2 verificadas contra docs oficiales el 2026-10-21
+* **Traceability:** specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2, desviación Pochteca D9.3, reglas del AGENTS del vault), specs/spec-vault-structure.md (zonas D9.1), specs/spec-mcp-server.md (7 tools + taxonomía `E_*`), docs/UH.md (tabla Agentes Primarios — inmutable), docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución); reglas de formato OpenCode V2 verificadas contra docs oficiales el 2026-10-21
 
 ## Summary
 
@@ -203,7 +203,8 @@ investigación). Edit deny: su salida es análisis/enrutamiento/estado.
 | `/update` | tlacuilo | `02-drafts/` | localizar `$1` en `02-drafts/` e inyectar `$ARGUMENTS` sin reiniciar el flujo |
 
 Skeleton obligatorio de cada cuerpo (≤35 líneas, español): uso explícito de `$ARGUMENTS` y/o `$1`;
-fase metodológica UH nombrada; MCP-first con los 4 tools y protocolo `E_*`→`rag_status`; destino
+fase metodológica UH nombrada; MCP-first con las **7 tools** (catálogo único en la skill
+`tepochcalli-mcp`) y protocolo `E_*`→`rag_status`; destino
 de escritura = SU bandeja del mapa + frontmatter contract cuando aplique; cita
 `source_path » heading (chars x–y)`; no-contaminación donde lee bandejas. Prohibido: `!`cmd`` y
 `@paths`.
@@ -424,7 +425,7 @@ Referencia cruzada de cada comando contra el inventario REAL. Las columnas de sk
 | Comando | Skills concretas (inventario real) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
 | --- | --- | --- | --- | --- |
 | `/rubric` | scientific-problem-selection, experimental-design, writing-plans | read · glob · grep · question · todowrite | `tepochcalli-rag`: search (dimensionar corpus), rag_status ante `E_*` | ninguno |
-| `/research` | deep-research⟵G, research-lookup⟵G, paper-lookup⟵G, arxiv-search⟵G, pubmed-search⟵G, wikipedia-search, multi-search-engine, parallel-web | webfetch · websearch · read · edit `01-tasks/research/**` | search · index_refresh · add_source (ingesta externa vía markitdown MCP) · rag_status | ninguno |
+| `/research` | deep-research⟵G, research-lookup⟵G, paper-lookup⟵G, arxiv-search⟵G, pubmed-search⟵G, wikipedia-search, multi-search-engine, parallel-web | webfetch · websearch · read · edit `01-tasks/research/**` | search · index_refresh · add_source (ingesta externa; markitdown **en proceso**) · rag_status | ninguno |
 | `/validate` | scholar-evaluation⟵G, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units | read · glob · grep · edit `04-review/**` | search (cruce con corpus) · rag_status | ninguno |
 | `/synthesize` | idea-refine⟵G, markdown-mermaid-writing | read · glob · grep · edit `01-tasks/**` | search · rag_status | ninguno |
 | `/cite` | citation-management, venue-templates | read · glob · grep · edit `03-citations/**` | rag_status; search SOLO si el usuario pide re-trazabilidad (el gate de procedencia opera sobre la evidencia de `/research`, sin red) | ninguno |
@@ -433,18 +434,18 @@ Referencia cruzada de cada comando contra el inventario REAL. Las columnas de sk
 | `/transform` | xlsx-official⟵G, excel-analysis⟵G, data-transform⟵G, scientific-slides, pptx-official⟵G, markdown-mermaid-writing (mindmap), matplotlib⟵G, scientific-visualization⟵G, infographics | read · edit `02-drafts/**` (fuente) y `05-outputs/**` (salida) | search · rag_status; `excel` MCP: disabled y break `--offline` → manda la skill (grupo 3); `jupyter` MCP: disabled, sin skill → GAP | ninguno; Jupyter/Graphviz/R = GAP Anexo A, se declaran sin inventar |
 | `/update` | obsidian-markdown⟵G, scientific-writing⟵G | read · glob · grep · edit `02-drafts/**` | search · index_refresh (si hay ingesta nueva) · add_source solo si el usuario lo pide · rag_status | ninguno |
 
-### Matriz de conflictos/redundancias de skills (inventario REAL, 2026-10-21)
+### Matriz de conflictos/redundancias de skills (inventario REAL, 2026-10-21; + skill nueva 2026-11-03)
 
 Contra `ls obsidian-workspace/.opencode/skills/` = **208 dirs** (recuento de esta ola). Veredictos: **CONSERVAR / CONSOLIDAR (nominando ganadora) / RETIRAR (out-of-domain) / INSTALAR-GAP**. Cobertura: filas 1-13 nombran 58 dirs en conflicto explícito; fila 14 suma 14 ganadoras del núcleo en dominio; fila 15 barre el resto por familia (~120 out-of-domain según Anexo A; el remanente en dominio no listado se falla CONSERVAR por el criterio de la fila 14); fila 16 gaps = 0 dirs hoy. Phase 5 repite el `ls` y cierra el recuento 1:1 por fila (métrica WORKFLOW: 100% del inventario).
 
 | Grupo | Skills miembros (inventario real) | Solape/conflicto | Veredicto | Acción Phase 5 |
 | --- | --- | --- | --- | --- |
-| 1. PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | cuatro wrappers de la misma conversión; liteparse duplica al motor (Docling, spec-rag-engine) | CONSOLIDAR — gana `pdf` (general) + `pdf-processing-pro` (documentos largos) | retirar 3 (pdf-anthropic, liteparse, uno de processing) |
+| 1. PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | cuatro wrappers de la misma conversión; liteparse duplica al conversor del motor (markitdown, spec-rag-engine) | CONSOLIDAR — gana `pdf` (general) + `pdf-processing-pro` (documentos largos) | retirar 3 (pdf-anthropic, liteparse, uno de processing) |
 | 2. Office ×6 | docx, docx-official, pptx, pptx-official, xlsx, xlsx-official | duplicado exacto por familia | CONSOLIDAR — ganan `docx-official`, `pptx-official`, `xlsx-official` | retirar 3 variantes libres |
 | 3. Excel/MCP | excel-analysis, data-transform + entrada `excel` MCP en opencode.json (disabled; `uvx` → rompe `--offline`) | tres caminos para CSV/Excel | CONSOLIDAR — gana la vía skill (offline-safe) | retirar 1 (`data-transform` si `excel-analysis` cubre); dejar/eliminar la entrada MCP disabled |
 | 4. Literatura ×14 | literature, literature-search, literature-review, research-literature, academic-literature-search, paper-lookup, arxiv-search, biorxiv-search, medrxiv-search, pubmed-search, pubmed-database, openalex-database, bgpt-paper-search, paperzilla | buscadores redundantes; las bases bio/med específicas son out-of-domain para el payload genérico | CONSOLIDAR — ganan `research-lookup` (general) + `arxiv-search` + `pubmed-search` | retirar 11 |
 | 5. Deep research ×4 | deep-research, deep-research-swarm, tooluniverse-literature-deep-research, research-lookup | variantes de orquestación duplican búsqueda; swarm = coste de tokens contra criterio 4 | CONSOLIDAR — ganan `deep-research` + `research-lookup` | retirar 2 (swarm, tooluniverse) |
-| 6. markitdown skill × markitdown MCP | skill `markitdown` + MCP `markitdown` (lo añade el wizard, fase 8) | mismo convertidor por dos canales | CONSERVAR con nota: **el MCP manda en el flujo RAG** (`add_source`); la skill queda para conversión ad-hoc multi-archivo sin tocar índice | mantener ambos; nota en AGENTS.md del vault |
+| 6. markitdown skill × markitdown MCP | skill `markitdown` + MCP `markitdown` (retirado del payload en la review Phase 2 y **definitivamente** en Phase 3.5: la conversión es en proceso, D29/ADR-011) | mismo convertidor por dos canales | CONSERVAR la skill con nota: el flujo RAG usa `add_source`/`convert_*` de `tepochcalli-rag`; la skill queda para conversión ad-hoc multi-archivo sin tocar índice. **El MCP standalone ya no existe** | mantener la skill; nota en AGENTS.md del vault |
 | 7. Obsidian trío + instructions | obsidian-markdown, obsidian-vault, obsidian-cli | vault×cli se solapan en gestión de notas; el json del workspace lista además `markdown-mermaid-writing` | CONSOLIDAR — ganan `obsidian-markdown` (formato) + `obsidian-cli` (gestión); `obsidian-vault` se fusiona | retirar 1; actualizar `instructions` de `opencode.json` si se retira la skill |
 | 8. Estadística ×4 | statistical-analysis, data-stats-analysis, statsmodels, statistical-power | data-stats-analysis duplica el rango de statistical-analysis | CONSOLIDAR — ganan `statistical-analysis` + `statsmodels` (statistical-power como helper CONSERVAR) | retirar 1 |
 | 9. Visualización ×5 | matplotlib, seaborn, plotly, data-viz-plots, scientific-visualization | wrappers sobre los mismos backends | CONSOLIDAR — entry point `scientific-visualization` + backends `matplotlib`/`seaborn`/`plotly` | retirar 1 (`data-viz-plots`) |
@@ -455,8 +456,9 @@ Contra `ls obsidian-workspace/.opencode/skills/` = **208 dirs** (recuento de est
 | 14. Núcleo metodológico sin conflicto (restantes en dominio) | p. ej. citation-management, experimental-design, writing-plans, scientific-problem-selection, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units, venue-templates, scientific-slides, paper-2-web, exploratory-data-analysis, networkx, sympy, shap | sin solape material para el pipeline 9/5 | CONSERVAR | mantener en payload base |
 | 15. Out-of-domain para payload genérico (grosso del remanente) | scanpy, pydeseq2, qiime2-amplicon, neuropixels-analysis, diffdock, qiskit, matlab, geopandas y `gis-*` (×14), `marketing-*` (×37), `finance-*`/`sales-*`/`legal-*`/`healthcare-*`/`paid-media-*`/`product-*`/`design-*`, y el resto del inventario no nombrado arriba | no corresponden a las 14 categorías UH de investigación general | RETIRAR → "skill pack" opcional futuro | retirar del payload base (Anexo A; PACK=1 en CI para no romper referencias); el remanente en dominio (p. ej. polars, dask, vaex, zarr-python, pyzotero, scientific-schematics, exa-search, perplexity-search, patents-search, database-lookup, wikipedia-search, multi-search-engine) se falla CONSERVAR por el criterio de la fila 14 |
 | 16. Gaps UH (sin skill hoy) | jupyter (cuadernos), R (graficación estadística), Graphviz/PlantUML (diagramas), LaTeX de manuscrito (`latex-posters` no cubre manuscrito) | categorías #10/#11/#14 de UH sin cubrir | INSTALAR-GAP | Phase 5 instala según Anexo A o declara won't (gate WORKFLOW) |
+| 17. `tepochcalli-mcp` (nueva, Phase 3.5 — H4) | `tepochcalli-mcp/SKILL.md` en `obsidian-workspace/.opencode/skills/tepochcalli-mcp/` — no existía en el `ls` de 2026-10-21; hoy está en el payload | catálogo único de decisión de las 7 tools de `tepochcalli-rag` + fallback `anydoc`; solapa con la skill `markitdown` en «convertir», pero esta decide **cuándo** usar cada tool | CONSERVAR (nueva; registrada por OM-6 para que la matriz de Phase 4 cubra el 100 %) | Phase 5 la cuenta como entrada del inventario: **209 dirs** (208 + 1); ninguna otra skill la duplica |
 
-* Cierre de cobertura: filas 1-14 nombran explícitamente 72 de los 208 dirs del `ls`; fila 15 barre el resto por familia con criterio decidido (RETIRAR out-of-domain ≈120 / CONSERVAR remanente en dominio); fila 16 declara los gaps. **Objetivo del payload final: <60 skills en el payload base** (métrica heredada de WORKFLOW Phase 5).
+* Cierre de cobertura: filas 1-14 nombran explícitamente 72 de los 208 dirs del `ls`; fila 15 barre el resto por familia con criterio decidido (RETIRAR out-of-domain ≈120 / CONSERVAR remanente en dominio); fila 16 declara los gaps; **fila 17 añade la skill `tepochcalli-mcp` de Phase 3.5 (fuera del `ls` de 2026-10-21) ⇒ el inventario de Phase 5 parte de 209 dirs**. **Objetivo del payload final: <60 skills en el payload base** (métrica heredada de WORKFLOW Phase 5).
 * **Decisión explícita (2026-10-28): 0 skills nuevas para el protocolo de opendraft.** Los
   gates heredados (procedencia, check de claim, gate de compilación) son invariantes de
   workflow — deben correr SIEMPRE — y en OpenCode un cuerpo de comando se ejecuta siempre,
@@ -522,5 +524,5 @@ Linkables desde docs/WORKFLOW.md Phase 5 ("Validación del agent workflow (D9)")
 
 * OpenCode V2 docs (agents/commands/permissions) — verificación 2026-10-21
 * specs/spec-agent-workflow.md (D9.2/D9.3, Anexo A), specs/spec-vault-structure.md (D9.1),
-  specs/spec-mcp-server.md (contrato 4 tools + `E_*`), docs/UH.md (tabla Agentes Primarios),
+  specs/spec-mcp-server.md (contrato 7 tools + `E_*`), docs/UH.md (tabla Agentes Primarios),
   docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución)

@@ -103,16 +103,20 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 
 | Spec | Status | Alcance |
 | --- | --- | --- |
-| [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved | Flujo CocoIndex: fuentes, chunking, PDF/Docling, Δ<30s, escala |
-| [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved | Contratos de tools, errores, latencia/token budget, config |
-| [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Proposed | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia |
+| [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved; Amended 2026-11-02 (Phase 3.5) | Flujo CocoIndex: N raíces por llamada, extracción markitdown (8 formatos, sin Docling), Δ<30s de texto y documentos aparte, escala |
+| [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved; Amended 2026-11-02 (Phase 3.5) | 7 contratos de tools, errores `E_*`, frontera B′, latencia/token budget, config |
+| [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Proposed; Amended 2026-11-02 (Phase 3.5) | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia, raíces indexables |
 | [specs/spec-embeddings.md](specs/spec-embeddings.md) | Approved | Modelo default, matriz local/externo, cache, swap+re-index |
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Approved (FTR Phase 3→4, 2026-10-28) | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
-| [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved | markitdown-mcp: config V2, `convert_to_markdown`, fallback, seguridad |
+| [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
 | [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | Blueprint Phase 4 (diseño del agent workflow) — ejecución literal en Phase 5; gate Approved usuario |
 
 (Plantillas: [specs/spec-template.md](specs/spec-template.md), [specs/adr/adr-template.md](specs/adr/adr-template.md).)
+
+> **Phase 3.5 (2026-11-02):** las cuatro filas marcadas *Amended* están enmendadas por
+> ADR-009/010/011, todavía **Proposed**: el FTR con el usuario es el paso que los convierte en
+> *Accepted* (y ese paso no lo hace esta documentación).
 
 ## Log de decisiones
 

@@ -7,6 +7,58 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 3.5, 2026-11-03)
+
+- **Tres tools del conversor en `tepochcalli-rag`** — `convert_document`, `convert_base64` y
+  `list_formats` —: markitdown **en proceso**, escritura atómica dentro del vault y respuesta
+  **summary-only** (5 claves: `written_to`, `source_uri`, `bytes`, `chars`, `preview` ≤500
+  chars). El cuerpo convertido nunca viaja al LLM (ADR-009). El server pasa de **4 a 7 tools**.
+- **Índice multi-raíz por llamada**: `index_refresh(directories=[...])` indexa cualquier carpeta
+  del vault, recursiva y a cualquier profundidad; una raíz puede ser un fichero suelto; las
+  solapadas se deduplican; `source_path` es **relativo al vault** y `rag_status` publica
+  `last_refresh_roots`/`available_roots` (ADR-010).
+- **RAG de documentos nativo**: `.pdf/.docx/.pptx/.xlsx/.xls` se indexan en su forma original
+  (markitdown), con `doc_kind` propio y `offsets_ref="extract"` — sin convertirlos antes a `.md`
+  (D49/D51). El PDF pierde `heading` y se declara (D54).
+- **Skill `tepochcalli-mcp`** en el payload (`.opencode/skills/tepochcalli-mcp/SKILL.md`):
+  catálogo único de decisión de las 7 tools, defaults, errores y fallback `anydoc`.
+- Contract tests e2e de las 7 tools, negativos de la frontera B′ y e2e bulk de 1 000 páginas
+  (test `slow`).
+
+### Changed (Phase 3.5)
+
+- **Dieta de dependencias (ADR-011):** `markitdown[docx,pptx,xlsx,xls,pdf]==0.1.9` en proceso y
+  `cocoindex[lancedb,sentence-transformers,litellm]`; `litellm` deja de ser dependencia directa
+  (pin por `[tool.uv] constraint-dependencies`). Venv medido: **1,921 GiB** y **135 paquetes**
+  (antes 184); lock **193 → 140** entradas.
+- **Extracción de documentos con markitdown** en el motor (antes Docling): Δ de texto p95
+  **4 299 ms** (n=20, nearest-rank; Phase 1: 5 385/5 466/5 952 ms), RSS `VmHWM` **1 486 MiB**
+  (texto) / **1 601 MiB** (documentos) frente a 2 048–2 189 MiB con Docling.
+- Una sola implementación de embedder (write y read sobre el mismo path del snapshot) y
+  `@coco.fn` en los helpers para que editar el parser invalide el memo (D58/D59).
+- Frontera **B′** documentada en `docs/SECURITY.md`: entrada **y** salida dentro del vault,
+  validación de raíces (existencia y tipo) y symlinks acotados al vault.
+
+### Removed (Phase 3.5)
+
+- `mcp.servers.markitdown` del payload: el server standalone ya no existe; la conversión es una
+  librería en proceso de `tepochcalli-rag`.
+- `docling`, `torchvision` y `markitdown-mcp` del venv (ADR-011).
+
+### Fixed (Phase 3.5)
+
+- Reintentos con backoff en el embedder remoto: llegan con `LiteLLMEmbedder` (**TD-16
+  cerrada**), conservando `E_API_AUTH` y el scrub de la clave.
+- Write y read resuelven **el mismo path pineado** del snapshot (bug de espacio vectorial
+  desalineado: el índice se construía con «main» y la query con un SHA). `require_local_model`
+  sigue comprobando solo que el directorio no esté vacío — deuda TD-29.
+- `spec-rag-engine` §Target corregida: `offsets_ref` **no** es columna persistida; se deriva de
+  `doc_kind` al leer.
+
+**No verificado en esta fase:** GitHub Actions nunca ha corrido (M6); los 3 tests `slow`
+(incluye el bulk) van aparte; el coste de un PDF de 30 páginas con markitdown **no se midió**;
+Windows sigue sin probar. Detalle en `docs/WORKFLOW.md` §Phase 3.5.
+
 ### Added (Phase 3, 2026-10-28)
 
 - **Wizard de instalación `tepochcalli`**: crate Rust
@@ -79,23 +131,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Project Information
 
 ### Repository
+
 - **Name**: [Project Name]
 - **Description**: [Project Description]
-- **Repository**: https://github.com/[username]/[repository-name]
+- **Repository**: <https://github.com/[username]/[repository-name]>
 - **License**: MIT License
 
 ### Technology Stack
+
 ...
 
 ### Related Documentation
+
 ...
 
 ### Update Instructions
 
 #### From Previous Versions
+
 ...
 
 #### For Future Versions
+
 ...
 
 ### Contributing to the CHANGELOG
