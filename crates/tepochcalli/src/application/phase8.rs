@@ -7,9 +7,11 @@
 //!    the file pre-exists; a backup failure aborts BEFORE any mutation, so
 //!    there is nothing to compensate).
 //! 2. **Merge:** conservative JSON merge — every unrelated user server is
-//!    preserved byte-for-value; only `tepochcalli-rag` is (re)written and a
-//!    stale `markitdown` entry is removed (D19). The merged doc keeps key
-//!    order (`preserve_order`) and the payload's 2-space form, and lands
+//!    preserved byte-for-value; only `tepochcalli-rag` is (re)written (its
+//!    `environment` keeps every key the user added, imposing only
+//!    `TEPOCHCALLI_ROOT`), and a stale `markitdown` entry is removed (D19).
+//!    The merged doc keeps key order (`preserve_order`) and the payload's
+//!    2-space form, and lands
 //!    atomically (temp + rename in the same dir). A byte-identical entry is
 //!    left untouched (`changed: false`).
 //! 3. **Verify:** run the vault venv python with the registered cwd + env
@@ -101,14 +103,36 @@ pub fn mcp_python_command() -> &'static str {
 /// The exact entry F8 manages (spec-installer-wizard §Merge): key order is
 /// the payload's (`type/command/cwd/environment/disabled`), preserved by
 /// the `preserve_order` serializer on both write and comparison.
-fn expected_rag_entry() -> serde_json::Value {
+fn expected_rag_entry(
+    environment: serde_json::Map<String, serde_json::Value>,
+) -> serde_json::Value {
     serde_json::json!({
         "type": "local",
         "command": [mcp_python_command(), "-m", "tepochcalli_mcp"],
         "cwd": ".",
-        "environment": { CONTRACT_ROOT_ENV: "." },
+        "environment": serde_json::Value::Object(environment),
         "disabled": false
     })
+}
+
+/// Environment of the managed entry: every key the user already put there
+/// survives (D32 — `INDEXER_DIR`, `TEPOCHCALLI_TOP_K`…), and only the
+/// contract root is imposed. Insertion order is the user's, so pointing
+/// `TEPOCHCALLI_ROOT` at its existing position keeps a rerun byte-equal.
+fn merged_environment(
+    current: Option<&serde_json::Value>,
+) -> Result<serde_json::Map<String, serde_json::Value>, WizardError> {
+    let mut environment = match current {
+        // Present-but-not-an-object is a safe typed failure (never a guess),
+        // same criterion as `servers_mut`.
+        Some(value) => value.as_object().ok_or(WizardError::PhaseFailed)?.clone(),
+        None => serde_json::Map::new(),
+    };
+    environment.insert(
+        CONTRACT_ROOT_ENV.to_string(),
+        serde_json::Value::String(".".to_string()),
+    );
+    Ok(environment)
 }
 
 /// The `mcp.servers` object, creating `mcp`/`servers` when absent; a
@@ -137,7 +161,9 @@ fn merge_servers(doc: &mut serde_json::Value) -> Result<bool, WizardError> {
     if servers.shift_remove(STALE_MARKITDOWN).is_some() {
         changed = true;
     }
-    let expected = expected_rag_entry();
+    let expected = expected_rag_entry(merged_environment(
+        servers.get(MANAGED_RAG).and_then(|e| e.get("environment")),
+    )?);
     match servers.get(MANAGED_RAG) {
         Some(current) if current == &expected => {}
         _ => {

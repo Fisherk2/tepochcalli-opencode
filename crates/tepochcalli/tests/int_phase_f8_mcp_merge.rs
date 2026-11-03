@@ -25,8 +25,8 @@ use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
 use tepochcalli::application::phase8::{
-    compensate_phase8, mcp_python_command_for, run_phase8, Phase8Report, RagHealth, MANAGED_RAG,
-    OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
+    compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
+    RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
 };
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::{CommandOutput, CommandRunner};
@@ -141,6 +141,19 @@ fn occurrences(haystack: &str, needle: &str) -> usize {
     haystack.matches(needle).count()
 }
 
+/// The managed entry exactly as F8 writes it, with a caller-supplied
+/// `environment` (so a test can pre-seed user keys).
+fn managed_entry(environment: serde_json::Value) -> String {
+    serde_json::json!({"mcp": {"servers": {MANAGED_RAG: {
+        "type": "local",
+        "command": [mcp_python_command(), "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "environment": environment,
+        "disabled": false
+    }}}})
+    .to_string()
+}
+
 #[test]
 fn f8_backup_before_write_and_compensation_restores_byte_identical() {
     let vault = tmp();
@@ -249,6 +262,110 @@ fn f8_rewrites_only_when_different_second_run_is_noop() {
         occurrences(&String::from_utf8_lossy(&after_second), MANAGED_RAG),
         1,
         "zero duplicate entries"
+    );
+}
+
+#[test]
+fn f8_keeps_user_environment_keys() {
+    // User-added env vars (INDEXER_DIR, TEPOCHCALLI_TOP_K…) are data, not
+    // drift: re-running the installer must not delete them.
+    let vault = tmp();
+    let original = managed_entry(serde_json::json!({
+        "TEPOCHCALLI_ROOT": ".",
+        "INDEXER_DIR": "00-Resources,03-Citations",
+        "TEPOCHCALLI_TOP_K": "9"
+    }));
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    assert!(!report.changed, "a satisfied entry is not a change");
+    let merged =
+        std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("config still exists");
+    assert_eq!(merged, original, "changed == false ⇒ file not rewritten");
+
+    let doc: serde_json::Value = serde_json::from_str(&merged).expect("merged parses");
+    let env = doc["mcp"]["servers"][MANAGED_RAG]["environment"]
+        .as_object()
+        .expect("environment object");
+    assert_eq!(env.len(), 3, "same three keys survive, got: {env:?}");
+    assert_eq!(env["TEPOCHCALLI_ROOT"], ".");
+    assert_eq!(env["INDEXER_DIR"], "00-Resources,03-Citations");
+    assert_eq!(env["TEPOCHCALLI_TOP_K"], "9");
+}
+
+#[test]
+fn f8_environment_preservation_is_idempotent() {
+    let vault = tmp();
+    let original = managed_entry(serde_json::json!({
+        "INDEXER_DIR": "00-Resources,03-Citations",
+        "TEPOCHCALLI_ROOT": "."
+    }));
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok(), rag_ok()]);
+
+    let first = run_phase8(&proc, vault.path()).expect("first pass must succeed");
+    assert!(!first.changed, "already-canonical entry ⇒ no rewrite");
+    let second = run_phase8(&proc, vault.path()).expect("second pass must succeed");
+    assert!(!second.changed, "strict idempotency across reruns");
+    assert_eq!(
+        std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("config exists"),
+        original,
+        "neither pass rewrote the file"
+    );
+}
+
+#[test]
+fn f8_non_object_environment_fails_and_writes_nothing() {
+    // Never guess: a malformed `environment` is a typed failure, and
+    // compensation leaves the user file byte-identical.
+    let vault = tmp();
+    let original = managed_entry(serde_json::json!([]));
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    assert_eq!(
+        run_phase8(&proc, vault.path()).expect_err("non-object environment must fail"),
+        WizardError::PhaseFailed
+    );
+    assert_eq!(
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config exists"),
+        original.as_bytes(),
+        "nothing written, byte-identical"
+    );
+    assert!(
+        proc.calls().is_empty(),
+        "no probe spawn on a failed merge, got: {:?}",
+        proc.calls()
+    );
+}
+
+#[test]
+fn f8_entry_without_environment_gains_only_the_contract_root() {
+    let vault = tmp();
+    let original = serde_json::json!({"mcp": {"servers": {MANAGED_RAG: {
+        "type": "local",
+        "command": [mcp_python_command(), "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "disabled": false
+    }}}})
+    .to_string();
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    assert!(report.changed, "adding the environment is a change");
+
+    let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged config");
+    let doc: serde_json::Value = serde_json::from_str(&merged).expect("merged parses");
+    assert_eq!(
+        doc["mcp"]["servers"][MANAGED_RAG]["environment"],
+        serde_json::json!({ "TEPOCHCALLI_ROOT": "." }),
+        "no invented keys"
     );
 }
 
