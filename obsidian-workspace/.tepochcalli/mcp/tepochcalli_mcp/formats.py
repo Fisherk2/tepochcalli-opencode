@@ -34,9 +34,9 @@ SUPPORTED_FORMATS: Final[tuple[str, ...]] = (
 """Las 13 extensiones del contrato §5.5, en el orden en que `list_formats` las publica."""
 
 NOTES: Final = (
-    "Sin OCR: un PDF escaneado no tiene capa de texto y no se convierte — "
-    "guárdalo como `.md` a mano o pásalo por un OCR. Fuera del catálogo quedan "
-    "`.doc`/`.ppt` (sin convertidor legacy) y los binarios de v1."
+    "Sin OCR: un PDF escaneado no tiene capa de texto y no se convierte. "
+    "Fuera del catálogo: `.doc`/`.ppt`, porque markitdown 0.1.9 no trae "
+    "convertidor legacy para esos binarios."
 )
 """La nota del wire (H1): el catálogo es honesto sobre lo que la instalación NO hace."""
 

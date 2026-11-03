@@ -82,6 +82,7 @@ from tepochcalli_mcp.tools import add_source as add_source_handler
 from tepochcalli_mcp.tools import convert_base64 as convert_base64_handler
 from tepochcalli_mcp.tools import convert_document as convert_document_handler
 from tepochcalli_mcp.tools import index_refresh as index_refresh_handler
+from tepochcalli_mcp.tools import list_formats as list_formats_handler
 from tepochcalli_mcp.tools import rag_status as rag_status_handler
 from tepochcalli_mcp.tools import search as search_handler
 
@@ -591,6 +592,20 @@ async def convert_base64(
     return tepochcalli_mcp.tools.json_text_result(
         summary.serialize_budget(payload), is_error="error" in payload
     )
+
+
+@server.tool()
+def list_formats() -> CallToolResult:
+    """Lista los formatos que el conversor acepta; sin OCR. Catálogo real, no adivinado.
+
+    Devuelve `{formats, count, notes}`: las 13 extensiones en el orden del
+    catálogo, el total derivado y una nota con los dos límites que el agente NO
+    debe prometer — este conversor no hace OCR (un PDF escaneado ⇒
+    `SOURCE_UNREACHABLE`) y `.doc`/`.ppt` no están porque `markitdown 0.1.9` no
+    trae convertidor legacy. Consúltala ante una extensión dudosa o cuando
+    `convert_base64` no tenga pista de tipo.
+    """
+    return tepochcalli_mcp.tools.json_result(list_formats_handler.list_formats())
 
 
 @server.tool()

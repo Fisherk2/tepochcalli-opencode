@@ -140,6 +140,7 @@ MCP_TOOL_MODULES: Final[tuple[str, ...]] = (
     f"{MCP_PACKAGE}.tools.add_source",
     f"{MCP_PACKAGE}.tools.convert_document",
     f"{MCP_PACKAGE}.tools.convert_base64",
+    f"{MCP_PACKAGE}.tools.list_formats",
 )
 """Handlers T2-T5: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
 
@@ -436,6 +437,16 @@ def test_walker_covers_the_second_package_transitively() -> None:
     )
     assert "markitdown" not in {target.split(".")[0] for target in reached_base64}, (
         "convert_base64 (T10) va por costura: tools/ NUNCA importa markitdown"
+    )
+
+    reached_formats = {
+        target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.tools.list_formats")
+    }
+    assert f"{MCP_PACKAGE}.formats" in reached_formats, (
+        "list_formats (T11) lee el catálogo de formats.py: dato puro"
+    )
+    assert "markitdown" not in {target.split(".")[0] for target in reached_formats}, (
+        "list_formats (T11) publica DATO: nunca importa el conversor"
     )
 
 

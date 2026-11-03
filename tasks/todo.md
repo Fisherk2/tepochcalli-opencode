@@ -113,7 +113,7 @@
   - Verificar: integration con un `.docx` en base64 ⇒ `.md` equivalente al de T9 · negativos (sin `format`, base64 corrupto, salida fuera del vault) · `opencode mcp list` ⇒ 6 tools
   - Dep.: T9 · Tamaño: M
 
-- [ ] **T11 · `list_formats`: el catálogo de formatos, atado al motor**
+- [x] **T11 · `list_formats`: el catálogo de formatos, atado al motor**
   - Subagentes: `mcp-developer` (lead), `technical-writer` · Skills: `source-driven-development`, `clean-code` · Herramientas: `context7`
   - AC: (a) `list_formats()` sin argumentos devuelve `{formats, count, notes}` del catálogo; (b) la respuesta es **< 200 tokens**; (c) la nota aclara que **no hay OCR**; (d) un test ata cada extensión del catálogo a una conversión real (o a la lista de «best-effort»); (e) registrada en `server.py` con su `description`
   - Verificar: integration que itera el catálogo · < 200 tokens por el estimador de `budget` · `opencode mcp list` ⇒ 7 tools

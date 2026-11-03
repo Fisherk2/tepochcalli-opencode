@@ -47,6 +47,7 @@ _EXPECTED_INPUT_KEYS: dict[str, list[str]] = {
     "rag_status": [],
     "convert_document": ["path", "output_path", "format"],
     "convert_base64": ["data", "output_path", "format", "filename"],
+    "list_formats": [],
 }
 _EXPECTED_REQUIRED: dict[str, list[str]] = {
     "search": ["query"],
@@ -55,6 +56,7 @@ _EXPECTED_REQUIRED: dict[str, list[str]] = {
     "rag_status": [],
     "convert_document": ["path"],
     "convert_base64": ["data"],
+    "list_formats": [],
 }
 
 

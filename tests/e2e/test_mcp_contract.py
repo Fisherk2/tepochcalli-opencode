@@ -160,6 +160,7 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
                 "convert_base64",
                 "convert_document",
                 "index_refresh",
+                "list_formats",
                 "rag_status",
                 "search",
             ]
@@ -179,6 +180,8 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
             assert tools["convert_base64"].input_schema["required"] == ["data"]
             assert list(tools["index_refresh"].input_schema["properties"]) == ["directories"]
             assert tools["index_refresh"].input_schema.get("required", []) == []
+            assert tools["list_formats"].input_schema["properties"] == {}
+            assert tools["list_formats"].input_schema.get("required", []) == []
             assert (
                 tools["index_refresh"].input_schema["properties"]["directories"]["default"] is None
             )
