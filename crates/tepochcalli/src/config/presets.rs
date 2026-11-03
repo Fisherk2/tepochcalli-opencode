@@ -12,6 +12,10 @@ pub struct Preset {
     pub name: String,
     /// HuggingFace id.
     pub hf_id: String,
+    /// SHA de la revisión HF pineada (T6/D59): el snapshot estable que
+    /// materializa el flow es `<models>/<slug>@<sha>/`, y ese mismo SHA va a
+    /// `[embedding].revision` — write y read resuelven el mismo directorio.
+    pub revision: String,
     /// Embedding dimensions.
     pub dims: u32,
     /// Download weight in MB (HF blob).
@@ -142,6 +146,7 @@ fn finish_block(fields: &[(&str, &str)]) -> Result<Preset, PresetError> {
     Ok(Preset {
         name: unquote_value("name", get("name")?)?.to_string(),
         hf_id: unquote_value("hf_id", get("hf_id")?)?.to_string(),
+        revision: unquote_value("revision", get("revision")?)?.to_string(),
         dims,
         size_mb,
         disk_mb,

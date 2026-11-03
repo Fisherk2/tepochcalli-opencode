@@ -307,6 +307,7 @@ fn f7_failure_leaves_no_index_and_keeps_placeholders() {
     let report = Phase6Report {
         provider: "local".to_string(),
         model: Some("paraphrase-multilingual-MiniLM-L12-v2".to_string()),
+        revision: Some("e8f8c211226b894fcb81acc59f3b34ba3efd5f42".to_string()),
         dims: Some(384),
         rss_peak_bytes: Some(1),
     };

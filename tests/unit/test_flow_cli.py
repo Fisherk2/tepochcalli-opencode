@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import sys
+from pathlib import Path
 
 import pytest
 import tepochcalli_flow.__main__ as cli
@@ -42,7 +43,9 @@ def test_embed_check_ok_reports_dims_and_rss(
         def encode(self, _text: str) -> list[float]:
             return [0.1] * 384
 
-    monkeypatch.setattr(cli, "build_embedder_for_model", lambda _model: _FakeEmbedder())
+    monkeypatch.setattr(
+        cli, "build_embedder_for_model", lambda _model, _revision=None: _FakeEmbedder()
+    )
     monkeypatch.setattr(cli, "rss_peak_bytes", lambda: 1_234_567)
     assert cli.main(["embed-check", "--model", "paraphrase-multilingual-MiniLM-L12-v2"]) == 0
     payload = json.loads(capsys.readouterr().out)
@@ -60,7 +63,7 @@ def test_embed_check_bad_model_reports_e_model_invalid(
     """Un repo que no es de embeddings ⇒ `ok: false` con `E_MODEL_INVALID`."""
     monkeypatch.setattr(cli, "CONTROL_PHRASE", "tepochcalli embedding check")
 
-    def _boom(_model: str) -> object:
+    def _boom(_model: str, _revision: str | None = None) -> object:
         raise ValueError("not a sentence-transformers repo")
 
     monkeypatch.setattr(cli, "build_embedder_for_model", _boom)
@@ -80,10 +83,54 @@ def test_embed_check_uses_control_phrase(monkeypatch: pytest.MonkeyPatch) -> Non
             seen.append(text)
             return [0.0] * 8
 
-    monkeypatch.setattr(cli, "build_embedder_for_model", lambda _model: _FakeEmbedder())
+    monkeypatch.setattr(
+        cli, "build_embedder_for_model", lambda _model, _revision=None: _FakeEmbedder()
+    )
     monkeypatch.setattr(cli, "rss_peak_bytes", lambda: 0)
     assert cli.cmd_embed_check("some-model")["ok"] is True
     assert seen == ["tepochcalli embedding check"]
+
+
+def test_embed_check_materializes_the_candidate_model_at_the_stable_path(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """F6: `embed-check --model/--revision` materializa `<slug>@<sha>` con la config candidata."""
+    import sys
+    import types
+
+    from tepochcalli_flow import config as flow_config
+    from tepochcalli_flow import model_store
+
+    monkeypatch.setenv("TEPOCHCALLI_VAULT_ROOT", str(tmp_path))
+    # `build_embedder_for_model` llama `apply_model_cache_env` (correcto en
+    # producción); en el test lo neutralizamos para no filtrar `HF_HOME` a la
+    # suite (el materializador está doblado y no descarga).
+    monkeypatch.setattr(flow_config.Config, "apply_model_cache_env", lambda _self: None)
+    calls: list[object] = []
+
+    def _ensure(config: object) -> Path:
+        calls.append(config)
+        return Path("/models/estable")
+
+    class _FakeEmbedder:
+        def encode(self, _text: str) -> list[float]:
+            return [0.0] * 4
+
+    monkeypatch.setattr(model_store, "ensure_local_model", _ensure)
+    monkeypatch.setitem(
+        sys.modules,
+        "sentence_transformers",
+        types.SimpleNamespace(SentenceTransformer=lambda _path: _FakeEmbedder()),
+    )
+    monkeypatch.setattr(cli, "rss_peak_bytes", lambda: 0)
+
+    payload = cli.cmd_embed_check("org/custom-model", "abc123")
+
+    assert payload["ok"] is True
+    candidate = calls[0]
+    assert candidate.embedding.model == "org/custom-model"
+    assert candidate.embedding.revision == "abc123"
+    assert candidate.embedding_model_path.name == "org__custom-model@abc123"
 
 
 def test_rss_peak_bytes_linux_scales_kb_to_bytes(monkeypatch: pytest.MonkeyPatch) -> None:

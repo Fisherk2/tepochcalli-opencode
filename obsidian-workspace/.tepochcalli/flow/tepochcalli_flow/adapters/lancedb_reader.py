@@ -61,13 +61,13 @@ from pathlib import Path, PurePosixPath
 from typing import Final, cast
 
 import lancedb
+from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
 from lancedb.rerankers import RRFReranker
-from sentence_transformers import SentenceTransformer
 
-from .. import config as flow_config
 from ..citation import DocKind, offsets_ref_for
 from ..config import DEFAULT_TOP_K, load_config
 from ..layout import DB_RELPATH, TABLE_NAME
+from ..model_store import is_materialized
 from ..ports import CitedChunk
 
 VECTOR_COLUMN: Final = "embedding"
@@ -107,25 +107,28 @@ def _close_connection(db: lancedb.AsyncConnection) -> None:
 
 
 def build_reader(vault_root: Path) -> LanceDBChunkReader:
-    """Composition root del lector: config del vault + embedder + `LanceDBChunkReader`.
+    """Composition root del lector: config + snapshot estable + MISMA op que el write (T6/D59).
 
-    Monta el wiring que antes se repetía en cada entrypoint (`verify.main`):
-    carga la config del vault, apunta el cache de modelos a
-    `<vault>/.tepochcalli/models` y corta el `SentenceTransformer` local
-    configurado, pineado a la revisión del docstring de `config.MODEL_REVISION`.
-    shortcut: construye su propio embedder (la estrategia de
-    fase/errores E_* de Phase 2 reemplazará esta fábrica, ver spec-mcp-server).
+    Resuelve `config.embedding_model_path` (`<models>/<slug>@<sha>/`), exige que
+    el snapshot exista (sin descargar: el read path no materializa) y construye
+    `SentenceTransformerEmbedder(<path>)` — la MISMA op que el write path, no
+    una `SentenceTransformer` aparte. El corte es sync por contrato del puerto
+    (`embed: Callable[[str], list[float]]`) y `LanceDBChunkReader` lo ejecuta en
+    un hilo; dentro, `asyncio.run` da a la op su propio loop.
     """
     config = load_config(vault_root)
     config.apply_model_cache_env()
-    model = SentenceTransformer(
-        config.embedding.model,
-        device=config.embedding.device,
-        revision=flow_config.MODEL_REVISION,
-    )
-    return LanceDBChunkReader(
-        vault_root / DB_RELPATH, embed=lambda text: model.encode(text).tolist()
-    )  # noqa: E501
+    path = config.embedding_model_path
+    if not is_materialized(config):
+        raise FileNotFoundError(
+            f"snapshot local ausente en {path}; ejecuta `tepochcalli config embedder`"
+        )
+    op = SentenceTransformerEmbedder(str(path), device=config.embedding.device)
+
+    def embed(text: str) -> list[float]:
+        return [float(value) for value in asyncio.run(op.embed(text))]
+
+    return LanceDBChunkReader(vault_root / DB_RELPATH, embed=embed)
 
 
 def _validated_args(query: str, top_k: int, path_filter: str | None) -> tuple[str, str | None]:

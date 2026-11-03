@@ -75,7 +75,12 @@ from support.mcp_server import (
     server_env,
     wire_payload,
 )
-from tepochcalli_flow.config import DEFAULT_API_KEY_ENV, DEFAULT_EMBEDDING_MODEL
+from tepochcalli_flow.config import (
+    DEFAULT_API_KEY_ENV,
+    DEFAULT_EMBEDDING_MODEL,
+    MODEL_REVISION,
+    model_slug,
+)
 from tepochcalli_mcp import budget, errors
 
 FIXTURE_VAULT = Path(__file__).parents[1] / "fixtures" / "vault_markdown"
@@ -472,9 +477,23 @@ def test_offline_without_cache_travels_the_wire_as_e_offline_no_cache(
     contract_vault: tuple[Path, Path],
     tmp_path: Path,
 ) -> None:
-    """Cache de modelo VACÍO + modo offline ⇒ `E_OFFLINE_NO_CACHE` en el wire (cero dial)."""
+    """Snapshot PRESENTE pero ilegible + modo offline ⇒ `E_OFFLINE_NO_CACHE` (cero dial).
+
+    T6: la ausencia del snapshot es `E_MODEL_INVALID` (más precisa); este caso
+    conserva el contrato de `E_OFFLINE_NO_CACHE` para un snapshot que **existe**
+    (directorio no vacío) pero no se puede cargar sin red. El hijo corre con
+    `HF_HUB_OFFLINE=1` y un `HF_HOME` vacío.
+    """
     vault, _models_link = contract_vault
     clone = _cloned_vault(vault, tmp_path, empty_models=True)
+    stable = (
+        clone
+        / ".tepochcalli"
+        / "models"
+        / f"{model_slug(DEFAULT_EMBEDDING_MODEL)}@{MODEL_REVISION}"
+    )
+    stable.mkdir()
+    (stable / "config.json").write_text("{}", encoding="utf-8")  # no es un modelo válido
     # HF_HOME vacío + HF_HUB_OFFLINE=1 (server_env lo fija con model_cache):
     # la carga local falla contra un cache sin pesos y SIN intento de red.
     env = server_env(clone, clone / ".tepochcalli" / "models")

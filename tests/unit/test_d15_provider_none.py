@@ -99,5 +99,12 @@ def test_build_embedder_refuses_none_with_the_typed_error() -> None:
         embedding=flow_config.EmbeddingConfig(provider="none"),
     )
 
+    def _must_not_build(*_args: object) -> object:
+        raise AssertionError("con provider='none' no se construye ninguna op")
+
     with pytest.raises(embedder.EmbedderUnavailableError):
-        embedder.build_embedder(config)
+        embedder.build_read_cut(
+            config,
+            local_op_factory=_must_not_build,
+            api_op_factory=_must_not_build,
+        )

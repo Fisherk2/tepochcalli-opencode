@@ -415,6 +415,12 @@ fn swap_success_runs_six_steps_in_order_and_purges_old_model() {
         config.contains(NEW_MODEL),
         "config conmutada, got:\n{config}"
     );
+    // El swap pinea la revisión del preset (D59): sin ella el read path
+    // resolvería otro snapshot que el que materializó el gate.
+    assert!(
+        config.contains("revision = \"5617a9f61b028005a4858fdac845db406aefb181\""),
+        "la config debe pinear el SHA del preset, got:\n{config}"
+    );
     let meta = std::fs::read_to_string(rt.join("db").join("index-meta.json"))
         .expect("sidecar tras el swap");
     assert!(

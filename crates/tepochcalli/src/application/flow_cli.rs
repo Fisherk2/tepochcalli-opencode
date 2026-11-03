@@ -15,8 +15,8 @@ use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 
 /// Model cache dir, sandboxed under the vault via `HF_HOME` (same dir the
 /// F6 gate, F7 and the swap pass: the download happens once, every pass
-/// reuses it).
-const MODELS_DIR: &str = "models";
+/// reuses it). `pub(super)`: F6 deriva de aquí el path estable del snapshot.
+pub(super) const MODELS_DIR: &str = "models";
 
 /// Plazos de subprocess (L3-6): el gate mide RSS de un embed (generoso:
 /// descarga de modelo incluida, 300 s); el refresh reconstruye el índice

@@ -67,12 +67,23 @@ def _config(
     )
 
 
-def test_local_provider_builds_sentence_transformer_with_model_and_device() -> None:
-    """`local` ⇒ `SentenceTransformerEmbedder(model, device=…)` pineado (ADR-006/E1)."""
-    embedder = flow_app._build_embedder(_config("local"))
+def test_local_provider_builds_sentence_transformer_with_the_stable_path_and_device(
+    tmp_path: Path,
+) -> None:
+    """`local` ⇒ `SentenceTransformerEmbedder(<models>/<slug>@<sha>, device=…)` pineado."""
+    config = Config(
+        models_dir=tmp_path / ".tepochcalli" / "models",
+        embedding=EmbeddingConfig(provider="local"),
+    )
+    stable = config.embedding_model_path
+    stable.mkdir(parents=True)
+    (stable / "config.json").write_text("{}", encoding="utf-8")
+
+    embedder = flow_app._build_embedder(config)
 
     assert isinstance(embedder, SentenceTransformerEmbedder)
-    assert embedder._model_name_or_path == DEFAULT_EMBEDDING_MODEL
+    assert embedder._model_name_or_path == str(stable)
+    assert stable.name.endswith(f"@{config.embedding.revision}")
     assert embedder._device == DEFAULT_EMBEDDING_DEVICE
 
 

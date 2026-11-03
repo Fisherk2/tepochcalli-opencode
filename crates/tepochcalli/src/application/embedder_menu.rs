@@ -1,10 +1,14 @@
-//! F6b: 5-exit embedder menu + test-embed gate + atomic config (T11).
+//! F6b: 5-exit embedder menu + test-embed gate + materialización verificada
+//! del snapshot + atomic config (T11, T6/D59).
 //!
 //! Single-responsibility orchestrator over ports only (`Ui`, `HostProbe`,
 //! `CommandRunner`, `HttpClient`) plus `domain` + `config` — never
 //! `adapters/`. The menu order is [`EMBEDDER_PATHS`]; the gate contract
-//! (`venv python -m tepochcalli_flow embed-check --model <id>` returning
-//! `{ok,…}`) is implemented by the flow in T12 — here `FakeProc` stands in.
+//! (`venv python -m tepochcalli_flow embed-check --model <id> --revision
+//! <sha>` returning `{ok,…}`) is implemented by the flow in T12 — aquí
+//! `FakeProc` stands in. El wizard NO descarga modelos (D25): invoca el CLI
+//! del flow y luego **verifica** que `<models>/<slug>@<sha>/` existe y no
+//! está vacío antes de escribir la config.
 
 use std::path::{Path, PathBuf};
 
@@ -12,6 +16,7 @@ use crate::config::{badge_for, default_and_large, parse_presets, Preset};
 use crate::domain::{Badge, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
 
+use super::flow_cli::MODELS_DIR;
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::text::{
     config_value, is_plausible_hf_id, json_bool, json_raw, json_string, json_u32, json_u64,
@@ -64,7 +69,8 @@ const HF_API_BASE: &str = "https://huggingface.co/api/models/";
 const CONFIG_DIR: &str = "config";
 /// Config file name; written via temp + rename (never half-written).
 const CONFIG_FILE: &str = "tepochcalli.toml";
-/// Gate contract is flow-side (T12); the wizard only passes `--model`.
+/// Gate contract is flow-side (T12); el wizard pasa `--model` y, si conoce la
+/// revisión, `--revision <sha>` (el snapshot estable depende de ambos).
 const GATE_MODULE: &str = "tepochcalli_flow";
 const GATE_SUBCOMMAND: &str = "embed-check";
 /// fp32 resident estimate: params × 4 B × 1.3 overhead, shown in MB.
@@ -97,6 +103,11 @@ pub struct Phase6Report {
     pub provider: String,
     /// HF id or external model name (`None` for path 5).
     pub model: Option<String>,
+    /// SHA de la revisión pineada (`[embedding].revision`, D59): es la que el
+    /// gate materializó y la que el read path necesita para resolver el MISMO
+    /// snapshot. `None` cuando no se conoce (la API de HF no respondió) o no
+    /// aplica (paths 4-5).
+    pub revision: Option<String>,
     /// Gate-measured dims (`None` for paths 4-5).
     pub dims: Option<u32>,
     /// Gate-measured RSS peak in bytes (`None` for paths 4-5).
@@ -226,15 +237,19 @@ const F6_EXTERNAL_HEADER: &str =
 const F6_NONE_HEADER: &str =
     "generado por `tepochcalli install` (F6, salida 5) — re-entrada: `tepochcalli config embedder`";
 
-pub(super) fn local_config(header: &str, model: &str) -> String {
-    format!(
-        "# {header}\n\
-         [embedding]\n\
-         provider = \"local\"\n\
-         model = \"{}\"\n\
-         device = \"cpu\"\n",
+/// `provider = "local"` con el modelo y, cuando se conoce, su `revision` (SHA):
+/// sin esa clave el read path cae al default del flow y puede no coincidir con
+/// el snapshot materializado (D59).
+pub(super) fn local_config(header: &str, model: &str, revision: Option<&str>) -> String {
+    let mut body = format!(
+        "# {header}\n[embedding]\nprovider = \"local\"\nmodel = \"{}\"\n",
         toml_escape(model)
-    )
+    );
+    if let Some(sha) = revision {
+        body.push_str(&format!("revision = \"{}\"\n", toml_escape(sha)));
+    }
+    body.push_str("device = \"cpu\"\n");
+    body
 }
 
 pub(super) fn external_config(header: &str, model: &str, api_key: &str) -> String {
@@ -286,24 +301,86 @@ struct GateOk {
     rss_peak_bytes: u64,
 }
 
-/// Runs `venv python -m tepochcalli_flow embed-check --model <id>` (shared
-/// spawn trunk). `ok:false` is the portero verdict (`E_MODEL_INVALID`); a
-/// crashed/garbled gate is `PhaseFailed`.
+/// Runs `venv python -m tepochcalli_flow embed-check --model <id> [--revision
+/// <sha>]` (shared spawn trunk). `ok:false` is the portero verdict
+/// (`E_MODEL_INVALID`); a crashed/garbled gate is `PhaseFailed`.
 fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
     model_id: &str,
+    revision: Option<&str>,
     token: Option<&str>,
 ) -> Result<GateOk, WizardError> {
+    let mut args: Vec<&str> = vec!["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id];
+    if let Some(sha) = revision {
+        args.push("--revision");
+        args.push(sha);
+    }
     let out = super::flow_cli::run_flow_cli(
         proc,
         vault,
-        &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
+        &args,
         &[],
         token,
         super::flow_cli::GATE_TIMEOUT,
     )?;
     parse_gate(&out.stdout)
+}
+
+/// `BAAI/bge-m3` → `BAAI__bge-m3`: un id con `/` no puede anidar el
+/// directorio del snapshot. Espejo de `tepochcalli_flow.config.model_slug`.
+fn model_slug(model: &str) -> String {
+    model.replace('/', "__")
+}
+
+/// Snapshot estable del modelo: `<vault>/.tepochcalli/models/<slug>@<sha>/` —
+/// la MISMA fórmula que `tepochcalli_flow.config.Config.embedding_model_path`
+/// (write y read cargan ese path, D59).
+fn model_dir(vault: &Path, model: &str, revision: &str) -> PathBuf {
+    vault
+        .join(RUNTIME_DIR)
+        .join(MODELS_DIR)
+        .join(format!("{}@{revision}", model_slug(model)))
+}
+
+/// `true` cuando el directorio existe y NO está vacío (misma regla que
+/// `tepochcalli_flow.model_store.is_materialized`).
+fn is_materialized(dir: &Path) -> bool {
+    dir.is_dir()
+        && std::fs::read_dir(dir)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false)
+}
+
+/// AC T6(c): tras un gate `ok`, el snapshot debe estar materializado. Sin SHA
+/// (la API de HF no respondió: el CLI heredó el default del vault) no se puede
+/// nombrar el directorio — basta un `<slug>@*` no vacío.
+fn verify_materialized(
+    vault: &Path,
+    model: &str,
+    revision: Option<&str>,
+) -> Result<(), WizardError> {
+    let ok = match revision {
+        Some(sha) => is_materialized(&model_dir(vault, model, sha)),
+        None => {
+            let prefix = format!("{}@", model_slug(model));
+            std::fs::read_dir(vault.join(RUNTIME_DIR).join(MODELS_DIR))
+                .map(|entries| {
+                    entries.flatten().any(|entry| {
+                        entry.file_name().to_string_lossy().starts_with(&prefix)
+                            && is_materialized(&entry.path())
+                    })
+                })
+                .unwrap_or(false)
+        }
+    };
+    if ok {
+        Ok(())
+    } else {
+        // El gate dijo `ok` pero no dejó snapshot: fallo de fase. `main` lo
+        // compensa a la salida 5 (config `none`) — nunca media config.
+        Err(WizardError::PhaseFailed)
+    }
 }
 
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
@@ -325,6 +402,9 @@ fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
 pub(super) struct HfEstimate {
     pub(super) gated: bool,
     pub(super) embedding_tag: Option<bool>,
+    /// SHA de la revisión que sirve HF para este repo: el pin que F6 pasa al
+    /// gate y escribe en `[embedding].revision` (D59).
+    pub(super) sha: Option<String>,
     ram_mb: Option<u64>,
     disk_mb: Option<u64>,
 }
@@ -385,6 +465,7 @@ pub(super) fn parse_hf_metadata(body: &[u8]) -> HfEstimate {
     HfEstimate {
         gated,
         embedding_tag,
+        sha: json_string(&text, "sha"),
         ram_mb,
         disk_mb,
     }
@@ -413,7 +494,9 @@ fn finish_local(
     vault: &Path,
     preset: &Preset,
 ) -> Result<Phase6Report, WizardError> {
-    let gate = run_gate(deps.proc, vault, &preset.hf_id, None)?;
+    let revision = Some(preset.revision.as_str());
+    let gate = run_gate(deps.proc, vault, &preset.hf_id, revision, None)?;
+    verify_materialized(vault, &preset.hf_id, revision)?;
     deps.ui.panel(
         "Embedding OK",
         &format!(
@@ -424,10 +507,14 @@ fn finish_local(
             Provenance::Measured.label()
         ),
     );
-    write_config(vault, &local_config(F6_LOCAL_HEADER, &preset.hf_id))?;
+    write_config(
+        vault,
+        &local_config(F6_LOCAL_HEADER, &preset.hf_id, revision),
+    )?;
     Ok(Phase6Report {
         provider: "local".to_string(),
         model: Some(preset.hf_id.clone()),
+        revision: Some(preset.revision.clone()),
         dims: Some(gate.dims),
         rss_peak_bytes: Some(gate.rss_peak_bytes),
     })
@@ -442,6 +529,9 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
         Ok(body) => Some(parse_hf_metadata(&body)),
         Err(_) => None,
     };
+    // La revisión pineada es el `sha` del repo (provenance del snapshot); sin
+    // API es `None` y el CLI hereda el default del vault (como el read path).
+    let revision = estimate.as_ref().and_then(|estimate| estimate.sha.clone());
     let mut token: Option<String> = None;
     if let Some(estimate) = &estimate {
         if estimate.embedding_tag == Some(false) {
@@ -466,7 +556,8 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
             "La API de HF no responde (sin red): se intenta la descarga directa.",
         );
     }
-    let gate = run_gate(deps.proc, vault, &id, token.as_deref())?;
+    let gate = run_gate(deps.proc, vault, &id, revision.as_deref(), token.as_deref())?;
+    verify_materialized(vault, &id, revision.as_deref())?;
     deps.ui.panel(
         "Embedding OK",
         &format!(
@@ -477,10 +568,14 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
             Provenance::Measured.label()
         ),
     );
-    write_config(vault, &local_config(F6_LOCAL_HEADER, &id))?;
+    write_config(
+        vault,
+        &local_config(F6_LOCAL_HEADER, &id, revision.as_deref()),
+    )?;
     Ok(Phase6Report {
         provider: "local".to_string(),
         model: Some(id),
+        revision,
         dims: Some(gate.dims),
         rss_peak_bytes: Some(gate.rss_peak_bytes),
     })
@@ -502,6 +597,7 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
     Ok(Phase6Report {
         provider: "litellm".to_string(),
         model: Some(model),
+        revision: None,
         dims: None,
         rss_peak_bytes: None,
     })
@@ -520,6 +616,7 @@ impl Phase6Report {
         Self {
             provider: "none".to_string(),
             model: None,
+            revision: None,
             dims: None,
             rss_peak_bytes: None,
         }
@@ -544,7 +641,7 @@ pub fn litellm_config_present(vault: &Path) -> bool {
 }
 
 /// Rebuild the F6 report from an existing config (for `--resume`: skip the
-/// menu, keep the recorded provider/model). `None` when no config exists.
+/// menu, keep the recorded provider/model/revision). `None` when no config exists.
 #[must_use]
 pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
     let body = std::fs::read_to_string(config_path(vault)).ok()?;
@@ -553,9 +650,11 @@ pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
     }
     let provider = config_value(&body, "provider")?;
     let model = config_value(&body, "model");
+    let revision = config_value(&body, "revision");
     Some(Phase6Report {
         provider,
         model,
+        revision,
         dims: None,
         rss_peak_bytes: None,
     })
@@ -571,9 +670,9 @@ pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        badge_label, config_path, estimate_row, external_config, local_config, none_config,
-        parse_gate, parse_hf_metadata, write_config, EMBEDDER_PATHS, F6_EXTERNAL_HEADER,
-        F6_LOCAL_HEADER, F6_NONE_HEADER,
+        badge_label, config_path, estimate_row, external_config, is_materialized, local_config,
+        model_dir, none_config, parse_gate, parse_hf_metadata, write_config, EMBEDDER_PATHS,
+        F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER,
     };
     use crate::domain::{Badge, EmbedderChoice};
 
@@ -593,17 +692,79 @@ mod tests {
         );
     }
 
+    /// El path estable del snapshot es el MISMO que resuelven write y read del
+    /// flow (`config.py`: `model_slug` + `embedding_model_path`). Los dos
+    /// literales son los SHAs de `presets.toml`; si la fórmula cambia en un
+    /// lado, este test lo dice antes de que el read path devuelva
+    /// `E_MODEL_INVALID`.
+    #[test]
+    fn model_dir_is_the_flow_snapshot_path() {
+        let vault = std::path::Path::new("/v");
+        assert_eq!(
+            model_dir(
+                vault,
+                "paraphrase-multilingual-MiniLM-L12-v2",
+                "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+            ),
+            vault.join(".tepochcalli").join("models").join(
+                "paraphrase-multilingual-MiniLM-L12-v2@e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
+            )
+        );
+        // Un id con `/` es UN nivel de directorio, no una ruta anidada.
+        assert_eq!(
+            model_dir(vault, "BAAI/bge-m3", "5617a9f"),
+            vault
+                .join(".tepochcalli")
+                .join("models")
+                .join("BAAI__bge-m3@5617a9f")
+        );
+    }
+
+    /// Regla de `model_store.is_materialized`: directorio presente **y** con
+    /// algo dentro. El vacío (o el ausente) no cuenta.
+    #[test]
+    fn is_materialized_needs_a_non_empty_dir() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let dir = model_dir(
+            vault.path(),
+            "paraphrase-multilingual-MiniLM-L12-v2",
+            "abc123",
+        );
+        assert!(!is_materialized(&dir), "ausente no está materializado");
+        if let Err(err) = std::fs::create_dir_all(&dir) {
+            panic!("mkdir: {err}");
+        }
+        assert!(!is_materialized(&dir), "un directorio vacío no cuenta");
+        if let Err(err) = std::fs::write(dir.join("config.json"), b"{}") {
+            panic!("write: {err}");
+        }
+        assert!(is_materialized(&dir), "con contenido sí está materializado");
+    }
+
     #[test]
     fn config_bodies_combine_the_caller_header_byte_identically() {
         // Trazabilidad del artefacto: la cabecera es del caller, el cuerpo lo
         // ponen los generadores. Comillas/barras van en medio del escape.
-        let body = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3");
+        let body = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3", None);
         assert_eq!(
             body,
             "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
              [embedding]\n\
              provider = \"local\"\n\
              model = \"BAAI/bge-m3\"\n\
+             device = \"cpu\"\n"
+        );
+        // Con SHA, `revision` va entre `model` y `device` (D59).
+        let pinned = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3", Some("5617a9f"));
+        assert_eq!(
+            pinned,
+            "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
+             [embedding]\n\
+             provider = \"local\"\n\
+             model = \"BAAI/bge-m3\"\n\
+             revision = \"5617a9f\"\n\
              device = \"cpu\"\n"
         );
         assert_eq!(

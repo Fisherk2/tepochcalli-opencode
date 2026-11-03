@@ -269,14 +269,13 @@ def _stage_phase(vault: Path) -> None:
     from tepochcalli_flow.config import load_config
     from tepochcalli_flow.layout import DB_RELPATH
     from tepochcalli_flow.ports import CitedChunk
-    from tepochcalli_mcp.embedder import build_embedder
-    from tepochcalli_mcp.server import _VaultSearchBackend
+    from tepochcalli_mcp.server import _read_embedder, _VaultSearchBackend
     from tepochcalli_mcp.tools import json_result
     from tepochcalli_mcp.tools import search as search_handler
 
     config = load_config(vault)
     config.apply_model_cache_env()
-    real_embed = build_embedder(config)
+    real_embed = _read_embedder(config)
     embed_calls: list[float] = []
 
     def _timed_embed(text: str) -> list[float]:

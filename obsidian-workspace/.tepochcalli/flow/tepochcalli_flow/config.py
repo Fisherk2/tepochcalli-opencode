@@ -48,12 +48,21 @@ DEFAULT_TOP_K: Final = 5
 
 MODEL_REVISION: Final = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42"
 """SHA del commit del modelo HF default (`paraphrase-multilingual-MiniLM-L12-v2`,
-obtenido del API de HuggingFace 2026-10-23). Todos los `SentenceTransformer(...)`
-del flow pasan `revision=MODEL_REVISION` para que el binario que reproduce los
-embeddings sea idéntico entre corridas/frost (spec-embeddings §provenance).
-shortcut: el `SentenceTransformerEmbedder` de cocoindex no acepta revision (firma
-inspect 2026-10-23); la ruta de ESCRITURA queda sin pin de revisión — el upgrade
-es añadir `revision` a esa clase upstream y propagarlo aquí."""
+obtenido del API de HuggingFace 2026-10-23). Es el default de
+`[embedding].revision`; ambos caminos (write y read) materializan y cargan el
+MISMO directorio `<models>/<slug>@<sha>/` (T6/D59)."""
+
+
+def model_slug(model: str) -> str:
+    """Nombre de directorio seguro para un id de modelo (sin `/` ni separadores).
+
+    Los ids de HuggingFace pueden llevar `org/nombre` (`BAAI/bge-m3`): el `/`
+    se sustituye por `__` para que `<models>/<slug>@<sha>/` sea UN nivel de
+    directorio y no una ruta anidada. La fórmula la comparte el wizard (F6) al
+    materializar el modelo.
+    """
+    return model.replace("/", "__")
+
 
 EMBEDDING_PROVIDERS: Final = ("local", "litellm", "none")
 """Valores aceptados de `[embedding].provider` — `none` es el 3.er valor (D15, T6).
@@ -77,6 +86,13 @@ class EmbeddingConfig:
 
     provider: str = DEFAULT_EMBEDDING_PROVIDER
     model: str = DEFAULT_EMBEDDING_MODEL
+    revision: str = MODEL_REVISION
+    """SHA de la revisión HF del modelo — `[embedding].revision` (T6/D59).
+
+    El default es el SHA del MiniLM default; un modelo custom DEBE declarar su
+    propia revisión. El path estable del snapshot se deriva de `model+revision`.
+    """
+
     device: str = DEFAULT_EMBEDDING_DEVICE
     api_key_env: str = DEFAULT_API_KEY_ENV
     api_key: str | None = field(default=None, repr=False)
@@ -128,6 +144,17 @@ class Config:
     embedding: EmbeddingConfig = EmbeddingConfig()
     chunking: ChunkingConfig = ChunkingConfig()
     search: SearchConfig = SearchConfig()
+
+    @property
+    def embedding_model_path(self) -> Path:
+        """Snapshot local estable del embedder: `<models>/<slug>@<sha>/` (T6/D59).
+
+        Es la ÚNICA referencia de ambos caminos: el write path materializa/carga
+        este directorio y el read path lo exige (sin descargar). `embedding.model`
+        sigue siendo el ID para mostrar/`rag_status`; el SHA viene de
+        `embedding.revision`.
+        """
+        return self.models_dir / f"{model_slug(self.embedding.model)}@{self.embedding.revision}"
 
     def apply_model_cache_env(self) -> None:
         """Fija el cache de modelos del vault en el entorno del proceso.
@@ -284,6 +311,13 @@ def _resolve_embedding(values: dict[str, object], config_path: Path) -> Embeddin
             DEFAULT_EMBEDDING_MODEL,
         )
         embedding = replace(embedding, model=DEFAULT_EMBEDDING_MODEL)
+    if not embedding.revision:  # `revision = ""` ⇒ SHA del modelo default
+        logger.warning(
+            "revision vacía en [embedding] de %s; se usa el SHA default '%s'",
+            config_path,
+            MODEL_REVISION,
+        )
+        embedding = replace(embedding, revision=MODEL_REVISION)
     if embedding.provider not in EMBEDDING_PROVIDERS:
         logger.warning(
             "provider inválido '%s' en [embedding] de %s; se usa el default '%s' (valores: %s)",

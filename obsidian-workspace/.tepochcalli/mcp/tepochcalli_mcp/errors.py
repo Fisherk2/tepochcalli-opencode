@@ -60,7 +60,8 @@ FIX_API_AUTH: Final = (
 """Texto LITERAL de spec-mcp-server §Códigos para `E_API_AUTH` (T6) — única fuente."""
 
 FIX_MODEL_INVALID: Final = (
-    "Verifica `[embedding].model` (o restaura `.tepochcalli/models/`) y "
+    "Verifica `[embedding].model` y materializa el snapshot con "
+    "`tepochcalli config embedder`; si el índice era de otro modelo, "
     "reconstruye con `tepochcalli reindex --confirm`."
 )
 """Guía de `E_MODEL_INVALID` (T6).

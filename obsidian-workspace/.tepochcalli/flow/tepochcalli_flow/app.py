@@ -69,6 +69,7 @@ from . import config as flow_config
 from . import source
 from .citation import normalize_source_path
 from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME  # noqa: F401  # re-export: tests y wiring del flow consumen los nombres vía app
+from .model_store import ensure_local_model
 from .models import EMBEDDER, LANCE_DB, ROOT_KEY, ChunkRow, RefreshReport
 from .parsers import DocumentChunk, chunk_document, extract_text
 from .refresh_lock import acquire_refresh_lock as _acquire_refresh_lock
@@ -148,15 +149,16 @@ def resolve_vault_root() -> Path:
 def _build_embedder(config: flow_config.Config) -> object:
     """Strategy/Factory de provider (T6, plan §6): la ÚNICA puerta de construcción.
 
-    * `local` ⇒ `SentenceTransformerEmbedder(model, device)` (E1/ADR-006; el
-      pin de `revision` vive en el atajo documentado de `config.MODEL_REVISION`
-      — el embedder de cocoindex no acepta revision).
+    * `local` ⇒ materializa el snapshot `<models>/<slug>@<sha>/` (idempotente;
+      descarga con `revision` SOLO si falta) y construye
+      `SentenceTransformerEmbedder(<path>, device)` — la op acepta «name or
+      path» (firma instalada `ops/sentence_transformers.py:59-65`). Ambos
+      caminos (write y read) usan el MISMO path ⇒ mismo binario (D59).
     * `litellm` ⇒ `LiteLLMEmbedder(model, api_key=…)` con la clave de
       `EmbeddingConfig.resolve_api_key()` (env var `api_key_env` si existe;
       si no, la `api_key` literal del toml gitignored que escribe el wizard —
       misma precedencia que el reader del MCP, una sola implementación). Fuente
-      instalada
-      `cocoindex==1.0.25/ops/litellm.py`: los kwargs pasan «to every
+      instalada `cocoindex==1.0.25/ops/litellm.py`: los kwargs pasan «to every
       ``litellm.aembedding`` call (e.g., ``api_key``…)» y el constructor es
       INERTE — sin clave ⇒ error tipado local, jamás una llamada con la pata
       caída; la dim se descubre con un embed real dentro de
@@ -179,7 +181,8 @@ def _build_embedder(config: flow_config.Config) -> object:
             "provider='none' (D15): sin embedder configurado — el MCP lo reporta "
             "como E_NO_EMBEDDER ANTES de llegar aquí"
         )
-    return SentenceTransformerEmbedder(config.embedding.model, device=config.embedding.device)
+    model_path = ensure_local_model(config)
+    return SentenceTransformerEmbedder(str(model_path), device=config.embedding.device)
 
 
 def _observe_component_failure(exc: BaseException, ctx: coco.ExceptionContext) -> None:

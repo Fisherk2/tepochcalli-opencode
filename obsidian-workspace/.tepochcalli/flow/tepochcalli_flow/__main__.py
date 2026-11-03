@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import sys
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
 
@@ -57,21 +58,31 @@ def run_refresh() -> dict[str, int]:
     }
 
 
-def build_embedder_for_model(model: str) -> SentenceTransformer:
-    """Construye el embedder `local` para `model` con el cache del vault.
+def build_embedder_for_model(model: str, revision: str | None = None) -> SentenceTransformer:
+    """Materializa el snapshot de `model@revision` y lo carga desde el path estable.
 
-    Reutiliza la ruta del flow (`config.apply_model_cache_env`): la descarga
-    ocurre una vez bajo `<vault>/.tepochcalli/models/`, nunca en `~/.cache`.
-    Import perezoso: `sentence-transformers` pesa y `refresh` no lo necesita.
+    Es la MISMA materialización del write path (`model_store.ensure_local_model`):
+    `<models>/<slug>@<sha>/` con `revision` pineada. El `embed-check` del wizard
+    (F6) usa esta función; el read path nunca descarga. Sin `revision`, se
+    hereda la config resuelta del vault (default `MODEL_REVISION`).
     """
     from sentence_transformers import SentenceTransformer
 
     from .config import load_config
+    from .model_store import ensure_local_model
 
     vault_root = Path(os.environ.get("TEPOCHCALLI_VAULT_ROOT", ""))
     config = load_config(vault_root if vault_root else Path.cwd())
     config.apply_model_cache_env()
-    return SentenceTransformer(model)
+    candidate = replace(
+        config,
+        embedding=replace(
+            config.embedding,
+            model=model,
+            revision=revision or config.embedding.revision,
+        ),
+    )
+    return SentenceTransformer(str(ensure_local_model(candidate)))
 
 
 def rss_peak_bytes() -> int:
@@ -97,17 +108,19 @@ def cmd_refresh() -> dict[str, int]:
     return run_refresh()
 
 
-def cmd_embed_check(model: str) -> dict[str, object]:
+def cmd_embed_check(model: str, revision: str | None = None) -> dict[str, object]:
     """Ejecuta `embed-check` para `model` y devuelve el veredicto JSON.
 
-    Todo fallo de carga/embed —repo inexistente, repo que no es de
-    embeddings, red caída— se reporta como `E_MODEL_INVALID` con `detail`:
+    Materializa `<models>/<slug>@<revision>/` (una sola función,
+    `model_store.ensure_local_model`) y valida con la frase de control. Todo
+    fallo de carga/embed —repo inexistente, no-embeddings, red caída— se
+    reporta como `E_MODEL_INVALID` con `detail`.
     shortcut: el CLI no distingue «no-embedding» de «no-descargable» sin
     reimplementar la taxonomía de errores de HF/transformers; el wizard
     (T11) decide reintentos por su lado con el `detail` como pista.
     """
     try:
-        vector = build_embedder_for_model(model).encode(CONTROL_PHRASE)
+        vector = build_embedder_for_model(model, revision).encode(CONTROL_PHRASE)
         return {
             "ok": True,
             "model": model,
@@ -133,9 +146,18 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("refresh", help="indexa el vault e imprime el RefreshReport en JSON")
     embed = sub.add_parser("embed-check", help="gate test-embed: frase de control + RSS pico")
     embed.add_argument("--model", required=True, help="id del modelo de HuggingFace")
+    embed.add_argument(
+        "--revision",
+        default=None,
+        help="SHA de la revisión HF (default: la de tepochcalli.toml / MODEL_REVISION)",
+    )
     args = parser.parse_args(argv)
     try:
-        payload = cmd_refresh() if args.command == "refresh" else cmd_embed_check(args.model)
+        payload = (
+            cmd_refresh()
+            if args.command == "refresh"
+            else cmd_embed_check(args.model, args.revision)
+        )
     except Exception as exc:  # noqa: BLE001 — el traceback íntegro va a stderr, nunca al JSON
         print(f"tepochcalli_flow {args.command}: {exc!r}", file=sys.stderr)
         return 1

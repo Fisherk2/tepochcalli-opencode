@@ -1,4 +1,5 @@
-//! F6b: 5-exit embedder menu + test-embed gate + atomic config (T11).
+//! F6b: 5-exit embedder menu + test-embed gate + materialización verificada
+//! del snapshot + atomic config (T11, T6/D59).
 //!
 //! RED-first: every behavior here failed before
 //! `application::embedder_menu::run_phase6` existed. Real `tempfile` vaults
@@ -18,6 +19,14 @@ use tepochcalli::application::embedder_menu::{Phase6Deps, EMBEDDER_PATHS};
 use tepochcalli::domain::{EmbedderChoice, WizardError};
 use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
 
+/// Los dos presets embebidos y su SHA pineada (espejo de `presets.toml`).
+const MINILM: &str = "paraphrase-multilingual-MiniLM-L12-v2";
+const MINILM_SHA: &str = "e8f8c211226b894fcb81acc59f3b34ba3efd5f42";
+const BGE: &str = "BAAI/bge-m3";
+const BGE_SHA: &str = "5617a9f61b028005a4858fdac845db406aefb181";
+/// `sha` que la API de HF devuelve en los fixtures de id libre.
+const HF_SHA: &str = "0000sha-for-the-free-id";
+
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T11 fixtures")
 }
@@ -35,6 +44,17 @@ fn create_venv_python(vault: &Path) {
         });
     std::fs::create_dir_all(python.parent().expect("venv bin parent")).expect("venv fixture");
     std::fs::write(python, b"fake-python").expect("venv python fixture");
+}
+
+/// Materializa el snapshot que deja el gate real: `<models>/<slug>@<sha>/`
+/// (la fórmula de `tepochcalli_flow.config.model_slug` + `embedding_model_path`).
+fn materialize(vault: &Path, model: &str, revision: &str) {
+    let dir = vault
+        .join(".tepochcalli")
+        .join("models")
+        .join(format!("{}@{revision}", model.replace('/', "__")));
+    std::fs::create_dir_all(&dir).expect("snapshot dir fixture");
+    std::fs::write(dir.join("config.json"), b"{}").expect("snapshot file fixture");
 }
 
 fn host_16gb() -> FakeHost {
@@ -66,7 +86,7 @@ fn hf_meta(gated: bool, pipeline_tag: &str, tags: &[&str], params_total: u64) ->
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{\"gated\":{gated},\"pipeline_tag\":\"{pipeline_tag}\",\
+        "{{\"gated\":{gated},\"sha\":\"{HF_SHA}\",\"pipeline_tag\":\"{pipeline_tag}\",\
          \"tags\":[{tags_json}],\
          \"safetensors\":{{\"parameters\":{{\"total\":{params_total}}}}},\
          \"siblings\":[{{\"rfilename\":\"model.safetensors\",\"size\":470000000}}]}}"
@@ -253,28 +273,23 @@ fn menu_offers_five_paths_with_minilm_default_first() {
 fn path1_ok_writes_local_config_after_gate() {
     let ui = TapUi::new(vec![0], vec![]);
     let host = host_16gb();
-    let proc = RecordingProc::scripted([gate_ok(
-        "paraphrase-multilingual-MiniLM-L12-v2",
-        384,
-        650_000_000,
-    )]);
+    let proc = RecordingProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
     let http = empty_http();
     let vault = tmp();
     create_venv_python(vault.path());
+    materialize(vault.path(), MINILM, MINILM_SHA);
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
     )
     .expect("path 1 with a passing gate must succeed");
     assert_eq!(report.provider, "local");
-    assert_eq!(
-        report.model.as_deref(),
-        Some("paraphrase-multilingual-MiniLM-L12-v2")
-    );
+    assert_eq!(report.model.as_deref(), Some(MINILM));
     assert_eq!(report.dims, Some(384));
     assert_eq!(report.rss_peak_bytes, Some(650_000_000));
 
-    // Gate contract (T12 programs against it): venv python, explicit argv.
+    // Gate contract (T12 programs against it): venv python, explicit argv,
+    // incluida la revisión pineada (el snapshot estable depende de ella).
     let calls = proc.calls();
     assert_eq!(calls.len(), 1, "exactly one gate call, got: {calls:?}");
     let (program, args, env) = &calls[0];
@@ -289,7 +304,9 @@ fn path1_ok_writes_local_config_after_gate() {
             "tepochcalli_flow",
             "embed-check",
             "--model",
-            "paraphrase-multilingual-MiniLM-L12-v2"
+            MINILM,
+            "--revision",
+            MINILM_SHA
         ]
     );
     assert!(
@@ -298,12 +315,16 @@ fn path1_ok_writes_local_config_after_gate() {
         "gate must sandbox the model cache under the vault, got: {env:?}"
     );
 
-    // Atomic config: exact expected body, provider local + model.
+    // Atomic config: exact expected body, provider local + model + revision.
     let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
     assert!(body.contains("provider = \"local\""), "got:\n{body}");
     assert!(
-        body.contains("model = \"paraphrase-multilingual-MiniLM-L12-v2\""),
+        body.contains(&format!("model = \"{MINILM}\"")),
         "got:\n{body}"
+    );
+    assert!(
+        body.contains(&format!("revision = \"{MINILM_SHA}\"")),
+        "la config debe pinear la misma revisión que el snapshot, got:\n{body}"
     );
     assert!(
         !vault
@@ -322,24 +343,59 @@ fn path1_ok_writes_local_config_after_gate() {
     );
 }
 
+/// AC T6(c): un gate `ok` sin snapshot materializado NO es éxito — F6 falla y
+/// no queda config escrita (ni siquiera la degradada: esa la escribe `main`).
+#[test]
+fn gate_ok_without_materialized_snapshot_fails_without_config() {
+    let ui = TapUi::new(vec![0], vec![]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
+    let http = empty_http();
+    let vault = tmp();
+    create_venv_python(vault.path());
+    // El CLI dijo ok pero no dejó `<models>/<slug>@<sha>/`: fallo de fase.
+    let err = tepochcalli::application::embedder_menu::run_phase6(
+        &deps(&ui, &host, &proc, &http),
+        vault.path(),
+    )
+    .expect_err("un gate sin snapshot no puede cerrar F6");
+    assert_eq!(err, WizardError::PhaseFailed);
+    assert!(
+        !config_path(vault.path()).exists(),
+        "sin snapshot no se escribe media config"
+    );
+    assert!(
+        !ui.captured()
+            .iter()
+            .any(|line| line.starts_with("PANEL Embedding OK")),
+        "no se anuncia un modelo que no está en disco: {:?}",
+        ui.captured()
+    );
+}
+
 #[test]
 fn path2_ok_writes_large_preset() {
     let ui = TapUi::new(vec![1], vec![]);
     let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok("BAAI/bge-m3", 1024, 3_000_000_000)]);
+    let proc = FakeProc::scripted([gate_ok(BGE, 1024, 3_000_000_000)]);
     let http = empty_http();
     let vault = tmp();
     create_venv_python(vault.path());
+    materialize(vault.path(), BGE, BGE_SHA);
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
     )
     .expect("path 2 with a passing gate must succeed");
     assert_eq!(report.provider, "local");
-    assert_eq!(report.model.as_deref(), Some("BAAI/bge-m3"));
+    assert_eq!(report.model.as_deref(), Some(BGE));
     assert_eq!(report.dims, Some(1024));
     let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
-    assert!(body.contains("model = \"BAAI/bge-m3\""), "got:\n{body}");
+    assert!(body.contains(&format!("model = \"{BGE}\"")), "got:\n{body}");
+    assert!(
+        body.contains(&format!("revision = \"{BGE_SHA}\"")),
+        "got:\n{body}"
+    );
 }
 
 #[test]
@@ -357,10 +413,11 @@ fn path3_free_id_estimates_then_gates_ok() {
     );
     let ui = TapUi::new(vec![2], vec![id.to_string()]);
     let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(id, 384, 650_000_000)]);
+    let proc = RecordingProc::scripted([gate_ok(id, 384, 650_000_000)]);
     let http = FakeHttp::new(files);
     let vault = tmp();
     create_venv_python(vault.path());
+    materialize(vault.path(), id, HF_SHA);
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
@@ -375,8 +432,26 @@ fn path3_free_id_estimates_then_gates_ok() {
         "estimate row must show RAM with `estimado` provenance: {:?}",
         ui.captured()
     );
+    // La revisión sale del `sha` de la API: gate y config la comparten.
+    let (_, args, _) = &proc.calls()[0];
+    assert_eq!(
+        args,
+        &[
+            "-m",
+            "tepochcalli_flow",
+            "embed-check",
+            "--model",
+            id,
+            "--revision",
+            HF_SHA
+        ]
+    );
     let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
     assert!(body.contains(&format!("model = \"{id}\"")), "got:\n{body}");
+    assert!(
+        body.contains(&format!("revision = \"{HF_SHA}\"")),
+        "got:\n{body}"
+    );
 }
 
 #[test]
@@ -456,6 +531,7 @@ fn path3_gated_repo_asks_token_and_passes_it_to_gate_env() {
     let http = FakeHttp::new(files);
     let vault = tmp();
     create_venv_python(vault.path());
+    materialize(vault.path(), id, HF_SHA);
     let report = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),

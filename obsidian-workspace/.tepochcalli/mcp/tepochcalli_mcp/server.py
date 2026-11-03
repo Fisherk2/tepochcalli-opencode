@@ -61,7 +61,7 @@ import contextlib
 import logging
 import os
 import tomllib
-from collections.abc import AsyncIterator, Awaitable
+from collections.abc import AsyncIterator, Awaitable, Callable
 from dataclasses import asdict
 from pathlib import Path
 from typing import TYPE_CHECKING, Final
@@ -210,16 +210,20 @@ class _VaultSearchBackend:
     async def cited_chunks(
         self, query: str, top_k: int, path_filter: str | None
     ) -> list[CitedChunk]:
-        """Búsqueda por el puerto `ChunkReader` — el adaptador vectoriza la query (T2)."""
+        """Búsqueda por el puerto `ChunkReader` — el adaptador vectoriza la query (T2).
+
+        El corte se construye con `_read_embedder` (composition root, T6/D59):
+        usa `SentenceTransformerEmbedder` sobre el **mismo path local** que el
+        write path. Si el snapshot falta, `EmbedderModelError` sube al handler
+        ⇒ `E_MODEL_INVALID` sin descargar nada.
+        """
         if self._reader is None:
             from tepochcalli_flow.adapters.lancedb_reader import LanceDBChunkReader
-
-            from tepochcalli_mcp.embedder import build_embedder
 
             self._config.apply_model_cache_env()
             self._reader = LanceDBChunkReader(
                 self._vault_root / DB_RELPATH,
-                embed=build_embedder(self._config),
+                embed=_read_embedder(self._config),
             )
         return await self._reader.search(query, top_k, path_filter)
 
@@ -254,6 +258,50 @@ def _vault_root() -> Path:
     if (contract_root := os.environ.get(CONTRACT_ROOT_ENV)) is not None:
         os.environ.setdefault(VAULT_ROOT_ENV, contract_root)
     return resolve_vault_root().resolve()
+
+
+def _local_op(path: Path, device: str) -> embedder.AsyncEmbedder:
+    """Op local de cocoindex (import perezoso: el arranque stdio no carga torch)."""
+    from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
+
+    return SentenceTransformerEmbedder(str(path), device=device)
+
+
+def _api_op(model: str, api_key: str) -> embedder.AsyncEmbedder:
+    """Op de API de cocoindex (import perezoso: `litellm` no entra sin usarse).
+
+    Rasgos de la op que el producto hereda (verificados en `ops/litellm.py`):
+    reintentos con backoff exponencial (1 s ×2, tope 30 s) dentro de un
+    `timeout` de 10 min — cierra TD-16; batching de 64
+    (`@coco.fn.as_async(batching=True, max_batch_size=64)`); y un texto que
+    empieza por `data:…;base64,`, `gs://` o `files/` se incrusta con un espacio
+    delante — igual en write y read porque AMBOS usan esta op, así que la
+    búsqueda sigue siendo consistente.
+    """
+    from cocoindex.ops.litellm import LiteLLMEmbedder
+
+    return LiteLLMEmbedder(model, api_key=api_key)
+
+
+def _read_embedder(config: Config) -> Callable[[str], list[float]]:
+    """Composition root del corte de LECTURA (T6/D59) — una sola implementación.
+
+    Construye la op de cocoindex con el **path estable** del snapshot
+    (`config.embedding_model_path`) y se la pasa a `embedder.build_read_cut`
+    (que aplica la estrategia de provider y el dialecto de errores). El módulo
+    `embedder` NO importa `cocoindex`: la frontera se cruza solo aquí, como con
+    `lancedb`/`markitdown`.
+
+    - `local`: `SentenceTransformerEmbedder(str(path), device=…)` — la op
+      acepta «name **or path**» (fuente instalada: `ops/sentence_transformers.py:59-65`).
+    - `api`: `LiteLLMEmbedder(model, api_key=…)` — constructor inerte; los
+      reintentos con backoff y el batching de 64 son de la op (TD-16).
+    """
+    return embedder.build_read_cut(
+        config,
+        local_op_factory=_local_op,
+        api_op_factory=_api_op,
+    )
 
 
 def _backend() -> _VaultSearchBackend:

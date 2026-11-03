@@ -34,7 +34,11 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL
+from tepochcalli_flow.config import (
+    DEFAULT_EMBEDDING_MODEL,
+    MODEL_REVISION,
+    model_slug,
+)
 
 SPIKE_MODEL_CACHE = Path("/tmp/opencode/tepochcalli-t1-spike/models")
 """Cache estable del spike T1 (MiniLM ~470 MB); solo existe en el host de desarrollo."""
@@ -54,12 +58,43 @@ def resolve_model_cache() -> Path:
 
 
 def link_model_cache(vault: Path, cache: Path) -> Path:
-    """Symlink `<vault>/.tepochcalli/models` → `cache` (el binario vive fuera del repo)."""
+    """Symlink `<vault>/.tepochcalli/models` → `cache` y materializa el path estable.
+
+    T6: el write/read path resuelven `<models>/<slug>@<sha>/`. En la suite, si
+    el snapshot HF del default ya vive en `cache` (corrida caliente), se crea
+    ese directorio como **symlink al snapshot** —así no se descarga nada ni se
+    duplica el modelo—; en frío se deja ausente y el write path lo materializa
+    (la única descarga permitida, la que CI persiste). El repo jamás se toca.
+    """
     cache.mkdir(parents=True, exist_ok=True)
     models_link = vault / ".tepochcalli" / "models"
     models_link.parent.mkdir(parents=True, exist_ok=True)
     models_link.symlink_to(cache, target_is_directory=True)
+    _link_stable_snapshot(models_link, cache)
     return models_link
+
+
+def _link_stable_snapshot(models_link: Path, cache: Path) -> None:
+    """Crea `<models>/<slug>@<sha>` → snapshot HF si el snapshot está cacheado."""
+    snapshot = _find_snapshot(cache)
+    if snapshot is None:
+        return
+    stable = models_link / f"{model_slug(DEFAULT_EMBEDDING_MODEL)}@{MODEL_REVISION}"
+    if stable.exists() or stable.is_symlink():
+        return
+    stable.symlink_to(snapshot, target_is_directory=True)
+
+
+def _find_snapshot(cache: Path) -> Path | None:
+    """Localiza el snapshot HF del modelo/revisión default en el cache resuelto."""
+    model = DEFAULT_EMBEDDING_MODEL.replace("/", "--")
+    slugs = (f"models--{model}", f"models--sentence-transformers--{model}")
+    for root in (cache, cache / "hub"):
+        for slug in slugs:
+            snapshot = root / slug / "snapshots" / MODEL_REVISION
+            if snapshot.is_dir():
+                return snapshot
+    return None
 
 
 def offline_env(cache: Path) -> dict[str, str]:

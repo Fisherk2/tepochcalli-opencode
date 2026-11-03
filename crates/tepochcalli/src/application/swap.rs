@@ -322,6 +322,7 @@ fn pending_local(preset: &Preset) -> Phase6Report {
     Phase6Report {
         provider: "local".to_string(),
         model: Some(preset.hf_id.clone()),
+        revision: Some(preset.revision.clone()),
         dims: None,
         rss_peak_bytes: None,
     }
@@ -336,12 +337,6 @@ fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>)
         );
         return Err(WizardError::ModelInvalid);
     }
-    let report_for = |model: String| Phase6Report {
-        provider: "local".to_string(),
-        model: Some(model),
-        dims: None,
-        rss_peak_bytes: None,
-    };
     let estimate = match deps.http.get(&format!("{HF_API_BASE}{id}")) {
         Ok(body) => Some(parse_hf_metadata(&body)),
         Err(_) => {
@@ -351,6 +346,16 @@ fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>)
             );
             None
         }
+    };
+    // La revisión pineada es el `sha` del repo (D59): el gate materializa ese
+    // snapshot y la config lo registra. Sin API queda `None` (default del flow).
+    let revision = estimate.as_ref().and_then(|estimate| estimate.sha.clone());
+    let report_for = |model: String, revision: Option<String>| Phase6Report {
+        provider: "local".to_string(),
+        model: Some(model),
+        revision,
+        dims: None,
+        rss_peak_bytes: None,
     };
     // Misma lectura que el menú F6: la decisión vive en `HfEstimate`
     // (`embedding_tag`/`gated`), con HF real (`"gated":"auto"`) el swap ya
@@ -375,12 +380,12 @@ fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>)
                 .input_secret("HF_TOKEN (opcional, solo para esta descarga)")?;
             let token = raw.trim().to_string();
             if token.is_empty() {
-                return Ok((report_for(id), None));
+                return Ok((report_for(id, revision), None));
             }
-            return Ok((report_for(id), Some(token)));
+            return Ok((report_for(id, revision), Some(token)));
         }
     }
-    Ok((report_for(id), None))
+    Ok((report_for(id, revision), None))
 }
 
 fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
@@ -396,6 +401,7 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
     Ok(Phase6Report {
         provider: "litellm".to_string(),
         model: Some(format!("{model}\u{0}{api_key}")),
+        revision: None,
         dims: None,
         rss_peak_bytes: None,
     })
@@ -425,6 +431,7 @@ fn picked_config_body(picked: &Phase6Report) -> String {
         local_config(
             SWAP_LOCAL_HEADER,
             picked.model.as_deref().unwrap_or_default(),
+            picked.revision.as_deref(),
         )
     }
 }
@@ -460,7 +467,13 @@ fn download_gate_and_reindex(
         .map(|(name, key)| (name.to_string(), Some(key.to_string())))
         .unwrap_or((model, None));
     let (dims, rss) = if picked.provider == "local" {
-        let gate = run_gate(deps.proc, vault, &model_name, token)?;
+        let gate = run_gate(
+            deps.proc,
+            vault,
+            &model_name,
+            picked.revision.as_deref(),
+            token,
+        )?;
         deps.ui.panel(
             "Embedding OK",
             &format!(
@@ -617,12 +630,18 @@ fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
     model_id: &str,
+    revision: Option<&str>,
     token: Option<&str>,
 ) -> Result<GateOk, WizardError> {
+    let mut args: Vec<&str> = vec!["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id];
+    if let Some(sha) = revision {
+        args.push("--revision");
+        args.push(sha);
+    }
     let out = super::flow_cli::run_flow_cli(
         proc,
         vault,
-        &["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id],
+        &args,
         &[],
         token,
         super::flow_cli::GATE_TIMEOUT,
@@ -757,6 +776,7 @@ mod tests {
         let picked = Phase6Report {
             provider: "litellm".to_string(),
             model: Some("openai/text-embedding-3-small\u{0}sk-SECRETO".to_string()),
+            revision: None,
             dims: None,
             rss_peak_bytes: None,
         };
@@ -840,6 +860,7 @@ mod tests {
         Phase6Report {
             provider: "local".to_string(),
             model: Some("BAAI/bge-m3".to_string()),
+            revision: Some("5617a9f61b028005a4858fdac845db406aefb181".to_string()),
             dims: Some(1024),
             rss_peak_bytes: None,
         }

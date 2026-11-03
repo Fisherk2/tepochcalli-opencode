@@ -42,6 +42,8 @@ fn embedded_presets_match_spec_v2() {
     let m = &presets[0];
     assert_eq!(m.name, "MiniLM multilingüe (default)");
     assert_eq!(m.hf_id, "paraphrase-multilingual-MiniLM-L12-v2");
+    // Mismo SHA que `tepochcalli_flow.config.MODEL_REVISION` (D59).
+    assert_eq!(m.revision, "e8f8c211226b894fcb81acc59f3b34ba3efd5f42");
     assert_eq!(m.dims, 384);
     assert_eq!(m.size_mb, 470);
     assert_eq!(m.disk_mb, 500);
@@ -75,6 +77,7 @@ fn malformed_toml_is_typed_error_not_silent_default() {
 [[preset]]
 name = "broken"
 hf_id = "org/broken"
+revision = "sha"
 size_mb = 10
 disk_mb = 10
 min_ram_gb = 0.1
@@ -91,6 +94,7 @@ recommended_flag = false
 [[preset]]
 name = "broken"
 hf_id = "org/broken"
+revision = "sha"
 dims = "not-a-number"
 size_mb = 10
 disk_mb = 10

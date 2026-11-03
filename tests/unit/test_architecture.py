@@ -417,7 +417,7 @@ def test_walker_covers_the_second_package_transitively() -> None:
 
 
 def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
-    """Dirección OPUESTA T2: `server.py` SÍ alcanza `lancedb` (composition root exento).
+    """Dirección OPUESTA T2/T6: `server.py` SÍ alcanza `lancedb` y `cocoindex` (root exento).
 
     Mismo papel que `test_lancedb_adapter_is_allowed_to_reach_lancedb` en Phase 1:
     prueba el otro lado de la frontera del server — si el walker no viera el
@@ -426,24 +426,28 @@ def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
     `tools/`+dominio (sin motor) ← `server.py` (con motor y SDK). T5 añade el
     otro lado de la costura: el composition root SÍ alcanza `markitdown` (vía
     `convert.py`, importado dentro de `_convert_seam`) — si no lo alcanzara,
-    el wiring de `add_source` estaría roto y los tests negativos del handler
-    seguirían pasando en vano.
+    el wiring de `add_source` estaría roto. T6 añade `cocoindex`: la op del
+    embedder (`SentenceTransformerEmbedder`/`LiteLLMEmbedder`) se construye
+    SOLO aquí y se inyecta a `embedder.build_read_cut` (D59).
     """
     reached = {target for _chain, target in _walk_imports(MCP_COMPOSITION_ROOT)}
     assert "lancedb" in reached, "el composition root construye el lector: importa lancedb"
+    assert "cocoindex" in reached, "el composition root construye la op del embedder (T6/D59)"
     assert f"{MCP_PACKAGE}.tools.search" in reached, "registra el handler de search: lo importa"
     assert f"{PACKAGE}.config" in reached, "carga la config del vault: lo importa"
     assert f"{MCP_PACKAGE}.convert" in reached, "cablea la costura de add_source: importa convert"
     assert "markitdown" in reached, "convert.py importa markitdown: el root exento sí lo alcanza"
 
 
-def test_provider_factory_reaches_only_litellm_and_sentence_transformers() -> None:
-    """T6: la fábrica `embedder` sí habla con `litellm`/`sentence_transformers` — y SOLO con eso.
+def test_embedder_module_stays_inside_its_allowlist() -> None:
+    """T6/D59: el módulo `embedder` no toca engines ni providers; su oficio es la estrategia.
 
-    El otro lado de la frontera `MCP_BOUNDARY_MODULES`: engines
-    (`cocoindex`/`lancedb`/`markitdown`) proscritos también aquí; el allowlist
-    añade los dos providers, que ES su oficio (plan §5: fábrica de provider
-    `local | litellm | none`).
+    Desde T6 las ops (`SentenceTransformerEmbedder`/`LiteLLMEmbedder`) se
+    construyen en el composition root y se inyectan como factories: `embedder`
+    se queda con `mode`/`is_available`/`build_read_cut` y el dialecto `E_*`.
+    Los engines siguen proscritos aquí; `litellm`/`sentence_transformers`
+    siguen permitidos por si una versión futura vuelve a construir la op, pero
+    hoy no se importan (el test no exige alcanzarlos).
     """
     for chain, target in _walk_imports(MCP_PROVIDER_MODULE):
         root = target.split(".")[0]

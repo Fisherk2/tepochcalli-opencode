@@ -436,11 +436,12 @@ def test_embedding_dims_come_from_the_embedder_annotation_not_a_literal() -> Non
 def test_embedder_is_built_with_the_configured_model_and_device_e1(
     indexed_run: IndexedRun,
 ) -> None:
-    """E1: el embedder del lifespan lleva `model` y `device` (`cpu`) de `tepochcalli.toml`."""
+    """E1/T6: el embedder del lifespan carga el **path estable** `<slug>@<sha>` y `cpu`."""
     assert indexed_run.update_completed
     embedder = _embedder_from_default_env()
+    model_path = flow_config.load_config(indexed_run.vault).embedding_model_path
     assert embedder.__coco_memo_key__() == (
-        flow_config.DEFAULT_EMBEDDING_MODEL,
+        str(model_path),
         flow_config.DEFAULT_EMBEDDING_DEVICE,
         False,
     )

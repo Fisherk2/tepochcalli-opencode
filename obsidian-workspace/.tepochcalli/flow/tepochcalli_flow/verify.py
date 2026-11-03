@@ -89,7 +89,11 @@ def main(argv: list[str] | None = None) -> int:
         )
         return EXIT_NO_DB
 
-    reader = build_reader(vault_root)
+    try:
+        reader = build_reader(vault_root)
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return EXIT_DB_BROKEN
     config = load_config(vault_root)  # para el print: construir embedder es lo caro
 
     try:
