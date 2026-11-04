@@ -61,7 +61,7 @@ Criterio 7 de UH.md: «Pueda procesar distintos formatos de texto, si no, utiliz
 
 * **Sin clave `ok`**: el éxito es la ausencia de error (D36/D66). `truncated` solo aparece cuando `preview` se recortó; `preview` ≤500 caracteres, leído **del fichero escrito** (no del buffer en memoria), igual que `bytes` (`stat()`) y `chars` (`len()`).
 * `source_uri` refleja la entrada tal como llegó: la ruta en `convert_document`, el `filename` en `convert_base64` (si vino).
-* `convert_base64` exige `format` **o** `filename`; sin pista de tipo ⇒ `VALIDATION_ERROR` (adivinar el extractor produciría markdown plausible pero falso). En `convert_document`, `format` es solo una pista opcional (`StreamInfo(extension=…)`) para nombres sin extensión.
+* `convert_base64` exige `format` **o** `filename`; sin pista de tipo ⇒ `VALIDATION_ERROR` (adivinar el extractor produciría markdown plausible pero falso). En `convert_document`, `format` es solo una pista opcional (`StreamInfo(extension=…)`) para nombres sin extensión — **rev. 2026-11-03 (orden del dueño):** y FUERZA el sufijo del destino (`x.pdf` con contenido Markdown) y actúa como pista de conversión real: un fichero sin extensión + `format=".txt"` se convierte (via `convert_local(…, extension_hint=…)`).
 * `output_path` omitido ⇒ `00-Resources/<slug>.md` (`paths.slugify_uri`). El destino no se auto-renombra ante colisión: `paths.available_name` solo **propone** el alternativo que acompaña al error de D66.
 
 ### Catálogo de formatos (verificado contra la instalación)

@@ -1,6 +1,6 @@
 # ADR-009: El conversor escribe a disco y devuelve solo un resumen (sin cuerpo en el wire)
 
-* **Status:** Accepted (2026-11-03)
+* **Status:** Accepted (2026-11-03) — enmendada en sitio la nota de §D38 (rev. 2026-11-03, orden explícita del dueño; precedente ADR-010 rev. 2)
 * **Date:** 2026-11-02
 * **Decision Makers:** Dueño del repo, Arquitecto
 * **Consulted:** `docs/diagnosis/fix01-conversor-satura-contexto-llm.md` (defecto reproducido), `markitdown==0.1.9` instalado y `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/convert.py` (API real: `MarkItDown().convert(source).markdown`), `tasks/plan.md` §2.1/§2.2 (D28-D67) y §5.5-§5.9
@@ -106,6 +106,12 @@ pista de tipo markitdown no puede elegir extractor, y adivinarlo convertiría by
 markdown plausible pero falso—; sin ninguno de los dos es `VALIDATION_ERROR`. En
 `convert_document`, `format` es solo una pista opcional (`StreamInfo(extension=…)`) para nombres
 sin extensión, no un selector de convertidor.
+
+> **Rev. 2026-11-03 (orden del dueño):** en `convert_document`, `format` FUERZA el sufijo del
+> destino (`x.pdf` con contenido Markdown) y actúa como pista de conversión
+> `StreamInfo(extension=…)` — un fichero sin extensión + `format=".txt"` se convierte en vez de
+> responder `UnsupportedFormatException` engañoso. La costura transporta la pista como
+> `convert_local(path, source_uri=…, extension_hint=…)`.
 
 ### D39 — La taxonomía de errores no crece
 

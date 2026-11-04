@@ -176,6 +176,23 @@ GitHub Actions **sigue sin haber corrido** (M6). Cambios en este registro:
 Ninguna asciende a blocker de Phase 4. El **FTR del usuario** (ADR-009/010/011 → *Accepted*) queda
 pendiente y no lo cubre este registro.
 
+## Review 5-ejes Phase 3.5 (post-FTR, 2026-11-03)
+
+Veredicto del dueño: aplicar W-01…W-13 (correcciones del conversor/`paths`/`budget`,
+aplicadas en el mismo pase). Tres hallazgos quedan FUERA de ese alcance y se registran;
+informe completo en la ventana de review del orquestador (2026-11-03):
+
+* **FTS con language por default «English» sobre corpus ES+EN** (`app.py`,
+  `declare_fts_index(column="text")` sin config): el stemming/stopwords del índice solo
+  cubren inglés ⇒ deriva de relevancia en las piernas FTS de consultas en español.
+  Plan: medir la deriva y evaluar la config bilingüe de LanceDB FTS en Phase 6 (criterio 3).
+* **`with_position=True` del índice FTS — nota:** activarlo gravaría el índice
+  (posiciones por token) sin consumidor hoy (el RRF usa ranking, no offsets; W-09 recorta el
+  heading en lectura). Evaluar solo si aparece un uso real (p. ej. resaltado de citas).
+* **`_convert_tail` y el walk del conversor:** los shadow-walks detectados NO se tocaron en
+  este pase (otra ventana); el hallazgo de las rutas de `instructions` del repo se convierte
+  en tarea propia (F6, no en esta ola W-*).
+
 ## Deuda no aceptada (evitada por diseño)
 
 * RAG desde cero (UH.md lo prohíbe explícitamente) → mitigado por ADR-001.

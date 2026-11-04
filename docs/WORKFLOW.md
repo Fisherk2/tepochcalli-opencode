@@ -153,6 +153,16 @@
      de `[1,20]` ⇒ 5 + `problems` (bug real: rompía toda `search` por defecto); `unknown_env`
      positivo en wire; límites de `suggestions.py`. `just ci` verde (97 %), suite **670 + 3
      `slow`**. Commits `95082be`/`92efc16`/`f4a399c`.
+  7. **Review 5-ejes post-FTR (2026-11-03, orden del dueño)**: W-01…W-13 aplicados
+     (validación de raíces en `add_source` antes de escribir —W-01—, guard SSRF por hop del
+     prefetch del conversor con cap de bytes y timeout —W-02—, null byte en `paths` ⇒
+     `VALIDATION_ERROR` —W-03—, redacción de credenciales completa —W-04/W-05—, `format` =
+     sufijo del destino + pista de conversión `extension_hint` —W-06, rev. en ADR-009 §D38 y
+     spec-markitdown—, hangul/dingbats/banderas en el estimador —W-07—, topes de `data` y
+     `path_filter` —W-08—, heading con tope 200 y en el budget —W-09—, `serialize_budget`
+     solo en éxito —W-10—, alternativo usable en `writer` —W-11—, `backend_factory` fuera del
+     event loop —W-12— y `convert`/`mcp.*` en el test de arquitectura —W-13—). Tres
+     hallazgos quedan FUERA de alcance y en `docs/TECH_DEBT.md` §Review 5-ejes Phase 3.5.
 
 ### Phase 4 — Diseño del agent workflow (blueprint)
 
