@@ -40,7 +40,7 @@ from pathlib import Path
 from tepochcalli_flow.citation import RESOURCES_DIR
 
 from tepochcalli_mcp import errors, formats, paths
-from tepochcalli_mcp.tools._convert_tail import write_converted
+from tepochcalli_mcp.tools._convert_tail import LocalConvert, write_converted
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,13 @@ async def convert_document(
     format: str | None = None,
     *,
     vault_root: Callable[[], Path],
-    convert: Callable[..., str],
+    convert: LocalConvert,
 ) -> dict[str, object]:
     """Resumen de 5 claves del `.md` escrito — el cuerpo no viaja (D36).
 
     `convert` es la costura `convert_local(path, source_uri=…, extension_hint=…)`
-    del composition root; argumentos posicionales del contrato MCP: `path`,
+    del composition root, tipada con el Protocol `LocalConvert` (`_convert_tail`);
+    argumentos posicionales del contrato MCP: `path`,
     `output_path?`, `format?`. W-06 (orden del dueño, 2026-11-03): `format`
     fuerza el sufijo del destino y ADEMÁS actúa como pista de conversión
     (`StreamInfo.extension`) — un fichero sin extensión + `format=".txt"`

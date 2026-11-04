@@ -141,6 +141,7 @@ MCP_TOOL_MODULES: Final[tuple[str, ...]] = (
     f"{MCP_PACKAGE}.tools.convert_document",
     f"{MCP_PACKAGE}.tools.convert_base64",
     f"{MCP_PACKAGE}.tools.list_formats",
+    f"{MCP_PACKAGE}.tools._convert_tail",
 )
 """Handlers T2-T5: banned roots (engines), pero `mcp.types` permitido en `tools/__init__.py`.
 
@@ -514,14 +515,45 @@ def test_mcp_composition_root_is_allowed_to_reach_lancedb() -> None:
     el wiring de `add_source` estaría roto. T6 añade `cocoindex`: la op del
     embedder (`SentenceTransformerEmbedder`/`LiteLLMEmbedder`) se construye
     SOLO aquí y se inyecta a `embedder.build_read_cut` (D59).
+
+    W2/A-02: desde la extracción, `lancedb`/`cocoindex` se alcanzan VÍA
+    `backend` (el walker sigue la arista `server → backend`): server ya no
+    importa el motor a pelo — SIEMPRE lo hace a través de su adaptador.
     """
     reached = {target for _chain, target in _walk_imports(MCP_COMPOSITION_ROOT)}
-    assert "lancedb" in reached, "el composition root construye el lector: importa lancedb"
-    assert "cocoindex" in reached, "el composition root construye la op del embedder (T6/D59)"
+    assert f"{MCP_PACKAGE}.backend" in reached, (
+        "el root importa su adaptador de lectura: lo construye e inyecta (W2)"
+    )
+    assert "lancedb" in reached, "el tamaño del root y su backend importan lancedb"
+    assert "cocoindex" in reached, "el corte de lectura construye la op del embedder (T6/D59)"
     assert f"{MCP_PACKAGE}.tools.search" in reached, "registra el handler de search: lo importa"
     assert f"{PACKAGE}.config" in reached, "carga la config del vault: lo importa"
     assert f"{MCP_PACKAGE}.convert" in reached, "cablea la costura de add_source: importa convert"
     assert "markitdown" in reached, "convert.py importa markitdown: el root exento sí lo alcanza"
+
+
+def test_backend_module_is_the_second_infra_adapter() -> None:
+    """W2/A-02: `backend` es el SEGUNDO adaptador del server — lancedb Y cocoindex.
+
+    Estatus anotado (regla del review): `backend` alcanza los engines
+    LEGÍTIMAMENTE, como `adapters/lancedb_reader` en el flow — implementa el
+    puerto `ChunkReader` abriendo la tabla (`_open_table`) y construye la op de
+    lectura. POR ESO no entra en `MCP_PURE_DOMAIN_MODULES` ni en
+    `MCP_TOOL_MODULES` (los parametrizados con ban de engines): es el lado
+    infraestructura del server junto al composition root. La sanidad de abajo
+    garantiza que si deja de alcanzarlos, su contrato como adaptador se
+    reconsidera — no un fallo de walker (esa la dan los tests de `tools.search`).
+    markitdown queda FUERA: es el lado LECTURA; el conversor va por costura.
+    """
+    reached = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.backend")}
+    assert "lancedb" in reached, "el adaptador abre la tabla: ES infraestructura (como adapters/)"
+    assert any(target.split(".")[0] == "cocoindex" for target in reached), (
+        "el corte de lectura construye la op del embedder (T6/D59)"
+    )
+    assert f"{PACKAGE}.ports" in reached, "el backend implementa el puerto `ChunkReader`"
+    assert "markitdown" not in {target.split(".")[0] for target in reached}, (
+        "backend es el lado LECTURA: nunca abre el conversor (markitdown)"
+    )
 
 
 def test_embedder_module_stays_inside_its_allowlist() -> None:

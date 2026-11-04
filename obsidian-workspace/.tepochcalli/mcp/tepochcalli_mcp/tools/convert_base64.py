@@ -43,7 +43,7 @@ from typing import Final
 from tepochcalli_flow.citation import RESOURCES_DIR
 
 from tepochcalli_mcp import errors, formats, paths
-from tepochcalli_mcp.tools._convert_tail import write_converted
+from tepochcalli_mcp.tools._convert_tail import BytesConvert, write_converted
 
 logger = logging.getLogger(__name__)
 
@@ -64,7 +64,7 @@ async def convert_base64(
     filename: str | None = None,
     *,
     vault_root: Callable[[], Path],
-    convert: Callable[..., str],
+    convert: BytesConvert,
 ) -> dict[str, object]:
     """Resumen de 5 claves del `.md` escrito — el cuerpo no viaja (D36).
 

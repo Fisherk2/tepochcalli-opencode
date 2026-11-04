@@ -77,7 +77,7 @@ class IndexMeta(TypedDict):
     `models` vive DENTRO del DTO (no es JSON: se convierte en
     `model_matches_config` bool antes del payload). La consulta es UNA
     proyección de `model`+`indexed_at` compartida con la de `search`
-    (`server._VaultSearchBackend._select`) — no se reimplementa.
+    (`backend._VaultSearchBackend._select`) — no se reimplementa.
     """
 
     rows: int

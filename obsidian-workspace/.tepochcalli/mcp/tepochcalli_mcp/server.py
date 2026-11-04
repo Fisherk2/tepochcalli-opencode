@@ -31,11 +31,13 @@ memoria:
   (reexporta la distribución hermana `mcp_types==2.3.0`).
 
 **Composition root (patrón T1, cerrado en T2/T3):** este es el ÚNICO módulo
-del paquete que conoce el SDK, el flow con motor (`lancedb`, `cocoindex`) y la
-config del vault — el test de arquitectura extendido lo exime de la regla de
-dominio y afirma que `server` SÍ alcanza `lancedb`, igual que `adapters/` en
-Phase 1. El wiring de `search` (T2/G1): `_vault_root` → `load_config` →
-`_VaultSearchBackend` (lector `LanceDBChunkReader` + embedder de
+del paquete que conoce el SDK y la config del vault; el motor (`lancedb`,
+`cocoindex`) lo tocan solo él y `backend.py` — desde W2 el lector del vault
+(`_VaultSearchBackend`) vive en `tepochcalli_mcp.backend`, el SEGUNDO adaptador
+de la capa MCP (infraestructura, como `adapters/` en Phase 1; el test de
+arquitectura lo pinza con su caso propio). El wiring de `search` (T2/G1):
+`_vault_root` → `load_config` → `backend._VaultSearchBackend` (lector
+`LanceDBChunkReader` + embedder de
 `embedder.py`, perezosos para que `tools/list` y el arranque stdio no carguen
 torch ni el modelo) → inyectado al handler `tools/search.py` como FACTORY
 (`backend_factory`), para que el arranque quede BAJO `@errors.internal_guard`
@@ -57,27 +59,22 @@ el detalle y su rationale viven en el docstring de `tools/add_source.py`.
 
 from __future__ import annotations
 
-import contextlib
 import logging
 import os
 import tomllib
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import Awaitable
 from dataclasses import asdict
 from pathlib import Path
-from typing import TYPE_CHECKING, Final
+from typing import Final
 
 from mcp.server.mcpserver import MCPServer
 from mcp.types import CallToolResult
-from tepochcalli_flow import citation
 from tepochcalli_flow.config import CONFIG_RELPATH, Config, load_config
-from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
-from tepochcalli_flow.ports import ChunkReader, CitedChunk
-
-if TYPE_CHECKING:
-    from lancedb.table import AsyncTable
+from tepochcalli_flow.layout import DB_RELPATH
 
 import tepochcalli_mcp.tools
 from tepochcalli_mcp import __version__, budget, diagnostics, embedder, paths, summary
+from tepochcalli_mcp.backend import _VaultSearchBackend
 from tepochcalli_mcp.tools import add_source as add_source_handler
 from tepochcalli_mcp.tools import convert_base64 as convert_base64_handler
 from tepochcalli_mcp.tools import convert_document as convert_document_handler
@@ -97,138 +94,6 @@ Spec-mcp-server §Carga de configuración. El flow NO lo conoce: su nombre es
 `TEPOCHCALLI_VAULT_ROOT` (Phase 1) y la traducción ocurre en `_vault_root`,
 el composition root — un solo nombre para el vault en todo el sistema.
 """
-
-
-class _VaultSearchBackend:
-    """`SearchBackend` sobre el vault real: lector Phase 1 + estado del índice.
-
-    Implementa el puerto fino que `tools/search.py` consume (decisión T2:
-    el handler depende del puerto, no del motor). Solo lectura. El lector y su
-    embedder se construyen en la PRIMERA búsqueda (no en el arranque): el
-    proceso stdio no paga el coste de torch/MiniLM hasta que alguien busca.
-    """
-
-    def __init__(self, vault_root: Path, config: Config) -> None:
-        """Prepara el backend sobre `vault_root` con su config resuelta."""
-        self._vault_root = vault_root
-        self._config = config
-        self._reader: ChunkReader | None = None
-
-    @property
-    def config(self) -> Config:
-        """Config con la que se construyó este backend (R2: la compara `_backend()`)."""
-        return self._config
-
-    @property
-    def expected_model(self) -> str:
-        """Modelo configurado — el MISMO id que las filas guardan en `model` (ADR-006)."""
-        return citation.model_id(self._config)
-
-    async def index_models(self) -> set[str]:
-        """Conjunto de `model` de las filas: vacío ⇒ índice inexistente (`INDEX_EMPTY`).
-
-        Revisión Phase 2: lo UNIQUE de la columna en un solo punto con el borde
-        de solo lectura de `_open_table` (review 2026-10-27): DB/tabla AUSENTE
-        sin conectar ⇒ vacío (lancedb 0.40 no expone `execute_sql`/DISTINCT —
-        coste residual documentado en `_select`); tabla EXISTENTE pero
-        ilegible ⇒ el `ValueError` SUBE (el guard lo vuelve `INTERNAL`) —
-        roto ya no finge vacío.
-        """
-        return {str(row["model"]) for row in await self._select(["model"])}
-
-    async def index_meta(self) -> rag_status_handler.IndexMeta:
-        """DTO de estado del índice para `rag_status` (T4) — derivado, sin estado nuevo.
-
-        Revisión Phase 2 (2026-10-27): el TOTAL sale de `count_rows()` —O(1),
-        metadatos del fragmento, no lectura de filas—; `models` y
-        `last_refresh` siguen de una proyección de 2 columnas
-        (`max(indexed_at)`, ISO-8601 UTC con offset fijo ⇒ orden
-        lexicográfico = cronológico). `db_size_bytes` = walk de TODO
-        `<vault>/.tepochcalli/db/` — la spec dice `db/`, no solo el `.lance`.
-        """
-        db_root = self._vault_root / DB_RELPATH.parent
-        size = (
-            sum(path.stat().st_size for path in db_root.rglob("*") if path.is_file())
-            if db_root.is_dir()
-            else 0
-        )
-        async with self._open_table() as table:
-            if table is None:  # DB o tabla AUSENTE: índice inexistente (vacío honesto)
-                return rag_status_handler.IndexMeta(
-                    rows=0, models=set(), last_refresh=None, db_size_bytes=size
-                )
-            total = await table.count_rows()
-            rows: list[dict[str, object]] = (
-                await table.query().select(["model", "indexed_at"]).to_list()
-            )
-        return rag_status_handler.IndexMeta(
-            rows=total,
-            models={str(row["model"]) for row in rows},
-            last_refresh=max((str(row["indexed_at"]) for row in rows), default=None),
-            db_size_bytes=size,
-        )
-
-    @contextlib.asynccontextmanager
-    async def _open_table(self) -> AsyncIterator[AsyncTable | None]:
-        """Apertura de solo lectura de `chunks` — `None` si DB/tabla AUSENTE.
-
-        Revisión Phase 2: la diferenciación vacío vs ROTO es honesta — DB
-        ausente ∉ conectar (`connect_async` crearía el directorio) y tabla
-        ausente se distingue con `list_tables()`; si la tabla EXISTE y es
-        ilegible (`ValueError` de lancedb 0.40: esquema incompatible) el error
-        ESCALA al caller → `internal_guard` ⇒ `INTERNAL` — jamás se finge
-        `INDEX_EMPTY` con índice roto.
-        """
-        import lancedb  # composition root: el único sitio con el motor (decisión T2)
-
-        db_uri = self._vault_root / DB_RELPATH
-        if not db_uri.exists():
-            yield None
-            return
-        db = await lancedb.connect_async(str(db_uri))
-        try:
-            names = (await db.list_tables()).tables
-            if TABLE_NAME not in names:
-                yield None
-                return
-            yield await db.open_table(TABLE_NAME)
-        finally:
-            db.close()  # type: ignore[no-untyped-call]  # close() sin anotar en lancedb 0.40.0
-
-    async def _select(self, columns: list[str]) -> list[dict[str, object]]:
-        """Proyección de columnas de `chunks` — costura compartida search/rag_status (T2/T4).
-
-        shortcut: lancedb 0.40.0 NO expone `execute_sql` — ni `SELECT DISTINCT
-        model` ni `SELECT MAX(indexed_at)` bajan como pushdown a DataFusion; la
-        proyección materializa solo ESAS columnas (cortas, sin `vector`) y el
-        coste residual es O(filas) en ancho mínimo. Ver `_open_table` para el
-        borde de ausencia/ilegibilidad (review 2026-10-27: roto ⇒ escala).
-        """
-        async with self._open_table() as table:
-            if table is None:
-                return []
-            rows: list[dict[str, object]] = await table.query().select(columns).to_list()
-        return rows
-
-    async def cited_chunks(
-        self, query: str, top_k: int, path_filter: str | None
-    ) -> list[CitedChunk]:
-        """Búsqueda por el puerto `ChunkReader` — el adaptador vectoriza la query (T2).
-
-        El corte se construye con `_read_embedder` (composition root, T6/D59):
-        usa `SentenceTransformerEmbedder` sobre el **mismo path local** que el
-        write path. Si el snapshot falta, `EmbedderModelError` sube al handler
-        ⇒ `E_MODEL_INVALID` sin descargar nada.
-        """
-        if self._reader is None:
-            from tepochcalli_flow.adapters.lancedb_reader import LanceDBChunkReader
-
-            self._config.apply_model_cache_env()
-            self._reader = LanceDBChunkReader(
-                self._vault_root / DB_RELPATH,
-                embed=_read_embedder(self._config),
-            )
-        return await self._reader.search(query, top_k, path_filter)
 
 
 _backend_instance: _VaultSearchBackend | None = None
@@ -261,50 +126,6 @@ def _vault_root() -> Path:
     if (contract_root := os.environ.get(CONTRACT_ROOT_ENV)) is not None:
         os.environ.setdefault(VAULT_ROOT_ENV, contract_root)
     return resolve_vault_root().resolve()
-
-
-def _local_op(path: Path, device: str) -> embedder.AsyncEmbedder:
-    """Op local de cocoindex (import perezoso: el arranque stdio no carga torch)."""
-    from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
-
-    return SentenceTransformerEmbedder(str(path), device=device)
-
-
-def _api_op(model: str, api_key: str) -> embedder.AsyncEmbedder:
-    """Op de API de cocoindex (import perezoso: `litellm` no entra sin usarse).
-
-    Rasgos de la op que el producto hereda (verificados en `ops/litellm.py`):
-    reintentos con backoff exponencial (1 s ×2, tope 30 s) dentro de un
-    `timeout` de 10 min — cierra TD-16; batching de 64
-    (`@coco.fn.as_async(batching=True, max_batch_size=64)`); y un texto que
-    empieza por `data:…;base64,`, `gs://` o `files/` se incrusta con un espacio
-    delante — igual en write y read porque AMBOS usan esta op, así que la
-    búsqueda sigue siendo consistente.
-    """
-    from cocoindex.ops.litellm import LiteLLMEmbedder
-
-    return LiteLLMEmbedder(model, api_key=api_key)
-
-
-def _read_embedder(config: Config) -> Callable[[str], list[float]]:
-    """Composition root del corte de LECTURA (T6/D59) — una sola implementación.
-
-    Construye la op de cocoindex con el **path estable** del snapshot
-    (`config.embedding_model_path`) y se la pasa a `embedder.build_read_cut`
-    (que aplica la estrategia de provider y el dialecto de errores). El módulo
-    `embedder` NO importa `cocoindex`: la frontera se cruza solo aquí, como con
-    `lancedb`/`markitdown`.
-
-    - `local`: `SentenceTransformerEmbedder(str(path), device=…)` — la op
-      acepta «name **or path**» (fuente instalada: `ops/sentence_transformers.py:59-65`).
-    - `api`: `LiteLLMEmbedder(model, api_key=…)` — constructor inerte; los
-      reintentos con backoff y el batching de 64 son de la op (TD-16).
-    """
-    return embedder.build_read_cut(
-        config,
-        local_op_factory=_local_op,
-        api_op_factory=_api_op,
-    )
 
 
 def _backend() -> _VaultSearchBackend:

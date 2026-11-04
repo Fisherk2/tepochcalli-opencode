@@ -17,8 +17,36 @@ from __future__ import annotations
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Protocol
 
 from tepochcalli_mcp import errors, formats, paths, summary, writer
+
+
+class LocalConvert(Protocol):
+    """Costura del composition root para `convert_document` (T9): `convert_local`.
+
+    Un Protocol (patrón `SearchBackend` de `tools/search.py`) pina la firma
+    REAL que `_convert_local_seam` construye en `server.py`: mypy strict
+    rechaza un wiring que deje de coincidir.
+    """
+
+    def __call__(self, path: Path, *, source_uri: str, extension_hint: str | None) -> str:
+        """Markdown del documento del vault, con la pista como `extension_hint`."""
+        ...
+
+
+class BytesConvert(Protocol):
+    """Costura del composition root para `convert_base64` (T10): `convert_bytes`.
+
+    Firma REAL de `_convert_bytes_seam` (server.py) — idéntico patrón a
+    `LocalConvert`.
+    """
+
+    def __call__(
+        self, data: bytes, *, filename: str | None, extension: str, source_uri: str
+    ) -> str:
+        """Markdown de los bytes en contexto (`BytesIO` + `StreamInfo`)."""
+        ...
 
 
 async def write_converted(
