@@ -16,7 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `00-Resources` si está ausente o vacía. Reemplaza el default, no lo suma (ADR-010 §4.1,
   enmendado).
 - **`TEPOCHCALLI_TOP_K`**: default de `top_k` en `search` (5), sobreescribible por llamada; rango
-  útil 1–8 y un valor no entero o ≤0 cae a 5. Se lee al arrancar el MCP.
+  útil 1–8 y un valor no entero o fuera de `[1,20]` cae a 5. Se lee al arrancar el MCP.
 - **Diagnóstico de configuración en `rag_status`**: el bloque `config` gana `problems` (raíz de
   `INDEXER_DIR` inexistente o fuera del vault, `TEPOCHCALLI_ROOT` mal, `TEPOCHCALLI_TOP_K`
   inválido) y `unknown_env` (nombres que parecen nuestros y no lo son: `INDEXER_DRI`,
@@ -30,7 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `INDEXER_DIR` y el MCP no puede añadir ni quitar raíces. Una pasada declara el estado completo
   del índice, así que un subconjunto purgaría las filas de las demás raíces; el delta memoizado
   hace que re-escanear el conjunto completo cueste solo lo que cambió. Un agente que pase el
-  argumento recibe `VALIDATION_ERROR` por argumento desconocido (ADR-010 §4.1, rev. 2 — ADR
+  argumento no cambia nada: el SDK valida por firma y descarta las claves desconocidas, así que la
+  tool indexa el conjunto configurado (sin error — fijado por test; ADR-010 §4.1, rev. 2 — ADR
   editado en sitio por orden del dueño).
 - La sección **`[search]` de `tepochcalli.toml` queda jubilada**: `top_k` se declara en
   `environment`. Un toml viejo que la traiga solo recibe el aviso de sección desconocida — el
@@ -39,7 +40,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (config por entorno)
 
-- **`add_source` rechaza con `VALIDATION_ERROR` si `00-Resources` no está declarada** en
+- **`TEPOCHCALLI_TOP_K` fuera de `[1,20]` ya no rompe `search`**: antes un valor como `21` hacía el
+  `default` del schema igual a 21, `effective_top_k` lanzaba `ValueError` y **toda** `search` sin
+  argumento devolvía `VALIDATION_ERROR`, mientras `problems` no lo señalaba (solo chequeaba >0).
+  Ahora cae a 5 igual que el resto de envs inválidas y aparece en `config.problems` (spec §tabla).
+- **`add_source` rechaza** con `VALIDATION_ERROR` si `00-Resources` no está declarada** en
   `INDEXER_DIR` (`details: {requested, allowed, hint}`), **antes de escribir**: antes la añadía a
   la unión del refresh de esa llamada, y con el conjunto fijado en la variable eso solo podía
   hacerse modificando raíces. Escribir un fichero que el índice no va a ver era una promesa falsa.

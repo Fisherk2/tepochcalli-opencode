@@ -124,7 +124,7 @@ sequenceDiagram
 | venv + uv bootstrap | Runtime | `.tepochcalli/venv/`, `bin/` | ADR-004 |
 | `tepochcalli.toml` | Config | `.tepochcalli/config/` (gitignored) | spec-embeddings |
 | **Suite Phase 1 (T2–T11):** `tests/unit/` + `tests/integration/` — 137 tests en T11, **164 al cierre de Phase 1 (2026-10-23)**; `bench_delta.py` en `tests/benchmarks/` (M1, p95 sobre 20 ciclos) | Verificación | repo `tests/{unit,integration,benchmarks}/` | WORKFLOW §Phase 1, TRD §6.2 |
-| **Suite Phase 3.5 (T1–T16):** **658 passed + 3 `slow`**, cobertura **97 %** (gate 95 %); contract tests e2e de las 7 tools, negativos de B′, multi-raíz y documentos; `bench_delta.py` re-medido (Δ texto p95 **4 299 ms**, n=20 nearest-rank) | Verificación | repo `tests/` | WORKFLOW §Phase 3.5 |
+| **Suite Phase 3.5 (T1–T16):** **670 passed + 3 `slow`**, cobertura **97 %** (gate 95 %); contract tests e2e de las 7 tools, negativos de B′, multi-raíz y documentos; `bench_delta.py` re-medido (Δ texto p95 **4 299 ms**, n=20 nearest-rank) | Verificación | repo `tests/` | WORKFLOW §Phase 3.5 |
 | **CI Phase 1:** `phase1.yml` (ruff → suite → smoke Δ) | Verificación | `.github/workflows/phase1.yml` — **solo verificación local; nunca corrió en GitHub Actions (M6)** | T11, WORKFLOW §Phase 1 |
 | Wizard TUI Rust + cargo-dist | Distribución | repo `crates/` (Phase 3) + Releases | ADR-003, spec-installer-wizard |
 

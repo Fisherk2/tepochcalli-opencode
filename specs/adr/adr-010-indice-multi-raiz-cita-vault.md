@@ -178,8 +178,9 @@ de symlink del vault, y la normalización de cita.
   y el mismo `scanned` que la versión anterior sobre el mismo vault.
 * **Atomicidad (D65):** `INDEXER_DIR="materiales,no-existe"` ⇒ `VALIDATION_ERROR` y el recuento de
   filas del índice **no cambia**.
-* **Sin override:** `index_refresh` con cualquier argumento (el retirado `directories` incluido) ⇒
-  `VALIDATION_ERROR` por argumento desconocido, y el índice no se toca.
+* **Sin override:** `index_refresh` no acepta raíces; el retirado `directories` **no tiene efecto**
+  (el SDK valida por firma y descarta las claves desconocidas ⇒ la tool indexa el conjunto
+  configurado, sin error — fijado por test). El wire no puede cambiar el conjunto.
 * **Nunca `INTERNAL`:** una raíz inexistente, un fichero con extensión no soportada y un
   directorio donde se esperaba un fichero devuelven `VALIDATION_ERROR` con
   `details.suggestions` no vacías.
