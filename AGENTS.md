@@ -119,6 +119,11 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Wizard Rust: fases, rollback, cargo-dist |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | markitdown en proceso: 3 tools del conversor (summary-only) + seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | 9 comandos, 5 agentes, auditoría de skills |
+| [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Blueprint Phase 4 (padre): formato V2, `AGENTS.md` del vault, decisiones D-P4-* |
+| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Inventario real 209/170/9 + matriz de 17 filas |
+| [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | 5 bloques `permissions` V2 + nota de fusión |
+| [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | 5 system prompts en inglés (≤60 líneas) |
+| [specs/spec-payload-commands.md](specs/spec-payload-commands.md) | 9 cuerpos de comando en inglés + contrato español |
 | [specs/adr/](specs/adr/) | ADR-001…008 (Accepted, 2026-10-21) + ADR-009…011 (Accepted, 2026-11-03) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagramas C4/secuencia + inventario + índice ADR |
 | [docs/PRD.md](docs/PRD.md) · [docs/TRD.md](docs/TRD.md) | Requisitos de producto / técnicos |
@@ -133,7 +138,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * Decisions reversibles (nombres de variables internas): inline, sin delegar. Decisiones D1-D6:
   NO se re-litigan en código — requieren ADR nuevo aprobado por el usuario.
 * Skills/agents del vault: Phase 4 (diseño) propone instalar/retirar vía blueprint
-  (matriz de specs/spec-payload-vault.md, audit actions de spec-agent-workflow Anexo A);
+  (matriz de specs/spec-payload-skills.md, audit actions de spec-agent-workflow Anexo A);
   Phase 5 (payload) ejecuta; en el repo padre nunca.
 * Paralelizable: Phase 1 (flow) y Phase 2 (server MCP) pueden ir en worktrees separados contra
   el contrato de datos; Phase 3 (wizard) requiere Phase 1-2 estables.

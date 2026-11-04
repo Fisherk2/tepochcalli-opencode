@@ -54,7 +54,7 @@ repo                                # este repositorio (producto + plantilla)
 ├── AGENTS.md                       # reglas para asistentes de IA (línea guía ≤200)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
-│   ├── spec-*.md                   #   8 specs (motor, MCP, vault, embeddings, wizard…)
+│   ├── spec-*.md                   #   12 specs (motor, MCP, vault, embeddings, wizard… + 5 del payload)
 │   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
@@ -110,13 +110,21 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Approved (FTR Phase 3→4, 2026-10-28) | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
-| [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | Blueprint Phase 4 (diseño del agent workflow) — ejecución literal en Phase 5; gate Approved usuario |
+| [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | spec padre: reglas de formato V2, blueprint del AGENTS.md del vault, testing ejecutable y decisiones Phase 4 |
+| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Proposed | Inventario real 209/170/9 + matriz de 17 filas + muestras del instalador |
+| [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | Proposed | 5 bloques `permissions` V2 (forma en bloque) + nota de fusión (D-P4-2) |
+| [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | Proposed | 5 system prompts en inglés con el esqueleto de casa (≤60 líneas) |
+| [specs/spec-payload-commands.md](specs/spec-payload-commands.md) | Proposed | 9 cuerpos en inglés (≤35 líneas) + contrato de referencia español |
 
 (Plantillas: [specs/spec-template.md](specs/spec-template.md), [specs/adr/adr-template.md](specs/adr/adr-template.md).)
 
 > **Phase 3.5 cerrada (FTR 2026-11-03):** los ADR-009/010/011 pasan a *Accepted* y las cuatro
 > specs enmendadas quedan **definitivas** (`spec-vault-structure` promovida a *Approved*). Phase 4
-> (blueprint) queda desbloqueada.
+> (blueprint) quedó desbloqueada (hoy completada a nivel de checklist, ver abajo).
+>
+> **Phase 4 completada a nivel de checklist (2026-11-04) — FTR de usuario pendiente:** el blueprint
+> vive en `spec-payload-vault` + sus 4 specs hermanas, todas **Proposed** hasta que el usuario
+> apruebe el gate BLUEPRINT APPROVED. Phase 5 no arranca sin esa aprobación.
 
 ## Log de decisiones
 

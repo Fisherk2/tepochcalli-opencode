@@ -1,6 +1,6 @@
 # Implementation Plan — Tepochcalli v1
 
-**Date:** 2026-10-21 (rev. 9 — Phase 3.5 **COMPLETADA** 2026-11-04: review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final 703 passed+3 slow, coverage 97 %, bench-smoke PASS, rust-ci ok; baseline escala NTFS-3G FAIL / btrfs PASS → Phase 6; Phase 4 lista para planificar. rev. 8 — Phase 3.5 **cerrada con FTR aprobado** 2026-11-03: 7 tools, índice multi-raíz, dieta y skill; ADR-009/010/011 **Accepted**. rev. 7 — Phase 3.5 planificada 2026-11-02: 3 ADR (009/010/011) + 4 specs enmendadas + D28-D67; rev. 6 estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
+**Date:** 2026-10-21 (rev. 10 — Phase 4 **COMPLETADA** 2026-11-04 a nivel de checklist: blueprint del payload en 5 specs <500 líneas (209 skills · 170 agentes · 9 comandos verificados), 0 links rotos, md-lint 0 errores (pagado el único MD005 del baseline) y `git diff --stat -- obsidian-workspace` vacío; **FTR pendiente de aprobación del usuario** — Phase 5 no arranca sin BLUEPRINT APPROVED. rev. 9 — Phase 3.5 **COMPLETADA** 2026-11-04: review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final 703 passed+3 slow, coverage 97 %, bench-smoke PASS, rust-ci ok; baseline escala NTFS-3G FAIL / btrfs PASS → Phase 6; Phase 4 lista para planificar. rev. 8 — Phase 3.5 **cerrada con FTR aprobado** 2026-11-03: 7 tools, índice multi-raíz, dieta y skill; ADR-009/010/011 **Accepted**. rev. 7 — Phase 3.5 planificada 2026-11-02: 3 ADR (009/010/011) + 4 specs enmendadas + D28-D67; rev. 6 estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
@@ -18,7 +18,7 @@
 | 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e |
 | 6 | E2E Acceptance | Validar los 7 criterios de UH.md sobre sistema completo | Aceptación: tabla §6.3 toda verde en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 
-> **Estado (2026-11-04):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 3.5 (conversor + multi-raíz + dieta + skill) COMPLETADA 2026-11-04** — FTR aprobado 2026-11-03 (7 tools, ADR-009/010/011 **Accepted**, 4 specs enmendadas definitivas) + review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final `just ci` verde local: **703 passed + 3 `slow`**, cobertura **97 %** (gate 95 %), bench-smoke **PASS**, rust-ci **ok** (§Phase 3.5); **Phase 4 (blueprint) DESBLOQUEADA — lista para planificar** (primer gap conocido: `obsidian-workspace/AGENTS.md` es un template vacío y no contiene la regla MCP-first que el blueprint debe redactar). GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
+> **Estado (2026-11-04):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 3.5 (conversor + multi-raíz + dieta + skill) COMPLETADA 2026-11-04** — FTR aprobado 2026-11-03 (7 tools, ADR-009/010/011 **Accepted**, 4 specs enmendadas definitivas) + review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final `just ci` verde local: **703 passed + 3 `slow`**, cobertura **97 %** (gate 95 %), bench-smoke **PASS**, rust-ci **ok** (§Phase 3.5); **Phase 4 (blueprint) COMPLETADA 2026-11-04** a nivel de checklist — blueprint del payload en 5 specs (`spec-payload-vault` + 4 hermanas), todas **Proposed**; FTR de usuario pendiente (§4), así que **Phase 5 no arranca** y no se declara BLUEPRINT APPROVED. GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
 
 ## 2. Phase Breakdown
 
@@ -78,8 +78,10 @@
 ### Phase 3.5 — Conversor summary-only + skill `tepochcalli-mcp` (H1-H4)
 
 * **Estado (2026-11-03): CERRADA — FTR aprobado.** T1-T16 ejecutados; CP-A, CP-B, CP-C, CP-D,
-  CP-E y CP-F cerrados; plan y detalle en [`tasks/plan.md`](../tasks/plan.md) y
-  [`tasks/todo.md`](../tasks/todo.md). Contratos en **ADR-009** (conversor summary-only),
+  CP-E y CP-F cerrados; plan y detalle en el commit `5064a26` (D-P4-5: `tasks/plan.md` y
+  `tasks/todo.md` fueron sobrescritos por `391216d`, así que el contenido previo vive solo en git —
+  las referencias «tasks/plan.md §2» de §8 y de `docs/TECH_DEBT.md`
+  apuntan a ese contenido histórico, no al fichero actual). Contratos en **ADR-009** (conversor summary-only),
   **ADR-010** (índice multi-raíz + cita vault-relativa) y **ADR-011** (dos librerías + ledger de
   no-reinvención), **Accepted 2026-11-03**; `spec-markitdown`, `spec-mcp-server`, `spec-rag-engine`
   y `spec-vault-structure` enmendadas y definitivas.
@@ -163,7 +165,7 @@
      solo en éxito —W-10—, alternativo usable en `writer` —W-11—, `backend_factory` fuera del
      event loop —W-12— y `convert`/`mcp.*` en el test de arquitectura —W-13—). Tres
      hallazgos quedan FUERA de alcance y en `docs/TECH_DEBT.md` §Review 5-ejes Phase 3.5.
-   8. **Cierre 2026-11-04 (orden del dueño):** el review 5-ejes post-FTR aterriza en 6 commits
+  8. **Cierre 2026-11-04 (orden del dueño):** el review 5-ejes post-FTR aterriza en 6 commits
    (`e191a45`, `876a215`, `a149fc7`, `a5ce99e`, `f904458`, `6e00aa9`) y `ad7575c` lleva los
    plugins del payload a **@latest** para seguir al harness — **revierte los pins de R-04**.
    Gate final verde en local: **703 passed + 3 `slow`**, cobertura **97 %** (gate 95 %),
@@ -173,12 +175,29 @@
 
 ### Phase 4 — Diseño del agent workflow (blueprint)
 
-* **Estado (2026-11-04): DESBLOQUEADA — LISTA PARA PLANIFICAR.** Dependencias satisfechas (Phase 0 contratos D9 congelados + Phase 3 y Phase 3.5 COMPLETADAS con FTR aprobado y gate final verde); lienzo vivo `specs/spec-payload-vault.md` en **Proposed** (con la skill `tepochcalli-mcp` ya registrada en su matriz); arranque del diseño vía `/plan`. Primer gap conocido: `obsidian-workspace/AGENTS.md` es un template vacío (placeholders) y no contiene la regla MCP-first que el blueprint debe redactar. Sin gate BLUEPRINT APPROVED, Phase 5 no arranca.
-* Objetivo: completar specs/spec-payload-vault.md hasta estado **Approved**: system prompts definitivos de los 5 agentes, bloques YAML de permisos (last-match-wins), templates determinísticos de los 9 comandos. AGENDA: (i) §Tabla de invocación por comando — 9 filas × 4 columnas {skills concretas del inventario real, herramientas nativas, MCPs a ejecutar (`tepochcalli-rag` tools por comando, incluidas las 3 del conversor; `anydoc` solo como fallback disabled), subagentes permitidos}; (ii) §Matriz de conflictos/redundancias de skills contra el inventario REAL de `obsidian-workspace/.opencode/skills/` (lectura only).
+* **Estado (2026-11-04): COMPLETADA (checklist) — FTR pendiente de aprobación del usuario.** Diseño
+  puro: `obsidian-workspace/` intacto (`git diff --stat -- obsidian-workspace` **vacío**; sin commits
+  de payload). El blueprint quedó en **5 specs** — `spec-payload-vault` (366 líneas, spec padre),
+  `spec-payload-skills` (226), `spec-payload-permissions` (408), `spec-payload-agents` (443),
+  `spec-payload-commands` (476) — todas <500 y todas en **Proposed**; `spec-agent-workflow` (231)
+  sigue en Proposed. Verificado sobre el inventario real: **209 skills · 170 agentes · 9 comandos**,
+  **0 skills/subagentes inventados**; cuerpos de los 5 agentes 56/54/58/58/56 líneas, 9 comandos
+  24-30 líneas, `AGENTS.md` del vault (blueprint) 67 líneas — todo en inglés (D-P4-6/D-P4-7) y
+  dentro de los techos de la spec. **92 links relativos** entre las 6 specs: **0 rotos**; markdownlint
+  **0 errores** (se pagó el único MD005 del baseline); ningún bloque mermaid añadido en la fase. **Skills base: 60 distintas** — el
+  objetivo <60 falla por 1, y **D-P4-10** propone cortar 10 remnants en dominio hasta 50, **pendiente
+  del FTR** (no aplicado). **D-P4-9**: CP-A se leyó sobre las specs existentes en ese momento;
+  **D-P4-11**: los permisos se extrajeron a la 5.ª spec para respetar <500.
+  **FTR pendiente de aprobación del usuario; Phase 5 no arranca sin BLUEPRINT APPROVED.**
+* Objetivo (contenido entregado en las 5 specs; *Approved* es el gate, no el entregable): completar el blueprint hasta estado **Approved**: system
+  prompts definitivos de los 5 agentes, bloques YAML de permisos (last-match-wins), templates
+  determinísticos de los 9 comandos. AGENDA: (i) §Tabla de invocación por comando — 9 filas × 4 columnas {skills concretas del inventario real, herramientas nativas, MCPs a ejecutar (`tepochcalli-rag` tools por comando, incluidas las 3 del conversor; `anydoc` solo como fallback disabled), subagentes permitidos}; (ii) §Matriz de conflictos/redundancias de skills contra el inventario REAL de `obsidian-workspace/.opencode/skills/` (lectura only) — entregada con **17 filas** que cubren el 100 % del inventario.
 * Naturaleza: **documentación pura — cero escritura de payload**. `obsidian-workspace/` sigue vedado; la prohibición es un deliverable verbal de esta fase, no código.
 * Dependencias: Phase 0 (contratos D9); puede correr en paralelo a Phases 1-3 (no los necesita — los contratos MCP ya están Accepted).
-* Métricas: la matriz cubre el 100% del inventario (recuento `ls` vs filas); cada skill referenciada en la tabla existe o está marcada GAP; cero skills/subagents inventados; permisos YAML sin campos legacy V2.
-* **Gate: BLUEPRINT APPROVED por el usuario** (status de spec-payload-vault → Approved en el índice de SPEC.md). Sin gate verde, Phase 5 NO arranca.
+* Métricas (medidas en el FTR del 2026-11-04): la matriz cubre el 100% del inventario (recuento `ls` vs filas ⇒ **17 filas / 209 skills**); cada skill referenciada en la tabla existe o está marcada GAP; cero skills/subagents inventados; permisos YAML sin campos legacy V2.
+* **Gate: BLUEPRINT APPROVED por el usuario** (status de las 5 specs del payload → Approved en el
+  índice de SPEC.md). Checklist verde 2026-11-04 (§4); **la aprobación es lo que falta y no se
+  declara que exista**. Sin gate verde, Phase 5 NO arranca.
 
 ### Phase 5 — Payload + Skills audit (ejecución)
 
@@ -273,7 +292,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 | Phase 0→1 | specs/ + ADRs | consistencia D1-D9, links, mermaid | Usuario + arquitecto |
 | Phase 2→3 | contratos vs código | shapes = spec-mcp-server | arquitecto |
 | Phase 3→4 | wizard crate + docs de cierre | CP-A..D (6/6 cada uno) + FTR checklist + suite local | Usuario |
-| Phase 4→5 | blueprint (spec-payload-vault Approved) | tabla invocación + matriz conflictos + permisos V2 sin legacy | Usuario + arquitecto |
+| Phase 4→5 | blueprint: 5 specs del payload (`spec-payload-vault` **Approved** + `skills`/`permissions`/`agents`/`commands`) | tabla invocación + matriz conflictos + permisos V2 sin legacy — **checklist verde 2026-11-04, aprobación pendiente** | Usuario + arquitecto |
 | Phase 5→6 | payload + skills | Anexo A acciones ejecutadas + permission fixtures + methodology e2e verdes + coherencia blueprint vs archivos generados | Usuario |
 
 **FTR Phase 0→1 — ejecutado 2026-10-23 (T12), checklist verde** (corrido sobre `specs/`, `docs/`, `AGENTS.md` y `SPEC.md`):
@@ -314,6 +333,19 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
   El tier 1 de `src/` pasó de 2 a 14 ficheros con `#[cfg(test)]` (79 unit tests), y ese trabajo
   destapó tres defectos ya corregidos: `join_checked` aceptaba `..`, los lectores de config no
   deshacían el escape de `toml_escape` y `commit()` borraba el config vivo en vez de restaurarlo.
+
+**FTR Phase 4→5 — 2026-11-04, checklist verde (aprobación de usuario pendiente)** (artefacto: blueprint del payload en 5 specs; gate Phase 4→Phase 5). **Este bloque no concede el gate**: el FTR exige la aprobación del usuario, así que aquí solo se registra el checklist.
+
+* **Inventario real verificado contra `obsidian-workspace/.opencode/`**: **209 skills · 170 agentes · 9 comandos**; **0 skills/subagentes inventados** (las 17 filas de la matriz cubren el 100 % del recuento `ls`).
+* **5 specs del payload <500 líneas**: vault 366 · skills 226 · permissions 408 · agents 443 · commands 476 (`spec-agent-workflow` 231). Las 5 en **Proposed** — ninguna se promueve aquí.
+* **14 bloques del payload dentro de presupuesto**: 5 cuerpos de agente (56/54/58/58/56 ≤60) + 9 cuerpos de comando (24-30 ≤35); el blueprint del `AGENTS.md` del vault son 67 líneas, dentro del techo de 120.
+* **0 marcadores de español** en los bloques del payload (D-P4-6/D-P4-7): sin `ñ`, `¿`, `¡` ni las palabras sueltas del criterio; artefactos en inglés, prosa del repo en español.
+* **0 links rotos**: 92 links relativos revisados en las 6 specs.
+* **markdownlint: 0 errores** en `specs/`, `tasks/`, `docs/`, `AGENTS.md` y `SPEC.md`. El único error del baseline D12 (`docs/WORKFLOW.md:166`, MD005 de indentación) se corrigió en este cierre con un dedent de una línea; no queda ninguno.
+* **Payload intacto**: `git diff --stat -- obsidian-workspace` **vacío**; ningún commit de la fase escribe `obsidian-workspace/`.
+* **Pendiente del usuario — D-P4-10**: el corte de 10 remnants en dominio (60 → 50 skills, objetivo <60) **no se aplica**; sin él la métrica de Phase 5 falla por 1 y el FTR debe fijar la base del recuento (60 o 70).
+* **Artefactos de guía**: `agent_example.md` y `command_example.md` siguen **untracked** en la raíz (D-P4-8); no se commitean.
+* **Lo NO verificado**: nada de Phase 5 se ejecuta aquí (permission fixtures y methodology e2e son sus gates); GitHub Actions sigue sin haber corrido (M6).
 
 ## 5. Risk Management
 

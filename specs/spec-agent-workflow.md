@@ -174,6 +174,8 @@ No se adoptan: retry/backoff (vive en el motor y la taxonomía `E_*` del MCP) ni
 
 ## Anexo A — Auditoría de skills (`obsidian-workspace/.opencode/skills/`)
 
+> **Aviso (2026-11-04):** las cifras de este anexo (208 skills, ≈120 out-of-domain) quedan **superadas** por [specs/spec-payload-skills.md](spec-payload-skills.md), que mide **209** y **109** out-of-domain. El anexo se conserva como auditoría histórica.
+
 Inventario real: **208 skills** (listado completo al final). Las 14 categorías solicitadas en UH.md se contrastan a continuación.
 
 ### Cobertura por categoría
@@ -200,7 +202,7 @@ Inventario real: **208 skills** (listado completo al final). Las 14 categorías 
 | Familia | Skills | Acción recomendada |
 | --- | --- | --- |
 | Office "oficial vs libre" | docx + docx-official · pptx + pptx-official · xlsx + xlsx-official | conservar la variante oficial; retirar la duplicada (misma función) |
-| PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | quedarse con 1–2 (proponer: `pdf` general + `pdf-processing-pro`); liteparse lo cubre el motor propio (Docling) |
+| PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | quedarse con 1–2 (proponer: `pdf` general + `pdf-processing-pro`); liteparse lo cubre el motor propio (markitdown, ADR-011) |
 | Búsqueda de literatura ×8+ | literature, literature-search, literature-review, research-literature, academic-literature-search, paper-lookup, arxiv-search, biorxiv-search, medrxiv-search, pubmed-search, pubmed-database, openalex-database, bgpt-paper-search, paperzilla | consolidar a 2: un buscador general (research-lookup) + uno de preprints/biomed por dominio si el usuario lo pide; las de bases bio específicas son out-of-domain para el payload genérico |
 | Deep research ×4 | deep-research, deep-research-swarm, tooluniverse-literature-deep-research, research-lookup | conservar 1–2 (swarm es una variante de orquestación: evaluar coste de tokens contra presupuesto del criterio 4) |
 | Estadística | statistical-analysis, data-stats-analysis, statsmodels, statistical-power | statistical-analysis + statsmodels cubren el rango; revisar superposición con data-stats-analysis |

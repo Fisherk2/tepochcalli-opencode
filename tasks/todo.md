@@ -103,7 +103,7 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 - [x] Frontmatter: `description` **entrecomillado** «Name - Role» en inglés, `mode: primary`, sin `model`; `default_agent` → `itzamna`
 - [x] Divergencia con la guía documentada: el blueprint mantiene `subagent * deny` para los 5 (catálogo inerte, D9)
 - [x] Riesgo D-P4-3 (tools MCP sin regla por agente) anotado en §Trade-offs
-- Verificado: 5/5 YAML parsean; simulación de última-coincidencia 14/14 probes; 0 `{action: …}` en línea; md-lint 0
+- Verificado: 5/5 YAML parsean; simulación de última-coincidencia **42/42** probes (incluye los 5 denies de gobernanza que añadió el review); 0 `{action: …}` en línea; md-lint 0
 - Deps: T1, T3 · Verificación: YAML parseable + simulación last-match-wins + grep legacy = 0 + md-lint
 
 ### 🚦 Checkpoint CP-B — fin de T3+T4
@@ -227,8 +227,8 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 | D-P4-7 | **Las muestras del payload van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf`; el renombrado del wizard es de Phase 5 | dueño | 2026-11-04 |
 | D-P4-8 | **La guía de formato son `agent_example.md` y `command_example.md`** (raíz, **sin commitear**): fijan el header y el esqueleto de cuerpo; el plan solo referencia las rutas | dueño | 2026-11-04 |
 | D-P4-9 | **CP-A se lee sobre las specs que existen en ese momento**: `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` 585 baja a <500 cuando T6 mueva los cuerpos de comando (el fichero ya partía de 528, rojo antes de Phase 4) | orquestador | 2026-11-04 |
-| D-P4-10 | **Corte de 10 remnants en dominio** (`polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`) para que la base baje de 61 a 51 y cumpla `<60` — **pendiente de aprobación del dueño en el FTR**, no aplicado | dueño (pendiente) | 2026-11-04 |
-| D-P4-11 | **5.ª spec `spec-payload-permissions.md`**: la forma en bloque de la guía (action/resource/effect en líneas propias) triplica la sección de permisos (390 líneas) e impide el umbral <500; se extrae a su propia spec y `spec-payload-vault.md` queda en 463 | orquestador | 2026-11-04 |
+| D-P4-10 | **Corte de 10 remnants en dominio** (`polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`) para que la base baje de 60 a 50 y cumpla `<60` — **pendiente de aprobación del dueño en el FTR**, no aplicado | dueño (pendiente) | 2026-11-04 |
+| D-P4-11 | **5.ª spec `spec-payload-permissions.md`**: la forma en bloque de la guía (action/resource/effect en líneas propias) triplica la sección de permisos (390 líneas) e impide el umbral <500; se extrae a su propia spec y `spec-payload-vault.md` queda en 366 | orquestador | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)
@@ -243,3 +243,9 @@ _Cada nota registra: qué se hizo, qué se encontró que no estaba en el plan, y
 - **T4 (2026-11-04):** permisos en forma de bloque = 390 líneas; D-P4-11 los extrae a `spec-payload-permissions.md` (408) y deja el vault en 463. Simulación last-match-wins 14/14. Se añadieron reglas de higiene (`external_directory`, `.env`, `.tepochcalli/config/**`) que el array global hacía de facto; sin ellas, al borrar las 313 reglas se reabriría la lectura de secretos.
 - **T5/T6 (2026-11-04):** 14 bloques con el esqueleto de casa (5 prompts 56/54/58/58/56; 9 comandos 24-30). `data-transform` citada por error en el prompt de Tlacuilo (la matriz la retira) → eliminada. Los 3 cuerpos españoles de referencia son byte-idénticos a HEAD. El vault baja a **310** líneas.
 - **CP-C (2026-11-04):** verde. El chequeo de idioma exime nombres propios y tokens de enum (`ok_con_avisos`, `sin_ancla`, …); sin esa exención, `con` dentro de `ok_con_avisos` daría un falso positivo.
+- **T8b — review 5 ejes (2026-11-04):** REQUEST CHANGES en los 5 ejes, con 3 blockers reales, todos corregidos antes del FTR:
+  1. **B1** — 6 `description:` con dos puntos y espacio sin entrecomillar no parseaban como YAML (`/rubric`, `/validate`, `/review`, `/transform` + 2 referencias españolas). Corregidas; el §Testing exige ahora parseo YAML.
+  2. **B2** — Tlacuilo podía editar `.git/`, `AGENTS.md`, `opencode.json` y `tepochcalli.toml` por `edit * allow`. Añadidos 4 denies al final del bloque (27 reglas).
+  3. **B3** — la base no era 61: los cubos se solapaban en 2 skills (`wikipedia-search`, `multi-search-engine`) y los 5 por defecto no sumaban. Base real **60 distintas** (35+22+5−2); D-P4-10 sigue pendiente (corte a 50).
+  Mayores corregidos: `xlsx` retirada citada por el prompt de Tlacuilo → `xlsx-official`; `spec-payload-vault` decía "specs Approved" → Proposed; `Docling` → markitdown en el Anexo A + aviso de cifras superadas; `/transform` editaba dos bandejas → solo `05-outputs/`; contadores 111/98 → 112/97; `tepochcalli-rag_search` → `tepochcalli_rag_search`; AGENTS.md repunta la matriz a `spec-payload-skills.md`; bandejas descritas como caché → matiz de entregables.
+  Verificación tras los fixes: 12/12 frontmatter parsean, 42/42 probes, md-lint 0, 0 enlaces rotos.

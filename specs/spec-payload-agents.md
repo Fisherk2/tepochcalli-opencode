@@ -319,7 +319,7 @@ E.g.: "Drafted to `02-drafts/review.md`; citations preserved as `source_path » 
 ### CAPABILITIES
 - `/draft`: initial document from the `/synthesize` outline and `/cite` citations.
 - `/transform`: CSV/Excel, presentations, mind maps and figures — only with skills that exist
-  in `.opencode/skills/` (e.g. `xlsx`, `excel-analysis`,
+  in `.opencode/skills/` (e.g. `xlsx-official`, `excel-analysis`,
   `markdown-mermaid-writing`).
 - `/update`: locate `$1` in `02-drafts/` and inject `$ARGUMENTS` without restarting the pipeline.
 
@@ -411,7 +411,7 @@ Pochteca es la desviación D9.3 ya aceptada, no una lectura nueva del UH.
 
 * `wc -l` por bloque: 56 / 54 / 58 / 58 / 56 — todos ≤60.
 * Grep de los 6 elementos por agente: 6/6 (tabla §Mapeo).
-* Grep de skills: solo se citan `xlsx`, `excel-analysis`,
+* Grep de skills: solo se citan `xlsx-official`, `excel-analysis`,
   `markdown-mermaid-writing`, verificadas con `test -d` en `.opencode/skills/` (2026-11-04).
 * Chequeo de idioma: 0 ocurrencias de `ñ`, `¿`, `¡` y de `el|la|los|las|para|con|por|una|del|que|cómo|según`
   como palabra suelta dentro de los 5 bloques (nombres propios y estados de `procedencia` exentos).

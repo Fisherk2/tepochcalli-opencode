@@ -449,7 +449,7 @@ trabajaría sobre inventario no verificado.
 | Gate | Momento | Criterios de paso |
 | --- | --- | --- |
 | **CP-A** | fin de T1+T2 | Reglas de formato citadas (URL + versión + fecha) · inventario contado 1:1 (209/170/9) · **0 skills inventadas** · 4 specs <500 líneas |
-| **CP-B** | fin de T3+T4 | Los 7 nombres de tool del servidor MCP coinciden con la tabla 9×4 · cada skill citada existe · **0** campos legacy y **0** `todowrite` · YAMLs parsean y la simulación last-match-wins coincide con lo esperado |
+| **CP-B** | fin de T3+T4 | Los 7 nombres de tool del servidor MCP coinciden con la tabla 9×4 · cada skill citada existe · **0** campos legacy y **0** `permission:` singular (`todowrite` se conserva como acción de casa, D-P4-3) · YAMLs parsean y la simulación last-match-wins coincide con lo esperado |
 | **CP-C** | fin de T5+T6 | 5 prompts ≤60 líneas con los 6 elementos obligatorios · 9 comandos ≤35 líneas con los 7 elementos obligatorios · **0** ocurrencias de `!`cmd``/`@paths` · cada destino de escritura = su bandeja D9.2 · **0 marcadores del español en los 14 bloques del payload (D-P4-6)** · esqueleto de casa presente en los 14 ficheros (secciones de la guía, con las sustituidas declaradas) |
 | **CP-D** | fin de T7 | `AGENTS.md` del vault ≤120 líneas y coherente con T5/T6 · enlaces relativos 0 rotos · preguntas abiertas 0 · md-lint sin errores nuevos |
 | **CP-E** | fin de T8 | **BLUEPRINT APPROVED** por el usuario (FTR Phase 4→5) · status `Approved` en `SPEC.md` · md-lint sin errores nuevos · mermaid render 0 fallos · `git diff --stat -- obsidian-workspace` vacío |

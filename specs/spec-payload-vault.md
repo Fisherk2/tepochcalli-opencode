@@ -18,7 +18,7 @@ materializa. El contenido de esos artefactos vive repartido en las specs hermana
 [`spec-payload-skills.md`](spec-payload-skills.md) (inventario, matriz y tabla 9×4).
 **No se escribe nada ahora**: por decisión explícita del usuario (2026-10-21),
 `obsidian-workspace/` queda intacto bajo /spec; la ejecución del blueprint es labor de **Phase 5
-vía /plan**, por agentes autorizados, de forma LITERAL desde estas specs Approved. Los permisos
+vía /plan**, por agentes autorizados, de forma LITERAL desde estas specs (hoy Proposed; Phase 5 solo tras el gate BLUEPRINT APPROVED). Los permisos
 por agente viven SOLO en los `.md`; los modelos viven SOLO en `opencode.json` (no duplicar en
 ambos lugares).
 
@@ -116,7 +116,7 @@ se copia en esta spec.
 | `webfetch` | URL pedida | sí | |
 | `websearch` | query | sí | |
 | `external_directory` | frontera de directorio externo (acaba en `/*`) | sí | default `allow`; se comprueba antes de `read`/`edit` |
-| `<server>_<tool>` | `*` para una tool MCP (`tepochcalli-rag_search`) | sí | caracteres no soportados pasan a `_` |
+| `<server>_<tool>` | `*` para una tool MCP (`tepochcalli_rag_search`) | sí | caracteres no soportados pasan a `_` |
 | `execute` | `*`; un deny elimina Code Mode | sí | las tools anidadas aplican sus propias reglas |
 | `doom_loop` | reservada | **no** | «`doom_loop` and `lsp` are not current V2 Core permission actions»; no la usa el payload |
 | `todowrite` | acción de casa (stubs y `agent_example.md`) | casa | casa — no en el catálogo de las docs; se conservan porque los nombres de acción son cadenas ampliables por plugin |
@@ -200,7 +200,7 @@ index, not from the model's memory.
 | Zone | Who writes | Rule |
 | --- | --- | --- |
 | `00-Resources/` | the user only (via `add_source` on request) | the only indexable source; free nesting |
-| `01-tasks/`…`05-outputs/` | the agents, each in its tray (§4) | you may READ, EXTRACT and DELETE (regenerable cache); do NOT deposit or edit in place |
+| `01-tasks/`…`05-outputs/` | the agents, each in its tray (§4) | you may READ and EXTRACT; copy out `02-drafts/` and `03-citations/` before deleting (01/04/05 are regenerable); do NOT deposit or edit in place |
 | `10+`, `20+`… | you | personal library; agents read only if you ask; not indexed in v1 |
 | `.obsidian/`, `.opencode/`, `.tepochcalli/` | Obsidian / the wizard | off-limits to agents |
 
@@ -305,7 +305,7 @@ Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario 209,
 | D-P4-7 | Las muestras del payload van en inglés (nombre y contenido) | dueño | 2026-11-04 |
 | D-P4-8 | Guía de formato: `agent_example.md` y `command_example.md` (raíz, untracked) | dueño | 2026-11-04 |
 | D-P4-9 | CP-A se lee sobre las specs existentes en ese momento | orquestador | 2026-11-04 |
-| D-P4-10 | Corte de 10 remnants en dominio para bajar de 61 a 51 skills (<60) — pendiente del FTR | dueño (pendiente) | 2026-11-04 |
+| D-P4-10 | Corte de 10 remnants en dominio para bajar de 60 a 50 skills (<60) — pendiente del FTR | dueño (pendiente) | 2026-11-04 |
 | D-P4-11 | Extraer los permisos a la 5.ª spec `spec-payload-permissions.md` para respetar <500 | orquestador | 2026-11-04 |
 
 ## Testing Strategy — criterios de aceptación de la ejecución (Phase 5)

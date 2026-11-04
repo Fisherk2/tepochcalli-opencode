@@ -44,7 +44,7 @@ cerrado con cita en bloque. Sin `model`, sin `subagent`, sin `subtask`.
 
 ```markdown
 ---
-description: Build the research rubric: central question, objectives, scope, source criteria.
+description: "Build the research rubric: central question, objectives, scope, source criteria."
 agent: nezahualcoyotl
 ---
 
@@ -108,7 +108,7 @@ Doubt about intent or arguments: `question`.
 
 ```markdown
 ---
-description: Audit one document: contradictions, bias, and a deterministic claim-by-claim check against the index.
+description: "Audit one document: contradictions, bias, and a deterministic claim-by-claim check against the index."
 agent: chilam
 ---
 
@@ -226,7 +226,7 @@ Doubt about intent or arguments: `question`.
 
 ```markdown
 ---
-description: Peer-review a draft: spelling, argument coherence, clarity, and substantive improvements.
+description: "Peer-review a draft: spelling, argument coherence, clarity, and substantive improvements."
 agent: chilam
 ---
 
@@ -255,7 +255,7 @@ Doubt about intent or arguments: `question`.
 
 ```markdown
 ---
-description: Turn accepted research into dissemination artifacts: CSV/Excel, slides, mind map, figures.
+description: "Turn accepted research into dissemination artifacts: CSV/Excel, slides, mind map, figures."
 agent: tlacuilo
 ---
 
@@ -386,7 +386,7 @@ Salida: notas de evidencia con procedencia lista para `/validate` y `/cite`.
 
 ```markdown
 ---
-description: Auditoría crítica de un documento: contradicciones, sesgos y verificación determinista de cada afirmación contra el índice
+description: "Auditoría crítica de un documento: contradicciones, sesgos y verificación determinista de cada afirmación contra el índice"
 agent: chilam
 ---
 
@@ -418,7 +418,7 @@ Fase metodológica: EVALUACIÓN CRÍTICA (UH). Argumentos: `$1` = ruta del docum
 
 ```markdown
 ---
-description: Compilación y formato bibliográfico con gate determinista: ninguna referencia sin procedencia resuelta sale compilada
+description: "Compilación y formato bibliográfico con gate determinista: ninguna referencia sin procedencia resuelta sale compilada"
 agent: chilam
 ---
 

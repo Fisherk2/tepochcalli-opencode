@@ -309,11 +309,26 @@ permissions:
   - action: edit
     resource: "04-review/**"
     effect: deny
+  - action: edit
+    resource: ".git/**"
+    effect: deny
+  - action: edit
+    resource: "AGENTS.md"
+    effect: deny
+  - action: edit
+    resource: "opencode.json"
+    effect: deny
+  - action: edit
+    resource: "tepochcalli.toml"
+    effect: deny
 ```
 
 Sus superficies efectivas: `02-drafts/`, `05-outputs/` y los finales que el usuario pida en sus
 carpetas (10+). Sin navegación web (UH); shell deny (las exportaciones las hacen las skills). La
-lista de deny va ENTERA detrás de `edit * allow`: mover una línea cambia la política.
+lista de deny va ENTERA detrás de `edit * allow`: mover una línea cambia la política. Los cuatro
+últimos denies protegen la gobernanza del vault (`.git/`, `AGENTS.md`, `opencode.json`,
+`tepochcalli.toml`): sin ellos, `edit * allow` dejaría a Tlacuilo reescribir el fichero que dice
+mandar sobre su prompt o la config del harness.
 
 **Itzamná** (default_agent; orquestador — verificar que el nombre coincide con
 `default_agent: "itzamna"` en `opencode.json`, archivo `itzamna.md` sin acento) —
@@ -406,3 +421,19 @@ investigación). Edit deny: su salida es análisis/enrutamiento/estado. Sin web:
   política.
 * **Sin reglas `<server>_<tool>` por agente (D-P4-3):** qué tool MCP usa cada rol lo fija el
   system prompt, no `permissions`. Riesgo aceptado, con su blast radius, en §Trade-offs.
+
+## Verificación (simulación last-match-wins)
+
+Simulación ejecutada el 2026-11-04 con el intérprete del §Semántica de `permissions` (glob `*`
+cruza `/`, `?` = un carácter, sin coincidencia ⇒ `ask`). 42 probes, 42/42 esperado == real:
+
+| Agente | Probes | Casos clave (esperado → real) |
+| --- | --- | --- |
+| Pochteca | 9 | `edit 01-tasks/research/x.md` allow → allow · `edit 02-drafts/x.md` deny → deny |
+| Nezahualcóyotl | 6 | `edit 01-tasks/research/x.md` deny → deny · `edit 01-tasks/plan.md` allow → allow |
+| Chilam | 6 | `edit 03-citations/x.md` allow → allow · `edit 02-drafts/x.md` deny → deny |
+| Tlacuilo | 15 | `edit 05-outputs/x.csv` allow → allow · `edit 00-Resources/x.md` deny → deny · `edit AGENTS.md` deny → deny · `edit opencode.json` deny → deny · `edit .git/config` deny → deny |
+| Itzamná | 6 | `edit` cualquiera deny → deny |
+
+Lectura de secretos en los 5: `.env`, `sub/.env`, `.env.local`, `config/.env`, `secrets.env` →
+`deny`; `.tepochcalli/config/tepochcalli.toml` → `deny`. Sin reglas muertas.
