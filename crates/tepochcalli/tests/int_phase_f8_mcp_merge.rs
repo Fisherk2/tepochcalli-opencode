@@ -54,6 +54,64 @@ fn write_config(vault: &Path, body: &str) -> PathBuf {
     target
 }
 
+/// FakeUi for the I11a consent gate: scripted `select` answers (1 = confirm,
+/// 0 = decline) plus a count of the warning panels shown.
+struct ConsentUi {
+    select_answers: RefCell<VecDeque<usize>>,
+    panels: RefCell<Vec<(String, String)>>,
+}
+
+/// Errors that should never happen in these scripts surface as UserAborted
+/// (the adapters' prompt-failure invariant).
+impl ConsentUi {
+    fn confirming() -> Self {
+        Self::new([1])
+    }
+
+    fn declining() -> Self {
+        Self::new([0])
+    }
+
+    fn new(answers: impl IntoIterator<Item = usize>) -> Self {
+        Self {
+            select_answers: RefCell::new(answers.into_iter().collect()),
+            panels: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn panels(&self) -> Vec<(String, String)> {
+        self.panels.borrow().clone()
+    }
+}
+
+impl tepochcalli::ports::Ui for ConsentUi {
+    fn select(
+        &self,
+        _prompt: &str,
+        _options: &[&str],
+        _default_index: usize,
+    ) -> Result<usize, WizardError> {
+        self.select_answers
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
+    fn input(&self, _prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
+    fn input_secret(&self, _prompt: &str) -> Result<String, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
+    fn panel(&self, title: &str, body: &str) {
+        self.panels
+            .borrow_mut()
+            .push((title.to_string(), body.to_string()));
+    }
+}
+
 /// Venv interpreter fixture: F8 refuses to verify without it (same rule as
 /// F7 — no F5 on the vault means no spawn, typed error instead).
 fn venv_python(vault: &Path) -> PathBuf {
@@ -167,14 +225,20 @@ fn f8_backup_before_write_and_compensation_restores_byte_identical() {
     let proc = RecordingProc::scripted([rag_ok()]);
 
     let report: Phase8Report =
-        run_phase8(&proc, vault.path()).expect("F8 must succeed on a user config");
+        run_phase8(&proc, vault.path(), None).expect("F8 must succeed on a user config");
     assert!(report.changed, "new entry ⇒ changed");
 
-    // `.bak` exists BEFORE the merge and is byte-identical to the original.
-    let backup = std::fs::read(vault.path().join(OPENCODE_BAK)).expect(".bak must exist");
-    assert_eq!(backup, original.as_bytes(), ".bak must be byte-identical");
+    // I11b: success means the merge is verified, so the `.bak`'s protection
+    // window is closed and the cleanup removes it.
+    assert!(
+        !vault.path().join(OPENCODE_BAK).exists(),
+        "successful run cleans its own .bak"
+    );
 
-    // Simulate a later failure: trash the merged file, compensate, compare.
+    // Compensation semantics stay pinned separately (a run that dies before
+    // success): a `.bak` present restores the user file byte-identical and
+    // leaves no residue.
+    std::fs::write(vault.path().join(OPENCODE_BAK), &original).expect("fixture .bak");
     std::fs::write(vault.path().join(OPENCODE_JSON), b"{\"trashed\":true}")
         .expect("trash the merged file");
     compensate_phase8(vault.path());
@@ -199,7 +263,7 @@ fn f8_preserves_unrelated_servers_and_manages_only_rag() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok()]);
 
-    run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    run_phase8(&proc, vault.path(), None).expect("F8 must succeed");
 
     let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged config");
     let doc: serde_json::Value = serde_json::from_str(&merged).expect("merged must parse");
@@ -249,12 +313,12 @@ fn f8_rewrites_only_when_different_second_run_is_noop() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok(), rag_ok()]);
 
-    let first = run_phase8(&proc, vault.path()).expect("first F8 must succeed");
+    let first = run_phase8(&proc, vault.path(), None).expect("first F8 must succeed");
     assert!(first.changed, "stale entry must be rewritten");
     let after_first =
         std::fs::read(vault.path().join(OPENCODE_JSON)).expect("merged config exists");
 
-    let second = run_phase8(&proc, vault.path()).expect("second F8 must succeed");
+    let second = run_phase8(&proc, vault.path(), None).expect("second F8 must succeed");
     assert!(!second.changed, "identical entry ⇒ no rewrite");
     let after_second =
         std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config still exists");
@@ -283,7 +347,7 @@ fn f8_keeps_user_environment_keys() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok()]);
 
-    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    let report = run_phase8(&proc, vault.path(), None).expect("F8 must succeed");
     assert!(!report.changed, "a satisfied entry is not a change");
     let merged =
         std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("config still exists");
@@ -310,9 +374,9 @@ fn f8_environment_preservation_is_idempotent() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok(), rag_ok()]);
 
-    let first = run_phase8(&proc, vault.path()).expect("first pass must succeed");
+    let first = run_phase8(&proc, vault.path(), None).expect("first pass must succeed");
     assert!(!first.changed, "already-canonical entry ⇒ no rewrite");
-    let second = run_phase8(&proc, vault.path()).expect("second pass must succeed");
+    let second = run_phase8(&proc, vault.path(), None).expect("second pass must succeed");
     assert!(!second.changed, "strict idempotency across reruns");
     assert_eq!(
         std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("config exists"),
@@ -332,7 +396,7 @@ fn f8_non_object_environment_fails_and_writes_nothing() {
     let proc = RecordingProc::scripted([rag_ok()]);
 
     assert_eq!(
-        run_phase8(&proc, vault.path()).expect_err("non-object environment must fail"),
+        run_phase8(&proc, vault.path(), None).expect_err("non-object environment must fail"),
         WizardError::PhaseFailed
     );
     assert_eq!(
@@ -361,7 +425,7 @@ fn f8_entry_without_environment_gains_only_the_contract_root() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok()]);
 
-    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    let report = run_phase8(&proc, vault.path(), None).expect("F8 must succeed");
     assert!(report.changed, "adding the environment is a change");
 
     let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged config");
@@ -385,7 +449,7 @@ fn f8_removes_stale_markitdown_and_never_registers_it() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok()]);
 
-    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    let report = run_phase8(&proc, vault.path(), None).expect("F8 must succeed");
     assert!(
         report.changed,
         "removing the stale entry counts as a change"
@@ -424,7 +488,7 @@ fn f8_write_is_atomic_and_legible() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok()]);
 
-    run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    run_phase8(&proc, vault.path(), None).expect("F8 must succeed");
 
     assert!(
         !vault.path().join("opencode.json.tmp").exists(),
@@ -445,7 +509,7 @@ fn f8_probe_runs_venv_python_with_registered_cwd_and_env() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok()]);
 
-    let report = run_phase8(&proc, vault.path()).expect("F8 must succeed");
+    let report = run_phase8(&proc, vault.path(), None).expect("F8 must succeed");
     assert_eq!(report.health, RagHealth::Ok);
 
     // Exactly one verification call, shaped like the registered entry.
@@ -471,7 +535,7 @@ fn f8_degraded_state_passes_with_fix_hint() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_degraded()]);
 
-    let report = run_phase8(&proc, vault.path()).expect("degraded must still succeed");
+    let report = run_phase8(&proc, vault.path(), None).expect("degraded must still succeed");
     assert_eq!(report.health, RagHealth::Degraded);
     assert!(report.changed, "merge still applies in degraded installs");
 }
@@ -501,7 +565,7 @@ fn f8_rag_status_violations_fail_safe_with_compensation() {
             stderr: String::new(),
         })]);
 
-        let err = run_phase8(&proc, vault.path()).unwrap_err();
+        let err = run_phase8(&proc, vault.path(), None).unwrap_err();
         assert_eq!(err, WizardError::PhaseFailed, "case: {name}");
         let current =
             std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config must still exist");
@@ -523,7 +587,7 @@ fn f8_rag_status_violations_fail_safe_with_compensation() {
         stderr: "Traceback (most recent call last): ...".to_string(),
     })]);
     assert_eq!(
-        run_phase8(&crashed, vault.path()).expect_err("crashed probe must fail"),
+        run_phase8(&crashed, vault.path(), None).expect_err("crashed probe must fail"),
         WizardError::PhaseFailed
     );
     assert_eq!(
@@ -541,7 +605,7 @@ fn f8_missing_opencode_json_is_created_and_compensated() {
     venv_python(vault.path());
     let proc = RecordingProc::scripted([rag_ok(), rag_degraded()]);
 
-    let report = run_phase8(&proc, vault.path()).expect("missing file must be created");
+    let report = run_phase8(&proc, vault.path(), None).expect("missing file must be created");
     assert!(report.changed);
     let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("created");
     assert_eq!(occurrences(&merged, MANAGED_RAG), 1);
@@ -588,7 +652,7 @@ fn f8_real_venv_loopback_ok_then_degraded() {
     write_config(vault.path(), &user_config());
     let proc = StdCommandRunner;
 
-    let first = run_phase8(&proc, vault.path()).expect("real ok loopback must succeed");
+    let first = run_phase8(&proc, vault.path(), None).expect("real ok loopback must succeed");
     assert_eq!(first.health, RagHealth::Ok);
     assert!(first.changed);
     let merged = std::fs::read_to_string(vault.path().join(OPENCODE_JSON)).expect("merged");
@@ -600,7 +664,8 @@ fn f8_real_venv_loopback_ok_then_degraded() {
         "[embedding]\nprovider = \"none\"\n",
     )
     .expect("none config");
-    let second = run_phase8(&proc, vault.path()).expect("real degraded loopback must succeed");
+    let second =
+        run_phase8(&proc, vault.path(), None).expect("real degraded loopback must succeed");
     assert_eq!(second.health, RagHealth::Degraded);
     assert!(!second.changed, "merge is idempotent across the rerun");
     let merged_again =
@@ -608,8 +673,121 @@ fn f8_real_venv_loopback_ok_then_degraded() {
     assert_eq!(occurrences(&merged_again, MANAGED_RAG), 1);
 }
 
-/// Static cross-language guard: the loopback above is the only Rust test
-/// that EXECUTES `RAG_STATUS_PROBE`, and it skips without the repo venv —
+/// I11a consent fixtures: a user key whose value looks like a plaintext
+/// secret inside the managed entry.
+fn secret_config() -> String {
+    managed_entry(serde_json::json!({
+        "TEPOCHCALLI_EMBED_API_KEY": "sk-proj-this-would-be-a-real-literal-secret"
+    }))
+}
+
+#[test]
+fn f8_secret_environment_decline_fails_clean_and_writes_nothing() {
+    let vault = tmp();
+    let original = secret_config();
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+    let ui = ConsentUi::declining();
+
+    assert_eq!(
+        run_phase8(&proc, vault.path(), Some(&ui))
+            .expect_err("a declined consent is a typed failure"),
+        WizardError::PhaseFailed
+    );
+    assert_eq!(
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config exists"),
+        original.as_bytes(),
+        "decline ⇒ nothing persisted, byte-identical"
+    );
+    assert!(
+        !vault.path().join(OPENCODE_BAK).exists(),
+        "compensation cleaned the backup of the failed run"
+    );
+    assert!(
+        proc.calls().is_empty(),
+        "no probe spawn without consent, got: {:?}",
+        proc.calls()
+    );
+    let panels = ui.panels();
+    assert!(
+        !panels.is_empty(),
+        "the risk is explained before the question"
+    );
+    for (_, body) in panels {
+        assert!(
+            !body.contains("sk-proj"),
+            "values never travel to the panel, only key names: {body}"
+        );
+        assert!(
+            body.contains("TEPOCHCALLI_EMBED_API_KEY"),
+            "the panel names the affected keys"
+        );
+    }
+}
+
+#[test]
+fn f8_secret_environment_confirm_persists_and_rerun_is_noop() {
+    let vault = tmp();
+    write_config(vault.path(), &secret_config());
+    venv_python(vault.path());
+    // Two passes: both confirm (every pass that would WRITE asks again).
+    let proc = RecordingProc::scripted([rag_ok(), rag_ok()]);
+    let ui = ConsentUi::confirming();
+
+    let first = run_phase8(&proc, vault.path(), Some(&ui)).expect("consent ⇒ F8 succeeds");
+    assert!(first.changed, "the confirmed merge is written");
+    let after_first =
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("merged config exists");
+    let doc: serde_json::Value =
+        serde_json::from_str(&String::from_utf8_lossy(&after_first)).expect("merged parses");
+    // The secret stays (D32: user keys are data) and gains only the contract root.
+    assert_eq!(
+        doc["mcp"]["servers"][MANAGED_RAG]["environment"]["TEPOCHCALLI_EMBED_API_KEY"],
+        "sk-proj-this-would-be-a-real-literal-secret"
+    );
+    assert_eq!(
+        doc["mcp"]["servers"][MANAGED_RAG]["environment"]["TEPOCHCALLI_ROOT"],
+        "."
+    );
+
+    // Identical rerun: nothing to persist ⇒ no gate, byte-identical file.
+    let second = run_phase8(&proc, vault.path(), Some(&ui)).expect("second F8");
+    assert!(!second.changed, "idempotent rerun never re-asks");
+    assert_eq!(second.health, RagHealth::Ok, "sanity: probe still verified");
+    let after_second =
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config still exists");
+    assert_eq!(after_first, after_second, "no-op rerun ⇒ byte-identical");
+    assert_eq!(proc.calls().len(), 2, "one probe per pass");
+}
+
+#[test]
+fn f8_secret_environment_without_tui_fails_instead_of_persisting() {
+    // Headless has no confirmation surface: fail typed, never persist the
+    // secret silently (same rule as the mirror-http door in main).
+    let vault = tmp();
+    let original = secret_config();
+    write_config(vault.path(), &original);
+    venv_python(vault.path());
+    let proc = RecordingProc::scripted([rag_ok()]);
+
+    assert_eq!(
+        run_phase8(&proc, vault.path(), None).expect_err("no TUI ⇒ no persistence of secrets"),
+        WizardError::PhaseFailed
+    );
+    assert_eq!(
+        std::fs::read(vault.path().join(OPENCODE_JSON)).expect("config exists"),
+        original.as_bytes(),
+        "headless never writes the secret entry"
+    );
+    assert!(
+        proc.calls().is_empty(),
+        "no probe spawn, got: {:?}",
+        proc.calls()
+    );
+}
+
+/// Static cross-language guard: the loopback above is the only Rust test that EXECUTES `RAG_STATUS_PROBE`, and it skips without the repo venv —
 /// a seam renamed in `server.py` used to reach production as a `TypeError`
 /// (`99d8b38` and earlier). This check runs on every `cargo test` (no
 /// Python, no venv): every seam name the probe imports from

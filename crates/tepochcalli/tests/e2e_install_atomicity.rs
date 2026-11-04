@@ -350,7 +350,7 @@ fn f8_failure_restores_user_config_byte_identical() {
         stderr: "Traceback".to_string(),
     })]);
     assert_eq!(
-        run_phase8(&proc, vault.path()).expect_err("crashed probe must fail"),
+        run_phase8(&proc, vault.path(), None).expect_err("crashed probe must fail"),
         WizardError::PhaseFailed
     );
     assert_eq!(
@@ -496,10 +496,10 @@ fn rerun_is_idempotent_with_zero_dupes() {
         "{\"mcp\":{\"servers\":{}}}",
     );
     let proc = FakeProc::scripted([rag_ok(), rag_ok()]);
-    let r1 = run_phase8(&proc, vault.path()).expect("first F8");
+    let r1 = run_phase8(&proc, vault.path(), None).expect("first F8");
     assert!(r1.changed);
     let bytes_first = std::fs::read(vault.path().join("opencode.json")).expect("merged");
-    let r2 = run_phase8(&proc, vault.path()).expect("second F8");
+    let r2 = run_phase8(&proc, vault.path(), None).expect("second F8");
     assert!(!r2.changed, "identical entry ⇒ no rewrite");
     let bytes_second = std::fs::read(vault.path().join("opencode.json")).expect("merged");
     assert_eq!(bytes_first, bytes_second);

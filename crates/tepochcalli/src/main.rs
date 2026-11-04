@@ -792,7 +792,7 @@ fn run_phases(
     if resume && is_phase_done(path.as_path(), Phase::F8) {
         let _ = writeln!(stderr, "resume: F8 already done, skipping");
     } else {
-        match run_phase8(&proc, path.as_path()) {
+        match run_phase8(&proc, path.as_path(), Some(ui)) {
             Ok(f8) => {
                 mark_phase_done(path.as_path(), Phase::F8);
                 let _ = writeln!(

@@ -135,11 +135,11 @@
   },
   "plugins": [
     "opencode-rpc@2.0.0",
-    "opencode-navigator@latest",
-    "opencode-skills-collection@latest",
-    "opencode-skill-creator@latest",
-    "opencode-search-plugin@latest",
-    "opencode-parser@latest"
+    "opencode-navigator@0.25.0",
+    "opencode-skills-collection@4.1.35",
+    "opencode-skill-creator@0.3.6",
+    "opencode-search-plugin@4.6.1",
+    "opencode-parser@2.0.1"
   ],
   "permissions": [
     {

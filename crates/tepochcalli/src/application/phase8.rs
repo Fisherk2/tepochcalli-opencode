@@ -5,7 +5,9 @@
 //!
 //! 1. **Backup:** byte-copy `opencode.json` → `opencode.json.bak` (only when
 //!    the file pre-exists; a backup failure aborts BEFORE any mutation, so
-//!    there is nothing to compensate).
+//!    there is nothing to compensate). On success the `.bak` is removed
+//!    again (its protection window closed — I11b); a failed removal is only
+//!    a `Ui` warning, never a phase failure.
 //! 2. **Merge:** conservative JSON merge — every unrelated user server is
 //!    preserved byte-for-value; only `tepochcalli-rag` is (re)written (its
 //!    `environment` keeps every key the user added, imposing only
@@ -13,7 +15,8 @@
 //!    The merged doc keeps key order (`preserve_order`) and the payload's
 //!    2-space form, and lands
 //!    atomically (temp + rename in the same dir). A byte-identical entry is
-//!    left untouched (`changed: false`).
+//!    left untouched (`changed: false`). BEFORE any write, values that look
+//!    like plaintext secrets require explicit TUI consent (I11a).
 //! 3. **Verify:** run the vault venv python with the registered cwd + env
 //!    (`TEPOCHCALLI_ROOT=.`) calling the raw `rag_status` handler — the
 //!    stdio transport the `CommandRunner` port cannot speak (no stdin seam;
@@ -23,7 +26,7 @@
 use std::path::Path;
 
 use crate::domain::WizardError;
-use crate::ports::CommandRunner;
+use crate::ports::{CommandRunner, Ui};
 
 use super::flow_cli::run_flow_cli;
 use super::text::json_raw;
@@ -116,6 +119,31 @@ fn expected_rag_entry(
     })
 }
 
+/// Values that look like literal secrets in the managed entry's environment
+/// (I11a): a known provider marker anywhere in the value, or a value of ≥32
+/// chars that is pure base64url/hex (`[A-Za-z0-9+/=_-]`) — a real token has
+/// no punctuation like `,:/`; a path like `00-Resources` is too short.
+///
+/// Pure heuristic over key NAMES only returning which keys matched — values
+/// never travel to any log or panel.
+#[must_use]
+pub fn secret_env_keys(environment: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    const MARKERS: [&str; 4] = ["sk-", "Bearer ", "ghp_", "xoxb-"];
+    let mut keys = Vec::new();
+    for (key, value) in environment {
+        if let Some(text) = value.as_str() {
+            if MARKERS.iter().any(|m| text.contains(m))
+                || (text.len() >= 32
+                    && text.bytes().all(|b| {
+                        b.is_ascii_alphanumeric() || matches!(b, b'+' | b'/' | b'=' | b'-' | b'_')
+                    }))
+            {
+                keys.push(key.clone());
+            }
+        }
+    }
+    keys
+}
 /// Environment of the managed entry: every key the user already put there
 /// survives (D32 — `INDEXER_DIR`, `TEPOCHCALLI_TOP_K`…), and only the
 /// contract root is imposed. Insertion order is the user's, so pointing
@@ -240,10 +268,44 @@ fn verify_rag_status(proc: &dyn CommandRunner, vault: &Path) -> Result<RagHealth
     parse_rag_status(out.stdout.trim())
 }
 
-/// F8: backup → conservative merge (atomic, only when different) → `rag_status`
-/// end-to-end. A backup failure aborts before any mutation; any later
-/// failure compensates (the user file is restored byte-identical).
-pub fn run_phase8(proc: &dyn CommandRunner, vault: &Path) -> Result<Phase8Report, WizardError> {
+/// I11a consent: warn (never the values, only the key names) and require an
+/// explicit confirmation before persisting. The default row is "No": nothing
+/// is written yet, so a decline (or a missing TUI, `None`) fails clean with
+/// an untouched vault — the rollback-as-other-doors guarantee is trivially
+/// true. Esc/EEOF surfaces through `ui.select` itself (`UserAborted`, the
+/// adapters' documented prompt-failure invariant).
+fn confirm_secret_environment(ui: &dyn Ui, keys: &[String]) -> Result<(), WizardError> {
+    ui.panel(
+        "Posibles secretos literales en opencode.json",
+        &format!(
+            "Estos valores del environment de {MANAGED_RAG} parecen secretos en claro \
+             y quedarían escritos sin cifrar en opencode.json:\n  {}",
+            keys.join(", ")
+        ),
+    );
+    let choice = ui.select(
+        "¿Persistir opencode.json con esos valores?",
+        &[
+            "No: cancelar (recomendado)",
+            "Sí: persistir de todas formas",
+        ],
+        0,
+    )?;
+    if choice != 1 {
+        return Err(WizardError::PhaseFailed);
+    }
+    Ok(())
+}
+
+/// F8: backup → conservative merge (atomic, only when different, with the
+/// I11a secret-literal consent before any write) → `rag_status` end-to-end.
+/// A backup failure aborts before any mutation; any later failure
+/// compensates (the user file is restored byte-identical).
+pub fn run_phase8(
+    proc: &dyn CommandRunner,
+    vault: &Path,
+    ui: Option<&dyn Ui>,
+) -> Result<Phase8Report, WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention).
     let target = vault.join(OPENCODE_JSON);
     let original: Option<Vec<u8>> = if target.is_file() {
@@ -255,7 +317,7 @@ pub fn run_phase8(proc: &dyn CommandRunner, vault: &Path) -> Result<Phase8Report
         std::fs::write(vault.join(OPENCODE_BAK), bytes)
             .map_err(|_| WizardError::PermissionDenied)?;
     }
-    let outcome = merge_and_verify(proc, vault, &target, original.as_deref());
+    let outcome = merge_and_verify(proc, vault, &target, original.as_deref(), ui);
     if outcome.is_err() {
         compensate_phase8(vault);
     }
@@ -267,18 +329,51 @@ fn merge_and_verify(
     vault: &Path,
     target: &Path,
     original: Option<&[u8]>,
+    ui: Option<&dyn Ui>,
 ) -> Result<Phase8Report, WizardError> {
     let mut doc: serde_json::Value = match original {
         Some(bytes) => serde_json::from_slice(bytes).map_err(|_| WizardError::PhaseFailed)?,
         None => serde_json::json!({ "mcp": { "servers": {} } }),
     };
     let changed = merge_servers(&mut doc)?;
+    // I11a: the merge is resolved in memory, nothing persisted yet — values
+    // that look like plaintext secrets in what would be WRITTEN require
+    // explicit TUI consent right before the write. Without a TUI (`None`,
+    // headless) there is no confirmation possible: fail typed instead of
+    // guessing (same rule as the mirror-http door). A decline or Esc/EOF
+    // propagates from `ui.select` before `atomic_write` ⇒ compensation only
+    // rewrites identical bytes. Idempotent reruns (`changed == false`) never
+    // re-ask: nothing would be persisted.
+    if changed {
+        let environment = &doc["mcp"]["servers"][MANAGED_RAG]["environment"];
+        if let Some(environment) = environment.as_object() {
+            let secrets = secret_env_keys(environment);
+            if !secrets.is_empty() {
+                match ui {
+                    Some(ui) => confirm_secret_environment(ui, &secrets)?,
+                    None => return Err(WizardError::PhaseFailed),
+                }
+            }
+        }
+    }
     if changed {
         let mut body = serde_json::to_string_pretty(&doc).map_err(|_| WizardError::PhaseFailed)?;
         body.push('\n');
         atomic_write(target, body.as_bytes())?;
     }
     let health = verify_rag_status(proc, vault)?;
+    // I11b: success closes the .bak's protection window — remove it. A failed
+    // removal is only a warning (the residue breaks nothing); failures of the
+    // phase itself keep the backup via `compensate_phase8`.
+    if original.is_some() && std::fs::remove_file(vault.join(OPENCODE_BAK)).is_err() {
+        if let Some(ui) = ui {
+            ui.panel(
+                "Backup residual",
+                "No se pudo borrar opencode.json.bak tras el éxito; es inofensivo \
+                 (la instalación quedó correcta) y se puede borrar a mano.",
+            );
+        }
+    }
     Ok(Phase8Report { changed, health })
 }
 
@@ -308,6 +403,57 @@ pub fn compensate_phase8(vault: &Path) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// I11a: pure heuristic — real provider markers win; long unpunctuated
+    /// tokens read as secrets; paths/format lists with punctuation or short
+    /// values never do.
+    #[test]
+    fn secret_env_keys_matches_markers_and_entropy() {
+        let secrets: &[&str] = &[
+            "sk-proj-abcdef",
+            "  Bearer eyJhbGciOiJub3RlLXJlYWwtaGlnaC1lbnRyb3B5LXN0YXRz",
+            "ghp_0123456789abcdef0123456789abcdef",
+            "xoxb-123-456-abcdef",
+            "a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-a-", // 32, base64url-ish
+            "YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXpBQkNERUZH", // 42 chars pure base64
+        ];
+        for value in secrets {
+            let mut environment = serde_json::Map::new();
+            environment.insert(
+                "TEPOCHCALLI_EMBED_API_KEY".to_string(),
+                serde_json::Value::String((*value).to_string()),
+            );
+            assert_eq!(
+                secret_env_keys(&environment),
+                vec!["TEPOCHCALLI_EMBED_API_KEY"],
+                "must flag: {value}"
+            );
+        }
+        let clean: &[&str] = &[
+            ".",
+            "9",
+            "00-Resources,03-Citations",
+            "00-Resources",
+            "http://localhost:8888",
+            "ocalh",
+        ];
+        for value in clean {
+            let mut environment = serde_json::Map::new();
+            environment.insert(
+                "INDEXER_DIR".to_string(),
+                serde_json::Value::String((*value).to_string()),
+            );
+            assert!(
+                secret_env_keys(&environment).is_empty(),
+                "must not flag: {value}"
+            );
+        }
+        // Non-string values are ignored.
+        assert!(
+            secret_env_keys(serde_json::json!({"N": 1}).as_object().unwrap()).is_empty(),
+            "non-string values are never flagged"
+        );
+    }
 
     #[test]
     fn parse_rag_status_rejects_error_envelopes() {
