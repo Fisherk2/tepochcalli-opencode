@@ -59,6 +59,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] 209/209 clasificadas (CONSERVAR / CONSOLIDAR+ganadora / RETIRAR / INSTALAR-GAP) o barridas por la fila 15
 - [ ] Gaps (Jupyter, R, Graphviz/PlantUML, LaTeX manuscrito) declarados sin inventar nombres
 - [ ] `tepochcalli-mcp` (fila 17) y TD-22/OfficeCLI coherentes con `docs/TECH_DEBT.md`
+- [ ] **Muestras inventariadas (D-P4-7)**: `00-Resources/ejemplo.md` + `ejemplo.pdf` (constantes `PLACEHOLDER_MD_NAME`/`PLACEHOLDER_PDF_NAME`, asset `crates/tepochcalli/assets/ejemplo.pdf`) y `01-Tasks/{outline,rubric,todo}.md` → nombre objetivo en inglés (`example.md`, `example.pdf`) + contenido esperado; anotar la caja `01-Tasks/` vs canónico `01-tasks/` (vecina de TD-8)
 - [ ] Recuento **derivado** de skills del payload base vs objetivo **<60**
 - [ ] Fichero <500 líneas (si supera 450 → avisar: contingencia O-2)
 - Deps: T0 · Verificación: script de cobertura (faltantes 0, huérfanos 0) + `wc -l` + md-lint
@@ -187,6 +188,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] `docs/WORKFLOW.md` §Phase 4 COMPLETADA con métricas reales + entrada FTR en §4
 - [ ] `docs/WORKFLOW.md` §Phase 3.5: la referencia a `tasks/plan.md` apunta al commit (D-P4-5)
 - [ ] `docs/TECH_DEBT.md`: TD-7, TD-8, TD-14a/TD-14b, TD-22, TD-6 actualizados
+- [ ] Impacto de D-P4-6/D-P4-7 registrado para Phase 5 (constantes del wizard + asset `ejemplo.pdf` + re-verificación de que el PDF sigue parseable, F3)
 - [ ] `CHANGELOG.md` con entrada de Phase 4
 - [ ] `git diff --stat -- obsidian-workspace` **vacío**
 - [ ] Commits atómicos Conventional Commits ≤72 columnas + trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>`
@@ -212,6 +214,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 | D-P4-4 | Dividir el blueprint en 4 specs (<500 líneas) | dueño | 2026-11-04 |
 | D-P4-5 | Sobrescribir `tasks/plan.md` y `tasks/todo.md` | dueño | 2026-11-04 |
 | D-P4-6 | **Los artefactos del payload van en INGLÉS** (5 agents, 9 commands, `AGENTS.md` del vault, `description`); la prosa del repo sigue en español | dueño | 2026-11-04 |
+| D-P4-7 | **Las muestras del payload van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf`; el renombrado del wizard es de Phase 5 | dueño | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)

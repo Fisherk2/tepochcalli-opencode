@@ -18,9 +18,14 @@ Phase 5 pueda ejecutarlo **literal** (sin reinterpretación).
 
 **Idioma (D-P4-6):** el blueprint se redacta en español, pero **todo lo que se materializa dentro de
 `obsidian-workspace/` va en inglés** — los 5 `.opencode/agents/*.md`, los 9 `.opencode/commands/*.md` y el
-`AGENTS.md` del vault (incluidos sus `description`). La documentación del repo (`specs/`, `docs/`, `tasks/`)
-permanece en español. Los **nombres propios** (agentes, bandejas, tools, estados de `procedencia`, el formato de
-cita) son contrato y no se traducen.
+`AGENTS.md` del vault (incluidos sus `description`), más las **muestras** que instala el wizard
+(`00-Resources/ejemplo.md` + `ejemplo.pdf` → `example.md` + `example.pdf`, con su contenido en inglés).
+La documentación del repo (`specs/`, `docs/`, `tasks/`) permanece en español. Los **nombres propios** (agentes,
+bandejas, tools, estados de `procedencia`, el formato de cita) son contrato y no se traducen.
+
+**D-P4-7 (consecuencia de D-P4-6):** las muestras del payload van en inglés, nombre y contenido. El blueprint fija
+el **nombre objetivo** y el contenido; el cambio de las constantes del wizard (`PLACEHOLDER_MD_NAME`,
+`PLACEHOLDER_PDF_NAME`) y del asset `crates/tepochcalli/assets/ejemplo.pdf` es **obra de Phase 5** (código Rust).
 
 **No-objetivos (fuera de Phase 4):**
 
@@ -43,6 +48,7 @@ cita) son contrato y no se traducen.
 | D-P4-4 | **Dividir el blueprint en 4 specs** (<500 líneas cada una) | T2/T5/T6 crean las 3 nuevas; T8 actualiza índices |
 | D-P4-5 | **Sobrescribir `tasks/plan.md` y `tasks/todo.md`** | El plan de Phase 3.5 queda solo en el historial de git; WORKFLOW §Phase 3.5 pasa a apuntar al commit |
 | D-P4-6 | **Los artefactos del payload se redactan en INGLÉS** (5 system prompts, 9 cuerpos de comando, `AGENTS.md` del vault, `description` de los agentes); la prosa del repo (specs, docs, `tasks/`) sigue en español | T5, T6 y T7 redactan en inglés; T1 fija el criterio y el chequeo; el gate CP-C verifica 0 marcadores del español en los bloques del payload. Precedente: la skill `tepochcalli-mcp` del payload ya está en inglés |
+| D-P4-7 | **Las muestras del payload también van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf` | T2 inventaría las muestras y fija su nombre objetivo; T8 registra el impacto en el wizard (constantes + asset) para Phase 5 |
 
 ## 3. Estado real verificado (2026-11-04, lectura del repo)
 
@@ -166,6 +172,11 @@ WORKFLOW es «recuento `ls` vs filas = 100 %». Este calpulli la vuelve verdad.
       o barrida por la fila 15 con el criterio escrito → cobertura **100 %** de los 209
 - [ ] Gaps (Jupyter, R, Graphviz/PlantUML, LaTeX de manuscrito) declarados **sin inventar nombres**
 - [ ] `tepochcalli-mcp` (fila 17) y el estado de TD-22 / OfficeCLI reflejados **sin contradecir** `docs/TECH_DEBT.md`
+- [ ] **Muestras del payload inventariadas** (D-P4-7): `00-Resources/ejemplo.md` + `ejemplo.pdf` (constantes del
+      wizard `PLACEHOLDER_MD_NAME`/`PLACEHOLDER_PDF_NAME`, asset `crates/tepochcalli/assets/ejemplo.pdf`) y los
+      placeholders `01-Tasks/{outline,rubric,todo}.md` → con su **nombre objetivo en inglés** (`example.md`,
+      `example.pdf`) y el contenido esperado; se anota también la discrepancia de caja `01-Tasks/` vs canónico
+      `01-tasks/` (vecina de TD-8) para que Phase 5 la resuelva
 - [ ] Recuento derivado (no estimado) de las skills que quedarían en el payload base → contraste con el objetivo **<60**
 - [ ] El archivo queda **<500 líneas**
 
@@ -354,6 +365,9 @@ del `AGENTS.md` del vault), `context-engineering` · **Tools/MCP:** `codebase-me
 - [ ] `docs/TECH_DEBT.md`: TD-7 (diseño hecho → ejecución en Phase 5), TD-8 (alias `00-resources` decidido →
       remediación Phase 5), TD-14a/TD-14b (regla de cita y gate determinista documentados → ejecución Phase 5),
       TD-22 (OfficeCLI 0.2.0, sin skill en el payload v1), TD-6 (MCP-first ya redactado en el `AGENTS.md` del vault)
+- [ ] Impacto de **D-P4-6/D-P4-7** registrado para Phase 5: renombrado de las constantes del wizard
+      (`PLACEHOLDER_MD_NAME`, `PLACEHOLDER_PDF_NAME`), del asset `crates/tepochcalli/assets/ejemplo.pdf` y
+      re-verificación de que el PDF sigue siendo parseable tras el renombrado (F3)
 - [ ] `CHANGELOG.md`: entrada de Phase 4
 - [ ] Cero escrituras en `obsidian-workspace/**` (verificado con `git diff --stat -- obsidian-workspace`)
 - [ ] Commits atómicos Conventional Commits (≤72 columnas) con trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>`
@@ -421,6 +435,7 @@ trabajaría sobre inventario no verificado.
 | O-8 | `default_agent: "itzamna"` solo resuelve si el `.md` es primary y visible | baja | alto | T4 lo normiza (`mode: primary`, sin `hidden`) y T8 lo verifica como criterio de Phase 5 |
 | O-9 | Al sobrescribir `tasks/plan.md`, se pierde el plan de Phase 3.5 salvo en git | alta | bajo | D-P4-5 (decisión del dueño); T8 actualiza la referencia de WORKFLOW al commit |
 | O-10 | La traducción al inglés (D-P4-6) puede **perder semántica**: `docs/UH.md` es la fuente inmutable en español y los estados de `procedencia`/el formato de cita son contrato | media | alto | El español original **se conserva** en la spec como contrato de referencia y el inglés es el bloque congelado; T5/T6 exigen fidelidad explícita (mismos estados, mismo gate, mismas clasificaciones) y T7 reconcilia bloque inglés ↔ bloque español; el chequeo de idioma excluye los nombres propios |
+| O-11 | D-P4-7 toca el **asset del wizard**: `ejemplo.pdf` tiene offsets verificados (`gen_ejemplo_pdf.py`); renombrarlo o regenerarlo en inglés puede romper la Fase 3 (el PDF debe seguir siendo parseable) | media | medio | El cambio de código es **de Phase 5**; el blueprint solo fija el nombre objetivo; T8 registra la re-verificación del PDF (F3) como criterio de Phase 5, no de Phase 4 |
 
 ## 9. Trazabilidad blueprint ↔ fuentes
 
