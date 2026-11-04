@@ -38,7 +38,11 @@ Contrato y precedencia, en orden:
 5. **escritura atómica** — slug + `.md` con sufijo numérico ante colisión
    (`paths`), temporal en el MISMO directorio de destino + `os.replace`
    (`writer.write_atomic`, la MISMA función del conversor — D63/D66), con
-   `ensure_within` como última defensa antes de escribir;
+   `ensure_within` como última defensa antes de escribir. W-01: las raíces
+   declaradas se RE-validan con `paths.validate_roots` antes del
+   `write_atomic` — una raíz mal escrita explota en el refresh de cola con
+   el fichero ya huérfano; el borde respuesta `VALIDATION_ERROR` con
+   `details.vault_dirs` + `suggestions` — cero ficheros en el vault;
 6. **reindexación** — el MISMO seam de refresh de T3, con EXACTAMENTE las
    raíces configuradas; reporte con `locked` ⇒ `ENGINE_LOCKED` (la forma
    congelada de §5 no tiene campo `locked` en su sub-objeto `indexed`, así
@@ -124,6 +128,11 @@ async def add_source(
         return errors.no_embedder()
     try:
         content = await asyncio.to_thread(convert, uri)
+    except paths.VaultPathError as exc:
+        # W-02: un redirect hacia la red interna sube como `VaultPathError` del
+        # guard por hop — entrada mal dirigida que el agente puede corregir
+        # (VALIDATION_ERROR), no inalcanzable; `exc.details` viene del guard.
+        return errors.validation_error(str(exc), exc.details)
     except Exception as exc:  # fetch/convert: cualquier motivo ⇒ SOURCE_UNREACHABLE
         # Review Phase 2 (eje 4): log y payload REDACTAN el URI (userinfo/query
         # secreta); el original solo queda dentro de esta llamada (fetch ya corrió).
@@ -132,6 +141,16 @@ async def add_source(
         return errors.source_unreachable(redacted, type(exc).__name__)
     dest_dir = root / paths.resources_destination(subdir_rel)
     dest_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        # W-01: una raíz declarada pero MAL escrita explota en el refresh de
+        # cola (`normalize_roots` ⇒ FileNotFoundError ⇒ INTERNAL) con el fichero
+        # ya escrito — huérfano. El borde la juzga igual que `index_refresh`
+        # (VALIDATION_ERROR con `details.vault_dirs` + `suggestions`) antes de
+        # la escritura: `00-Resources/_inbox` ya existe (el mkdir la creó), así
+        # que una raíz mala es la ÚNICA cosa que puede disparar aquí.
+        paths.validate_roots(allowed, root)
+    except paths.VaultPathError as exc:
+        return errors.validation_error(str(exc), exc.details)
     name = paths.available_name(
         paths.slugify_uri(uri), lambda candidate: (dest_dir / candidate).exists()
     )

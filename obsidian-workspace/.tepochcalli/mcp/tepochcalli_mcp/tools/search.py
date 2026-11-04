@@ -36,6 +36,7 @@ como `EmbedderApiError` YA SCRUBEADA: la clave no alcanza el log).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from collections.abc import Callable
 from dataclasses import asdict
@@ -106,7 +107,9 @@ async def search(
         return errors.validation_error(str(exc))
     if not embedder_available():
         return errors.no_embedder()  # R1: precede a INDEX_EMPTY y a todo lo demás
-    backend = backend_factory()  # arranque BAJO la guarda: un fallo ⇒ INTERNAL (G1)
+    # W-12: el arranque de la factory (resolve vault + config: toml en disco)
+    # hace I/O — va FUERA del event loop, igual que el refresh de T3.
+    backend = await asyncio.to_thread(backend_factory)
     index_models = await backend.index_models()
     # Revisión Phase 2: una tabla EXISTENTE pero ilegible ya NO se finge vacía —
     # el `ValueError` del backend ESCALA y el guard lo convierte en `INTERNAL`

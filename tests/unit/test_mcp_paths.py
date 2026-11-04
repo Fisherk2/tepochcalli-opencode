@@ -379,3 +379,56 @@ def test_redact_uri_leaves_plain_uris_byte_a_byte() -> None:
     )
     assert paths.redact_uri(plain) == "https://***@example.org"
     assert paths.redact_uri("file:///vault/x.bin") == "file:///vault/x.bin"  # solo http(s)
+
+
+# --- W-03/W-04 (review 5-ejes): null byte y redacción más completa -------------------
+
+
+def test_validate_vault_path_rejects_null_byte_as_vault_path_error(tmp_path: Path) -> None:
+    r"""Un null byte (`\x00`) en la ruta ⇒ `VaultPathError`: input mal escrito, no bug nuestro.
+
+    Hoy, `resolve()` lanza el `ValueError` del OS («embedded null byte») que el
+    `internal_guard` convertía en `INTERNAL`; el agente debe poder corregir
+    `output_path` en un reintento.
+    """
+    with pytest.raises(paths.VaultPathError, match="invalida"):
+        paths.validate_vault_path(f"{tmp_path}/a\x00.md", tmp_path, must_exist=True)
+
+
+def test_resolve_file_uri_rejects_percent_encoded_null_byte(tmp_path: Path) -> None:
+    """`filename="x%00.md"` decodifica a null byte ⇒ `VaultPathError` (≠ INTERNAL)."""
+    with pytest.raises(paths.VaultPathError, match="invalida"):
+        paths.resolve_file_uri(f"file://{tmp_path.as_posix()}/x%00.md", tmp_path)
+
+
+def test_redact_uri_covers_more_secret_words_and_the_fragment() -> None:
+    """`pwd`/`cred`/`auth`/`sess`/`sig`/`passphrase` en la query y el fragmento → `***`.
+
+    W-04: `https://u:pw@example.com/x?pwd=abc&credential=zzz&apikey=1#tok` deja
+    de filtrar el fragmento (`#access_token` es credencial también).
+    """
+    uri = "https://usuario:pas0rd@example.com/x?pwd=abc123&credential=zzz9&apikey=1&lang=es#tok123"
+    redacted = paths.redact_uri(uri)
+    assert "pas0rd" not in redacted, "userinfo sigue redactado"
+    assert "abc123" not in redacted and "zzz9" not in redacted, "pwd/credential redactados"
+    assert "tok123" not in redacted, "el fragmento se sustituye"
+    assert redacted.count("***") == 5, "userinfo + 3 params secretos + fragmento (lang=es intacto)"
+
+
+def test_redact_uri_without_query_still_redacts_the_fragment() -> None:
+    """Un fragmento sin query también se neutraliza (caso nuevo del bucle temprano)."""
+    redacted = paths.redact_uri("https://example.com/paper.pdf#access_token=secret")
+    assert redacted.endswith("#***")
+    assert "secret" not in redacted
+
+
+# --- W-08: tope de longitud del glob (review 5-ejes) -----------------------------------
+
+
+def test_path_filter_length_cap_at_the_exact_boundary() -> None:
+    """W-08: `path_filter` de exactamente 1024 chars pasa; 1025 ⇒ `ValueError`."""
+    ok = "00-Resources/" + "a" * (1024 - len("00-Resources/"))
+    assert len(ok) == 1024
+    assert paths.validate_path_filter(ok) == ok
+    with pytest.raises(ValueError, match="1024"):
+        paths.validate_path_filter("00-Resources/" + "a" * 1025)

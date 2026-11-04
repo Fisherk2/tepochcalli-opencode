@@ -51,8 +51,16 @@ def write_atomic(target: Path, content: str) -> Path:
 
 
 def _alternative(target: Path) -> str:
-    """Primer nombre libre del mismo directorio, reutilizando `paths.available_name` (D37)."""
-    candidate = paths.available_name(target.stem, lambda name: (target.parent / name).exists())
+    """Primer nombre libre del mismo directorio, reutilizando `paths.available_name` (D37).
+
+    W-11: la costura `taken` comprueba la colisión con el SUFIJO FINAL
+    (`target.suffix`), no con el `.md` interno de `available_name` — un
+    alternativo propuesto que ya existe no le sirve al agente.
+    """
+    candidate = paths.available_name(
+        target.stem,
+        lambda name: (target.parent / Path(name).with_suffix(target.suffix)).exists(),
+    )
     return Path(candidate).with_suffix(target.suffix).name
 
 

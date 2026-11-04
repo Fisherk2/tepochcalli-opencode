@@ -149,3 +149,28 @@ def test_add_source_uses_the_shared_writer(tmp_path: Path, monkeypatch: pytest.M
     assert payload["ok"] is True
     assert calls == [(tmp_path / "00-Resources" / "_inbox" / "notas.md").resolve()]
     assert not hasattr(add_source, "_write_atomic"), "la implementación se movió, no se copió"
+
+
+# --- W-11 (review 5-ejes): el alternativo propuesto debe ser USABLE ---------------------
+
+
+def test_alternative_with_a_non_md_suffix_suggests_a_free_name(tmp_path: Path) -> None:
+    """W-11: destino `x.pdf` existente ⇒ `suggested` ≠ `x.pdf` y realmente libre.
+
+    Antes, `paths.available_name` comprobaba colisiones con el sufijo `.md`
+    y el `.with_suffix(target.suffix)` posterior NO revalidaba: un `x.pdf`
+    existente devolvía el propio `x.pdf` como "alternativo".
+    """
+    target = tmp_path / "x.pdf"
+    target.write_bytes(b"previo")
+    another_pdf = tmp_path / "x-2.pdf"
+    another_pdf.write_bytes(b"otro")
+
+    first = writer._alternative(target)
+    assert first == "x-3.pdf", "el -2 también está tomado: salta al siguiente libre"
+    assert not (tmp_path / first).exists(), f"el sugerido {first!r} es realmente libre"
+
+    target2 = tmp_path / "y.pdf"
+    target2.write_bytes(b"x")
+    second = writer._alternative(target2)
+    assert second == "y-2.pdf", "sin colisión: el primer libre con el SUFIJO FINAL"

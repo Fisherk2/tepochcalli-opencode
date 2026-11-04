@@ -21,10 +21,15 @@ como string JSON (URI con `:`/espacios ⇒ YAML válido). Los tests assertan
 SOLO la presencia de `converted_at`, nunca su valor (regla G1: cero
 aserciones dependientes del tiempo).
 
-shortcut: `convert_source` no expone timeout de red — una URL que cuelgue
-bloquea el worker de `asyncio.to_thread` del handler. Aceptado en v1 (el
-harness impone su propio timeout de tool call); si se necesita, prefetch
-con `requests` y `timeout=` (también soportado por `convert(source)`).
+**W-02 (review 5-ejes): prefetch propio de `http(s)`.** El URI crudo ya no va
+directo a markitdown (que hoy sigue redirects automáticos a ciegas):
+`convert_source` fetch-ea con `requests` (`allow_redirects=False`,
+`timeout=(10, 60)`) y re-valida SSRF en CADA hop — el guard del borde cubre el
+URI entrante, pero la respuesta de un redirect podía saltar a la red interna.
+Hops: máx 5, esquemas http/s únicamente; aprobado cada hop, el body se baja con
+el cap de bytes (105 MB ≈ el envelope `convert_base64`) y se entrega a
+markitdown como `Response` (`_markitdown.py:311`). Sin dependencia nueva:
+`requests` YA viaja dentro de markitdown (R1/ADR-011).
 """
 
 from __future__ import annotations
@@ -33,12 +38,24 @@ import io
 import json
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Final
+from urllib.parse import urljoin, urlsplit
 
+import requests
 from markitdown import MarkItDown, StreamInfo
 from markitdown._exceptions import UnsupportedFormatException
 
-from tepochcalli_mcp import formats
+from tepochcalli_mcp import formats, paths
 from tepochcalli_mcp.paths import redact_uri
+
+_MAX_REDIRECT_HOPS: Final = 5
+"""Hops de redirect que el conversor sigue: más de 5 es un bucle, no una fuente."""
+
+_MAX_RESPONSE_BYTES: Final = 105_000_000
+"""Cap del body descargado (W-02/W-08): ~100 MB ≡ el envelope de 140M chars base64."""
+
+_FETCH_TIMEOUT: Final = (10.0, 60.0)
+"""Timeout del prefetch W-02: (conexión 10 s, lectura entre paquetes 60 s)."""
 
 
 def convert_source(uri: str) -> str:
@@ -47,18 +64,80 @@ def convert_source(uri: str) -> str:
     Cualquier fallo —red, formato no soportado, archivo ilegible— sube como
     excepción markitdown: el handler de `add_source` lo mapea a
     `SOURCE_UNREACHABLE` y el traceback queda en el log stderr del server,
-    nunca en el payload (spec-mcp-server §Manejo de errores).
-    Revisión Phase 2 (eje 4): el URI va al fetch TAL CUAL, pero al frontmatter
-    se redacta con `paths.redact_uri` — credenciales en el URI (userinfo/query
-    secreta) jamás se persisten citadas en el vault.
+    nunca en el payload (spec-mcp-server §Manejo de errores). Los rechazos
+    SSRF de un redirect suben como `paths.VaultPathError` — el handler los
+    mapea a `VALIDATION_ERROR` con el MISMO mensaje del guard del borde.
+    Revisión Phase 2 (eje 4): al frontmatter se redacta con
+    `paths.redact_uri` — credenciales en el URI (userinfo/query secreta)
+    jamás se persisten citadas en el vault.
     """
-    markdown = MarkItDown().convert(uri).markdown
-    source = json.dumps(redact_uri(uri), ensure_ascii=False)
+    source: str | requests.Response
+    scheme = urlsplit(uri).scheme
+    source = _fetch_http(uri) if scheme in ("http", "https") else uri
+    markdown = MarkItDown().convert(source).markdown
+    redacted = json.dumps(redact_uri(uri), ensure_ascii=False)
     stamp = datetime.now(UTC).isoformat(timespec="seconds")
-    return f"---\nsource_uri: {source}\nconverted_at: {stamp}\n---\n\n{markdown}\n"
+    return f"---\nsource_uri: {redacted}\nconverted_at: {stamp}\n---\n\n{markdown}\n"
 
 
-def convert_local(path: Path, *, source_uri: str) -> str:
+def _fetch_http(uri: str) -> requests.Response:
+    """Prefetch W-02: el body descargado y los metadatos del wire, hop a hop.
+
+    Por hop: guard SSRF (`paths._deny_internal_host`, el MISMO guard del borde)
+    ANTES de conectar; `GET` sin redirects automáticos; con un 3xx con
+    `location` se resuelve la URL relativa y se re-juzga el destino siguiente
+    (esquemas no http/s RECHAZADOS). El body se baja con el cap de bytes; el
+    `Response` devuelto conserva headers/URL, así que markitdown
+    (`convert_response`) elige el extractor con el content-type/charset/
+    extension del wire.
+    """
+    url: str = uri
+    for _hop in range(_MAX_REDIRECT_HOPS + 1):
+        try:
+            paths._deny_internal_host(url)
+        except ValueError as exc:
+            raise paths.VaultPathError(str(exc)) from None
+        response = requests.get(url, allow_redirects=False, timeout=_FETCH_TIMEOUT, stream=True)
+        location = response.headers.get("location") if 300 <= response.status_code < 400 else None
+        if location is None:
+            _drain_body(response)
+            return response
+        response.close()
+        target = urljoin(url, location)
+        if urlsplit(target).scheme not in ("http", "https"):
+            raise ValueError(
+                f"redirect a esquema no aceptado (solo http/https): {target!r} desde {url!r}"
+            )
+        url = target
+    raise ValueError(f"demasiados redirects (> {_MAX_REDIRECT_HOPS}) desde {uri!r}")
+
+
+def _drain_body(response: requests.Response) -> None:
+    """Baja el body de `response` AL PROPIO response, con el cap de bytes.
+
+    markitdown (`convert_response`) llama `response.iter_content`: reponiendo
+    el body descargado como `_content`, el cap aplica — un servidor que
+    anuncie gigas no agota la memoria del proceso del vault (W-02/W-08).
+    """
+    buffer = bytearray()
+    for chunk in response.iter_content(chunk_size=65536):
+        buffer.extend(chunk)
+        if len(buffer) > _MAX_RESPONSE_BYTES:
+            response.close()
+            raise ValueError(
+                f"La respuesta de {response.url!r} supera el tope de {_MAX_RESPONSE_BYTES} "
+                "bytes (~100 MB); documentos mayores: guardarlos en el vault y usar "
+                "`convert_document`."
+            )
+    response.close()
+    # El body YA fue consumido por esta descarga (stream=True): reponerlo como
+    # `_content` hace que `iter_content` de markitdown sirva slices de estos
+    # bytes — cap respetado — conservando headers/URL/charset del wire.
+    response._content = bytes(buffer)
+    response._content_consumed = True
+
+
+def convert_local(path: Path, *, source_uri: str, extension_hint: str | None = None) -> str:
     """Convierte un documento del vault a Markdown, SIN frontmatter (D36/T9).
 
     `source_uri` es la entrada tal como la dio el agente: no se usa para leer
@@ -67,13 +146,20 @@ def convert_local(path: Path, *, source_uri: str) -> str:
     `converted_at` haría que dos conversiones idénticas difirieran siempre y
     D66 (idempotencia) sería inalcanzable.
 
+    W-06 (orden del dueño, 2026-11-03): `extension_hint` es el `format` del
+    handler — pista de conversión real (`StreamInfo.extension`): un fichero
+    SIN extensión + `format=".txt"` se convierte en vez de responder
+    `UnsupportedFormatException` engañoso. El sufijo del DELTINO lo fuerza el
+    handler (`_destination`/`_suffix`); aquí no se toca.
+
     `UnsupportedFormatException` no cruza la costura: se traduce a
     `formats.UnsupportedFormatError` (dominio), que el handler mapea a
     `VALIDATION_ERROR` con el catálogo. Cualquier otro fallo sube como
     excepción markitdown ⇒ `SOURCE_UNREACHABLE` en el handler.
     """
+    stream_info = StreamInfo(extension=extension_hint) if extension_hint else None
     try:
-        return MarkItDown().convert(str(path)).markdown
+        return MarkItDown().convert(str(path), stream_info=stream_info).markdown
     except UnsupportedFormatException:
         raise formats.UnsupportedFormatError(
             f"formato no soportado para {source_uri!r}; "

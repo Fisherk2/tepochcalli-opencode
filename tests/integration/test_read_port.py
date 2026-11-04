@@ -338,6 +338,18 @@ def test_path_filter_to_like_predicate_pins_the_phase2_equivalence() -> None:
     )
 
 
+def test_path_filter_to_like_predicate_rejects_globs_beyond_the_cap() -> None:
+    """W-08: el tope de 1024 chars del borde MCP se revalida en el adaptador.
+
+    Defensa en profundidad SIN duplicar la traducción: el mismo literal de
+    longitud, dos bordes (`mcp.paths` —aquí el adaptador—).
+    """
+    ok = "00-Resources/" + "a" * (1024 - len("00-Resources/"))
+    assert path_filter_to_like_predicate(ok).startswith("source_path LIKE ")
+    with pytest.raises(ValueError, match="1024"):
+        path_filter_to_like_predicate("00-Resources/" + "a" * 1025)
+
+
 def test_invalid_inputs_are_rejected_at_the_boundary(
     reader: LanceDBChunkReader,
 ) -> None:

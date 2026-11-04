@@ -64,7 +64,7 @@ import lancedb
 from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
 from lancedb.rerankers import RRFReranker
 
-from ..citation import DocKind, offsets_ref_for
+from ..citation import MAX_HEADING_LENGTH, DocKind, offsets_ref_for
 from ..config import DEFAULT_TOP_K, load_config
 from ..layout import DB_RELPATH, TABLE_NAME
 from ..model_store import is_materialized
@@ -256,6 +256,11 @@ class LanceDBChunkReader:
             return cast(str, await search.explain_plan())
 
 
+MAX_PATH_FILTER_LENGTH: Final = 1024
+# MISMO tope que el borde MCP (`tepochcalli_mcp.paths`, W-08): duplicado a propósito —
+# el adaptador revalida su propia frontera y nunca importa el server (test de arquitectura).
+
+
 def path_filter_to_like_predicate(path_filter: str) -> str:
     r"""Traduce el glob `path_filter` al predicado SQL `LIKE` de Phase 2 (§search).
 
@@ -285,6 +290,11 @@ def path_filter_to_like_predicate(path_filter: str) -> str:
         raise ValueError(
             f"path_filter debe ser un glob relativo al vault, no absoluto: {path_filter!r}"
         )
+    if len(normalized) > MAX_PATH_FILTER_LENGTH:
+        raise ValueError(
+            f"path_filter demasiado largo: {len(normalized)} chars superan el tope "
+            f"{MAX_PATH_FILTER_LENGTH}"
+        )
     if ".." in PurePosixPath(normalized).parts:
         raise ValueError(
             f"path_filter no puede contener segmentos '..' (escape del vault): {path_filter!r}"
@@ -309,7 +319,9 @@ def _to_cited_chunks(rows: list[dict[str, object]]) -> list[CitedChunk]:
         CitedChunk(
             text=str(row["text"]),
             source_path=str(row["source_path"]),
-            heading=None if row["heading"] is None else str(row["heading"]),
+            # W-09: el heading cruza el wire en cada resultado; se recorta al
+            # tope de `citation` (una fila mal indexada no infla el payload).
+            heading=None if row["heading"] is None else str(row["heading"])[:MAX_HEADING_LENGTH],
             # `row` es `dict[str, object]` (fila Arrow ya deserializada): los cast
             # son aserciones del esquema —BIGINT las dos primeras, DOUBLE la
             # última—, no conversiones; el `int()`/`float()` de runtime sigue

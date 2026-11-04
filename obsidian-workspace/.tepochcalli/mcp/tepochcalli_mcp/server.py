@@ -399,11 +399,15 @@ def _convert_seam(uri: str) -> str:
     return convert_source(uri)
 
 
-def _convert_local_seam(path: Path, *, source_uri: str) -> str:
-    """Seam T9: markitdown EN PROCESO sobre un documento del vault, sin frontmatter."""
+def _convert_local_seam(path: Path, *, source_uri: str, extension_hint: str | None) -> str:
+    """Seam T9: markitdown EN PROCESO sobre un documento del vault, sin frontmatter.
+
+    W-06: la costura transporta el `format` del handler como `extension_hint`
+    (pista de conversión del dueño); `None` sin pista (comportamiento previo).
+    """
     from tepochcalli_mcp.convert import convert_local
 
-    return convert_local(path, source_uri=source_uri)
+    return convert_local(path, source_uri=source_uri, extension_hint=extension_hint)
 
 
 def _convert_bytes_seam(
@@ -600,9 +604,7 @@ async def convert_document(
     payload = await convert_document_handler.convert_document(
         path, output_path, format, vault_root=_vault_root, convert=_convert_local_seam
     )
-    return tepochcalli_mcp.tools.json_text_result(
-        summary.serialize_budget(payload), is_error="error" in payload
-    )
+    return _converter_result(payload)
 
 
 @server.tool()
@@ -634,9 +636,21 @@ async def convert_base64(
     payload = await convert_base64_handler.convert_base64(
         data, output_path, format, filename, vault_root=_vault_root, convert=_convert_bytes_seam
     )
-    return tepochcalli_mcp.tools.json_text_result(
-        summary.serialize_budget(payload), is_error="error" in payload
-    )
+    return _converter_result(payload)
+
+
+def _converter_result(payload: dict[str, object]) -> CallToolResult:
+    """Empaqueta el payload del conversor (W-10): `serialize_budget` SOLO en éxito.
+
+    El shape congelado de ADR-009 (5 claves + `truncated`) es la forma de un
+    RESUMEN; un payload de error no es un resumen — `serialize_budget` le
+    añadiría un `preview: ""` y `truncated: true` fantasma (error largo >
+    1400 chars). Los errores van por `json_result` (`is_error` sale del
+    payload, patrón de `tools/__init__.py`).
+    """
+    if "error" in payload:
+        return tepochcalli_mcp.tools.json_result(payload)
+    return tepochcalli_mcp.tools.json_text_result(summary.serialize_budget(payload))
 
 
 @server.tool()

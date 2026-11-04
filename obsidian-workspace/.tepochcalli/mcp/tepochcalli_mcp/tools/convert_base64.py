@@ -38,6 +38,7 @@ import hashlib
 import logging
 from collections.abc import Callable
 from pathlib import Path
+from typing import Final
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
@@ -45,6 +46,14 @@ from tepochcalli_mcp import errors, formats, paths
 from tepochcalli_mcp.tools._convert_tail import write_converted
 
 logger = logging.getLogger(__name__)
+
+MAX_BASE64_CHARS: Final = 140_000_000
+"""Tope de `data` base64 (W-08): ~100 MB decodificados (4 chars → 3 bytes).
+
+Los bytes viajan EN CONTEXTO del agente: sin tope, la decodificación sería un
+DoS de memoria en el proceso del vault. Documentos mayores van por `file:`
+(`convert_document`) — el disco nunca pasa por el wire.
+"""
 
 
 @errors.internal_guard
@@ -111,7 +120,19 @@ def _effective_extension(format: str | None, filename: str | None) -> str:
 
 
 def _decode(data: str) -> bytes:
-    """Bytes del documento; base64 inválido ⇒ `VaultPathError` (VALIDATION_ERROR)."""
+    """Bytes del documento; base64 inválido o demasiado grande ⇒ `VaultPathError`.
+
+    W-08: el corte de tamaño es `VALIDATION_ERROR` nombando el tope — una
+    entrada de cientos de MB en contexto es una llamada mal formada, no un
+    fallo del server (D39), y decodificarla sería un auto-DoS.
+    """
+    if len(data) > MAX_BASE64_CHARS:
+        raise paths.VaultPathError(
+            f"base64 demasiado grande en `data`: {len(data)} chars superan el tope "
+            f"{MAX_BASE64_CHARS} (~100 MB decodificados); guarda el documento en el "
+            "vault (una raíz de `INDEXER_DIR`) y usa `convert_document`.",
+            {"field": "data", "chars": len(data), "limit_chars": MAX_BASE64_CHARS},
+        )
     try:
         return base64.b64decode(data, validate=True)
     except (binascii.Error, ValueError) as exc:

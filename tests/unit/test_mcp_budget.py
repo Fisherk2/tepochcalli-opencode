@@ -21,14 +21,12 @@ from tepochcalli_flow.ports import CitedChunk
 from tepochcalli_mcp import budget
 
 
-def _chunk(
-    score: float, text: str = "x" * 400, *, source_path: str = "00-Resources/a.md"
-) -> CitedChunk:
+def _chunk(score: float, text: str = "x" * 400, *, heading: str | None = None) -> CitedChunk:
     """Chunk sintético para el presupuesto: el text manda el coste, el score el orden."""
     return CitedChunk(
         text=text,
-        source_path=source_path,
-        heading=None,
+        source_path="00-Resources/a.md",
+        heading=heading,
         char_start=0,
         char_end=len(text),
         score=score,
@@ -59,6 +57,23 @@ def test_estimate_tokens_counts_emoji_as_heavy() -> None:
     assert budget.estimate_tokens("🧪" * 100) == 100 + budget.CITATION_OVERHEAD_TOKENS
 
 
+def test_estimate_tokens_weights_hangul_dingbats_and_flags_one_per_character() -> None:
+    """W-07: hangul silábico, dingbats/símbolos y banderas pesan 1 token POR carácter.
+
+    Conteos exactos: 10 syllables → 30 tokens (no `30//4`); la puntuación
+    general (0x2000–0x206F) SÍ queda en el arco ligero.
+    """
+    assert budget.estimate_tokens("한국어" * 10) == 30 + budget.CITATION_OVERHEAD_TOKENS
+    assert budget.estimate_tokens("🇲🇽") == 2 + budget.CITATION_OVERHEAD_TOKENS, "bandera"
+    assert budget.estimate_tokens("✂✈") == 2 + budget.CITATION_OVERHEAD_TOKENS, "dingbats"
+    punctuation = "—…–"
+    assert budget.estimate_tokens(punctuation) == budget.CITATION_OVERHEAD_TOKENS, (
+        "0x2000–0x206F NO es heavy: 3 chars ligeros → 3//4 = 0"
+    )
+    mixed = "cohorte ✂" * 100
+    assert budget.estimate_tokens(mixed) == 800 // 4 + 100 + budget.CITATION_OVERHEAD_TOKENS
+
+
 def test_constants_pin_the_contract_numbers() -> None:
     """Los literales del contrato viven como constantes, no repetidos (plan §5)."""
     assert budget.CITATION_OVERHEAD_TOKENS == 25
@@ -67,6 +82,21 @@ def test_constants_pin_the_contract_numbers() -> None:
     assert budget.TOP_K_MAX == 20
     assert budget.TOP_K_CAP == 8
     assert budget.TOP_K_DEFAULT == 5
+
+
+def test_budget_counts_the_heading_in_the_chunk_cost() -> None:
+    """W-09: el heading crusa el wire y sus chars entran en el coste del chunk.
+
+    Antes el heading pagaba solo el `25` flat: dos chunks con headings
+    kilométricos sumaban >3200 tokens estimados sin truncarse — el payload
+    mentía la cota (criterio 4).
+    """
+    heavy = _chunk(0.9, text="cuerpo", heading="H" * 6000)  # ~25 + 6000//4 = 1526
+    light = _chunk(0.5)  # "x"*400 → 125 tokens: 1526 + 125 > 1600 ⇒ corta
+    kept, truncated = budget.apply_budget([heavy, light])
+
+    assert kept == [heavy], "el de mayor score se conserva (ídem antes)"
+    assert truncated is True, "corta: el heading ya paga su talla"
 
 
 # --- top_k efectivo ------------------------------------------------------------

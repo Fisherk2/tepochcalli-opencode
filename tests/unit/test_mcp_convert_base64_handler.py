@@ -23,7 +23,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 import pytest
-from tepochcalli_mcp import formats, summary
+from tepochcalli_mcp import formats, paths, summary
 from tepochcalli_mcp.tools import convert_base64 as handler
 
 DATA = b"docx sintetico"
@@ -292,3 +292,22 @@ def test_different_content_on_an_existing_destination_is_validation_error(
     assert "output_path" in payload["error"]["message"]
     assert payload["error"]["details"]["suggested"] == "informe-2.md"
     assert (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8") == original
+
+
+# --- W-08 (review 5-ejes): tope de tamaño de `data` --------------------------------------
+
+
+def test_decode_rejects_base64_beyond_the_size_cap() -> None:
+    """W-08: >140M chars base64 (~100MB decodificados) ⇒ `VaultPathError` con el tope.
+
+    Los bytes viajan EN CONTEXTO del agente: sin tope, la decodificación sería
+    un DoS de memoria en el proceso del vault.
+    """
+    with pytest.raises(paths.VaultPathError, match="140000000"):
+        handler._decode("A" * (140_000_000 + 1))
+
+
+def test_decode_accepts_exactly_the_size_cap() -> None:
+    """W-08, límite exacto: `len(data) == 140_000_000` NO dispara el corte (usaré `>`)."""
+    decoded = handler._decode("A" * 140_000_000)
+    assert len(decoded) == 105_000_000, "4 chars base64 → 3 bytes decodificados"

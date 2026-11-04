@@ -56,6 +56,9 @@ MAX_SLUG_LENGTH: Final = 80
 MAX_SLUG_SUFFIX: Final = 1000
 """Sufijo numérico máximo ante colisiones: un directorio saturado es INTERNAL, no un bucle."""
 
+MAX_PATH_FILTER_LENGTH: Final = 1024
+"""Tope del glob `path_filter` (W-08): un patrón de KBs es DoS de traducción, no una cita."""
+
 
 def validate_path_filter(path_filter: str | None) -> str | None:
     """Valida la forma del glob `path_filter` y lo devuelve tal cual (sin traducir).
@@ -69,6 +72,11 @@ def validate_path_filter(path_filter: str | None) -> str | None:
     normalized = path_filter.replace("\\", "/")
     if not normalized:
         raise ValueError("path_filter vacío: usa None para buscar en todo el índice")
+    if len(normalized) > MAX_PATH_FILTER_LENGTH:  # W-08: el adaptador lo revalida igual
+        raise ValueError(
+            f"path_filter demasiado largo: {len(normalized)} chars superan el tope "
+            f"{MAX_PATH_FILTER_LENGTH}"
+        )
     if normalized.startswith("/"):
         raise ValueError(
             f"path_filter debe ser un glob relativo al vault, no absoluto: {path_filter!r}"
@@ -189,7 +197,10 @@ def redact_uri(uri: str) -> str:
 
     * userinfo (`//usuario:clave@`) → `//***@`;
     * query params cuyo nombre contiene `key`/`token`/`password`/`secret`
+      (y de la review 5-ejes: `pwd`/`cred`/`auth`/`sess`/`sig`/`passphrase`)
       → valor `***` (orden y parámetros no secretos intactos);
+    * el fragmento (post `#`) ES credencial frecuente (`#access_token=…`) y
+      se sustituye completo por `***`;
     * un URI sin credenciales se devuelve BYTE A BYTE (Hyrum: los asserts de
       frontmatter existentes sin credenciales no notan el paso).
     """
@@ -197,7 +208,7 @@ def redact_uri(uri: str) -> str:
         return uri
     without_userinfo = re.sub(r"//[^/?#]*@", "//***@", uri)
     parsed = urlsplit(without_userinfo)
-    if not parsed.query:
+    if not parsed.query and not parsed.fragment:
         return without_userinfo
     params: list[tuple[str, str]] = []
     for name, value in parse_qsl(parsed.query, keep_blank_values=True):
@@ -205,11 +216,26 @@ def redact_uri(uri: str) -> str:
         params.append(
             (name, "***") if any(word in lowered for word in QUERY_SECRET_WORDS) else (name, value)
         )
-    return urlunsplit(parsed._replace(query=urlencode(params, safe="*")))
+    return urlunsplit(
+        parsed._replace(
+            query=urlencode(params, safe="*"), fragment="***" if parsed.fragment else ""
+        )
+    )
 
 
-QUERY_SECRET_WORDS: Final = ("key", "token", "password", "secret")
-"""Ítems query-parameter que delatan credencial para `redact_uri` (review SSRF)."""
+QUERY_SECRET_WORDS: Final = (
+    "key",
+    "token",
+    "password",
+    "secret",
+    "pwd",
+    "cred",
+    "auth",
+    "sess",
+    "sig",
+    "passphrase",
+)
+"""Ítems query-parameter que delatan credencial para `redact_uri` (review SSRF; W-04)."""
 
 
 def _deny_internal_host(uri: str) -> None:
@@ -292,7 +318,10 @@ def resolve_file_uri(uri: str, vault_root: Path) -> Path:
     local = Path(unquote(parsed.path))
     if not local.is_absolute():
         raise ValueError(f"`file:` debe ser una ruta absoluta: {uri!r}")
-    resolved = local.resolve()
+    try:
+        resolved = local.resolve()
+    except ValueError as exc:  # W-03: null byte (`%00`) del OS — input mal escrito, no bug
+        raise VaultPathError(f"ruta invalida: {uri!r} ({exc})") from None
     if not resolved.is_relative_to(vault_root.resolve()):
         raise ValueError(f"D16: `file:` fuera del vault rechazado: {uri!r}")
     if not resolved.is_file():
@@ -420,7 +449,10 @@ def validate_vault_path(
     candidate = Path(text.replace("\\", "/"))
     if ".." in candidate.parts:
         raise VaultPathError(f"ruta con segmentos '..' (escape del vault): {text!r}")
-    resolved = (candidate if candidate.is_absolute() else root / candidate).resolve()
+    try:
+        resolved = (candidate if candidate.is_absolute() else root / candidate).resolve()
+    except ValueError as exc:  # W-03: null byte (`output_path="a\x00.md"`) — no bug nuestro
+        raise VaultPathError(f"ruta invalida: {text!r} ({exc})") from None
     if not resolved.is_relative_to(root):
         raise VaultPathError(f"fuera del vault (B′): {text!r} no resuelve dentro de {root}")
     if not must_exist:

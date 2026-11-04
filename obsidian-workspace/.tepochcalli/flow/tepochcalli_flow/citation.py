@@ -35,6 +35,11 @@ SOURCE_OFFSETS_DOC_KINDS: Final[frozenset[DocKind]] = frozenset({"md", "markdown
 RESOURCES_DIR: Final = "00-Resources"
 """Raíz por omisión del índice y destino por omisión de `add_source` (ADR-010)."""
 
+MAX_HEADING_LENGTH: Final = 200
+"""Tope del `heading` del `CitedChunk` (W-09): cruza el wire en cada resultado de
+`search` y el adaptador lo recorta al construirlo — un heading kilométrico
+(una línea `#` arbitrariamente larga) no cabe en el presupuesto del payload."""
+
 _FRONTMATTER_DELIMITER: Final = "---"
 _ATX_HEADING: Final = re.compile(r"^ {0,3}#{1,6}[ \t]+(\S.*?)[ \t]*$")
 _ATX_CLOSING: Final = re.compile(r"[ \t]+#+[ \t]*$")

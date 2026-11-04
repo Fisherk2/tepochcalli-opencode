@@ -293,3 +293,31 @@ def test_refresh_receives_resources_declared_with_dot_slash(
 ) -> None:
     """El refresh recibe el conjunto declarado TAL CUAL (la normalización es solo del gate)."""
     assert _seam_calls(monkeypatch, tmp_path, "./00-Resources/") == [("./00-Resources/",)]
+
+
+# --- W-01 (review 5-ejes): las raíces declaradas se validan ANTES de escribir ------------
+
+
+def test_a_bad_indexer_root_is_validation_error_before_writing(tmp_path: Path) -> None:
+    """INDEXER_DIR con una raíz mala ⇒ `VALIDATION_ERROR` con cero bytes escritos.
+
+    Hoy, la raíz mala explota en el refresh de cola (`normalize_roots` →
+    `FileNotFoundError` ⇒ `INTERNAL`) CON el fichero ya huérfano en el vault;
+    el borde lo juzga igual que `index_refresh` (`details.vault_dirs` +
+    `suggestions`).
+    """
+    payload, calls = _run(
+        _notas_uri(tmp_path),
+        vault=tmp_path,
+        allowed_roots=lambda: ("00-Resources", "notaMala/"),
+    )
+
+    error = payload["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert (details := error["details"]), "el payload trae `details` estructurado"
+    assert details["exists"] is False
+    assert details["requested"] == "notaMala/", "nombra la raíz mal escrita"
+    assert "vault_dirs" in details and "suggestions" in details
+    assert calls == [_notas_uri(tmp_path)], "convierte, pero el fichero NO se escribe"
+    assert not list((tmp_path / "00-Resources").rglob("*.md")), "cero .md huérfanos"
+    assert not (tmp_path / "notaMala").exists()

@@ -72,12 +72,21 @@ Es el `default` del schema de `search`; `effective_top_k` sigue recortando a
 
 
 def _is_cjk(char: str) -> bool:
-    """¿Pesa 1 token el carácter? CJK/hanja/hangul + emoji (peso por carácter, review eje 9)."""
+    """¿Pesa 1 token el carácter? CJK/hanzi/hangul + símbolos y emoji (peso por carácter).
+
+    Review eje 9 + W-07: hangul silábico (AC00–D7AF), dingbats/símbolos
+    (2600–27BF) y banderas (1F1E6–1F1FF, regional indicators) también pesan;
+    la puntuación general (2000–206F) queda EN el arco ligero — no delata
+    script y el tokenizer la fragmenta lejos de 1 token por carácter.
+    """
     codepoint = ord(char)
     return (
         0x3000 <= codepoint <= 0x9FFF  # puntuación CJK + hiragana/katakana + ideographs
         or 0xF900 <= codepoint <= 0xFAFF  # ideographs de compatibilidad
         or 0x1100 <= codepoint <= 0x11FF  # hangul jamo
+        or 0xAC00 <= codepoint <= 0xD7AF  # W-07: hangul syllables
+        or 0x2600 <= codepoint <= 0x27BF  # W-07: dingbats/símbolos (✂ ✈ …)
+        or 0x1F1E6 <= codepoint <= 0x1F1FF  # W-07: regional indicators (banderas 🇲🇽)
         or 0x1F300 <= codepoint <= 0x1FAFF  # emoji (arco simple)
     )
 
@@ -114,16 +123,21 @@ def apply_budget(chunks: Sequence[CitedChunk]) -> tuple[list[CitedChunk], bool]:
     Acumula el coste de cada resultado mientras el total ≤ `PAYLOAD_TOKEN_CEILING`;
     al cortar descarta los de MENOR score — el de mayor score NUNCA se descarta
     (los empatados conservan el orden estable) — y el caller marca
-    `truncated: true`. Borde documentado: si un ÚNICO chunk excede el techo por
-    sí solo se entrega igual —una cita parcial vale más que un payload vacío—
-    con `truncated: false` (no se descartó ninguno: `kept == ordered`); con el
-    flow de Phase 1 no ocurre (chunks ≤1536 bytes).
+    `truncated: true`. Sedes de W-09: el HEADING cuenta — cruza el wire junto
+    al `text` y se paga a la misma tarifa ligera (`len(heading)//4`; el `25`
+    flat sigue cubriendo path+offsets). Borde documentado: si un ÚNICO chunk
+    excede el techo por sí solo se entrega igual —una cita parcial vale más
+    que un payload vacío— con `truncated: false` (no se descartó ninguno:
+    `kept == ordered`); con el flow de Phase 1 no ocurre (chunks ≤1536 bytes,
+    headings ≤200 por W-09).
     """
     ordered = sorted(chunks, key=lambda chunk: chunk.score, reverse=True)
     kept: list[CitedChunk] = []
     used = 0
     for chunk in ordered:
-        cost = estimate_tokens(chunk.text)
+        # W-09: el heading cruza el wire junto al text — sus chars pagan token
+        # (arco ligero //4); el `25` flat sigue cubriendo path + offsets.
+        cost = estimate_tokens(chunk.text) + (len(chunk.heading or "") // 4)
         if kept and used + cost > PAYLOAD_TOKEN_CEILING:
             break
         kept.append(chunk)

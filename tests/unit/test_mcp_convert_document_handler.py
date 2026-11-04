@@ -52,7 +52,7 @@ def _run(
     """Ejecuta el handler con costuras falsas; devuelve `(payload, llamadas a convert)`."""
     calls: list[tuple[Path, str]] = []
 
-    def fake_convert(source: Path, *, source_uri: str) -> str:
+    def fake_convert(source: Path, *, source_uri: str, extension_hint: str | None = None) -> str:
         calls.append((source, source_uri))
         return CONTENT
 
@@ -132,6 +132,31 @@ def test_format_forces_the_destination_extension(tmp_path: Path) -> None:
 
     assert defaulted["written_to"] == "00-Resources/datos.docx"
     assert explicit["written_to"] == "00-Resources/x.pdf"
+
+
+def test_format_is_also_the_conversion_hint_for_a_suffixless_file(tmp_path: Path) -> None:
+    """W-06 (orden del dueño): `format` fuerza el sufijo del destino Y es la pista.
+
+    `informe` SIN extensión + `format=".txt"` ⇒ se convierte (`StreamInfo.
+    extension` llega por la costura): hoy el conversor no ve pista alguna y
+    responde `UnsupportedFormatException` engañoso.
+    """
+    vault = _vault(tmp_path)
+    plain = vault / "documentos" / "informe"
+    plain.write_text("cuerpo plano\n", encoding="utf-8")
+    hints: list[str | None] = []
+
+    def convert(source: Path, *, source_uri: str, extension_hint: str | None) -> str:
+        hints.append(extension_hint)
+        assert source_uri == "documentos/informe"
+        return CONTENT
+
+    payload, _calls = _run("documentos/informe", format=".txt", vault=vault, convert=convert)
+
+    assert "error" not in payload
+    assert hints == [".txt"], "la pista de conversión llega por la costura"
+    assert payload["written_to"] == "00-Resources/informe.txt"
+    assert (vault / "00-Resources" / "informe.txt").read_text(encoding="utf-8") == CONTENT
 
 
 # --- frontera B′ y existencia/tipo (D31/D64) --------------------------------------
@@ -214,7 +239,7 @@ def test_extension_outside_the_catalog_is_validation_error_with_the_list(
 def test_unsupported_format_from_the_seam_maps_to_validation_error(tmp_path: Path) -> None:
     """`UnsupportedFormatError` de la costura ⇒ `VALIDATION_ERROR` con la lista (D39)."""
 
-    def unsupported(_source: Path, *, source_uri: str) -> str:
+    def unsupported(_source: Path, *, source_uri: str, extension_hint: str | None = None) -> str:
         raise formats.UnsupportedFormatError(f"sin convertidor para {source_uri}")
 
     vault = _vault(tmp_path)
@@ -285,7 +310,7 @@ def test_different_content_on_an_existing_destination_is_validation_error(
 def test_unexpected_conversion_failure_is_source_unreachable(tmp_path: Path) -> None:
     """Un convertidor roto ⇒ `SOURCE_UNREACHABLE` con la causa tipada; nada escrito."""
 
-    def broken(_source: Path, *, source_uri: str) -> str:
+    def broken(_source: Path, *, source_uri: str, extension_hint: str | None = None) -> str:
         raise RuntimeError("corrupto")
 
     vault = _vault(tmp_path)
@@ -295,3 +320,43 @@ def test_unexpected_conversion_failure_is_source_unreachable(tmp_path: Path) -> 
     assert _error_code(payload) == "SOURCE_UNREACHABLE"
     assert payload["error"]["details"] == {"cause": "RuntimeError"}
     assert not (vault / "00-Resources" / "informe.md").exists()
+
+
+# --- W-05 (review 5-ejes): el log de `_convert_tail` no filtra el URI -------------------
+
+
+def test_conversion_failure_log_redacts_and_truncates_the_uri(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """W-05: `logger.exception` redacta credenciales (`redact_uri`) y trunca a 300 chars.
+
+    El URI fuega tal cual entró en el log stderr (review eje 4 W-05): la
+    credencial en query (`pwd=…`) no puede escapar por la dimensión log-forge.
+    """
+    import logging
+
+    from tepochcalli_mcp.tools._convert_tail import write_converted
+
+    tail_uri = "https://api.com/i" + "p" * 900 + ".pdf?pwd=secret123"
+
+    async def raising() -> str:
+        msg = "corrupto"
+        raise ValueError(msg)
+
+    with caplog.at_level(logging.ERROR, logger="test.convert.log"):
+        payload = asyncio.run(
+            write_converted(
+                run_convert=raising,
+                target=Path("/tmp/irrelevante.md"),
+                source_uri=tail_uri,
+                vault_root=Path("/tmp"),
+                tool="convert_document",
+                logger=logging.getLogger("test.convert.log"),
+            )
+        )
+
+    assert _error_code(payload) == "SOURCE_UNREACHABLE"
+    record = next(r for r in caplog.records if r.message.startswith("convert_document:"))
+    massage = record.getMessage()
+    assert "secret123" not in massage, "la query secreta NO llega al log en claro"
+    assert len(massage) < 400, "truncado a ~300 chars (el path era de 900)"

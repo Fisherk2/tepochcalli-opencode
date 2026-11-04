@@ -343,6 +343,57 @@ def test_domain_transitive_imports_stay_stdlib_and_in_project(
         )
 
 
+CONVERT_BANNED_ROOTS: Final[frozenset[str]] = frozenset({"cocoindex", "lancedb"})
+"""W-13 (a): engines proscritos TAMBIÉN para la costura del conversor.
+
+`tepochcalli_mcp.convert` ES infraestructura (importa `markitdown` EN PROCESO,
+su oficio — por eso no entra en `BANNED_INFRA_ROOTS`), pero la costura no toca
+motores de índice: no es un pretexto para alcanzar `cocoindex`/`lancedb`.
+"""
+
+
+@pytest.mark.parametrize("module", [f"{MCP_PACKAGE}.convert"])
+def test_converter_reaches_neither_engine(module: str) -> None:
+    """W-13 (a): `convert.py` (markitdown in-process) NO alcanza motores de índice.
+
+    Parametrización a parte de la de dominio porque `markitdown` es SU oficio:
+    la frontera invariante es `cocoindex`/`lancedb` — la costura del conversor
+    no es un pretexto para crear un índice.
+    """
+    for chain, target in _walk_imports(module):
+        root = target.split(".")[0]
+        assert root not in CONVERT_BANNED_ROOTS, (
+            f"La costura del conversor {module} alcanza un engine: {_describe(chain, target)}"
+        )
+
+
+def test_converter_reach_is_markitdown_only() -> None:
+    """Sanidad del mismo test: `convert` SÍ importa `markitdown` (su oficio).
+
+    Sin esta ancla, un `_module_source` roto volvería el test parametrizado de
+    arriba vacío-verde.
+    """
+    reached = {target for _chain, target in _walk_imports(f"{MCP_PACKAGE}.convert")}
+    assert "markitdown" in reached, "el conversor importa la librería EN PROCESO"
+
+
+@pytest.mark.parametrize("module", MCP_TOOL_MODULES)
+def test_tool_handlers_allow_mcp_types_only_never_the_sdk_server(module: str) -> None:
+    """W-13 (b): en los handlers `mcp.types` sí (empaquetado); `mcp.server.*` JAMÁS.
+
+    Los handlers construyen dicts; SOLO el composition root habla con el SDK.
+    El walker corrige imports en ambos sentidos: `import mcp.types` (permitido
+    en `tools/__init__.py`) no debe tapar un `mcp.server.*` colado más tarde.
+    """
+    for chain, target in _walk_imports(module):
+        if target == "mcp" or target.startswith("mcp."):
+            allowed = target == "mcp.types" or target.startswith("mcp.types.")
+            assert allowed, (
+                f"El handler {module} alcanza el SDK fuera de `mcp.types`: "
+                f"{_describe(chain, target)} — el SDK del server vive solo en `server.py`"
+            )
+
+
 def test_walker_follows_in_project_import_edges_transitively() -> None:
     """El walker sí resuelve aristas in-project: citation -> config es alcanzable.
 

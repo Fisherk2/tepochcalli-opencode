@@ -41,7 +41,10 @@ async def write_converted(
     except formats.UnsupportedFormatError as exc:
         return errors.validation_error(str(exc), {"formats": list(formats.SUPPORTED_FORMATS)})
     except Exception as exc:  # corrupto, cifrado: no es una entrada mal escrita (D39)
-        logger.exception("%s: fallo de conversión para %s", tool, source_uri)
+        # W-05: el URI fuga tal cual entraba; en log va REDACTADO (review eje 4)
+        # y TRUNCADO (log-forge: un URI kilométrico no infla el stderr).
+        redacted = paths.redact_uri(source_uri)[:300]
+        logger.exception("%s: fallo de conversión para %s", tool, redacted)
         return errors.source_unreachable(source_uri, type(exc).__name__)
     if not content.strip():
         return errors.source_unreachable(source_uri, "EmptyMarkdown", guide=errors.GUIDE_OCR)

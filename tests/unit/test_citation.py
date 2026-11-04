@@ -324,3 +324,32 @@ def test_model_id_uses_the_resolved_config_model() -> None:
     )
 
     assert citation.model_id(cfg) == "otro-embedder"
+
+
+# --- W-09 (review 5-ejes): heading con tope al construir el CitedChunk ------------------
+
+
+def test_cited_chunk_heading_is_truncated_to_two_hundred_chars() -> None:
+    """W-09: un heading de 300 chars se entrega truncado a 200 en el `CitedChunk`.
+
+    El heading cruza el wire en cada resultado de `search`: sin tope, un
+    heading kilométrico (un `#` de 50k chars) infla el payload fuera del
+    presupuesto (criterio 4). Constante única-homed en `citation`.
+    """
+    from tepochcalli_flow.adapters import lancedb_reader
+
+    rows: list[dict[str, object]] = [
+        {
+            "text": "cuerpo",
+            "source_path": "00-Resources/a.md",
+            "heading": "H" * 300,
+            "char_start": 0,
+            "char_end": 6,
+            "score": 1.0,
+            "doc_kind": "md",
+            "_relevance_score": 1.0,
+        }
+    ]
+    (chunk,) = lancedb_reader._to_cited_chunks(rows)
+    assert chunk.heading is not None and len(chunk.heading) == 200, "recortado al tope"
+    assert str(citation.MAX_HEADING_LENGTH) == "200"

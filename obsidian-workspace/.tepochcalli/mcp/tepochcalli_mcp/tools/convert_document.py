@@ -56,14 +56,18 @@ async def convert_document(
 ) -> dict[str, object]:
     """Resumen de 5 claves del `.md` escrito — el cuerpo no viaja (D36).
 
-    `convert` es la costura `convert_local(path, source_uri=…)` del composition
-    root; argumentos posicionales del contrato MCP: `path`, `output_path?`,
-    `format?`. La cola (fallos tipados, vacío, escritura, resumen) vive en
+    `convert` es la costura `convert_local(path, source_uri=…, extension_hint=…)`
+    del composition root; argumentos posicionales del contrato MCP: `path`,
+    `output_path?`, `format?`. W-06 (orden del dueño, 2026-11-03): `format`
+    fuerza el sufijo del destino y ADEMÁS actúa como pista de conversión
+    (`StreamInfo.extension`) — un fichero sin extensión + `format=".txt"`
+    se convierte. La cola (fallos tipados, vacío, escritura, resumen) vive en
     `tools/_convert_tail.py`.
     """
     root = vault_root().resolve()
     try:
         source = paths.validate_vault_path(path, root, must_exist=True, expect="file")
+        hint = formats.normalize_suffix(format) if format else None
         suffix = _suffix(format, source)
         target = paths.validate_vault_path(
             _destination(path, output_path, suffix), root, must_exist=False
@@ -71,7 +75,9 @@ async def convert_document(
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
     return await write_converted(
-        run_convert=lambda: asyncio.to_thread(convert, source, source_uri=path),
+        run_convert=lambda: asyncio.to_thread(
+            convert, source, source_uri=path, extension_hint=hint
+        ),
         target=target,
         source_uri=path,
         vault_root=root,
