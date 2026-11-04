@@ -9,14 +9,15 @@
 
 ## Summary
 
-Esta spec es dueña de tres cosas del payload: el **inventario real de skills** (209 dirs,
-2026-11-04), la **matriz de conflictos/redundancias** (17 filas) con su **recuento derivado**, y el
-**inventario de muestras** que produce el instalador (D-P4-7).
+Esta spec es dueña de cuatro cosas del payload: el **inventario real de skills** (209 dirs,
+2026-11-04), la **matriz de conflictos/redundancias** (17 filas) con su **recuento derivado**, la
+**tabla de invocación comando→herramientas (9×4)** — movida aquí desde
+[specs/spec-payload-vault.md](spec-payload-vault.md) en T3 (D-P4-4) — y el **inventario de muestras**
+que produce el instalador (D-P4-7).
 
-No es dueña de: la tabla de invocación comando→skills (T3, en [specs/spec-payload-vault.md](spec-payload-vault.md)
-§Tabla de invocación 9×4), los cuerpos de comandos, agentes y `AGENTS.md` del vault (spec del
-blueprint), ni la instalación de gaps (Anexo A de [specs/spec-agent-workflow.md](spec-agent-workflow.md),
-decisión de Phase 5). **No se escribe nada en `obsidian-workspace/` en esta fase.**
+No es dueña de: los cuerpos de comandos, agentes y `AGENTS.md` del vault (spec del blueprint), ni la
+instalación de gaps (Anexo A de [specs/spec-agent-workflow.md](spec-agent-workflow.md), decisión de
+Phase 5). **No se escribe nada en `obsidian-workspace/` en esta fase.**
 
 ## Inventario real (2026-11-04)
 
@@ -30,7 +31,7 @@ wc -c obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md # 13098 (cuer
 ```
 
 * **0 skills citadas e inexistentes**: toda referencia de comandos y agentes resuelve contra el `ls`.
-* **112 dirs presentes y nunca citados**: los cubre el barrido de la fila 15 de la matriz.
+* **111 dirs presentes y nunca citados**: los cubre el barrido de la fila 15 de la matriz.
 * **209 nombres**, lectura directa (2026-11-04):
 
 <!-- markdownlint-disable MD033 -->
@@ -46,17 +47,17 @@ academic-literature-search · aeon · agent-browser · analytical-method-validat
 
 | Cubo | Dirs | Qué son |
 | --- | --- | --- |
-| CONSERVAR (explícito) | 34 | nombradas con veredicto de conservación (filas 6, 8, 11, 13, 17 y 14) |
+| CONSERVAR (explícito) | 35 | nombradas con veredicto de conservación (filas 6, 8, 11, 13, 14, 17 y los 12 remnants de la fila 15) |
 | CONSOLIDAR — supervivientes | 21 | ganadoras nominadas en las filas 1, 2, 3, 4, 5, 7, 9, 10 y 11; las perdedoras pasan a RETIRAR |
 | CONSERVAR por defecto | 5 | citadas por los comandos sin fila en la matriz: `markdown-mermaid-writing`, `multi-search-engine`, `parallel-web`, `peer-review`, `wikipedia-search` |
 | RETIRAR (explícito) | 37 | 29 de las filas 1-13 + 8 nombradas como ejemplo en la fila 15 |
 | INSTALAR-GAP | 0 | v1 no instala ninguna skill nueva; los 4 gaps del Anexo A quedan declarados como no instalados (fila 16) |
-| Barrido sin nombrar | 112 | resto del inventario, cubierto por familias en la fila 15 |
-| **Total** | **209** | 34 + 21 + 5 + 37 + 0 + 112 |
+| Barrido sin nombrar | 111 | resto del inventario, cubierto por familias en la fila 15 |
+| **Total** | **209** | 35 + 21 + 5 + 37 + 0 + 111 |
 
-Nombrado explícitamente = 34 + 21 + 5 + 37 = **97** (58 dirs en las filas 1-13 + 14 en la fila 14 +
-19 en la fila 15 + 1 en la fila 17 = 92 con veredicto, más las 5 citadas sin veredicto). Nombrado +
-barrido = 97 + 112 = 209.
+Nombrado explícitamente = 35 + 21 + 5 + 37 = **98** (58 dirs en las filas 1-13 + 15 en la fila 14 +
+19 en la fila 15 + 1 en la fila 17 = 93 con veredicto, más las 5 citadas sin veredicto). Nombrado +
+barrido = 98 + 111 = 209.
 
 ## Inventario de muestras del payload (D-P4-7)
 
@@ -102,17 +103,17 @@ cierra el recuento 1:1 por fila.
 | 11. Escritura ×5 | article-writing, scientific-writing, scientific-manuscript, doc-coauthoring, review-writing | scientific-manuscript solapa con scientific-writing (nota Anexo A); article-writing es divulgación/diseminación | CONSOLIDAR — gana `scientific-writing`; CONSERVAR `doc-coauthoring`, `review-writing`, `article-writing` (roles distintos) | retirar 1 (scientific-manuscript) |
 | 12. RAG-chat paralelo | open-notebook | NotebookLM-like local: solape frontal con tepochcalli-rag (que ES el producto) | RETIRAR | retirar 1 |
 | 13. Creativo/visual suelto | generate-image (+ `infographics`, que se conserva) | generación de imagen creativa, fuera de la metodología | RETIRAR | retirar 1 (`infographics` se CONSERVA: es salida de `/transform`) |
-| 14. Núcleo metodológico sin conflicto (en dominio) | 14 nombradas: citation-management, experimental-design, writing-plans, scientific-problem-selection, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units, venue-templates, scientific-slides, paper-2-web, exploratory-data-analysis, networkx, sympy, shap | sin solape material para el pipeline de 9 comandos y 5 agentes | CONSERVAR | mantener en el payload base |
-| 15. Resto del inventario (barrido por familia) | **112 dirs no nombrados** en las filas 1-14 y 17 (listado completo en el bloque `<details>`); dentro de la fila se nombran **12 remnants en dominio** — `polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`, `wikipedia-search`, `multi-search-engine` — que ya cuentan como CONSERVAR en el cubo explícito, más **7 ejemplos out-of-domain** que cuentan como RETIRAR | **familias medidas en este payload: 0 dirs** para `gis-*`, `marketing-*`, `finance-*`, `sales-*`, `legal-*`, `healthcare-*`, `paid-media-*`, `product-*` y `design-*` (la v1 las citaba como si existieran). El resto barrido es out-of-domain **medido: 102 dirs** (wet-lab, omics, química, física, geo, clínico, RL y meta); con los 7 ejemplos nombrados, el total out-of-domain es **109**, no ≈120 | RETIRAR el barrido out-of-domain (skill pack opcional futuro) y CONSERVAR los 12 remnants en dominio, de los cuales **10 quedan a decisión del FTR (D-P4-10)** | retirar los 102 out-of-domain del barrido + los 7 ejemplos; los 12 remnants se conservan salvo que el FTR apruebe el corte de 10; `wikipedia-search` y `multi-search-engine` **se quedan siempre** (los cita `/research`); `PACK=1` en CI para no romper referencias |
+| 14. Núcleo metodológico sin conflicto (en dominio) | 15 nombradas: citation-management, experimental-design, writing-plans, scientific-problem-selection, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units, venue-templates, scientific-slides, paper-2-web, exploratory-data-analysis, networkx, sympy, shap, scholar-evaluation | sin solape material para el pipeline de 9 comandos y 5 agentes; `scholar-evaluation` es la base de `/validate` y `/review` (la tabla 9×4 la cita) | CONSERVAR | mantener en el payload base |
+| 15. Resto del inventario (barrido por familia) | **111 dirs no nombrados** en las filas 1-14 y 17 (listado completo en el bloque `<details>`); dentro de la fila se nombran **12 remnants en dominio** — `polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`, `wikipedia-search`, `multi-search-engine` — que ya cuentan como CONSERVAR en el cubo explícito, más **7 ejemplos out-of-domain** que cuentan como RETIRAR | **familias medidas en este payload: 0 dirs** para `gis-*`, `marketing-*`, `finance-*`, `sales-*`, `legal-*`, `healthcare-*`, `paid-media-*`, `product-*` y `design-*` (la v1 las citaba como si existieran). El resto barrido es out-of-domain **medido: 102 dirs** (wet-lab, omics, química, física, geo, clínico, RL y meta); con los 7 ejemplos nombrados, el total out-of-domain es **109**, no ≈120 | RETIRAR el barrido out-of-domain (skill pack opcional futuro) y CONSERVAR los 12 remnants en dominio, de los cuales **10 quedan a decisión del FTR (D-P4-10)** | retirar los 102 out-of-domain del barrido + los 7 ejemplos; los 12 remnants se conservan salvo que el FTR apruebe el corte de 10; `wikipedia-search` y `multi-search-engine` **se quedan siempre** (los cita `/research`); `PACK=1` en CI para no romper referencias |
 | 16. Gaps UH (sin skill hoy) | jupyter (cuadernos), R (graficación estadística), Graphviz/PlantUML (diagramas), LaTeX de manuscrito (`latex-posters` no cubre manuscrito) | áreas de UH.md sin cubrir | INSTALAR-GAP — **0 instalaciones en v1** (declarado como no instalado) | Phase 5 solo instala si el Anexo A lo decide; mientras, `/transform` los menciona como pendiente de Phase 5 sin inventar nombres |
 | 17. `tepochcalli-mcp` (nueva, Phase 3.5 — H4) | `tepochcalli-mcp/SKILL.md` (13 KB, cuerpo en inglés), ausente del `ls` de 2026-10-21 | catálogo único de decisión de las 7 tools de `tepochcalli-rag` + fallback `anydoc`; solapa con la skill `markitdown` en «convertir», pero esta decide **cuándo** usar cada tool | CONSERVAR (nueva; registrada por OM-6 para que la matriz cubra el 100 %) | contarla como entrada del inventario: **209 dirs** (208 + 1) |
 
 * Recuento explícito por fila: las filas 1-13 nombran **58** dirs (21 ganadoras + 8 conservadas + 29
-  retiradas); la fila 14 nombra **14** conservadas; la fila 15 nombra **19** a título explícito (7
-  ejemplos retirados + 12 remnants en dominio conservados); la fila 17 añade **1** ⇒ **92 nombradas** +
-  **5 citadas sin veredicto** = **97 explícitas**; el barrido cubre los **112** restantes (97 + 112 = 209).
-  Los 12 remnants se cuentan en el cubo CONSERVAR (34), no en el barrido: por eso el corte de 10 baja
-  la base estricta de 60 a 50.
+  retiradas); la fila 14 nombra **15** conservadas; la fila 15 nombra **19** a título explícito (7
+  ejemplos retirados + 12 remnants en dominio conservados); la fila 17 añade **1** ⇒ **93 nombradas** +
+  **5 citadas sin veredicto** = **98 explícitas**; el barrido cubre los **111** restantes (98 + 111 = 209).
+  Los 12 remnants se cuentan en el cubo CONSERVAR (35), no en el barrido: por eso el corte de 10 baja
+  la base estricta de 61 a 51.
 * **Decisión explícita (2026-10-28, se mantiene): 0 skills nuevas para el protocolo de opendraft.**
   Los gates heredados (procedencia, check de claim, gate de compilación) son invariantes de
   workflow — deben correr SIEMPRE — y en OpenCode un cuerpo de comando se ejecuta siempre, mientras
@@ -126,29 +127,72 @@ cierra el recuento 1:1 por fila.
   `{fuente, estado, url_o_doi, fecha_consulta}`) — solo entonces, y anotándola en esta matriz.
   (Origen del protocolo: análisis de federicodeponte/opendraft, 2026-10-28.)
 
+## Tabla de invocación por comando (9×4)
+
+`9×4` = **9 filas** (una por comando) × **4 columnas de contenido** (skills concretas, herramientas
+nativas, MCPs a ejecutar y subagentes permitidos); la primera columna solo etiqueta el comando con su
+`agent:` de stub. `⟵G` = **ganadora de una consolidación** de la matriz de arriba (Phase 5 cita a la
+ganadora y retira a las perdedoras); sin marca = se conserva tal cual. Los 7 nombres de tool se copian
+verbatim de `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/server.py` (`@server.tool()`):
+`search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`, `list_formats`,
+`rag_status`. Los nombres nativos son el vocabulario V2 de
+[specs/spec-payload-vault.md](spec-payload-vault.md) §Vocabulario de acciones V2.
+
+| Comando | Skills concretas (inventario real) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
+| --- | --- | --- | --- | --- |
+| `/rubric` (agent: `nezahualcoyotl`) | scientific-problem-selection, experimental-design, writing-plans | read · glob · grep · question · todowrite (el rubric es una lista de tareas) | `tepochcalli-rag`: search (dimensionar el corpus), rag_status ante `E_*` | ninguno |
+| `/research` (agent: `pochteca`) | deep-research⟵G, research-lookup⟵G, paper-lookup⟵G, arxiv-search⟵G, pubmed-search⟵G, wikipedia-search, multi-search-engine, parallel-web, tepochcalli-mcp | webfetch · websearch · read · edit `01-tasks/research/**` | `tepochcalli-rag`: search · index_refresh · add_source (ingesta externa; markitdown **en proceso**) · rag_status | ninguno |
+| `/validate` (agent: `chilam`) | scholar-evaluation, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units | read · glob · grep · edit `04-review/**` | `tepochcalli-rag`: search (cruce con el corpus) · rag_status | ninguno |
+| `/synthesize` (agent: `nezahualcoyotl`) | idea-refine, markdown-mermaid-writing | read · glob · grep · edit `01-tasks/**` | `tepochcalli-rag`: search · rag_status | ninguno |
+| `/cite` (agent: `chilam`) | citation-management, venue-templates | read · glob · grep · edit `03-citations/**` | `tepochcalli-rag`: rag_status; search SOLO si el usuario pide re-trazabilidad (el gate de procedencia opera sobre la evidencia de `/research`, sin red) | ninguno |
+| `/draft` (agent: `tlacuilo`) | scientific-writing⟵G, doc-coauthoring, obsidian-markdown⟵G, markdown-mermaid-writing | read · edit `02-drafts/**` | `tepochcalli-rag`: search · rag_status | ninguno |
+| `/review` (agent: `chilam`) | peer-review, review-writing, scholar-evaluation | read · glob · grep · edit `04-review/**` | `tepochcalli-rag`: search · rag_status | ninguno |
+| `/transform` (agent: `tlacuilo`) | xlsx-official⟵G, excel-analysis⟵G, scientific-slides, pptx-official⟵G, markdown-mermaid-writing (mindmap), matplotlib⟵G, scientific-visualization⟵G, infographics, tepochcalli-mcp | read · edit `02-drafts/**` (fuente) y `05-outputs/**` (salida) | `tepochcalli-rag`: search · rag_status · convert_document · convert_base64 · list_formats; `anydoc`: fallback disabled — solo si el conversor falla con formato fuera de catálogo y con permiso del usuario | ninguno |
+| `/update` (agent: `tlacuilo`) | obsidian-markdown⟵G, scientific-writing⟵G, tepochcalli-mcp | read · glob · grep · edit `02-drafts/**` | `tepochcalli-rag`: search · index_refresh (si hay ingesta nueva) · add_source solo si el usuario lo pide · rag_status | ninguno |
+
+* **Las 3 tools del conversor son de `/transform` (y solo de ahí):** la skill `tepochcalli-mcp` fija que
+  un documento del vault se indexa **tal cual** con `index_refresh` (convertirlo antes es innecesario y el
+  `.md` convertido no es la fuente citable); `convert_document`/`convert_base64` existen para producir un
+  `.md` legible en disco y `/transform` es el único comando que entrega artefactos a `05-outputs/`;
+  `list_formats` es el catálogo con el que comprueba un formato antes de prometerlo. `/research` no los
+  necesita: ingiere con `add_source`, que convierte en la misma llamada.
+* **`excel` y `jupyter` = GAP, no tools usables:** siguen `disabled: true` en `opencode.json` (además,
+  `uvx` rompe `--offline`); la vía Excel es la skill `excel-analysis`. Jupyter, R, Graphviz, PlantUML y
+  LaTeX de manuscrito no tienen skill en el inventario (fila 16, 0 instalaciones en v1): `/transform` los
+  declara como pendientes de Phase 5 sin inventar nombres.
+* **`officecli` no se cita** como skill ni como MCP: es binario del wizard (TD-22, feature 0.2.0).
+* **Ningún `⟵G` inventado:** `scholar-evaluation` (citada por `/validate` y `/review`), `review-writing` e
+  `idea-refine` están **conservadas**, no consolidadas — se citan sin marca. `data-transform` no aparece:
+  la fila 3 la retira y la vía es la skill `excel-analysis`. `scholar-evaluation` se añadió a la fila 14
+  de la matriz (enmienda T3) para que no caiga en el barrido de la fila 15.
+* **Permisos MCP:** el mapeo `<server>_<tool>` por agente es de T4 (`specs/spec-payload-vault.md`
+  §permisos); esta tabla solo declara qué tool ejecuta cada comando.
+* **Subagentes:** **ninguno** en las 9 filas — los 5 primarios llevan `subagent * deny`; si un comando
+  necesitara un helper, se documenta antes como enmienda al blueprint.
+
 ## Cobertura y recuento derivado
 
-Recuento del inventario: 34 + 21 + 5 + 37 + 0 + 112 = **209** (desglose en
-§Veredictos). Cobertura explícita: **97** nombradas + **112** en el barrido = 209.
+Recuento del inventario: 35 + 21 + 5 + 37 + 0 + 111 = **209** (desglose en
+§Veredictos). Cobertura explícita: **98** nombradas + **111** en el barrido = 209.
 
 **Payload base según los veredictos de la matriz:**
 
 | Escenario | Cálculo | Total | Objetivo <60 |
 | --- | --- | --- | --- |
-| A — estricto (solo veredictos) | 34 CONSERVAR + 21 CONSOLIDAR + 5 por defecto | **60** | ✗ falla por 0/1 (60 no es menor que 60) |
-| B — A + 6 barridos claramente en dominio | 60 + 6 | 66 | ✗ |
-| C — B + 4 borderline | 66 + 4 | 70 | ✗ |
-| D — corte recomendado (no aplicado) | A − 10 remnants en dominio sin cita | **50** | ✓ |
+| A — estricto (solo veredictos) | 35 CONSERVAR + 21 CONSOLIDAR + 5 por defecto | **61** | ✗ falla por 1 |
+| B — A + 6 barridos claramente en dominio | 61 + 6 | 67 | ✗ |
+| C — B + 4 borderline | 67 + 4 | 71 | ✗ |
+| D — corte recomendado (no aplicado) | A − 10 remnants en dominio sin cita | **51** | ✓ |
 
 El objetivo de menos de 60 skills del payload base (métrica heredada de [docs/WORKFLOW.md](../docs/WORKFLOW.md)
-Phase 5 y de TD-7) **no se cumple sin un corte**: el payload derivado de los veredictos es 60 y el
-barrido en dominio lo sube hasta 70. **No se borra nada por cuenta propia.**
+Phase 5 y de TD-7) **no se cumple sin un corte**: el payload derivado de los veredictos es 61 y el
+barrido en dominio lo sube hasta 71. **No se borra nada por cuenta propia.**
 
 **Corte recomendado — DECISIÓN DEL OWNER (D-P4-10, pendiente en el FTR):** retirar los 10 remnants
 en dominio de la fila 15 que **ningún comando cita** — `polars`, `dask`, `vaex`, `zarr-python`,
 `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`,
 `database-lookup`. Con la fila 4 ya corregida (11 retiradas, 3 supervivientes) la base estricta baja
-a 50. Se **conservan** `wikipedia-search` y `multi-search-engine` porque la tabla 9×4 de `/research`
+a 51. Se **conservan** `wikipedia-search` y `multi-search-engine` porque la tabla 9×4 de `/research`
 las cita.
 
 **Nota TD-22 (OfficeCLI, 0.2.0) — sin contradicción:** esta matriz gobierna el payload **v1**: las 6
@@ -161,18 +205,18 @@ retiran ahora tres ganadoras que la 0.2.0 volverá a retirar.
 ## Open Questions
 
 * **D-P4-10 (owner/FTR):** ¿se aprueba retirar los 10 remnants en dominio de la fila 15 que ningún
-  comando cita? Sin ese corte el payload base queda en 60 (escenario A) o 70 (C) y el objetivo no se
-  cumple; con el corte, 50. No se aplica hasta aprobación explícita.
-* **Escenario base del corte:** ¿la métrica se mide sobre A (60) o sobre C (70)? De ello depende que
-  el corte deje 50 o 60; el FTR debe fijarlo antes de Phase 5 para que el recuento sea reproducible.
-* **4 borderline del barrido:** ¿se aceptan como en dominio (suben el payload a 70) o se tratan como
+  comando cita? Sin ese corte el payload base queda en 61 (escenario A) o 71 (C) y el objetivo no se
+  cumple; con el corte, 51. No se aplica hasta aprobación explícita.
+* **Escenario base del corte:** ¿la métrica se mide sobre A (61) o sobre C (71)? De ello depende que
+  el corte deje 51 o 61; el FTR debe fijarlo antes de Phase 5 para que el recuento sea reproducible.
+* **4 borderline del barrido:** ¿se aceptan como en dominio (suben el payload a 71) o se tratan como
   out-of-domain? T2a los separó de los 6 claros; la matriz no los reclama.
 * **Generador del PDF de muestra:** `gen_ejemplo_pdf.py` no existe en el repo aunque el comentario de
   `EJEMPLO_PDF` lo cite. ¿Se versiona un generador mínimo o se reescribe el comentario sin él?
 
 ## References
 
-* [specs/spec-payload-vault.md](spec-payload-vault.md) — blueprint de agentes/comandos/`AGENTS.md`; §Tabla de invocación 9×4 (T3) y puntero a esta matriz
+* [specs/spec-payload-vault.md](spec-payload-vault.md) — blueprint de agentes, permisos y `AGENTS.md`; puntero a esta spec para la tabla 9×4 y la matriz (D-P4-4)
 * [specs/spec-agent-workflow.md](spec-agent-workflow.md) — Anexo A: auditoría de 208 skills (2026-10-21) y gaps accionables
 * [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) — TD-7 (skills infladas) y TD-22 (OfficeCLI 0.2.0: 6 skills + MCP `excel`)
 * [docs/UH.md](../docs/UH.md) — áreas de investigación pedidas (sin numeración en la fuente)

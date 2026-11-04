@@ -76,41 +76,43 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 
 ## Ola 2 — Tabla y permisos (paralelo: T3 ‖ T4)
 
-### [ ] T3 — Tabla de invocación por comando (9×4)
+### [x] T3 — Tabla de invocación por comando (9×4)
 
 - Subagente: `workflow-architect` · Skills: `api-and-interface-design`, `opencode`, `context-engineering`
 - Tools: `context7`, `codebase-memory-mcp`, `gitmcp`
 - Fichero: `specs/spec-payload-skills.md`
-- [ ] 9 filas × 4 columnas
-- [ ] Cada skill citada existe (0 huérfanas); `⟵G` solo donde la matriz consolidó
-- [ ] Herramientas nativas con vocabulario V2
-- [ ] MCPs: solo las 7 de `tepochcalli-rag`; las 3 del conversor asignadas; `anydoc` = fallback **disabled**
-- [ ] `excel`/`jupyter` disabled → GAP declarado (no tools usables)
-- [ ] Subagentes permitidos = **ninguno** en las 9 filas
-- [ ] `officecli` no citado como skill ni MCP
+- [x] 9 filas × 4 columnas
+- [x] Cada skill citada existe (0 huérfanas); `⟵G` solo donde la matriz consolidó (12 marcas, todas ganadoras reales)
+- [x] Herramientas nativas con vocabulario V2
+- [x] MCPs: solo las 7 de `tepochcalli-rag` (verificadas contra `server.py`); las 3 del conversor asignadas a `/transform`; `anydoc` = fallback **disabled**
+- [x] `excel`/`jupyter` disabled → GAP declarado (no tools usables)
+- [x] Subagentes permitidos = **ninguno** en las 9 filas
+- [x] `officecli` no citado como skill ni MCP
+- Hallazgo: la tabla antigua marcaba `⟵G` en 4 skills que no eran ganadoras (`scholar-evaluation`, `review-writing`, `idea-refine`, `data-transform`); corregidas. `scholar-evaluation` se añadió a la fila 14 para que no cayera en el barrido.
 - Deps: T2 · Verificación: 7 tools de `server.py` contrastados (0 diferencias) + grep de skills + md-lint
 
-### [ ] T4 — Permisos de los 5 agentes + decisión del array global
+### [x] T4 — Permisos de los 5 agentes + decisión del array global
 
 - Subagente: `security-architect` · Skills: `security-and-hardening`, `design-patterns`, `opencode`
 - Tools: `context7`, `gitmcp`
-- Fichero: `specs/spec-payload-vault.md` (§Blueprint de permisos + §Nota de fusión)
-- [ ] 5 YAML en la **forma de la guía**: `permissions` como lista con `action:`/`resource:`/`effect:` en líneas propias (no el mapa en línea del blueprint actual), con `todowrite`/`lsp`/`question` conservadas, sin `permission:` singular y sin campos legacy
-- [ ] last-match-wins: reglas amplias primero, excepciones al final (ej. Nezahualcóyotl: `01-tasks/research/** deny` **último**)
-- [ ] Superficies: Pochteca `01-tasks/research/**` · Nezahualcóyotl `01-tasks/` (sin research) · Chilam `03-citations/`+`04-review/` · Tlacuilo deny-list (`02-drafts/`, `05-outputs/`, 10+ a petición) · Itzamná sin edit/subagent/shell
-- [ ] **D-P4-2 registrada**: el array global de 313 reglas se elimina en Phase 5 → permisos SOLO en los `.md`
-- [ ] Frontmatter: `description` **entrecomillado** con patrón «Name - Role» (`"Pochteca - The Explorer"`), `mode: primary`, sin `model`; `default_agent` → `itzamna`
-- [ ] Divergencia con la guía documentada: la guía usa `subagent * allow` + deny por nombre; el blueprint mantiene `subagent * deny` para los 5 (catálogo inerte, D9)
-- [ ] Riesgo D-P4-3 (tools MCP sin regla por agente) anotado para §Trade-offs
-- Deps: T1, T3 · Verificación: YAML parseable + simulación last-match-wins (≥3 reglas/agente) + grep legacy = 0 + md-lint
+- Fichero: NUEVO `specs/spec-payload-permissions.md` (movido de `spec-payload-vault.md`, D-P4-11) + §Nota de fusión
+- [x] 5 YAML en la **forma de la guía**: `permissions` lista con `action:`/`resource:`/`effect:` en líneas propias, `todowrite`/`lsp`/`question` conservadas, sin `permission:` singular y sin campos legacy
+- [x] last-match-wins: reglas amplias primero, excepciones al final (`Nezahualcóyotl`: `edit 01-tasks/research/** deny` **último**)
+- [x] Superficies: Pochteca `01-tasks/research/**` · Nezahualcóyotl `01-tasks/` (sin research) · Chilam `03-citations/`+`04-review/` · Tlacuilo deny-list (`02-drafts/`, `05-outputs/`, 10+ a petición) · Itzamná sin edit/subagent/shell
+- [x] **D-P4-2 registrada**: el array global de 313 reglas se elimina en Phase 5 → permisos SOLO en los `.md` (con la razón de orden de fusión)
+- [x] Frontmatter: `description` **entrecomillado** «Name - Role» en inglés, `mode: primary`, sin `model`; `default_agent` → `itzamna`
+- [x] Divergencia con la guía documentada: el blueprint mantiene `subagent * deny` para los 5 (catálogo inerte, D9)
+- [x] Riesgo D-P4-3 (tools MCP sin regla por agente) anotado en §Trade-offs
+- Verificado: 5/5 YAML parsean; simulación de última-coincidencia 14/14 probes; 0 `{action: …}` en línea; md-lint 0
+- Deps: T1, T3 · Verificación: YAML parseable + simulación last-match-wins + grep legacy = 0 + md-lint
 
 ### 🚦 Checkpoint CP-B — fin de T3+T4
 
-- [ ] 7 tools del servidor MCP == columna MCP de la tabla
-- [ ] Toda skill citada existe
-- [ ] 0 campos legacy, 0 `todowrite`
-- [ ] YAMLs parsean y la simulación de última-coincidencia coincide con lo esperado
-- [ ] md-lint sin errores nuevos vs baseline
+- [x] 7 tools del servidor MCP == columna MCP de la tabla (`search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`, `list_formats`, `rag_status`)
+- [x] Toda skill citada existe (32 citadas, 0 huérfanas)
+- [x] 0 campos legacy; 0 `permission:` singular; `todowrite` **conservado** como acción de casa (D-P4-3 reducido)
+- [x] YAMLs parsean y la simulación de última-coincidencia coincide (14/14)
+- [x] md-lint sin errores nuevos vs baseline
 
 ---
 
@@ -225,7 +227,8 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 | D-P4-7 | **Las muestras del payload van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf`; el renombrado del wizard es de Phase 5 | dueño | 2026-11-04 |
 | D-P4-8 | **La guía de formato son `agent_example.md` y `command_example.md`** (raíz, **sin commitear**): fijan el header y el esqueleto de cuerpo; el plan solo referencia las rutas | dueño | 2026-11-04 |
 | D-P4-9 | **CP-A se lee sobre las specs que existen en ese momento**: `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` 585 baja a <500 cuando T6 mueva los cuerpos de comando (el fichero ya partía de 528, rojo antes de Phase 4) | orquestador | 2026-11-04 |
-| D-P4-10 | **Corte de 10 remnants en dominio** (`polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`) para que la base baje de 60 a 50 y cumpla `<60` — **pendiente de aprobación del dueño en el FTR**, no aplicado | dueño (pendiente) | 2026-11-04 |
+| D-P4-10 | **Corte de 10 remnants en dominio** (`polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`) para que la base baje de 61 a 51 y cumpla `<60` — **pendiente de aprobación del dueño en el FTR**, no aplicado | dueño (pendiente) | 2026-11-04 |
+| D-P4-11 | **5.ª spec `spec-payload-permissions.md`**: la forma en bloque de la guía (action/resource/effect en líneas propias) triplica la sección de permisos (390 líneas) e impide el umbral <500; se extrae a su propia spec y `spec-payload-vault.md` queda en 463 | orquestador | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)

@@ -44,7 +44,7 @@ aplican el diseño. Un despacho anterior autorizó reescribir el payload; el usu
 ## Proposed Solution
 
 Phase 5 materializa 15 archivos de texto desde los bloques de esta spec (5 agents, 9 commands,
-1 AGENTS.md) más la verificación de `opencode.json` (§Nota de fusión). El enrutamiento usa el
+1 AGENTS.md) más la verificación de `opencode.json` (§Nota de fusión en [specs/spec-payload-permissions.md](spec-payload-permissions.md)). El enrutamiento usa el
 patrón nativo V2: el campo `agent:` de un comando cambia la sesión al primary indicado — Itzamná
 "enruta sin ejecutar" sin necesidad de spawns.
 
@@ -158,127 +158,9 @@ Fuente: [permissions.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/serv
 * Excepción: los nombres propios son contrato y no se traducen — agentes (Itzamná, Nezahualcóyotl,
   Pochteca, Chilam, Tlacuilo), bandejas, tools, estados de `procedencia` y formato de cita.
 
-### Blueprint de permisos por agente (YAML; cuerpo ≤60 líneas por archivo, inglés — D-P4-6)
+### Blueprint de permisos por agente
 
-Los cinco archivos llevan `mode: primary`, `description` en inglés (1 línea, patrón «Name - Role», D-P4-6)
-y SIN `model`
-(vive en `opencode.json`). Cada cuerpo (system prompt, inglés, ≤60 líneas) incluye: persona UH
-(1-2 líneas); propósito en el workflow con su bandeja exacta; MCP-first (`search` de
-`tepochcalli-rag` antes de lectura cruda de `00-Resources/`, `index_refresh()` con dudas de
-frescura, ante cualquier `E_*` → `rag_status()` + reportar el `fix_hint`, no el error crudo);
-no-contaminación (WARN si hay archivos del usuario en bandejas 01-05); formato de cita
-`source_path » heading (chars x–y)`; cláusula "el AGENTS.md del vault manda y es editable".
-
-**Pochteca** (`/research`; desviación documentada del UH — D9.3):
-
-```yaml
-permissions:
-  - {action: "edit", resource: "*", effect: "deny"}
-  - {action: "subagent", resource: "*", effect: "deny"}
-  - {action: "shell", resource: "*", effect: "deny"}
-  - {action: "read", resource: "*", effect: "allow"}
-  - {action: "glob", resource: "*", effect: "allow"}
-  - {action: "grep", resource: "*", effect: "allow"}
-  - {action: "skill", resource: "*", effect: "allow"}
-  - {action: "webfetch", resource: "*", effect: "allow"}
-  - {action: "websearch", resource: "*", effect: "allow"}
-  - {action: "edit", resource: "01-tasks/research/**", effect: "allow"}
-```
-
-Único write surface del diseño: `01-tasks/research/**` — toda nota con frontmatter
-{agent, timestamp, fuentes, método} obligatorio. El resto del vault: negado.
-
-**Nezahualcóyotl** (`/rubric`, `/synthesize`):
-
-```yaml
-permissions:
-  - {action: "edit", resource: "*", effect: "deny"}
-  - {action: "subagent", resource: "*", effect: "deny"}
-  - {action: "read", resource: "*", effect: "allow"}
-  - {action: "glob", resource: "*", effect: "allow"}
-  - {action: "grep", resource: "*", effect: "allow"}
-  - {action: "skill", resource: "*", effect: "allow"}
-  - {action: "webfetch", resource: "*", effect: "deny"}
-  - {action: "websearch", resource: "*", effect: "deny"}
-  - {action: "edit", resource: "01-tasks/**", effect: "allow"}
-  - {action: "edit", resource: "01-tasks/research/**", effect: "deny"}
-```
-
-El deny de `research/**` va DESPUÉS del allow (last-match): su bandeja es el root de `01-tasks/`
-(rúbricas, planes, outlines); la sub-bandeja de evidencia es exclusiva de Pochteca. Sin web (UH).
-
-**Chilam** (`/validate`, `/cite`, `/review`):
-
-```yaml
-permissions:
-  - {action: "edit", resource: "*", effect: "deny"}
-  - {action: "subagent", resource: "*", effect: "deny"}
-  - {action: "read", resource: "*", effect: "allow"}
-  - {action: "glob", resource: "*", effect: "allow"}
-  - {action: "grep", resource: "*", effect: "allow"}
-  - {action: "skill", resource: "*", effect: "allow"}
-  - {action: "webfetch", resource: "*", effect: "deny"}
-  - {action: "websearch", resource: "*", effect: "deny"}
-  - {action: "edit", resource: "03-citations/**", effect: "allow"}
-  - {action: "edit", resource: "04-review/**", effect: "allow"}
-```
-
-Audita lo recolectado, no investiga fuente nueva (trazabilidad: web negada); informes en
-`04-review/` con frontmatter {command, agent, target_doc, verdict}.
-
-**Tlacuilo** (`/draft`, `/transform`, `/update`) — estilo deny-list (UH: "permisos exclusivos para
-crear/sobrescribir los archivos finales"):
-
-```yaml
-permissions:
-  - {action: "subagent", resource: "*", effect: "deny"}
-  - {action: "shell", resource: "*", effect: "deny"}
-  - {action: "webfetch", resource: "*", effect: "deny"}
-  - {action: "websearch", resource: "*", effect: "deny"}
-  - {action: "read", resource: "*", effect: "allow"}
-  - {action: "glob", resource: "*", effect: "allow"}
-  - {action: "grep", resource: "*", effect: "allow"}
-  - {action: "skill", resource: "*", effect: "allow"}
-  - {action: "edit", resource: "*", effect: "allow"}
-  - {action: "edit", resource: ".obsidian/**", effect: "deny"}
-  - {action: "edit", resource: ".opencode/**", effect: "deny"}
-  - {action: "edit", resource: ".tepochcalli/**", effect: "deny"}
-  - {action: "edit", resource: "00-Resources/**", effect: "deny"}
-  - {action: "edit", resource: "01-tasks/**", effect: "deny"}
-  - {action: "edit", resource: "03-citations/**", effect: "deny"}
-  - {action: "edit", resource: "04-review/**", effect: "deny"}
-```
-
-Sus superficies efectivas: `02-drafts/`, `05-outputs/` y los finales que el usuario pida en sus
-carpetas (10+). Sin navegación web (UH); shell deny (las exportaciones las hacen las skills).
-
-**Itzamná** (default_agent; orquestador — verificar que el nombre coincide con
-`default_agent: "itzamna"` en `opencode.json`, archivo `itzamna.md` sin acento):
-
-```yaml
-permissions:
-  - {action: "edit", resource: "*", effect: "deny"}
-  - {action: "subagent", resource: "*", effect: "deny"}
-  - {action: "shell", resource: "*", effect: "deny"}
-  - {action: "read", resource: "*", effect: "allow"}
-  - {action: "glob", resource: "*", effect: "allow"}
-  - {action: "grep", resource: "*", effect: "allow"}
-  - {action: "skill", resource: "*", effect: "allow"}
-```
-
-Enrutamiento por comandos, no spawns: `subagent * deny` deja los ~165 subagents Códice catalogados
-pero NO invocables (los archivos se CONSERVAN por decisión del usuario; pureza de la sesión de
-investigación). Edit deny: su salida es análisis/enrutamiento/estado.
-
-### Nota de fusión con `opencode.json` (verificación en Phase 5, sin duplicar)
-
-* `permissions` SOLO en los `.md` de agentes: verificar que el bloque `agents` de `opencode.json`
-  no traiga arrays de permisos que colisionen con el spine anterior.
-* `model` (y `steps`/`color`) pueden quedarse en el `agents` de `opencode.json`; en ese caso NO se
-  duplican en el frontmatter del `.md`. Un solo lugar por campo.
-* `default_agent` debe resolver a `itzamna` (nombre de archivo real).
-* `mcp.servers` para `tepochcalli-rag` y `markitdown`: los añade el wizard (fase 8,
-  spec-installer-wizard §Merge) — el payload NO los pre-carga.
+Movido a [specs/spec-payload-permissions.md](spec-payload-permissions.md) (contrato de frontmatter y los 5 bloques `permissions`; D-P4-11).
 
 ### Blueprint de los 9 comandos (mapeo D9.2 — frontmatter: `description` no vacío + `agent`)
 
@@ -421,7 +303,7 @@ poderes del blueprint:
 
 * **Check de existencia movido AGUAS ARRIBA a `/research`** — opendraft verifica DOIs contra
   ≥2/3 bases en su fase de citas; aquí eso es imposible en `/cite` porque Chilam tiene
-  `webfetch`/`websearch` denegados (§Blueprint de permisos). Pochteca (único agente con web)
+  `webfetch`/`websearch` denegados ([§Blueprint de permisos](spec-payload-permissions.md)). Pochteca (único agente con web)
   ejecuta el check y registra los estados de procedencia en la evidencia.
 * **Estados de procedencia serializados** — los 6 estados cerrados de `bibliography.json` de
   opendraft se contraen a 4, persistidos SIEMPRE en el frontmatter (unconfirmed nunca puede
@@ -510,21 +392,9 @@ Manda sobre los system prompts de `.opencode/agents/`. Reglas de seguridad duras
 markitdown, red) también viven en `docs/SECURITY.md` del producto.
 ```
 
-### Tabla de invocación por comando (9×4 — lienzo Phase 4)
+### Tabla de invocación por comando (9×4)
 
-Referencia cruzada de cada comando contra el inventario REAL. Las columnas de skills citan nombres que EXISTEN hoy en `.opencode/skills/` (ls 2026-10-21, 208 dirs); donde la matriz de conflictos CONSOLIDA una familia, Phase 5 deja de citar a la perdedora y conserva la ganadora (marcadas ⟵G). Política de subagentes: los 5 primarios llevan `subagent * deny` — SI un comando necesitara un helper, se DOCUMENTA aquí como enmienda pendiente al blueprint; no se inventa.
-
-| Comando | Skills concretas (inventario real) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
-| --- | --- | --- | --- | --- |
-| `/rubric` | scientific-problem-selection, experimental-design, writing-plans | read · glob · grep · question · todowrite | `tepochcalli-rag`: search (dimensionar corpus), rag_status ante `E_*` | ninguno |
-| `/research` | deep-research⟵G, research-lookup⟵G, paper-lookup⟵G, arxiv-search⟵G, pubmed-search⟵G, wikipedia-search, multi-search-engine, parallel-web | webfetch · websearch · read · edit `01-tasks/research/**` | search · index_refresh · add_source (ingesta externa; markitdown **en proceso**) · rag_status | ninguno |
-| `/validate` | scholar-evaluation⟵G, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units | read · glob · grep · edit `04-review/**` | search (cruce con corpus) · rag_status | ninguno |
-| `/synthesize` | idea-refine⟵G, markdown-mermaid-writing | read · glob · grep · edit `01-tasks/**` | search · rag_status | ninguno |
-| `/cite` | citation-management, venue-templates | read · glob · grep · edit `03-citations/**` | rag_status; search SOLO si el usuario pide re-trazabilidad (el gate de procedencia opera sobre la evidencia de `/research`, sin red) | ninguno |
-| `/draft` | scientific-writing⟵G, doc-coauthoring, obsidian-markdown⟵G, markdown-mermaid-writing | read · edit `02-drafts/**` | search · rag_status | ninguno |
-| `/review` | peer-review, review-writing⟵G, scholar-evaluation⟵G | read · glob · grep · edit `04-review/**` | search · rag_status | ninguno |
-| `/transform` | xlsx-official⟵G, excel-analysis⟵G, data-transform⟵G, scientific-slides, pptx-official⟵G, markdown-mermaid-writing (mindmap), matplotlib⟵G, scientific-visualization⟵G, infographics | read · edit `02-drafts/**` (fuente) y `05-outputs/**` (salida) | search · rag_status; `excel` MCP: disabled y break `--offline` → manda la skill (grupo 3); `jupyter` MCP: disabled, sin skill → GAP | ninguno; Jupyter/Graphviz/R = GAP Anexo A, se declaran sin inventar |
-| `/update` | obsidian-markdown⟵G, scientific-writing⟵G | read · glob · grep · edit `02-drafts/**` | search · index_refresh (si hay ingesta nueva) · add_source solo si el usuario lo pide · rag_status | ninguno |
+Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (tabla 9×4 y skills por comando; D-P4-4).
 
 ### Matriz de conflictos/redundancias de skills
 
@@ -543,6 +413,14 @@ Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario 209,
 
 * ✅ **Pros:** blueprint congelado y grepeable; Phase 5 se vuelve mecánica; permisos como datos por archivo; payload coherente con D9.
 * ⚠️ **Cons / Risks:** dos fuentes (esta spec + stubs actuales) hasta Phase 5 — el drift se corta con los criterios de aceptación; el deny-list de Tlacuilo depende de mantener el orden last-match.
+* ⚠️ **D-P4-3 — riesgo aceptado:** sin reglas `<server>_<tool>` por agente, `add_source`,
+  `convert_document`, `convert_base64` y `list_formats` son invocables por CUALQUIER agente — incluido
+  Itzamná, que tiene `edit` denegado. El sistema de permisos no ve esas escrituras (son tools MCP,
+  no la acción `edit`): el control es el system prompt del rol más el borde B′ de `paths.py` (rutas
+  dentro del vault). Un prompt inyectado desde `00-Resources/` o un modelo que ignore la instrucción
+  puede escribir en `00-Resources/` vía `add_source`. Se acepta en v1 porque D-P4-3 deja el control
+  MCP al prompt; si se exige garantía, Phase 5+ añade las 7 reglas por agente (35 reglas, +2 por
+  bloque).
 * ⚖️ **Neutral:** los ~165 subagents Códice quedan en disco, no invocables — catálogo inerte.
 
 ## Testing Strategy — criterios de aceptación de la ejecución (Phase 5)
@@ -575,7 +453,7 @@ Linkables desde docs/WORKFLOW.md Phase 5 ("Validación del agent workflow (D9)")
 
 * ¿El array global `permissions` de `opencode.json` (higiene heredada del pack Códice) se elimina
   al ejecutar el blueprint para que los permisos queden SOLO en los `.md`? (verificación exigida
-  por §Nota de fusión; decisión al ejecutar Phase 5)
+  por la §Nota de fusión de [specs/spec-payload-permissions.md](spec-payload-permissions.md); decisión al ejecutar Phase 5)
 
 ## References
 
