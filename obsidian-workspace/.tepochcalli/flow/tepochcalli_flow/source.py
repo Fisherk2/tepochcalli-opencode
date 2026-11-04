@@ -58,6 +58,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import cache
 from pathlib import Path
 from typing import Final
 
@@ -278,18 +279,39 @@ async def _scan_directory(
 ) -> int:
     """Camina UNA raíz-directorio: candidatos + clasificación + silenciosas."""
     candidates = await _connector_candidates(root.path, matcher)
-    items.extend(
-        classify_file(
-            vault_root,
-            candidate,
-            max_file_bytes=max_file_bytes,
-            probe_extraction=probe_extraction,
+    resolved_parents: dict[Path, Path] = {}
+    for candidate in candidates:
+        parent = candidate.parent
+        resolved = resolved_parents.get(parent)
+        if resolved is None:
+            # Resolve del padre UNA vez por directorio único (W4/P-01): los
+            # ficheros del mismo directorio lo comparten; el chequeo D47 de
+            # cada fichero cae a UN `islink` en el camino común.
+            resolved = resolved_parents[parent] = parent.resolve()
+        items.append(
+            classify_file(
+                vault_root,
+                candidate,
+                max_file_bytes=max_file_bytes,
+                probe_extraction=probe_extraction,
+                resolved_parent=resolved,
+            )
         )
-        for candidate in candidates
-    )
     silent = unvisited_skips(vault_root, root.path, path_matcher=matcher)
     items.extend(silent)
     return len(candidates) + len(silent)
+
+
+@cache
+def _resolve_vault(vault_root: Path) -> Path:
+    """Raíz del VAULT resuelta UNA vez por ruta y proceso (W4/P-01).
+
+    `Path.resolve()` recorre los ancestros con `lstat` — por fichero eran
+    ~descenso syscalls repetidos sobre la MISMA raíz en cada `classify_file`.
+    El vault no se mueve durante una pasada; las llamadas directas de
+    test/verify usan raíces tmp únicas, así que la clave-ruta no se cruza.
+    """
+    return vault_root.resolve()
 
 
 def classify_file(
@@ -299,6 +321,7 @@ def classify_file(
     max_file_bytes: int,
     size_bytes: int | None = None,
     probe_extraction: bool = False,
+    resolved_parent: Path | None = None,
 ) -> WalkItem:
     """Aplica la regla F5 a un archivo y devuelve su entrada o su skip con motivo.
 
@@ -308,13 +331,16 @@ def classify_file(
     error de `stat()`/lectura se traduce en un `SkipReason` en vez de propagarse
     (§Fuentes: «se registran como `skipped`, no fallan el delta»). `size_bytes`
     permite reutilizar un tamaño ya conocido (p. ej. `FileLike.size()` en T6)
-    sin volver a hacer `stat()`.
+    sin volver a hacer `stat()`. `resolved_parent` (W4/P-01): el padre del
+    fichero ya resuelto — `_scan_directory` lo computa UNA vez por directorio
+    único y el chequeo D47 evita re-resolver el fichero (ver
+    `_symlink_escape_target`); `None` cae al resolve completo de siempre.
 
     `probe_extraction` (T3): para los binarios, ejecuta el extractor y convierte
     un fallo en `EXTRACTION_FAILED`. El engine lo deja en False — la extracción
     real ocurre una sola vez, dentro de `index_file` memoizado.
     """
-    escaped = _symlink_escape_target(file_path, vault_root.resolve())
+    escaped = _symlink_escape_target(file_path, _resolve_vault(vault_root), resolved_parent)
     if escaped is not None:
         return SkippedSource(
             file_path,
@@ -367,20 +393,29 @@ def classify_file(
     return SourceEntry(file_path, source_path, kind, observed_size)
 
 
-def _symlink_escape_target(file_path: Path, resolved_vault: Path) -> Path | None:
+def _symlink_escape_target(
+    file_path: Path,
+    resolved_vault: Path,
+    resolved_parent: Path | None = None,
+) -> Path | None:
     """Target resuelto si escapa del VAULT, o `None` si vive dentro (frontera D47).
 
-    `Path.resolve()` sigue la cadena completa de symlinks —de archivo o de
-    directorio— y compara contra la raíz del VAULT resuelta (pasada ya
-    resuelta: el llamador la resuelve UNA vez por fichero, no aquí), de modo
-    que un vault bajo un path enlazado no produce falsos positivos. Con N
-    raíces, un link de `documentos/` a `materiales/` es legítimo.
+    `resolved_parent` (W4/P-01): el DIRECTORIO PADRE ya resuelto — UNA vez por
+    directorio único (`_scan_directory` lo cachea), no por fichero. Para un
+    fichero que NO es symlink (I `lstat` por fichero, el camino común), el
+    target es exactamente `resolved_parent/name`: toda la cadena de symlinks
+    relevante vive en la del padre, ya resuelta. Si el padre no llega (llamadas
+    directas de test/verify) o el fichero ES symlink, se resuelve la cadena
+    COMPLETA como antes — semántica D47 intacta para el caso que la necesita.
+
     shortcut: SIN early-return is_symlink — el conector emite candidatos YA
     RESUELTOS (links fuera del vault llegan como rutas regulares externas) y
-    un resolve() del fichero es el único chequeo honesto; el `vault_root` sí
-    está pre-resuelto (un resolve menos por fichero).
+    el `vault_root` sí está pre-resuelto (un resolve menos por fichero).
     """
-    target = file_path.resolve()
+    if resolved_parent is not None and not os.path.islink(file_path):
+        target = resolved_parent / file_path.name
+    else:
+        target = file_path.resolve()
     return None if target.is_relative_to(resolved_vault) else target
 
 

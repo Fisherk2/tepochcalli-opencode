@@ -11,8 +11,11 @@ Fuentes de verdad:
   directorio ilegible), nunca descartes de rutas que la whitelist excluye.
 
 Estos tests bajan a las funciones de clasificación directas (`classify_file`,
-`unvisited_skips`, `_unreadable_dir_skips`) para cubrir las ramas defensivas
-que un walk completo no alcanza de forma determinista.
+`unvisited_skips`) para cubrir las ramas defensivas que un walk completo no
+alcanza de forma determinista. (`_unreadable_dir_skips` y
+`_broken_symlink_skips` se fusionaron en UNA traversada en `unvisited_skips`
+—W4/P-01, gate de performance—: este test era el único que pinnaba el nombre
+interno, y sigue probando el MISMO contrato vía el `onerror` del walk único.)
 """
 
 from __future__ import annotations
@@ -95,13 +98,14 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
     """Contrato T8: `_onerror` solo cuenta `PermissionError` DENTRO del recurso.
 
     `localfs.walk_dir` traga exactamente `PermissionError` (`except
-    PermissionError: continue`), así que el `onerror` de `_unreadable_dir_skips`
-    debe ignorar (a) excepciones que no son `PermissionError`, (b) un
-    `PermissionError` sin `filename` y (c) uno cuyo path cae fuera de
-    `00-Resources/`. Se incluye el caso POSITIVO en el mismo test para que el
-    doble de `os.walk` no pueda pasar vacíamente: la identidad que el contador
-    preserva es «1 entrada `unreadable_dir` por cada `PermissionError` del
-    conector con path dentro del recurso, y 0 por todo lo demás».
+    PermissionError: continue`), así que el `onerror` del walk único de
+    `unvisited_skips` debe ignorar (a) excepciones que no son
+    `PermissionError`, (b) un `PermissionError` sin `filename` y (c) uno cuyo
+    path cae fuera de `00-Resources/`. Se incluye el caso POSITIVO en el mismo
+    test para que el doble de `os.walk` no pueda pasar vacíamente: la
+    identidad que el contador preserva es «1 entrada `unreadable_dir` por cada
+    `PermissionError` del conector con path dentro del recurso, y 0 por todo
+    lo demás».
     """
     recursos = tmp_path / citation.RESOURCES_DIR
     recursos.mkdir(parents=True)
@@ -109,7 +113,7 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
     matcher = source.build_path_matcher()
 
     def drive(errores: list[BaseException]) -> list[source.SkippedSource]:
-        """Ejecuta `_unreadable_dir_skips` con un `os.walk` que dispara `errores`."""
+        """Ejecuta `unvisited_skips` con un `os.walk` que dispara `errores`."""
 
         def fake_walk(
             top: str | Path,
@@ -124,7 +128,7 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
             return []
 
         monkeypatch.setattr(walk_skips.os, "walk", fake_walk)
-        return walk_skips._unreadable_dir_skips(tmp_path, recursos, matcher)
+        return walk_skips.unvisited_skips(tmp_path, recursos, path_matcher=matcher)
 
     ignorados: list[BaseException] = [
         OSError(5, "error de E/S que el conector NO traga", str(recursos / "sub")),
@@ -138,6 +142,50 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
     assert [(skip.source_path, skip.reason) for skip in drive(aceptado)] == [
         ("00-Resources/sub", source.SkipReason.UNREADABLE_DIR)
     ]
+
+
+# --- W4/P-01: el padre resuelto compartido no cambia el titular de D47 ----------
+
+
+def test_classify_file_with_resolved_parent_agrees_whether_or_not_the_file_is_a_link(
+    tmp_path: Path,
+) -> None:
+    """`resolved_parent` gana UN `islink` por fichero en vez de un resolve completo.
+
+    Camino nuevo de `_scan_directory` (W4/P-01): el resolver del DIRECTORIO
+    PADRE es una vez por directorio; la frontera D47 debe seguir distinguir un
+    regular indexable de un symlink que escapa — el fichero enlazado resuelve
+    su cadena COMPLETA aunque el padre venga ya resuelto.
+    """
+    vault = tmp_path / "vault"
+    recursos = vault / citation.RESOURCES_DIR
+    recursos.mkdir(parents=True)
+    (recursos / "a.md").write_text("# A\n\nprosa.\n", encoding="utf-8")
+    fuera = tmp_path / "fuera.md"
+    fuera.write_text("# Fuera\n\nsecreto.\n", encoding="utf-8")
+    try:
+        (recursos / "secreto.md").symlink_to(fuera)
+    except (OSError, NotImplementedError) as exc:  # pragma: no cover - FS sin symlinks
+        pytest.skip(f"el filesystem no soporta symlinks: {exc}")
+    padre = recursos.resolve()
+
+    regular = source.classify_file(
+        vault,
+        recursos / "a.md",
+        max_file_bytes=source.DEFAULT_MAX_FILE_BYTES,
+        resolved_parent=padre,
+    )
+    enlazado = source.classify_file(
+        vault,
+        recursos / "secreto.md",
+        max_file_bytes=source.DEFAULT_MAX_FILE_BYTES,
+        resolved_parent=padre,
+    )
+
+    assert isinstance(regular, source.SourceEntry)
+    assert regular.source_path == "00-Resources/a.md"
+    assert isinstance(enlazado, source.SkippedSource)
+    assert enlazado.reason is source.SkipReason.SYMLINK_ESCAPE
 
 
 # --- whitelist del barrido de symlinks rotos -----------------------------------

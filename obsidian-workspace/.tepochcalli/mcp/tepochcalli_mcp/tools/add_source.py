@@ -47,7 +47,11 @@ Contrato y precedencia, en orden:
    raíces configuradas; reporte con `locked` ⇒ `ENGINE_LOCKED` (la forma
    congelada de §5 no tiene campo `locked` en su sub-objeto `indexed`, así
    que el candado viaja COMO ERROR con `details.written_to`: el archivo sí
-   quedó, el ciclo Δ es reintentable).
+   quedó, el ciclo Δ es reintentable). Nota de coste (W4/P-03, sin cambio
+   de contrato D65): CADA llamada paga UN ciclo Δ completo — no hay flag
+   sin-refresh ni debounce —; el Δ memoizado evita re-parse de lo ya
+   indexado, pero el walk corre entero por llamada, así que un agente que
+   añade N fuentes seguidas paga N walks (y N filas de refresh en el log).
 
 `@errors.internal_guard` (G1) envuelve el handler completo — arranque de
 `vault_root` incluido—: cualquier fallo no mapeado ⇒ `INTERNAL` canónico.

@@ -192,6 +192,13 @@ informe completo en la ventana de review del orquestador (2026-11-03):
 * **`_convert_tail` y el walk del conversor:** los shadow-walks detectados NO se tocaron en
   este pase (otra ventana); el hallazgo de las rutas de `instructions` del repo se convierte
   en tarea propia (F6, no en esta ola W-*).
+* **Criterio 2 a escala en fuseblk/NTFS — bench P-02 (2026-11-03):** a 11k entradas (10k md +
+  1k pdf) el Δ p95 es **26 967 ms en btrfs** (PASS, 90 % del budget) y **39 501 ms en
+  fuseblk/NTFS-3G** (FAIL); walk-only 7.2 s (btrfs) vs **17.6 s (59 % del budget, NTFS)**.
+  El coste lo domina el ciclo update de cocoindex (walk + memo/stat del engine), no los
+  embeddings. W4 redujo traversadas (3→2) y resolves (cache por directorio); el follow-up
+  real (snapshot de mtime / integración con el update del engine) es Phase 6 con este bench
+  como baseline (`tests/benchmarks/bench_delta_scale.py`, nunca en gate).
 
 ## Deuda no aceptada (evitada por diseño)
 
