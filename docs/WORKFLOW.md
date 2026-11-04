@@ -182,11 +182,11 @@
   `spec-payload-commands` (476) — todas <500 y todas en **Proposed**; `spec-agent-workflow` (231)
   sigue en Proposed. Verificado sobre el inventario real: **209 skills · 170 agentes · 9 comandos**,
   **0 skills/subagentes inventados**; cuerpos de los 5 agentes 56/54/58/58/56 líneas, 9 comandos
-  24-30 líneas, `AGENTS.md` del vault (blueprint) 67 líneas — todo en inglés (D-P4-6/D-P4-7) y
+  24-30 líneas, `AGENTS.md` del vault (blueprint) 67 líneas — todo en inglés (D-P4-6) y
   dentro de los techos de la spec. **92 links relativos** entre las 6 specs: **0 rotos**; markdownlint
   **0 errores** (se pagó el único MD005 del baseline); ningún bloque mermaid añadido en la fase. **Skills base: 60 distintas** — el
-  objetivo <60 falla por 1, y **D-P4-10** propone cortar 10 remnants en dominio hasta 50, **pendiente
-  del FTR** (no aplicado). **D-P4-9**: CP-A se leyó sobre las specs existentes en ese momento;
+  objetivo <60 falla por 1. Por decisión del dueño (2026-11-04) **no se ejecuta ningún corte**:
+  revisará manualmente cada skill del payload (D-P4-10 retirada). **D-P4-9**: CP-A se leyó sobre las specs existentes en ese momento;
   **D-P4-11**: los permisos se extrajeron a la 5.ª spec para respetar <500.
   **FTR pendiente de aprobación del usuario; Phase 5 no arranca sin BLUEPRINT APPROVED.**
 * Objetivo (contenido entregado en las 5 specs; *Approved* es el gate, no el entregable): completar el blueprint hasta estado **Approved**: system
@@ -339,11 +339,11 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 * **Inventario real verificado contra `obsidian-workspace/.opencode/`**: **209 skills · 170 agentes · 9 comandos**; **0 skills/subagentes inventados** (las 17 filas de la matriz cubren el 100 % del recuento `ls`).
 * **5 specs del payload <500 líneas**: vault 366 · skills 226 · permissions 408 · agents 443 · commands 476 (`spec-agent-workflow` 231). Las 5 en **Proposed** — ninguna se promueve aquí.
 * **14 bloques del payload dentro de presupuesto**: 5 cuerpos de agente (56/54/58/58/56 ≤60) + 9 cuerpos de comando (24-30 ≤35); el blueprint del `AGENTS.md` del vault son 67 líneas, dentro del techo de 120.
-* **0 marcadores de español** en los bloques del payload (D-P4-6/D-P4-7): sin `ñ`, `¿`, `¡` ni las palabras sueltas del criterio; artefactos en inglés, prosa del repo en español.
+* **0 marcadores de español** en los bloques del payload (D-P4-6): sin `ñ`, `¿`, `¡` ni las palabras sueltas del criterio; artefactos en inglés, prosa del repo en español. Las muestras del instalador quedan en español por decisión del dueño (D-P4-7 revocada).
 * **0 links rotos**: 92 links relativos revisados en las 6 specs.
 * **markdownlint: 0 errores** en `specs/`, `tasks/`, `docs/`, `AGENTS.md` y `SPEC.md`. El único error del baseline D12 (`docs/WORKFLOW.md:166`, MD005 de indentación) se corrigió en este cierre con un dedent de una línea; no queda ninguno.
 * **Payload intacto**: `git diff --stat -- obsidian-workspace` **vacío**; ningún commit de la fase escribe `obsidian-workspace/`.
-* **Pendiente del usuario — D-P4-10**: el corte de 10 remnants en dominio (60 → 50 skills, objetivo <60) **no se aplica**; sin él la métrica de Phase 5 falla por 1 y el FTR debe fijar la base del recuento (60 o 70).
+* **Skills — D-P4-10 retirada (2026-11-04)**: la base estricta es **60** y el objetivo <60 falla por 1; el dueño **no aprueba ningún corte** y revisará manualmente cada skill del payload más adelante. No se registra excepción.
 * **Artefactos de guía**: `agent_example.md` y `command_example.md` siguen **untracked** en la raíz (D-P4-8); no se commitean.
 * **Lo NO verificado**: nada de Phase 5 se ejecuta aquí (permission fixtures y methodology e2e son sus gates); GitHub Actions sigue sin haber corrido (M6).
 

@@ -162,7 +162,8 @@ Fuente: [permissions.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/serv
 #### Regla de idioma del payload (D-P4-6)
 
 * Artefactos materializados en `obsidian-workspace/` (`.opencode/agents/*.md`, `.opencode/commands/*.md`,
-  `AGENTS.md` del vault, muestras `example.md`/`example.pdf`) → **INGLÉS**.
+  `AGENTS.md` del vault) → **INGLÉS**. Las muestras del instalador (`ejemplo.md`/`ejemplo.pdf`, cuerpo
+  y PDF en español) quedan **fuera** de la regla por decisión del dueño (D-P4-7 revocada, 2026-11-04).
 * Documentación del repo (`specs/`, `docs/`, `tasks/`) → **ESPAÑOL**.
 * Comprobación mecánica en los bloques del payload: cero ocurrencias de `ñ`, `¿`, `¡` y de la lista de
   palabras inequívocas `el|la|los|las|para|con|por|una|del|que|cómo|según`. Una vocal acentuada por
@@ -302,10 +303,10 @@ Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario 209,
 | D-P4-4 | Dividir el blueprint en specs hermanas (<500 líneas cada una) | dueño | 2026-11-04 |
 | D-P4-5 | Sobrescribir `tasks/plan.md` y `tasks/todo.md`; el plan de Phase 3.5 queda en git | dueño | 2026-11-04 |
 | D-P4-6 | Los artefactos del payload se redactan en inglés; la prosa del repo sigue en español | dueño | 2026-11-04 |
-| D-P4-7 | Las muestras del payload van en inglés (nombre y contenido) | dueño | 2026-11-04 |
+| D-P4-7 | **Revocada 2026-11-04:** las muestras del instalador se quedan como están (`ejemplo.md`/`ejemplo.pdf`, contenido en español); no se renombran ni traducen | dueño | 2026-11-04 |
 | D-P4-8 | Guía de formato: `agent_example.md` y `command_example.md` (raíz, untracked) | dueño | 2026-11-04 |
 | D-P4-9 | CP-A se lee sobre las specs existentes en ese momento | orquestador | 2026-11-04 |
-| D-P4-10 | Corte de 10 remnants en dominio para bajar de 60 a 50 skills (<60) — pendiente del FTR | dueño (pendiente) | 2026-11-04 |
+| D-P4-10 | **Retirada 2026-11-04:** no se ejecuta ningún corte de skills; el dueño revisará manualmente cada skill del payload | dueño | 2026-11-04 |
 | D-P4-11 | Extraer los permisos a la 5.ª spec `spec-payload-permissions.md` para respetar <500 | orquestador | 2026-11-04 |
 
 ## Testing Strategy — criterios de aceptación de la ejecución (Phase 5)

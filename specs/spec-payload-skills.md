@@ -60,19 +60,19 @@ Nombrado explícitamente = 35 + 22 + 37 + 3 = **97** (58 dirs en las filas 1-13 
 barrido = 97 + 112 = 209. Los dos remnants que también están en el cubo de 5 (`wikipedia-search`,
 `multi-search-engine`) se cuentan UNA vez: de ahí que 35 + 22 + 5 + 37 = 99 nominales no sea el total.
 
-## Inventario de muestras del payload (D-P4-7)
+## Inventario de muestras del payload
 
 `00-Resources/` está **vacío** en el repo (ver el `ls` de arriba): las muestras del golden-vault las
 crea el instalador en tiempo de instalación. Todo lo de esta tabla vive en el crate `tepochcalli`,
 no en el payload.
 
-| Artefacto | Ruta / constante | Estado actual | Objetivo (inglés) | Acción Phase 5 |
+| Artefacto | Ruta / constante | Estado actual | Objetivo | Acción Phase 5 |
 | --- | --- | --- | --- | --- |
-| Nombre de la nota | `crates/tepochcalli/src/application/installer.rs:46` `PLACEHOLDER_MD_NAME` | valor `ejemplo.md` | `example.md` | renombrar la constante y sus usos |
-| Nombre del PDF | `installer.rs:47` `PLACEHOLDER_PDF_NAME` | valor `ejemplo.pdf` | `example.pdf` | renombrar la constante y sus usos |
-| Cuerpo de la nota | `installer.rs:49-53` `PLACEHOLDER_MD_BODY` | español: empieza por `# Ejemplo` y explica que es un «marcador de posición creado por `tepochcalli install`» | cuerpo en inglés con el mismo mensaje (dónde escribir, cuándo indexa el RAG) | traducir el literal |
-| Bytes del PDF | `installer.rs:58` `EJEMPLO_PDF` = `include_bytes!` de `crates/tepochcalli/assets/ejemplo.pdf` | PDF válido de **592 bytes**; su única línea de contenido es `Hola tepochcalli` | PDF mínimo con el texto en inglés (p. ej. `Hello tepochcalli`) | regenerar el asset, renombrar la constante a `EXAMPLE_PDF` y corregir la ruta |
-| Generador del PDF | comentario de `EJEMPLO_PDF` (installer.rs:55-57) cita `gen_ejemplo_pdf.py` | **el script no existe en el repo** (búsqueda por nombre en todo el árbol: 0 resultados) | generador versionado, o comentario que no cite un artefacto inexistente | crear un generador mínimo y commitearlo, o reescribir el comentario |
+| Nombre de la nota | `crates/tepochcalli/src/application/installer.rs:46` `PLACEHOLDER_MD_NAME` | valor `ejemplo.md` | **sin cambio** (decisión del dueño 2026-11-04) | ninguna |
+| Nombre del PDF | `installer.rs:47` `PLACEHOLDER_PDF_NAME` | valor `ejemplo.pdf` | **sin cambio** (decisión del dueño 2026-11-04) | ninguna |
+| Cuerpo de la nota | `installer.rs:49-53` `PLACEHOLDER_MD_BODY` | español: empieza por `# Ejemplo` y explica que es un «marcador de posición creado por `tepochcalli install`» | **sin cambio** (decisión del dueño 2026-11-04) | ninguna |
+| Bytes del PDF | `installer.rs:58` `EJEMPLO_PDF` = `include_bytes!` de `crates/tepochcalli/assets/ejemplo.pdf` | PDF válido de **592 bytes**; su única línea de contenido es `Hola tepochcalli` | **sin cambio** (decisión del dueño 2026-11-04) | ninguna |
+| Generador del PDF | comentario de `EJEMPLO_PDF` (installer.rs:55-57) cita `gen_ejemplo_pdf.py` | **el script no existe en el repo** (búsqueda por nombre en todo el árbol: 0 resultados) | **sin cambio** (decisión del dueño 2026-11-04) | ninguna; el comentario queda como está |
 | Carpeta de bandeja | `obsidian-workspace/01-Tasks/` | existe y está trackeada con 3 ficheros de 0 bytes (`outline.md`, `rubric.md`, `todo.md`); `01-tasks/` **no** existe | `01-tasks/` (convención D9.1 en minúsculas) | renombrar la carpeta en el payload; no crearla |
 
 **Riesgo de caso (vecino de TD-8):** en sistemas de ficheros insensibles a mayúsculas (macOS,
@@ -105,7 +105,7 @@ cierra el recuento 1:1 por fila.
 | 12. RAG-chat paralelo | open-notebook | NotebookLM-like local: solape frontal con tepochcalli-rag (que ES el producto) | RETIRAR | retirar 1 |
 | 13. Creativo/visual suelto | generate-image (+ `infographics`, que se conserva) | generación de imagen creativa, fuera de la metodología | RETIRAR | retirar 1 (`infographics` se CONSERVA: es salida de `/transform`) |
 | 14. Núcleo metodológico sin conflicto (en dominio) | 15 nombradas: citation-management, experimental-design, writing-plans, scientific-problem-selection, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units, venue-templates, scientific-slides, paper-2-web, exploratory-data-analysis, networkx, sympy, shap, scholar-evaluation | sin solape material para el pipeline de 9 comandos y 5 agentes; `scholar-evaluation` es la base de `/validate` y `/review` (la tabla 9×4 la cita) | CONSERVAR | mantener en el payload base |
-| 15. Resto del inventario (barrido por familia) | **112 dirs no nombrados** en las filas 1-14 y 17 (listado completo en el bloque `<details>`); dentro de la fila se nombran **12 remnants en dominio** — `polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`, `wikipedia-search`, `multi-search-engine` — que cuentan como CONSERVAR, más **8 ejemplos out-of-domain** (`scanpy`, `pydeseq2`, `qiime2-amplicon`, `neuropixels-analysis`, `diffdock`, `qiskit`, `matlab`, `geopandas`) que cuentan como RETIRAR | **familias medidas en este payload: 0 dirs** para `gis-*`, `marketing-*`, `finance-*`, `sales-*`, `legal-*`, `healthcare-*`, `paid-media-*`, `product-*` y `design-*` (la v1 las citaba como si existieran). Out-of-domain **medido: 109** = 102 dirs del barrido (wet-lab, omics, química, física, geo, clínico, RL y meta) + los 8 ejemplos nombrados (uno, `geopandas`, ya estaba en `gis-*`); no ≈120 | RETIRAR el barrido out-of-domain (skill pack opcional futuro) y CONSERVAR los 12 remnants en dominio, de los cuales **10 quedan a decisión del FTR (D-P4-10)** | retirar los 102 out-of-domain del barrido + los 8 ejemplos; los 12 remnants se conservan salvo que el FTR apruebe el corte de 10; `wikipedia-search` y `multi-search-engine` **se quedan siempre** (los cita `/research`); `PACK=1` en CI para no romper referencias |
+| 15. Resto del inventario (barrido por familia) | **112 dirs no nombrados** en las filas 1-14 y 17 (listado completo en el bloque `<details>`); dentro de la fila se nombran **12 remnants en dominio** — `polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`, `wikipedia-search`, `multi-search-engine` — que cuentan como CONSERVAR, más **8 ejemplos out-of-domain** (`scanpy`, `pydeseq2`, `qiime2-amplicon`, `neuropixels-analysis`, `diffdock`, `qiskit`, `matlab`, `geopandas`) que cuentan como RETIRAR | **familias medidas en este payload: 0 dirs** para `gis-*`, `marketing-*`, `finance-*`, `sales-*`, `legal-*`, `healthcare-*`, `paid-media-*`, `product-*` y `design-*` (la v1 las citaba como si existieran). Out-of-domain **medido: 109** = 102 dirs del barrido (wet-lab, omics, química, física, geo, clínico, RL y meta) + los 8 ejemplos nombrados (uno, `geopandas`, ya estaba en `gis-*`); no ≈120 | RETIRAR el barrido out-of-domain (skill pack opcional futuro) y CONSERVAR los 12 remnants en dominio (sin corte: decisión del dueño 2026-11-04) | retirar los 102 out-of-domain del barrido + los 8 ejemplos; los 12 remnants se conservan; `wikipedia-search` y `multi-search-engine` **se quedan siempre** (los cita `/research`); `PACK=1` en CI para no romper referencias |
 | 16. Gaps UH (sin skill hoy) | jupyter (cuadernos), R (graficación estadística), Graphviz/PlantUML (diagramas), LaTeX de manuscrito (`latex-posters` no cubre manuscrito) | áreas de UH.md sin cubrir | INSTALAR-GAP — **0 instalaciones en v1** (declarado como no instalado) | Phase 5 solo instala si el Anexo A lo decide; mientras, `/transform` los menciona como pendiente de Phase 5 sin inventar nombres |
 | 17. `tepochcalli-mcp` (nueva, Phase 3.5 — H4) | `tepochcalli-mcp/SKILL.md` (13 KB, cuerpo en inglés), ausente del `ls` de 2026-10-21 | catálogo único de decisión de las 7 tools de `tepochcalli-rag` + fallback `anydoc`; solapa con la skill `markitdown` en «convertir», pero esta decide **cuándo** usar cada tool | CONSERVAR (nueva; registrada por OM-6 para que la matriz cubra el 100 %) | contarla como entrada del inventario: **209 dirs** (208 + 1) |
 
@@ -113,8 +113,7 @@ cierra el recuento 1:1 por fila.
   retiradas); la fila 14 nombra **15** conservadas; la fila 15 nombra **20** a título explícito (8
   ejemplos retirados + 12 remnants en dominio conservados); la fila 17 añade **1** ⇒ **94 nombradas** +
   **3 citadas sin veredicto** = **97 explícitas**; el barrido cubre los **112** restantes (97 + 112 = 209).
-  Los 12 remnants se cuentan en el cubo CONSERVAR (35), no en el barrido: por eso el corte de 10 baja
-  la base estricta de 60 a 50.
+  Los 12 remnants se cuentan en el cubo CONSERVAR (35), no en el barrido.
 * **Decisión explícita (2026-10-28, se mantiene): 0 skills nuevas para el protocolo de opendraft.**
   Los gates heredados (procedencia, check de claim, gate de compilación) son invariantes de
   workflow — deben correr SIEMPRE — y en OpenCode un cuerpo de comando se ejecuta siempre, mientras
@@ -183,18 +182,12 @@ Recuento del inventario: 35 + 22 + 37 + 3 + 112 = **209** (desglose en
 | A — estricto (solo veredictos) | 35 CONSERVAR + 22 CONSOLIDAR + 5 por defecto − 2 solapadas | **60** | ✗ falla por 1 (60 no es menor que 60) |
 | B — A + 6 barridos claramente en dominio | 60 + 6 | 66 | ✗ |
 | C — B + 4 borderline | 66 + 4 | 70 | ✗ |
-| D — corte recomendado (no aplicado) | A − 10 remnants en dominio sin cita | **50** | ✓ |
 
 El objetivo de menos de 60 skills del payload base (métrica heredada de [docs/WORKFLOW.md](../docs/WORKFLOW.md)
-Phase 5 y de TD-7) **no se cumple sin un corte**: el payload derivado de los veredictos es 60 y el
-barrido en dominio lo sube hasta 70. **No se borra nada por cuenta propia.**
-
-**Corte recomendado — DECISIÓN DEL OWNER (D-P4-10, pendiente en el FTR):** retirar los 10 remnants
-en dominio de la fila 15 que **ningún comando cita** — `polars`, `dask`, `vaex`, `zarr-python`,
-`pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`,
-`database-lookup`. Con la fila 4 ya corregida (11 retiradas, 3 supervivientes) la base estricta baja
-a 50. Se **conservan** `wikipedia-search` y `multi-search-engine` porque la tabla 9×4 de `/research`
-las cita.
+Phase 5 y de TD-7) **no se cumple con los veredictos actuales**: el payload derivado es 60 y el
+barrido en dominio lo sube hasta 70. **No se borra nada por cuenta propia.** Por decisión del dueño
+(2026-11-04) **no se ejecuta ningún corte**: revisará manualmente cada skill del payload más adelante
+y decidirá allí. No se registra excepción ni deuda nueva en esta fase.
 
 **Nota TD-22 (OfficeCLI, 0.2.0) — sin contradicción:** esta matriz gobierna el payload **v1**: las 6
 skills de ofimática permanecen y se consolidan en `docx-official`/`pptx-official`/`xlsx-official`
@@ -205,15 +198,8 @@ retiran ahora tres ganadoras que la 0.2.0 volverá a retirar.
 
 ## Open Questions
 
-* **D-P4-10 (owner/FTR):** ¿se aprueba retirar los 10 remnants en dominio de la fila 15 que ningún
-  comando cita? Sin ese corte el payload base queda en 60 (escenario A) o 70 (C) y el objetivo no se
-  cumple; con el corte, 50. No se aplica hasta aprobación explícita.
-* **Escenario base del corte:** ¿la métrica se mide sobre A (60) o sobre C (70)? De ello depende que
-  el corte deje 50 o 60; el FTR debe fijarlo antes de Phase 5 para que el recuento sea reproducible.
-* **4 borderline del barrido:** ¿se aceptan como en dominio (suben el payload a 71) o se tratan como
-  out-of-domain? T2a los separó de los 6 claros; la matriz no los reclama.
-* **Generador del PDF de muestra:** `gen_ejemplo_pdf.py` no existe en el repo aunque el comentario de
-  `EJEMPLO_PDF` lo cite. ¿Se versiona un generador mínimo o se reescribe el comentario sin él?
+* Ninguna abierta. El recuento derivado (60) y las muestras (sin cambio) quedan como están por
+  decisión del dueño (2026-11-04); la revisión skill por skill se hará manualmente.
 
 ## References
 

@@ -57,11 +57,11 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 - Fichero: NUEVO `specs/spec-payload-skills.md`
 - [x] Recuento con comando + fecha: **209** skills · **170** agentes · **9** comandos
 - [x] 0 skills inventadas (grep 1:1 contra el `ls`) · 0 huérfanas (112 presentes sin citar, cubiertas por la fila 15)
-- [x] 209/209 clasificadas (34+21+5 CONSERVAR/CONSOLIDAR · 37 RETIRAR · 0 INSTALAR-GAP · 112 barrido)
+- [x] 209/209 clasificadas (35 CONSERVAR + 22 CONSOLIDAR + 3 por defecto + 37 RETIRAR · 0 INSTALAR-GAP · 112 barrido)
 - [x] Gaps (Jupyter, R, Graphviz/PlantUML, LaTeX manuscrito) declarados sin inventar nombres
 - [x] `tepochcalli-mcp` (fila 17) y TD-22/OfficeCLI coherentes con `docs/TECH_DEBT.md` (frontera v1 vs 0.2.0)
-- [x] **Muestras inventariadas (D-P4-7)**: son artefactos de instalación (`installer.rs:46-58`), `00-Resources/` está vacío; objetivo `example.md`/`example.pdf`; cuerpo y PDF en español a regenerar; caja `01-Tasks/` vs `01-tasks/` anotada
-- [x] Recuento **derivado**: base estricta **60** (falla `<60` por 0/1); corte de 10 remnants → 50, flagged como D-P4-10 (owner/FTR), no aplicado
+- [x] **Muestras inventariadas (sin cambio, D-P4-7 revocada)**: son artefactos de instalación (`installer.rs:46-58`), `00-Resources/` está vacío; `ejemplo.md`/`ejemplo.pdf` y su contenido en español se quedan como están; caja `01-Tasks/` vs `01-tasks/` anotada
+- [x] Recuento **derivado**: base estricta **60** (falla `<60` por 1); **sin corte**: el dueño revisará manualmente cada skill (D-P4-10 retirada)
 - [x] Fichero <500 líneas (**182**)
 
 ### 🚦 Checkpoint CP-A — fin de T1+T2
@@ -197,7 +197,7 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 - [ ] `docs/WORKFLOW.md` §Phase 4 COMPLETADA con métricas reales + entrada FTR en §4
 - [ ] `docs/WORKFLOW.md` §Phase 3.5: la referencia a `tasks/plan.md` apunta al commit (D-P4-5)
 - [ ] `docs/TECH_DEBT.md`: TD-7, TD-8, TD-14a/TD-14b, TD-22, TD-6 actualizados
-- [ ] Impacto de D-P4-6/D-P4-7 registrado para Phase 5 (constantes del wizard + asset `ejemplo.pdf` + re-verificación de que el PDF sigue parseable, F3)
+- [ ] Impacto de D-P4-6 registrado; D-P4-7 revocada (sin renombrado de constantes ni del asset `ejemplo.pdf` en Phase 5)
 - [ ] `CHANGELOG.md` con entrada de Phase 4
 - [ ] `git diff --stat -- obsidian-workspace` **vacío**
 - [ ] `agent_example.md` y `command_example.md` siguen **untracked** (`??` en `git status --short`) y **no entran en ningún commit** (D-P4-8)
@@ -224,16 +224,18 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 | D-P4-4 | Dividir el blueprint en 4 specs (<500 líneas) | dueño | 2026-11-04 |
 | D-P4-5 | Sobrescribir `tasks/plan.md` y `tasks/todo.md` | dueño | 2026-11-04 |
 | D-P4-6 | **Los artefactos del payload van en INGLÉS** (5 agents, 9 commands, `AGENTS.md` del vault, `description`); la prosa del repo sigue en español | dueño | 2026-11-04 |
-| D-P4-7 | **Las muestras del payload van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf`; el renombrado del wizard es de Phase 5 | dueño | 2026-11-04 |
+| D-P4-7 | **Revocada (2026-11-04): las muestras se quedan como están** (`ejemplo.md`/`ejemplo.pdf`, contenido en español); sin renombrado ni traducción | dueño | 2026-11-04 |
 | D-P4-8 | **La guía de formato son `agent_example.md` y `command_example.md`** (raíz, **sin commitear**): fijan el header y el esqueleto de cuerpo; el plan solo referencia las rutas | dueño | 2026-11-04 |
 | D-P4-9 | **CP-A se lee sobre las specs que existen en ese momento**: `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` 585 baja a <500 cuando T6 mueva los cuerpos de comando (el fichero ya partía de 528, rojo antes de Phase 4) | orquestador | 2026-11-04 |
-| D-P4-10 | **Corte de 10 remnants en dominio** (`polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`) para que la base baje de 60 a 50 y cumpla `<60` — **pendiente de aprobación del dueño en el FTR**, no aplicado | dueño (pendiente) | 2026-11-04 |
+| D-P4-10 | **Retirada (2026-11-04): no se ejecuta ningún corte de skills**; el dueño revisará manualmente cada skill del payload más adelante. No se registra excepción ni deuda nueva | dueño | 2026-11-04 |
 | D-P4-11 | **5.ª spec `spec-payload-permissions.md`**: la forma en bloque de la guía (action/resource/effect en líneas propias) triplica la sección de permisos (390 líneas) e impide el umbral <500; se extrae a su propia spec y `spec-payload-vault.md` queda en 366 | orquestador | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)
 
 _Cada nota registra: qué se hizo, qué se encontró que no estaba en el plan, y la decisión que tomado._
+
+- **FTR 2026-11-04 — NO aprobado aún (decisión del dueño):** Phase 4 sigue abierta y las 5 specs siguen **Proposed**. El dueño revisará el blueprint antes de conceder el gate. Decisiones de esa revisión: **D-P4-10 retirada** (sin corte de skills; revisará manualmente cada una más adelante, sin registrar excepción) y **D-P4-7 revocada** (las muestras `ejemplo.md`/`ejemplo.pdf` se quedan como están, nombre y contenido en español). Ambas propagadas a specs, WORKFLOW, TECH_DEBT, CHANGELOG, plan y todo.
 
 - **T0 (2026-11-04):** baseline medido — 1 error MD005 pre-existente (`docs/WORKFLOW.md:166`), 13 bloques mermaid, `spec-payload-vault.md` 528 → 620 tras T1. Nada escrito.
 - **T1 (2026-11-04):** §Reglas de formato reescrita (107 líneas) con URLs v2.1.2. Hallazgo: `doom_loop` y `lsp` **no** son acciones del catálogo oficial V2 («not current V2 Core permission actions»); se marcan como `casa`/`no` y se conservan solo por la vía de acciones ampliables por plugin. Se corrigieron tres contradicciones de D-P4-6 (fecha 2026-10-21 en cabecera y Goals; `description` y cuerpo «en español»).

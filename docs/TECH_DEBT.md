@@ -214,7 +214,7 @@ blocker. FTR de usuario **pendiente** — no se declara BLUEPRINT APPROVED ni Ph
 | ID | Estado (2026-11-04) | Próxima acción |
 | --- | --- | --- |
 | **TD-6** | **Diseño cerrado** — la regla MCP-first está entera en el blueprint del `AGENTS.md` del vault (67 líneas, inglés) | Phase 5 lo materializa; el tracker del plugin/tool sigue en Phase 6+ |
-| **TD-7** | **Diseño cerrado** — matriz de 17 filas sobre el inventario real **209**; base estricta **60** y **D-P4-10** (corte a **50**) pendiente | FTR fija la base del recuento (60 o 70) y aprueba el corte; Phase 5 ejecuta |
+| **TD-7** | **Diseño cerrado** — matriz de 17 filas sobre el inventario real **209**; base estricta **60** (<60 falla por 1). Sin corte: el dueño revisará manualmente cada skill más adelante | Phase 5 ejecuta los veredictos de la matriz que el dueño valide; no hay corte automático |
 | **TD-8** | **Decidido** — canónico `01-tasks/`; el payload trae `01-Tasks/` (3 ficheros vacíos, tracked) y `01-tasks/` no existe | Phase 5 **renombra**, nunca crea (riesgo FS case-insensitive) |
 | **TD-14** | **Diseño cerrado** — (a) regla de cita en el blueprint del `AGENTS.md`; (b) check de claim en `/validate` y gate de compilación en `/cite` | Phase 5 los materializa; el contrato ADR-005 sigue intocado |
 | **TD-22** | **Sin cambio de alcance** — v1 conserva las 6 skills de ofimática consolidadas en las variantes `-official` | 0.2.0 retira las 6 + la entrada `excel` del MCP en la misma tarea |

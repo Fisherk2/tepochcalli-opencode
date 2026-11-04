@@ -16,25 +16,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   usuario y todavía no ha ocurrido (Phase 5 no arranca).
 - **Inventario real verificado** contra `obsidian-workspace/.opencode/`: **209 skills · 170 agentes
   · 9 comandos**; matriz de **17 filas** que cubre el 100 % del recuento, sin skills ni
-  subagentes inventados. Base estricta resultante: **60 skills** — el objetivo <60 falla por 1.
+  subagentes inventados. Base estricta resultante: **60 skills** — el objetivo <60 falla por 1; no se corta: el dueño revisará cada skill manualmente.
 - **5 bloques `permissions` re-verificados contra la documentación OpenCode V2 v2.1.2** y reescritos
   en **forma de bloque** (no array suelto), con la nota de fusión de **D-P4-2**: las reglas globales
   se concatenan **antes** de las del agente y no se sustituyen, así que el array global de **313
   reglas** se elimina en Phase 5 en lugar de convivir con los bloques.
 - **5 system prompts de agente (56/54/58/58/56 líneas) y 9 cuerpos de comando (24-30 líneas)
-  congelados en inglés** (D-P4-6/D-P4-7), con el contrato de referencia en español conservado en la
+  congelados en inglés** (D-P4-6), con el contrato de referencia en español conservado en la
   spec; el blueprint del **`AGENTS.md` del vault** (67 líneas, inglés) fija la regla MCP-first, la de
   cita y la de no-contaminación de bandejas.
-- **Decisiones registradas:** D-P4-6/D-P4-7 (artefactos y muestras del payload en inglés, prosa del
-  repo en español); **D-P4-11** (los permisos se extraen a una 5.ª spec para respetar <500 líneas);
-  **D-P4-10 pendiente** (corte de 10 remnants en dominio: 60 → 50 skills, sin aplicar hasta que el
-  FTR lo apruebe y fije la base del recuento).
+- **Decisiones registradas:** D-P4-6 (artefactos del payload en inglés; prosa del repo en español);
+  **D-P4-7 revocada** (las muestras del instalador se quedan como están, en español); **D-P4-11**
+  (los permisos se extraen a una 5.ª spec para respetar <500 líneas); **D-P4-10 retirada** (sin
+  corte de skills: el dueño revisará manualmente cada una).
 - **Hallazgos honestos** (registrados, no ejecutados): `doom_loop` y `lsp` **no** son acciones core
   de V2 — `doom_loop` queda reservada sin uso y `lsp` se conserva como acción de casa ampliable por
   plugin; las familias que anticipaba la fila 15 de la matriz **no existían** en el inventario y el
   barrido las sustituyó por un recuento real (**109 out-of-domain medidos**); `gen_ejemplo_pdf.py`
   **no existe** en el repo aunque un comentario del instalador lo cite; y las muestras del payload
-  son **artefactos de instalación** (las crea el wizard), no ficheros versionados en el blueprint.
+  son **artefactos de instalación** (las crea el wizard), no ficheros versionados en el blueprint;
+  por decisión del dueño (2026-11-04) conservan su nombre y su contenido en español.
 
 ### Added (config por entorno, 2026-11-03)
 
