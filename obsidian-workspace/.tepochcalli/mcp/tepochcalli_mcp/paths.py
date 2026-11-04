@@ -43,6 +43,7 @@ from typing import Final, Literal
 from urllib.parse import parse_qsl, unquote, urlencode, urlsplit, urlunsplit
 
 from tepochcalli_flow.citation import RESOURCES_DIR
+from tepochcalli_flow.config import DEFAULT_INDEXER_ROOTS
 
 from tepochcalli_mcp.suggestions import suggest_names
 
@@ -448,8 +449,9 @@ def validate_vault_path(
 def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple[str, ...]:
     """Valida N raíces indexables y devuelve sus rutas RELATIVAS al vault (D32/D44/D65).
 
-    `None` o lista vacía ⇒ `("00-Resources",)` (el default del producto, D42).
-    Cada raíz pasa las mismas reglas que una entrada (`validate_vault_path`) y
+    `None` o lista vacía ⇒ `("00-Resources",)` (el default del producto, D42 —
+    `config.DEFAULT_INDEXER_ROOTS`). Cada raíz pasa las mismas reglas que una
+    entrada (`validate_vault_path`) y
     además debe existir: una raíz puede ser un **fichero suelto** (D46). El
     fallo es **atómico**: se lanzan `VaultPathError` —que nombra la raíz mala,
     sus `suggestions` y `vault_dirs`— antes de devolver ninguna, así una raíz
@@ -457,7 +459,7 @@ def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple
     """
     entries = [str(item).strip() for item in (directories or ())]
     roots: list[str] = []
-    for entry in [entry for entry in entries if entry] or [RESOURCES_DIR]:
+    for entry in [entry for entry in entries if entry] or list(DEFAULT_INDEXER_ROOTS):
         relative = (
             validate_vault_path(entry, vault_root, must_exist=True)
             .relative_to(vault_root.resolve())

@@ -39,7 +39,8 @@ from pathlib import Path
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
-from tepochcalli_mcp import errors, formats, paths, summary, writer
+from tepochcalli_mcp import errors, formats, paths
+from tepochcalli_mcp.tools._convert_tail import write_converted
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,8 @@ async def convert_document(
 
     `convert` es la costura `convert_local(path, source_uri=…)` del composition
     root; argumentos posicionales del contrato MCP: `path`, `output_path?`,
-    `format?`.
+    `format?`. La cola (fallos tipados, vacío, escritura, resumen) vive en
+    `tools/_convert_tail.py`.
     """
     root = vault_root().resolve()
     try:
@@ -68,43 +70,32 @@ async def convert_document(
         )
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
-    try:
-        content = await asyncio.to_thread(convert, source, source_uri=path)
-    except formats.UnsupportedFormatError as exc:
-        return errors.validation_error(str(exc), {"formats": list(formats.SUPPORTED_FORMATS)})
-    except Exception as exc:  # corrupto, cifrado: no es una ruta mal escrita (D39)
-        logger.exception("convert_document: fallo de conversión para %s", path)
-        return errors.source_unreachable(path, type(exc).__name__)
-    if not content.strip():
-        return errors.source_unreachable(path, "EmptyMarkdown", guide=errors.GUIDE_OCR)
-    try:
-        written = writer.write_atomic(target, content)
-    except paths.VaultPathError as exc:
-        return errors.validation_error(str(exc), exc.details)
-    return summary.build_summary(written, source_uri=path, vault_root=root)
+    return await write_converted(
+        run_convert=lambda: asyncio.to_thread(convert, source, source_uri=path),
+        target=target,
+        source_uri=path,
+        vault_root=root,
+        tool="convert_document",
+        logger=logger,
+    )
 
 
 def _suffix(format: str | None, source: Path) -> str:
     """Extensión del DESTINO: `format` la fuerza; sin él, `.md` (D37).
 
     La validación del catálogo usa la extensión EFECTIVA (`format` como pista de
-    tipo o la del documento): fuera del catálogo ⇒ `VaultPathError` (el borde lo
-    mapea a `VALIDATION_ERROR` con la lista).
+    tipo o la del documento, normalizada por `formats.normalize_suffix`): fuera
+    del catálogo ⇒ `VaultPathError` (el borde lo mapea a `VALIDATION_ERROR` con
+    la lista).
     """
-    hinted = _normalize_extension(format) if format else ""
-    effective = hinted or _normalize_extension(source.suffix)
+    hinted = formats.normalize_suffix(format) if format else ""
+    effective = hinted or formats.normalize_suffix(source.suffix)
     if not formats.is_supported(effective):
         raise paths.VaultPathError(
             f"formato no soportado: {effective or '(sin extensión)'!r}",
             {"formats": list(formats.SUPPORTED_FORMATS)},
         )
     return hinted or ".md"
-
-
-def _normalize_extension(extension: str) -> str:
-    """`.PDF`/`pdf` ⇒ `.pdf`: el catálogo compara extensiones normalizadas."""
-    normalized = extension.strip().lower()
-    return normalized if not normalized or normalized.startswith(".") else f".{normalized}"
 
 
 def _destination(path: str, output_path: str | None, suffix: str) -> str:

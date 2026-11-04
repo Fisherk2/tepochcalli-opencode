@@ -41,7 +41,8 @@ from pathlib import Path
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
-from tepochcalli_mcp import errors, formats, paths, summary, writer
+from tepochcalli_mcp import errors, formats, paths
+from tepochcalli_mcp.tools._convert_tail import write_converted
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +61,8 @@ async def convert_base64(
 
     `convert` es la costura `convert_bytes(data, filename=…, extension=…,
     source_uri=…)` del composition root; argumentos posicionales del contrato
-    MCP: `data`, `output_path?`, `format?`, `filename?`.
+    MCP: `data`, `output_path?`, `format?`, `filename?`. La cola (fallos
+    tipados, vacío, escritura, resumen) vive en `tools/_convert_tail.py`.
     """
     root = vault_root().resolve()
     try:
@@ -75,22 +77,16 @@ async def convert_base64(
         )
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
-    try:
-        content = await asyncio.to_thread(
+    return await write_converted(
+        run_convert=lambda: asyncio.to_thread(
             convert, raw, filename=filename, extension=extension, source_uri=source_uri
-        )
-    except formats.UnsupportedFormatError as exc:
-        return errors.validation_error(str(exc), {"formats": list(formats.SUPPORTED_FORMATS)})
-    except Exception as exc:  # corrupto, cifrado: no es una pista mal escrita (D39)
-        logger.exception("convert_base64: fallo de conversión para %s", source_uri)
-        return errors.source_unreachable(source_uri, type(exc).__name__)
-    if not content.strip():
-        return errors.source_unreachable(source_uri, "EmptyMarkdown", guide=errors.GUIDE_OCR)
-    try:
-        written = writer.write_atomic(target, content)
-    except paths.VaultPathError as exc:
-        return errors.validation_error(str(exc), exc.details)
-    return summary.build_summary(written, source_uri=source_uri, vault_root=root)
+        ),
+        target=target,
+        source_uri=source_uri,
+        vault_root=root,
+        tool="convert_base64",
+        logger=logger,
+    )
 
 
 def _effective_extension(format: str | None, filename: str | None) -> str:
@@ -100,9 +96,7 @@ def _effective_extension(format: str | None, filename: str | None) -> str:
     pista markitdown no puede elegir convertidor (D38). Una pista fuera del
     catálogo cae igual, con la lista del catálogo en `details` (D39).
     """
-    hint = (format or (Path(filename).suffix if filename else "")).strip().lower()
-    if hint and not hint.startswith("."):
-        hint = f".{hint}"
+    hint = formats.normalize_suffix(format or (Path(filename).suffix if filename else ""))
     if not hint:
         raise paths.VaultPathError(
             "sin pista de tipo: pasa `format` o un `filename` con extensión "

@@ -38,6 +38,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import asdict
 from typing import Protocol
 
 from tepochcalli_flow.ports import CitedChunk
@@ -131,18 +132,10 @@ async def search(
     # El resto (EmbedderApiError ya scrubeado, errores del puerto, cualquier
     # cosa) lo captura el decorador: INTERNAL canónico + traceback al log (G1).
     kept, truncated = budget.apply_budget(chunks)
-    results: list[dict[str, object]] = [
-        {
-            "text": chunk.text,
-            "source_path": chunk.source_path,
-            "heading": chunk.heading,
-            "char_start": chunk.char_start,
-            "char_end": chunk.char_end,
-            "score": chunk.score,
-            "offsets_ref": chunk.offsets_ref,
-        }
-        for chunk in kept
-    ]
+    # `asdict` copia los 7 campos EN SU ORDEN congelado (mismo patrón que
+    # `_refresh_once` en `server.py`): el dataclass del puerto ES la forma del
+    # payload, sin recalcularlos a mano — donde el orden puede empezar a mentir.
+    results: list[dict[str, object]] = [asdict(chunk) for chunk in kept]
     # took_ms se cierra al terminar de ensamblar el payload: desde la ENTRADA
     # del handler (t0) hasta serializar, embed incluido (spec §Presupuestos).
     elapsed_ms = round((time.perf_counter() - started) * 1000)

@@ -51,9 +51,16 @@ class UnsupportedFormatError(ValueError):
     """
 
 
+def normalize_suffix(suffix: str) -> str:
+    """`pdf`/`PDF` ⇒ `.pdf`: minúsculas y el punto antepuesto (regla compartida D39).
+
+    Es la normalización que el catálogo y los handlers del conversor comparan
+    — el catálogo es el único sitio de la regla de «lowercase + punto».
+    """
+    normalized = suffix.strip().lower()
+    return normalized if not normalized or normalized.startswith(".") else f".{normalized}"
+
+
 def is_supported(suffix: str) -> bool:
     """¿La extensión (`.pdf`, `pdf` o `PDF`) está en el catálogo? Normaliza antes de mirar."""
-    normalized = suffix.strip().lower()
-    if normalized and not normalized.startswith("."):
-        normalized = f".{normalized}"
-    return normalized in SUPPORTED_FORMATS
+    return normalize_suffix(suffix) in SUPPORTED_FORMATS
