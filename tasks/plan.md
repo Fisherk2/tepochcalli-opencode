@@ -16,12 +16,19 @@
 bloques de permisos, la tabla de invocación 9×4 y la matriz de conflictos — hasta estado **Approved**, para que
 Phase 5 pueda ejecutarlo **literal** (sin reinterpretación).
 
+**Idioma (D-P4-6):** el blueprint se redacta en español, pero **todo lo que se materializa dentro de
+`obsidian-workspace/` va en inglés** — los 5 `.opencode/agents/*.md`, los 9 `.opencode/commands/*.md` y el
+`AGENTS.md` del vault (incluidos sus `description`). La documentación del repo (`specs/`, `docs/`, `tasks/`)
+permanece en español. Los **nombres propios** (agentes, bandejas, tools, estados de `procedencia`, el formato de
+cita) son contrato y no se traducen.
+
 **No-objetivos (fuera de Phase 4):**
 
 | Fuera | Por qué |
 | --- | --- |
 | Escribir en `obsidian-workspace/**` | Phase 4 es documentación pura; la prohibición ES un entregable verbal de la fase |
 | Tocar `obsidian-workspace/opencode.json` | La decisión sobre el array `permissions` se **documenta** aquí y se **ejecuta** en Phase 5 |
+| Traducir al inglés la documentación del repo (`specs/`, `docs/`, `tasks/`) | D-P4-6 solo alcanza al payload; la prosa del repo sigue en español (CODE_STYLE) |
 | Modificar código Python/Rust, contratos MCP, ADRs | Los contratos D1-D11 están `Accepted`; cambiarlos exige ADR nuevo |
 | Tocar `docs/UH.md`, `README.md`, `LICENSE`, `opencode.json` (raíz) | Pre-commit checklist del `AGENTS.md` del repo |
 | Instalar/retirar skills del payload | Es la acción de Phase 5 (Anexo A), no el diseño de Phase 4 |
@@ -35,6 +42,7 @@ Phase 5 pueda ejecutarlo **literal** (sin reinterpretación).
 | D-P4-3 | **Solo corregir el vocabulario** de acciones V2 (fuera `todowrite`); **sin** reglas MCP por agente | T1 corrige; T4 no añade acciones `tepochcalli_rag_*` |
 | D-P4-4 | **Dividir el blueprint en 4 specs** (<500 líneas cada una) | T2/T5/T6 crean las 3 nuevas; T8 actualiza índices |
 | D-P4-5 | **Sobrescribir `tasks/plan.md` y `tasks/todo.md`** | El plan de Phase 3.5 queda solo en el historial de git; WORKFLOW §Phase 3.5 pasa a apuntar al commit |
+| D-P4-6 | **Los artefactos del payload se redactan en INGLÉS** (5 system prompts, 9 cuerpos de comando, `AGENTS.md` del vault, `description` de los agentes); la prosa del repo (specs, docs, `tasks/`) sigue en español | T5, T6 y T7 redactan en inglés; T1 fija el criterio y el chequeo; el gate CP-C verifica 0 marcadores del español en los bloques del payload. Precedente: la skill `tepochcalli-mcp` del payload ya está en inglés |
 
 ## 3. Estado real verificado (2026-11-04, lectura del repo)
 
@@ -126,6 +134,11 @@ resuelta y citada.
 - [ ] Discrepancia entre `agents.mdx` (mapa singular) y `permissions.mdx` (lista) **resuelta a favor de la lista**,
       con la fuente canónica citada y el razonamiento
 - [ ] Checklist de no-regresión de frontmatter (los 7 campos legacy + `todowrite` + `subagent` en comandos)
+- [ ] **Regla de idioma del payload** (D-P4-6) fijada por escrito: los artefactos que se materializan en
+      `obsidian-workspace/` (`.opencode/agents/*.md`, `.opencode/commands/*.md`, `AGENTS.md` del vault) van en
+      **inglés**; la documentación del repo (`specs/`, `docs/`, `tasks/`) va en español — con la **lista de marcadores
+      del español** para el chequeo mecánico (`ñ`, `¿`, `¡`, y una lista corta de palabras inequívocas) y la
+      excepción de los **nombres propios** (agentes, bandejas, tools, estados de `procedencia`, que son contrato)
 - [ ] Cero referencias a APIs no verificadas (R2/R3: sin cita no hay decisión)
 
 **Verificación:** grep de `http` + `v2.1.2` en la sección (≥1 URL por grupo de reglas) · `just md-lint` sin errores
@@ -214,7 +227,7 @@ Hoy están escritos contra un formato viejo y el payload arrastra 313 reglas glo
       Itzamná sin `edit`, sin `subagent`, sin `shell`
 - [ ] **D-P4-2 registrada**: el array global `permissions` (313 reglas) de `obsidian-workspace/opencode.json`
       **se elimina en Phase 5** → permisos SOLO en los `.md`; §Nota de fusión reescrita con el porqué
-- [ ] Normas de frontmatter: `mode: primary`, `description` en español (1 línea), **sin `model`** (`model`/`steps`/`color`
+- [ ] Normas de frontmatter: `mode: primary`, `description` **in English** (1 line), **sin `model`** (`model`/`steps`/`color`
       viven en el bloque `agents` de `opencode.json`); `default_agent` → `itzamna` (primary, visible) como
       verificación de Phase 5
 - [ ] Nota de riesgo asumido (D-P4-3): sin reglas MCP por agente, `add_source`/`convert_*` quedan accesible para
@@ -238,7 +251,9 @@ que no está escrito. Este calpulli redacta los 5 prompts definitivos.
 
 **Criterios de aceptación**
 
-- [ ] 5 cuerpos, **≤60 líneas** cada uno, en español
+- [ ] 5 cuerpos, **≤60 líneas** cada uno, **in English** (D-P4-6); la spec que los surrounds sigue en español
+- [ ] La persona de cada agente es la **traducción fiel** de su fila en `docs/UH.md` (fuente inmutable en español):
+      mismo rol, mismo alcance, mismo nombre propio; la traducción no reinterpretan la metodología
 - [ ] Cada cuerpo incluye los 6 elementos obligatorios: persona UH (1-2 líneas) · propósito + **su bandeja exacta** ·
       MCP-first (`search` antes de leer crudo de `00-Resources/`; `index_refresh()` si duda de frescura; ante `E_*` →
       `rag_status()` + `fix_hint`, nunca el error crudo) · no-contaminación (WARN si hay archivos del usuario en
@@ -249,7 +264,7 @@ que no está escrito. Este calpulli redacta los 5 prompts definitivos.
 - [ ] Fichero **<500 líneas**
 
 **Verificación:** `wc -l` por bloque (≤60) · grep de los 6 elementos por agente (6/6) · grep de skills inexistentes = 0 ·
-md-lint.
+chequeo de idioma: 0 marcadores del español (`ñ`, `¿`, `¡`, lista de palabras) en los 5 bloques · md-lint.
 
 **Dependencias:** T4 · **Fichero:** NUEVO `specs/spec-payload-agents.md`.
 **Subagente:** `prompt-engineer` · **Skills:** `context-engineering` (presupuesto de prompt),
@@ -259,25 +274,29 @@ md-lint.
 
 ### T6 — Los 9 cuerpos de comando (verbatim, congelados)
 
-**Objetivo:** hacer literal la ejecución de Phase 5 (D-P4-1). Los 3 congelados se trasladan **sin cambio de
-contenido**; los 6 restantes se redactan hoy.
+**Objetivo:** hacer literal la ejecución de Phase 5 (D-P4-1). Los 3 cuerpos ya congelados se **traducen al inglés
+con fidelidad semántica** (el español de la spec queda como contrato de referencia; el bloque inglés es el que se
+congela para Phase 5); los 6 restantes se redactan hoy, también en inglés (D-P4-6).
 
 **Entregable:** NUEVO `specs/spec-payload-commands.md` (9 cuerpos + tabla de contratos + esqueleto obligatorio).
 
 **Criterios de aceptación**
 
-- [ ] 9 cuerpos, **≤35 líneas** cada uno, con frontmatter `{description (1 línea, español), agent: <id>}` (sin `model`,
+- [ ] 9 cuerpos, **≤35 líneas** cada uno, **in English** (D-P4-6), con frontmatter `{description (1 line, English), agent: <id>}` (sin `model`,
       sin `subagent`) y cuerpo con: fase metodológica UH nombrada · uso explícito de `$ARGUMENTS` y/o `$1` ·
       MCP-first con las **7** tools (catálogo único: la skill `tepochcalli-mcp`) · protocolo `E_*` → `rag_status` ·
       **destino de escritura = su bandeja** (D9.2) + contrato de frontmatter cuando aplique · formato de cita ·
       no-contaminación donde lee bandejas
-- [ ] `/research`, `/validate`, `/cite` se trasladan **verbatim** (cualquier cambio se anota como enmienda fechada)
+- [ ] `/research`, `/validate`, `/cite`: el español original se conserva en la spec como **contrato de referencia** y
+      el bloque inglés se congela para Phase 5 — traducción **fiel** (mismos estados de `procedencia`, mismo gate
+      determinista, mismas clasificaciones `respaldada`/`sin_ancla`/`cita_ajena`/`sin_cita`); cualquier divergencia
+      semántica se anota como enmienda fechada
 - [ ] Prohibido `!`cmd`` y `@paths`; cero menciones a `model`/`subagent` en el frontmatter
 - [ ] `/transform` cita solo skills **existentes hoy** y declara los gaps (Jupyter/R/Graphviz/LaTeX) sin inventar nombres
 - [ ] Fichero **<500 líneas**
 
 **Verificación:** `wc -l` por bloque (≤35) · grep de `!` y `@` = 0 · los 9 `agent:` resuelven a los 5 primarios
-válidos · md-lint.
+válidos · chequeo de idioma: 0 marcadores del español en los 9 bloques · md-lint.
 
 **Dependencias:** T3 (tools por comando), T4 (permisos) · **Fichero:** NUEVO `specs/spec-payload-commands.md`.
 **Subagente:** `technical-writer` · **Skills:** `context-engineering`, `obsidian-markdown`, `opencode`,
@@ -295,11 +314,13 @@ válidos · md-lint.
 
 **Criterios de aceptación**
 
-- [ ] §Blueprint `AGENTS.md` del vault revisado: **≤120 líneas**, 7 secciones, coherente con T5/T6 (mismo formato
+- [ ] §Blueprint `AGENTS.md` del vault **reescrito en inglés** (D-P4-6; hoy está en español en la spec) y revisado:
+      **≤120 líneas**, 7 secciones, coherente con T5/T6 (mismo formato
       de cita, mismos 4 estados de procedencia, misma regla MCP-first)
 - [ ] §Testing del blueprint con criterios **ejecutables** por Phase 5 (los greps ya listados + los nuevos:
       cero `todowrite`, cero campos legacy, todo nombre de skill citado existe, `default_agent` resuelve a `itzamna`,
-      ningún `.md` duplica `model` que ya define `opencode.json`, todo `.md` de agente ≤60 líneas y todo comando ≤35)
+      ningún `.md` duplica `model` que ya define `opencode.json`, todo `.md` de agente ≤60 líneas y todo comando ≤35,
+      **cero marcadores del español en los bloques del payload**)
 - [ ] §Open Questions: la del array global **resuelta** (D-P4-2) y la de `default_agent` de
       `spec-agent-workflow.md` resuelta por evidencia (`default_agent: "itzamna"` es primary y visible)
 - [ ] Enlaces entre specs resueltos tras la división (→ `spec-payload-skills.md`, `-agents.md`, `-commands.md`)
@@ -382,7 +403,7 @@ trabajaría sobre inventario no verificado.
 | --- | --- | --- |
 | **CP-A** | fin de T1+T2 | Reglas de formato citadas (URL + versión + fecha) · inventario contado 1:1 (209/170/9) · **0 skills inventadas** · 4 specs <500 líneas |
 | **CP-B** | fin de T3+T4 | Los 7 nombres de tool del servidor MCP coinciden con la tabla 9×4 · cada skill citada existe · **0** campos legacy y **0** `todowrite` · YAMLs parsean y la simulación last-match-wins coincide con lo esperado |
-| **CP-C** | fin de T5+T6 | 5 prompts ≤60 líneas con los 6 elementos obligatorios · 9 comandos ≤35 líneas con los 7 elementos obligatorios · **0** ocurrencias de `!`cmd``/`@paths` · cada destino de escritura = su bandeja D9.2 |
+| **CP-C** | fin de T5+T6 | 5 prompts ≤60 líneas con los 6 elementos obligatorios · 9 comandos ≤35 líneas con los 7 elementos obligatorios · **0** ocurrencias de `!`cmd``/`@paths` · cada destino de escritura = su bandeja D9.2 · **0 marcadores del español en los 14 bloques del payload (D-P4-6)** |
 | **CP-D** | fin de T7 | `AGENTS.md` del vault ≤120 líneas y coherente con T5/T6 · enlaces relativos 0 rotos · preguntas abiertas 0 · md-lint sin errores nuevos |
 | **CP-E** | fin de T8 | **BLUEPRINT APPROVED** por el usuario (FTR Phase 4→5) · status `Approved` en `SPEC.md` · md-lint sin errores nuevos · mermaid render 0 fallos · `git diff --stat -- obsidian-workspace` vacío |
 
@@ -399,6 +420,7 @@ trabajaría sobre inventario no verificado.
 | O-7 | Los stubs heredados traen errores (`tlacuilo.md` con título de Chilam, `chilam.md` con `edit * allow`, `todowrite`) que el blueprint no puede propagar | alta | medium | T1/T4 fijan el vocabulario y las superficies; T5/T6 no heredan nada del stub |
 | O-8 | `default_agent: "itzamna"` solo resuelve si el `.md` es primary y visible | baja | alto | T4 lo normiza (`mode: primary`, sin `hidden`) y T8 lo verifica como criterio de Phase 5 |
 | O-9 | Al sobrescribir `tasks/plan.md`, se pierde el plan de Phase 3.5 salvo en git | alta | bajo | D-P4-5 (decisión del dueño); T8 actualiza la referencia de WORKFLOW al commit |
+| O-10 | La traducción al inglés (D-P4-6) puede **perder semántica**: `docs/UH.md` es la fuente inmutable en español y los estados de `procedencia`/el formato de cita son contrato | media | alto | El español original **se conserva** en la spec como contrato de referencia y el inglés es el bloque congelado; T5/T6 exigen fidelidad explícita (mismos estados, mismo gate, mismas clasificaciones) y T7 reconcilia bloque inglés ↔ bloque español; el chequeo de idioma excluye los nombres propios |
 
 ## 9. Trazabilidad blueprint ↔ fuentes
 
@@ -408,9 +430,9 @@ trabajaría sobre inventario no verificado.
 | Permisos de los 5 agentes | `spec-payload-vault.md` §Blueprint (existente) + `spec-agent-workflow.md` D9.3 | T4 |
 | Tabla de invocación 9×4 | `spec-payload-vault.md` (existente) + inventario real | T3 |
 | Matriz de conflictos | `spec-payload-vault.md` §Matriz + `spec-agent-workflow.md` Anexo A + TECH_DEBT TD-7/TD-22 | T2 |
-| 5 system prompts | `docs/UH.md` (tabla Agentes Primarios) + D9.2 + TD-14 | T5 |
-| 9 cuerpos de comando | `docs/UH.md` (9 comandos) + D9.2 + bodies ya congelados | T6 |
-| `AGENTS.md` del vault | `spec-agent-workflow.md` §Requisitos (9 requisitos) + TD-14a + TD-6 | T7 |
+| 5 system prompts | `docs/UH.md` (tabla Agentes Primarios) + D9.2 + TD-14 · **traducción fiel al inglés** (D-P4-6) | T5 |
+| 9 cuerpos de comando | `docs/UH.md` (9 comandos) + D9.2 + bodies ya congelados · **traducción fiel al inglés** (D-P4-6) | T6 |
+| `AGENTS.md` del vault | `spec-agent-workflow.md` §Requisitos (9 requisitos) + TD-14a + TD-6 · **reescrito en inglés** (D-P4-6) | T7 |
 | Decisión del array global | Pregunta al dueño 2026-11-04 (D-P4-2) | T4 |
 
 ## 10. Cierre

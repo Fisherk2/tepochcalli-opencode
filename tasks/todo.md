@@ -46,6 +46,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] `permission:` singular marcado **V1 legacy / prohibido**
 - [ ] Discrepancia `agents.mdx` vs `permissions.mdx` resuelta a favor de la **lista**, citada
 - [ ] Checklist de no-regresión de frontmatter (7 campos legacy + `todowrite` + `subagent` en comandos)
+- [ ] **Regla de idioma (D-P4-6)**: payload (`agents/*.md`, `commands/*.md`, `AGENTS.md` del vault) en **inglés**; repo en español — con la lista de marcadores del español para el chequeo y la excepción de los nombres propios
 - Deps: T0 · Verificación: grep de URLs + md-lint sin errores nuevos + revisión del orquestador
 
 ### [ ] T2 — Inventario real + matriz de conflictos 1:1
@@ -97,7 +98,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] last-match-wins: reglas amplias primero, excepciones al final (ej. Nezahualcóyotl: `01-tasks/research/** deny` **último**)
 - [ ] Superficies: Pochteca `01-tasks/research/**` · Nezahualcóyotl `01-tasks/` (sin research) · Chilam `03-citations/`+`04-review/` · Tlacuilo deny-list (`02-drafts/`, `05-outputs/`, 10+ a petición) · Itzamná sin edit/subagent/shell
 - [ ] **D-P4-2 registrada**: el array global de 313 reglas se elimina en Phase 5 → permisos SOLO en los `.md`
-- [ ] Frontmatter: `mode: primary`, `description` en español, sin `model`; `default_agent` → `itzamna`
+- [ ] Frontmatter: `mode: primary`, `description` **in English**, sin `model`; `default_agent` → `itzamna`
 - [ ] Riesgo D-P4-3 (tools MCP sin regla por agente) anotado para §Trade-offs
 - Deps: T1, T3 · Verificación: YAML parseable + simulación last-match-wins (≥3 reglas/agente) + grep legacy = 0 + md-lint
 
@@ -118,26 +119,27 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - Subagente: `prompt-engineer` · Skills: `context-engineering`, `obsidian-markdown`, `opencode`
 - Tools: `context7`, `codebase-memory-mcp`
 - Fichero: NUEVO `specs/spec-payload-agents.md`
-- [ ] 5 cuerpos ≤60 líneas, en español
-- [ ] 6/6 elementos por agente: persona UH · propósito + bandeja · MCP-first · no-contaminación · formato de cita · cláusula «el AGENTS.md del vault manda»
+- [ ] 5 cuerpos ≤60 líneas, **in English** (D-P4-6); la spec que los surrounds sigue en español
+- [ ] Persona de cada agente = traducción fiel de su fila en `docs/UH.md` (mismo rol, mismo alcance; sin reinterpretar la metodología)
+- [ ] 6/6 elementos por agente: persona UH · propósito + bandeja · MCP-first · no-contaminación · formato de cita · cláusula «the vault's AGENTS.md governs and is editable»
 - [ ] Itzamná enruta y no ejecuta ni delega
 - [ ] 0 skills inexistentes citadas
 - [ ] Frontmatter conforme a T1 y coherente con los YAML de T4
 - [ ] Fichero <500 líneas
-- Deps: T4 · Verificación: `wc -l` + grep de los 6 elementos + grep de skills + md-lint
+- Deps: T4 · Verificación: `wc -l` + grep de los 6 elementos + grep de skills + **chequeo de idioma (0 marcadores del español)** + md-lint
 
 ### [ ] T6 — Los 9 cuerpos de comando (verbatim)
 
 - Subagente: `technical-writer` · Skills: `context-engineering`, `obsidian-markdown`, `opencode`, `documentation-and-adrs`
 - Tools: `context7`, `codebase-memory-mcp`
 - Fichero: NUEVO `specs/spec-payload-commands.md`
-- [ ] 9 cuerpos ≤35 líneas, frontmatter `{description, agent}` (sin `model`, sin `subagent`)
+- [ ] 9 cuerpos ≤35 líneas, **in English** (D-P4-6), frontmatter `{description (1 line, English), agent}` (sin `model`, sin `subagent`)
 - [ ] 7/7 elementos por comando: fase UH · `$ARGUMENTS`/`$1` · MCP-first 7 tools · protocolo `E_*`→`rag_status` · destino = su bandeja D9.2 · formato de cita · no-contaminación
-- [ ] `/research`, `/validate`, `/cite` verbatim (cualquier cambio anotado como enmienda fechada)
+- [ ] `/research`, `/validate`, `/cite`: el español original queda en la spec como contrato de referencia; el bloque inglés es el congelado — traducción fiel (mismos estados de `procedencia`, mismo gate, mismas clasificaciones); divergencia semántica = enmienda fechada
 - [ ] 0 ocurrencias de `!`cmd`` y de `@paths`
 - [ ] `/transform`: solo skills existentes + gaps declarados sin inventar
 - [ ] Fichero <500 líneas
-- Deps: T3, T4 · Verificación: `wc -l` + greps + `agent:` válidos + md-lint
+- Deps: T3, T4 · Verificación: `wc -l` + greps + `agent:` válidos + **chequeo de idioma (0 marcadores del español)** + md-lint
 
 ### 🚦 Checkpoint CP-C — fin de T5+T6
 
@@ -145,6 +147,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] 9 comandos ≤35 líneas con los 7 elementos
 - [ ] 0 `!`cmd`` / `@paths`
 - [ ] Cada destino de escritura = su bandeja (D9.2)
+- [ ] **0 marcadores del español en los 14 bloques del payload** (D-P4-6)
 - [ ] md-lint sin errores nuevos vs baseline
 
 ---
@@ -156,11 +159,11 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - Subagente: `docs-writer` · Skills: `documentation-and-adrs`, `agent-md-refactor`, `context-engineering`
 - Tools: `codebase-memory-mcp`, `vercel-grep`
 - Ficheros: `specs/spec-payload-vault.md`, `specs/spec-agent-workflow.md`
-- [ ] `AGENTS.md` del vault ≤120 líneas, 7 secciones, coherente con T5/T6
-- [ ] §Testing con criterios ejecutables por Phase 5 (greps incluidos)
+- [ ] `AGENTS.md` del vault **reescrito en inglés** (D-P4-6) ≤120 líneas, 7 secciones, coherente con T5/T6
+- [ ] §Testing con criterios ejecutables por Phase 5 (greps incluidos, incluido el de idioma)
 - [ ] §Open Questions: array global **resuelto** (D-P4-2) y `default_agent` resuelto por evidencia
 - [ ] Enlaces relativos entre specs: 0 rotos
-- [ ] §Decisiones fechadas y §Trade-offs con el riesgo D-P4-3
+- [ ] §Decisiones fechadas y §Trade-offs con los riesgos D-P4-3 y O-10 (fidelidad de la traducción)
 - Deps: T5, T6 · Verificación: script de enlaces + `wc -l` de las 4 specs + md-lint
 
 ### 🚦 Checkpoint CP-D — fin de T7
@@ -208,6 +211,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 | D-P4-3 | Solo corregir el vocabulario V2; sin reglas MCP por agente | dueño | 2026-11-04 |
 | D-P4-4 | Dividir el blueprint en 4 specs (<500 líneas) | dueño | 2026-11-04 |
 | D-P4-5 | Sobrescribir `tasks/plan.md` y `tasks/todo.md` | dueño | 2026-11-04 |
+| D-P4-6 | **Los artefactos del payload van en INGLÉS** (5 agents, 9 commands, `AGENTS.md` del vault, `description`); la prosa del repo sigue en español | dueño | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)
