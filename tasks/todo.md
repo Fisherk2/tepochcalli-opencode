@@ -163,23 +163,24 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 
 ## Ola 4 — Coherencia
 
-### [ ] T7 — Coherencia del blueprint y cierre de preguntas abiertas
+### [x] T7 — Coherencia del blueprint y cierre de preguntas abiertas
 
 - Subagente: `docs-writer` · Skills: `documentation-and-adrs`, `agent-md-refactor`, `context-engineering`
 - Tools: `codebase-memory-mcp`, `vercel-grep`
 - Ficheros: `specs/spec-payload-vault.md`, `specs/spec-agent-workflow.md`
-- [ ] `AGENTS.md` del vault **reescrito en inglés** (D-P4-6) ≤120 líneas, 7 secciones, coherente con T5/T6
-- [ ] §Testing con criterios ejecutables por Phase 5 (greps incluidos, incluido el de idioma)
-- [ ] §Open Questions: array global **resuelto** (D-P4-2) y `default_agent` resuelto por evidencia
-- [ ] Enlaces relativos entre specs: 0 rotos
-- [ ] §Decisiones fechadas y §Trade-offs con los riesgos D-P4-3 y O-10 (fidelidad de la traducción)
-- Deps: T5, T6 · Verificación: script de enlaces + `wc -l` de las 4 specs + md-lint
+- [x] `AGENTS.md` del vault **reescrito en inglés** (D-P4-6) ≤120 líneas (**67**), 7 secciones, coherente con T5/T6
+- [x] §Testing con criterios ejecutables por Phase 5 (greps incluidos, incluido el de idioma)
+- [x] §Open Questions: array global **resuelto** (D-P4-2) y `default_agent` resuelto por evidencia
+- [x] Enlaces relativos entre specs: **92 comprobados, 0 rotos**
+- [x] §Decisiones D-P4-1…D-P4-11 con autor y fecha; §Trade-offs con D-P4-3 y O-10
+- [x] Summary/Proposed Solution reflejan el split en 5 specs y los 15 artefactos
+- Deps: T5, T6 · Verificación: script de enlaces + `wc -l` de las 6 specs (<500) + md-lint
 
 ### 🚦 Checkpoint CP-D — fin de T7
 
-- [ ] `AGENTS.md` del vault ≤120 líneas y coherente
-- [ ] 0 enlaces rotos · 0 preguntas abiertas
-- [ ] md-lint sin errores nuevos vs baseline
+- [x] `AGENTS.md` del vault ≤120 líneas (67) y coherente
+- [x] 0 enlaces rotos · 0 preguntas abiertas
+- [x] md-lint sin errores nuevos vs baseline
 
 ---
 
