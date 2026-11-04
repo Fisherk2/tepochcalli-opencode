@@ -42,10 +42,10 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - Tools: `context7`, `gitmcp`, `vercel-grep`
 - Fichero: `specs/spec-payload-vault.md` (§Reglas de formato)
 - [ ] Cada regla con URL oficial + versión `v2.1.2` + fecha 2026-11-04
-- [ ] Tabla del vocabulario V2 de acciones, con `todowrite` marcado **inexistente**
-- [ ] `permission:` singular marcado **V1 legacy / prohibido**
+- [ ] Tabla del vocabulario de acciones V2; las acciones de casa (`todowrite`, `lsp`, `question`) **se conservan** (las docs admiten acciones de plugin); lo prohibido es `permission:` singular + los 7 campos legacy
 - [ ] Discrepancia `agents.mdx` vs `permissions.mdx` resuelta a favor de la **lista**, citada
-- [ ] Checklist de no-regresión de frontmatter (7 campos legacy + `todowrite` + `subagent` en comandos)
+- [ ] Checklist de no-regresión de frontmatter (7 campos legacy + `permission:` singular + `subagent` en comandos)
+- [ ] **Guía de formato del repo citada como canónica** (D-P4-8): `agent_example.md` y `command_example.md` (raíz, **sin commitear**) — solo por ruta, sin copiar su contenido
 - [ ] **Regla de idioma (D-P4-6)**: payload (`agents/*.md`, `commands/*.md`, `AGENTS.md` del vault) en **inglés**; repo en español — con la lista de marcadores del español para el chequeo y la excepción de los nombres propios
 - Deps: T0 · Verificación: grep de URLs + md-lint sin errores nuevos + revisión del orquestador
 
@@ -95,11 +95,12 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - Subagente: `security-architect` · Skills: `security-and-hardening`, `design-patterns`, `opencode`
 - Tools: `context7`, `gitmcp`
 - Fichero: `specs/spec-payload-vault.md` (§Blueprint de permisos + §Nota de fusión)
-- [ ] 5 YAML con vocabulario V2 (sin `todowrite`, sin `permission:` singular, sin campos legacy)
+- [ ] 5 YAML en la **forma de la guía**: `permissions` como lista con `action:`/`resource:`/`effect:` en líneas propias (no el mapa en línea del blueprint actual), con `todowrite`/`lsp`/`question` conservadas, sin `permission:` singular y sin campos legacy
 - [ ] last-match-wins: reglas amplias primero, excepciones al final (ej. Nezahualcóyotl: `01-tasks/research/** deny` **último**)
 - [ ] Superficies: Pochteca `01-tasks/research/**` · Nezahualcóyotl `01-tasks/` (sin research) · Chilam `03-citations/`+`04-review/` · Tlacuilo deny-list (`02-drafts/`, `05-outputs/`, 10+ a petición) · Itzamná sin edit/subagent/shell
 - [ ] **D-P4-2 registrada**: el array global de 313 reglas se elimina en Phase 5 → permisos SOLO en los `.md`
-- [ ] Frontmatter: `mode: primary`, `description` **in English**, sin `model`; `default_agent` → `itzamna`
+- [ ] Frontmatter: `description` **entrecomillado** con patrón «Name - Role» (`"Pochteca - The Explorer"`), `mode: primary`, sin `model`; `default_agent` → `itzamna`
+- [ ] Divergencia con la guía documentada: la guía usa `subagent * allow` + deny por nombre; el blueprint mantiene `subagent * deny` para los 5 (catálogo inerte, D9)
 - [ ] Riesgo D-P4-3 (tools MCP sin regla por agente) anotado para §Trade-offs
 - Deps: T1, T3 · Verificación: YAML parseable + simulación last-match-wins (≥3 reglas/agente) + grep legacy = 0 + md-lint
 
@@ -121,8 +122,11 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - Tools: `context7`, `codebase-memory-mcp`
 - Fichero: NUEVO `specs/spec-payload-agents.md`
 - [ ] 5 cuerpos ≤60 líneas, **in English** (D-P4-6); la spec que los surrounds sigue en español
+- [ ] **Esqueleto de casa** (guía): `# NAME — ROLE` · `## ROLE & DIRECTIVE` · `### PERSONALITY` (Tone/Opening/Closing/Ritual/Taboo/E.g.) · `### CAPABILITIES` · `### RULES` · `## SOURCES OF TRUTH` · `## COMPOSITION`
+- [ ] `### DELEGATION PROTOCOL` sustituido por cláusula explícita de **no-delegación** (D9), declarada en el `.md` y en la spec
+- [ ] 6/6 elementos por agente mapeados a las secciones de casa: persona UH · propósito + bandeja · MCP-first · no-contaminación · formato de cita · cláusula «the vault's AGENTS.md governs and is editable»
+- [ ] ≤60 líneas: el ejemplo de la guía tiene ~123 → comprimir y **declarar qué secciones se recortan**
 - [ ] Persona de cada agente = traducción fiel de su fila en `docs/UH.md` (mismo rol, mismo alcance; sin reinterpretar la metodología)
-- [ ] 6/6 elementos por agente: persona UH · propósito + bandeja · MCP-first · no-contaminación · formato de cita · cláusula «the vault's AGENTS.md governs and is editable»
 - [ ] Itzamná enruta y no ejecuta ni delega
 - [ ] 0 skills inexistentes citadas
 - [ ] Frontmatter conforme a T1 y coherente con los YAML de T4
@@ -135,6 +139,8 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - Tools: `context7`, `codebase-memory-mcp`
 - Fichero: NUEVO `specs/spec-payload-commands.md`
 - [ ] 9 cuerpos ≤35 líneas, **in English** (D-P4-6), frontmatter `{description (1 line, English), agent}` (sin `model`, sin `subagent`)
+- [ ] **Esqueleto de casa** (guía) adaptado: `## Pre-Flight` (frescura del índice + `search` antes de leer crudo) · `## Phase …` (fase metodológica) · `## Escalation` (`E_*` → `rag_status()` + `fix_hint`; dudas → `question`) · `## Suggested Next Step` con cita de bloque `> …` (siguiente comando de la cadena)
+- [ ] ≤35 líneas: el ejemplo de la guía tiene ~99 → comprimir y **declarar qué secciones se recortan**
 - [ ] 7/7 elementos por comando: fase UH · `$ARGUMENTS`/`$1` · MCP-first 7 tools · protocolo `E_*`→`rag_status` · destino = su bandeja D9.2 · formato de cita · no-contaminación
 - [ ] `/research`, `/validate`, `/cite`: el español original queda en la spec como contrato de referencia; el bloque inglés es el congelado — traducción fiel (mismos estados de `procedencia`, mismo gate, mismas clasificaciones); divergencia semántica = enmienda fechada
 - [ ] 0 ocurrencias de `!`cmd`` y de `@paths`
@@ -149,6 +155,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] 0 `!`cmd`` / `@paths`
 - [ ] Cada destino de escritura = su bandeja (D9.2)
 - [ ] **0 marcadores del español en los 14 bloques del payload** (D-P4-6)
+- [ ] Esqueleto de casa presente en los 14 ficheros (secciones de la guía, con las sustituidas declaradas)
 - [ ] md-lint sin errores nuevos vs baseline
 
 ---
@@ -191,6 +198,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 - [ ] Impacto de D-P4-6/D-P4-7 registrado para Phase 5 (constantes del wizard + asset `ejemplo.pdf` + re-verificación de que el PDF sigue parseable, F3)
 - [ ] `CHANGELOG.md` con entrada de Phase 4
 - [ ] `git diff --stat -- obsidian-workspace` **vacío**
+- [ ] `agent_example.md` y `command_example.md` siguen **untracked** (`??` en `git status --short`) y **no entran en ningún commit** (D-P4-8)
 - [ ] Commits atómicos Conventional Commits ≤72 columnas + trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>`
 - Deps: T7 · Verificación: md-lint + render mermaid + `wc -l` + enlaces + **FTR con el usuario**
 
@@ -215,6 +223,7 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 | D-P4-5 | Sobrescribir `tasks/plan.md` y `tasks/todo.md` | dueño | 2026-11-04 |
 | D-P4-6 | **Los artefactos del payload van en INGLÉS** (5 agents, 9 commands, `AGENTS.md` del vault, `description`); la prosa del repo sigue en español | dueño | 2026-11-04 |
 | D-P4-7 | **Las muestras del payload van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf`; el renombrado del wizard es de Phase 5 | dueño | 2026-11-04 |
+| D-P4-8 | **La guía de formato son `agent_example.md` y `command_example.md`** (raíz, **sin commitear**): fijan el header y el esqueleto de cuerpo; el plan solo referencia las rutas | dueño | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)

@@ -34,6 +34,7 @@ el **nombre objetivo** y el contenido; el cambio de las constantes del wizard (`
 | Escribir en `obsidian-workspace/**` | Phase 4 es documentación pura; la prohibición ES un entregable verbal de la fase |
 | Tocar `obsidian-workspace/opencode.json` | La decisión sobre el array `permissions` se **documenta** aquí y se **ejecuta** en Phase 5 |
 | Traducir al inglés la documentación del repo (`specs/`, `docs/`, `tasks/`) | D-P4-6 solo alcanza al payload; la prosa del repo sigue en español (CODE_STYLE) |
+| **Commitear `agent_example.md` / `command_example.md`** | Son la guía de formato del dueño y **no se commitean** (D-P4-8): se referencian por ruta y el plan se mantiene autosuficiente |
 | Modificar código Python/Rust, contratos MCP, ADRs | Los contratos D1-D11 están `Accepted`; cambiarlos exige ADR nuevo |
 | Tocar `docs/UH.md`, `README.md`, `LICENSE`, `opencode.json` (raíz) | Pre-commit checklist del `AGENTS.md` del repo |
 | Instalar/retirar skills del payload | Es la acción de Phase 5 (Anexo A), no el diseño de Phase 4 |
@@ -44,11 +45,12 @@ el **nombre objetivo** y el contenido; el cambio de las constantes del wizard (`
 | --- | --- | --- |
 | D-P4-1 | **Congelar los 9 comandos verbatim en Phase 4** (no solo 3) | T6 reescribe los 6 restantes; Phase 5 = copiar y verificar |
 | D-P4-2 | **Eliminar el array global `permissions`** (313 reglas) del payload | T4 decide y documenta; la ejecución es Phase 5 |
-| D-P4-3 | **Solo corregir el vocabulario** de acciones V2 (fuera `todowrite`); **sin** reglas MCP por agente | T1 corrige; T4 no añade acciones `tepochcalli_rag_*` |
+| D-P4-3 | **Solo corregir la FORMA del bloque de permisos** (`permissions` como lista; nunca `permission:` singular); las acciones de casa (`todowrite`, `lsp`, `question`) **se conservan** — lo fija la guía (D-P4-8); **sin** reglas MCP por agente | T1 documenta la forma y el catálogo; T4 no añade acciones `tepochcalli_rag_*` |
 | D-P4-4 | **Dividir el blueprint en 4 specs** (<500 líneas cada una) | T2/T5/T6 crean las 3 nuevas; T8 actualiza índices |
 | D-P4-5 | **Sobrescribir `tasks/plan.md` y `tasks/todo.md`** | El plan de Phase 3.5 queda solo en el historial de git; WORKFLOW §Phase 3.5 pasa a apuntar al commit |
 | D-P4-6 | **Los artefactos del payload se redactan en INGLÉS** (5 system prompts, 9 cuerpos de comando, `AGENTS.md` del vault, `description` de los agentes); la prosa del repo (specs, docs, `tasks/`) sigue en español | T5, T6 y T7 redactan en inglés; T1 fija el criterio y el chequeo; el gate CP-C verifica 0 marcadores del español en los bloques del payload. Precedente: la skill `tepochcalli-mcp` del payload ya está en inglés |
 | D-P4-7 | **Las muestras del payload también van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf` | T2 inventaría las muestras y fija su nombre objetivo; T8 registra el impacto en el wizard (constantes + asset) para Phase 5 |
+| D-P4-8 | **La guía de formato del repo son `agent_example.md` y `command_example.md`** (raíz del repo, **sin commitear**): fijan el header y el esqueleto de cuerpo de los `.md` de agente y de comando | El plan **solo referencia las rutas** (no copia ni extrae el contenido); T1+T5+T6 la citan como formato canónico; T8 verifica que sigan **untracked** |
 
 ## 3. Estado real verificado (2026-11-04, lectura del repo)
 
@@ -134,12 +136,17 @@ resuelta y citada.
       `mode: primary|subagent|all`; `hidden`; `color`; `steps`; frontmatter de comando `description`/`agent`/`model`/`subagent`;
       `template` solo en JSON; `default_agent` debe ser primary) lleva **URL oficial + versión + fecha**
 - [ ] Tabla del **vocabulario de acciones V2** (`read`, `edit`, `glob`, `grep`, `shell`, `subagent`, `skill`,
-      `question`, `webfetch`, `websearch`, `external_directory`, `doom_loop`, `<server>_<tool>`, `execute`) con la
-      nota explícita: **`todowrite` no existe** (lo usan los 5 stubs) y **`permission:` singular es V1 legacy**
-      (prohibido; los stubs tampoco deben reintroducirlo)
+      `question`, `webfetch`, `websearch`, `external_directory`, `doom_loop`, `<server>_<tool>`, `execute`) +
+      nota de que las acciones son **cadenas que un plugin puede ampliar** (docs oficiales: *«V2 action names are
+      strings, so plugins may define more actions»*), por lo que las acciones de casa (`todowrite`, `lsp`,
+      `question`, usadas por la guía y por los stubs) **se conservan**; la prohibición real es
+      **`permission:` singular** (V1 legacy) y los 7 campos legacy
 - [ ] Discrepancia entre `agents.mdx` (mapa singular) y `permissions.mdx` (lista) **resuelta a favor de la lista**,
       con la fuente canónica citada y el razonamiento
-- [ ] Checklist de no-regresión de frontmatter (los 7 campos legacy + `todowrite` + `subagent` en comandos)
+- [ ] Checklist de no-regresión de frontmatter (los 7 campos legacy + `permission:` singular + `subagent` en comandos)
+- [ ] **Guía de formato del repo** (D-P4-8) citada como canónica para el header y el esqueleto de cuerpo:
+      `agent_example.md` y `command_example.md` (raíz del repo, **sin commitear**) — el plan solo referencia las
+      rutas; no se copia su contenido ni se commitean
 - [ ] **Regla de idioma del payload** (D-P4-6) fijada por escrito: los artefactos que se materializan en
       `obsidian-workspace/` (`.opencode/agents/*.md`, `.opencode/commands/*.md`, `AGENTS.md` del vault) van en
       **inglés**; la documentación del repo (`specs/`, `docs/`, `tasks/`) va en español — con la **lista de marcadores
@@ -147,7 +154,8 @@ resuelta y citada.
       excepción de los **nombres propios** (agentes, bandejas, tools, estados de `procedencia`, que son contrato)
 - [ ] Cero referencias a APIs no verificadas (R2/R3: sin cita no hay decisión)
 
-**Verificación:** grep de `http` + `v2.1.2` en la sección (≥1 URL por grupo de reglas) · `just md-lint` sin errores
+**Verificación:** grep de `http` + `v2.1.2` en la sección (≥1 URL por grupo de reglas) · la sección cita las rutas
+de la guía (`agent_example.md`, `command_example.md`) como formato canónico · `just md-lint` sin errores
 nuevos vs T0 · revisión del orquestador contra la fuente.
 
 **Dependencias:** T0. **Fichero:** `specs/spec-payload-vault.md` (§Reglas de formato).
@@ -229,7 +237,10 @@ Hoy están escritos contra un formato viejo y el payload arrastra 313 reglas glo
 
 **Criterios de aceptación**
 
-- [ ] 5 bloques YAML con **vocabulario V2**: fuera `todowrite`, fuera `permission:` singular, sin los 7 campos legacy
+- [ ] 5 bloques YAML en la **forma de la guía** (D-P4-8): lista `permissions` con `action:`/`resource:`/`effect:`
+      **en líneas propias** (no el mapa en línea `{action: …, resource: …, effect: …}` del blueprint actual),
+      con las acciones de casa (`todowrite`, `lsp`, `question`) **conservadas**, sin `permission:` singular y
+      sin los 7 campos legacy
 - [ ] **last-match-wins respetado**: reglas amplias primero, excepciones al final (ej. Nezahualcóyotl:
       `edit * deny` → `edit 01-tasks/** allow` → `edit 01-tasks/research/** deny` **último**)
 - [ ] Superficies efectivas por agente: Pochteca `01-tasks/research/**`; Nezahualcóyotl `01-tasks/` (sin research);
@@ -238,9 +249,13 @@ Hoy están escritos contra un formato viejo y el payload arrastra 313 reglas glo
       Itzamná sin `edit`, sin `subagent`, sin `shell`
 - [ ] **D-P4-2 registrada**: el array global `permissions` (313 reglas) de `obsidian-workspace/opencode.json`
       **se elimina en Phase 5** → permisos SOLO en los `.md`; §Nota de fusión reescrita con el porqué
-- [ ] Normas de frontmatter: `mode: primary`, `description` **in English** (1 line), **sin `model`** (`model`/`steps`/`color`
+- [ ] Normas de frontmatter según la guía: `description` **entrecomillado** con el patrón «Name - Role»
+      (`"Pochteca - The Explorer"`), `mode: primary`, **sin `model`** (`model`/`steps`/`color`
       viven en el bloque `agents` de `opencode.json`); `default_agent` → `itzamna` (primary, visible) como
       verificación de Phase 5
+- [ ] Divergencia con la guía **documentada, no copiada**: la guía usa `subagent * allow` + deny por nombre
+      (patrón del orquestador Códice); el blueprint mantiene `subagent * deny` para los 5 (catálogo inerte, D9) —
+      la razón queda escrita en §Nota de fusión
 - [ ] Nota de riesgo asumido (D-P4-3): sin reglas MCP por agente, `add_source`/`convert_*` quedan accesible para
       todos → el control es de prompt, no de permiso → declarado en §Trade-offs
 
@@ -263,6 +278,16 @@ que no está escrito. Este calpulli redacta los 5 prompts definitivos.
 **Criterios de aceptación**
 
 - [ ] 5 cuerpos, **≤60 líneas** cada uno, **in English** (D-P4-6); la spec que los surrounds sigue en español
+- [ ] **Esqueleto de casa** (guía D-P4-8): `# NAME — ROLE` · `## ROLE & DIRECTIVE` · `### PERSONALITY`
+      (Tone / Opening / Closing / Ritual / Taboo / E.g.) · `### CAPABILITIES` · `### RULES` ·
+      `## SOURCES OF TRUTH` · `## COMPOSITION` (*Invoke directly when* / *Invoke via* / *Do not invoke from*)
+- [ ] `### DELEGATION PROTOCOL` de la guía **se sustituye** por una cláusula explícita de **no-delegación**
+      (D9: ningún agente delega en subagentes) — la sustitución se declara en el propio `.md` y en la spec
+- [ ] Los 6 elementos obligatorios **mapeados a las secciones de casa**: persona UH → `ROLE & DIRECTIVE` +
+      `PERSONALITY` · propósito y bandeja → `ROLE & DIRECTIVE` + `CAPABILITIES` · MCP-first, no-contaminación,
+      formato de cita y cláusula del `AGENTS.md` → `RULES` · fuentes de verdad → `SOURCES OF TRUTH`
+- [ ] El ejemplo de la guía ocupa ~123 líneas y el tope del vault es **≤60** → los cuerpos se **comprimen**
+      (frases en vez de listas largas) y cada `.md` declara qué secciones de la guía se recortan
 - [ ] La persona de cada agente es la **traducción fiel** de su fila en `docs/UH.md` (fuente inmutable en español):
       mismo rol, mismo alcance, mismo nombre propio; la traducción no reinterpretan la metodología
 - [ ] Cada cuerpo incluye los 6 elementos obligatorios: persona UH (1-2 líneas) · propósito + **su bandeja exacta** ·
@@ -298,6 +323,12 @@ congela para Phase 5); los 6 restantes se redactan hoy, también en inglés (D-P
       MCP-first con las **7** tools (catálogo único: la skill `tepochcalli-mcp`) · protocolo `E_*` → `rag_status` ·
       **destino de escritura = su bandeja** (D9.2) + contrato de frontmatter cuando aplique · formato de cita ·
       no-contaminación donde lee bandejas
+- [ ] **Esqueleto de casa** (guía D-P4-8), adaptado a la metodología: `## Pre-Flight` (estado del índice:
+      `index_refresh()` si dudamos de la frescura + `search` antes de leer crudo) · `## Phase …` (la fase
+      metodológica) · `## Escalation` (`E_*` → `rag_status()` + `fix_hint`; dudas de intención → `question`) ·
+      `## Suggested Next Step` cerrado con cita de bloque `> …` (el comando siguiente de la cadena, como la guía)
+- [ ] El ejemplo de la guía ocupa ~99 líneas y el tope del vault es **≤35** → los cuerpos se **comprimen** y cada
+      uno declara qué secciones de la guía se recortan
 - [ ] `/research`, `/validate`, `/cite`: el español original se conserva en la spec como **contrato de referencia** y
       el bloque inglés se congela para Phase 5 — traducción **fiel** (mismos estados de `procedencia`, mismo gate
       determinista, mismas clasificaciones `respaldada`/`sin_ancla`/`cita_ajena`/`sin_cita`); cualquier divergencia
@@ -370,6 +401,8 @@ del `AGENTS.md` del vault), `context-engineering` · **Tools/MCP:** `codebase-me
       re-verificación de que el PDF sigue siendo parseable tras el renombrado (F3)
 - [ ] `CHANGELOG.md`: entrada de Phase 4
 - [ ] Cero escrituras en `obsidian-workspace/**` (verificado con `git diff --stat -- obsidian-workspace`)
+- [ ] Los dos ejemplos de la guía (`agent_example.md`, `command_example.md`) siguen **untracked**
+      (`git status --short` los muestra como `??`) y **no entran en ningún commit** (D-P4-8)
 - [ ] Commits atómicos Conventional Commits (≤72 columnas) con trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>`
 
 **Verificación:** `just md-lint` (cero errores **nuevos** vs T0) · render mermaid de los bloques nuevos (0 fallos) ·
@@ -417,7 +450,7 @@ trabajaría sobre inventario no verificado.
 | --- | --- | --- |
 | **CP-A** | fin de T1+T2 | Reglas de formato citadas (URL + versión + fecha) · inventario contado 1:1 (209/170/9) · **0 skills inventadas** · 4 specs <500 líneas |
 | **CP-B** | fin de T3+T4 | Los 7 nombres de tool del servidor MCP coinciden con la tabla 9×4 · cada skill citada existe · **0** campos legacy y **0** `todowrite` · YAMLs parsean y la simulación last-match-wins coincide con lo esperado |
-| **CP-C** | fin de T5+T6 | 5 prompts ≤60 líneas con los 6 elementos obligatorios · 9 comandos ≤35 líneas con los 7 elementos obligatorios · **0** ocurrencias de `!`cmd``/`@paths` · cada destino de escritura = su bandeja D9.2 · **0 marcadores del español en los 14 bloques del payload (D-P4-6)** |
+| **CP-C** | fin de T5+T6 | 5 prompts ≤60 líneas con los 6 elementos obligatorios · 9 comandos ≤35 líneas con los 7 elementos obligatorios · **0** ocurrencias de `!`cmd``/`@paths` · cada destino de escritura = su bandeja D9.2 · **0 marcadores del español en los 14 bloques del payload (D-P4-6)** · esqueleto de casa presente en los 14 ficheros (secciones de la guía, con las sustituidas declaradas) |
 | **CP-D** | fin de T7 | `AGENTS.md` del vault ≤120 líneas y coherente con T5/T6 · enlaces relativos 0 rotos · preguntas abiertas 0 · md-lint sin errores nuevos |
 | **CP-E** | fin de T8 | **BLUEPRINT APPROVED** por el usuario (FTR Phase 4→5) · status `Approved` en `SPEC.md` · md-lint sin errores nuevos · mermaid render 0 fallos · `git diff --stat -- obsidian-workspace` vacío |
 
@@ -436,12 +469,15 @@ trabajaría sobre inventario no verificado.
 | O-9 | Al sobrescribir `tasks/plan.md`, se pierde el plan de Phase 3.5 salvo en git | alta | bajo | D-P4-5 (decisión del dueño); T8 actualiza la referencia de WORKFLOW al commit |
 | O-10 | La traducción al inglés (D-P4-6) puede **perder semántica**: `docs/UH.md` es la fuente inmutable en español y los estados de `procedencia`/el formato de cita son contrato | media | alto | El español original **se conserva** en la spec como contrato de referencia y el inglés es el bloque congelado; T5/T6 exigen fidelidad explícita (mismos estados, mismo gate, mismas clasificaciones) y T7 reconcilia bloque inglés ↔ bloque español; el chequeo de idioma excluye los nombres propios |
 | O-11 | D-P4-7 toca el **asset del wizard**: `ejemplo.pdf` tiene offsets verificados (`gen_ejemplo_pdf.py`); renombrarlo o regenerarlo en inglés puede romper la Fase 3 (el PDF debe seguir siendo parseable) | media | medio | El cambio de código es **de Phase 5**; el blueprint solo fija el nombre objetivo; T8 registra la re-verificación del PDF (F3) como criterio de Phase 5, no de Phase 4 |
+| O-12 | La guía de formato (D-P4-8) son dos ficheros **sin commitear**: pueden no estar en otra sesión, otra rama o un checkout limpio | media | medio | Riesgo **asumido por el dueño** (D-P4-8): el plan solo referencia las rutas. Si T5/T6 no las encuentran, **se paran y lo reportan** — no se improvisa el formato ni se reescribe la guía |
+| O-13 | Los topes del vault (≤60 líneas por agente, ≤35 por comando) son **menores** que los ejemplos de la guía (123 y 99 líneas): al comprimir se puede perder contenido normativo | alta | medio | T5/T6 declaran qué secciones recortan; los 6/7 elementos obligatorios y los contratos de frontmatter **no** son negociables (prioridad sobre el esqueleto); T7 verifica cobertura contra la checklist, no contra la extensión |
 
 ## 9. Trazabilidad blueprint ↔ fuentes
 
 | Sección del blueprint | Origen | Calpulli |
 | --- | --- | --- |
 | Reglas de formato OpenCode V2 | Docs oficiales `v2.1.2` (ctx7, 2026-11-04) | T1 |
+| **Formato del header y del esqueleto de cuerpo** | **`agent_example.md` y `command_example.md`** (raíz del repo, sin commitear) — guía del dueño (D-P4-8) | T1, T4, T5, T6 |
 | Permisos de los 5 agentes | `spec-payload-vault.md` §Blueprint (existente) + `spec-agent-workflow.md` D9.3 | T4 |
 | Tabla de invocación 9×4 | `spec-payload-vault.md` (existente) + inventario real | T3 |
 | Matriz de conflictos | `spec-payload-vault.md` §Matriz + `spec-agent-workflow.md` Anexo A + TECH_DEBT TD-7/TD-22 | T2 |
