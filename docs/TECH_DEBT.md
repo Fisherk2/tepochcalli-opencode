@@ -199,6 +199,10 @@ informe completo en la ventana de review del orquestador (2026-11-03):
   embeddings. W4 redujo traversadas (3→2) y resolves (cache por directorio); el follow-up
   real (snapshot de mtime / integración con el update del engine) es Phase 6 con este bench
   como baseline (`tests/benchmarks/bench_delta_scale.py`, nunca en gate).
+* **Política de plugins del payload: `@latest` por orden del dueño (2026-11-04)** —
+  `ad7575c` revierte los pins de R-04 (re-congelados en `6e00aa9`): el payload sigue al
+  harness con `@latest` y la versión queda pineada al instalar, no en el repo. El baseline
+  de escala P-02 de arriba (NTFS-3G FAIL 39 501 ms / btrfs PASS 26 967 ms) queda para Phase 6.
 
 ## Deuda no aceptada (evitada por diseño)
 
