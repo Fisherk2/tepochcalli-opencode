@@ -99,21 +99,30 @@
   },
   "mcp": {
     "servers": {
+      "tepochcalli-rag": {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "environment": {
+          "TEPOCHCALLI_ROOT": ".",
+          "INDEXER_DIR": "00-Resources",
+          "TEPOCHCALLI_TOP_K": "5"
+        },
+        "disabled": false
+      },
+      "anydoc": {
+        "type": "local",
+        "command": ["npx","-y","mcp-server-anydoc"],
+        "disabled":true
+      },
       "excel": {
         "type": "local",
-        "command": [
-          "uvx",
-          "excel-mcp-server",
-          "stdio"
-        ],
+        "command": ["uvx", "excel-mcp-server", "stdio"],
         "disabled": true
       },
       "jupyter": {
         "type": "local",
-        "command": [
-          "uvx",
-          "mcp-jupyter-notebook"
-        ],
+        "command": ["uvx", "mcp-jupyter-notebook"],
         "disabled": true,
         "environment": {
           "MCP_JUPYTER_SESSION_MODE": "server",
@@ -126,11 +135,11 @@
   },
   "plugins": [
     "opencode-rpc@2.0.0",
-    "opencode-navigator@latest",
-    "opencode-skills-collection@latest",
-    "opencode-skill-creator@latest",
-    "opencode-search-plugin@latest",
-    "opencode-parser@latest"
+    "opencode-navigator@0.25.0",
+    "opencode-skills-collection@4.1.35",
+    "opencode-skill-creator@0.3.6",
+    "opencode-search-plugin@4.6.1",
+    "opencode-parser@2.0.1"
   ],
   "permissions": [
     {

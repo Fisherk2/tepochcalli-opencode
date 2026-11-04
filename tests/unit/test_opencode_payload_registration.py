@@ -14,7 +14,10 @@ la entrada de wire `mcp.servers.markitdown` era superficie sin cliente):
    gestionadas, el resto del documento re-serializado con el MISMO
    serializador es byte-idéntico al original congelado en
    `tests/fixtures/opencode_payload_before_t9.json` (copia de
-   `git show HEAD:obsidian-workspace/opencode.json` al cerrar T8). Cualquier
+   `git show HEAD:obsidian-workspace/opencode.json`; re-congelado en el
+   review 5-ejes 2026-11-03 porque R-04 pineó las versiones de los 5
+   plugins `@latest` — cambio autorizado del payload, el resto manos off).
+   Cualquier
    cambio de clave, valor u ORDEN en el resto rompe la igualdad de bytes.
 """
 
