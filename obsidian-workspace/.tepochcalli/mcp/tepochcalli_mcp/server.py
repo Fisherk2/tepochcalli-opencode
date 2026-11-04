@@ -1,4 +1,4 @@
-"""Servidor MCP `tepochcalli-rag`: `MCPServer`, composition root y registro de las 4 tools (T1+T2).
+"""Servidor MCP `tepochcalli-rag`: `MCPServer`, composition root y registro de las 7 tools (T1-T11).
 
 Spike de anclaje fail-fast (tasks/plan.md §3) contra `mcp==2.3.0`, verificado
 en la fuente INSTALADA (`venv/lib/python3.12/site-packages/mcp/`), no de
@@ -511,7 +511,7 @@ def _unknown_env_seam() -> tuple[str, ...]:
 async def search(
     query: str, top_k: int = budget.TOP_K_DEFAULT, path_filter: str | None = None
 ) -> CallToolResult:
-    """Busca chunks citados en `00-Resources/` y devuelve los más relevantes.
+    """Busca chunks citados en las raíces declaradas (`INDEXER_DIR`) y devuelve los más relevantes.
 
     Cada resultado trae los 7 campos congelados `{text, source_path, heading,
     char_start, char_end, score, offsets_ref}` con offsets reproducibles

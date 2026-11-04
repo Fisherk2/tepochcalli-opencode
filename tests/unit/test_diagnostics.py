@@ -93,7 +93,7 @@ def test_invalid_top_k_is_reported(
 
     problems = diagnostics.config_problems(_config(), tmp_path)
 
-    assert problems == (f"TEPOCHCALLI_TOP_K: {raw!r} no es un entero > 0 (se usa 5)",)
+    assert problems == (f"TEPOCHCALLI_TOP_K: {raw!r} fuera de [1,20] (se usa 5)",)
 
 
 def test_valid_top_k_is_not_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

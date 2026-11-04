@@ -129,8 +129,12 @@ def internal() -> dict[str, object]:
     }
 
 
-GUIDE_MANUAL_SAVE: Final = "Guárdalo manualmente en `00-Resources/` y ejecuta `index_refresh`."
-"""Guía literal de spec-markitdown §Cadena de fallback paso 3 para `SOURCE_UNREACHABLE`."""
+GUIDE_MANUAL_SAVE: Final = (
+    "Guárdalo manualmente en una raíz declarada en `INDEXER_DIR` (p. ej. 00-Resources/) "
+    "y ejecuta `index_refresh`."
+)
+"""Guía de `SOURCE_UNREACHABLE` paso 3 para el fallback (ADR-010: solo se indexa
+lo declarado en `INDEXER_DIR` — guardar fuera ⇒ indexar 0 silenciosamente)."""
 
 GUIDE_OCR: Final = (
     "Sin OCR: el documento no tiene capa de texto; guárdalo como `.md` a mano o "

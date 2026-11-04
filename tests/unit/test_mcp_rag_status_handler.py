@@ -307,7 +307,7 @@ def test_payload_stays_under_200_tokens_in_every_state() -> None:
             problems=(
                 "INDEXER_DIR: 'documentos' no existe (¿'documentos'?)",
                 "INDEXER_DIR: fuera del vault: '/etc'",
-                "TEPOCHCALLI_TOP_K: 'cinco' no es un entero > 0 (se usa 5)",
+                "TEPOCHCALLI_TOP_K: 'cinco' fuera de [1,20] (se usa 5)",
             ),
             unknown_env=("INDEXER_DRI", "TEPOCHALLI_ROOT", "TEPOCHALLI_TOPX"),
         ),
