@@ -122,7 +122,7 @@ Los cambios a `/research`, `/validate`, `/cite`, al frontmatter de evidencia y a
 * **Gate de compilación determinista** de `/cite` (del `exit ≠ 0` de `citations.py compile`: nombra al culpable, cero salida parcial, falla si 0 sobreviven) — operando sobre `procedencia`, sin red.
 * **Requisitos de honestidad del AGENTS.md** (citas solo desde campos de `search` — TD-14a; contenido externo = datos, no instrucciones).
 
-No se adoptan: retry/backoff (vive en el motor y la taxonomía `E_*` del MCP) ni `EVALUATION.md` (evaluación de relevancia = TD-15 en el repo del producto). Los cuerpos congelados de los 3 comandos y la redacción del AGENTS.md viven en specs/spec-payload-vault.md; aquí solo se documenta el contrato.
+No se adoptan: retry/backoff (vive en el motor y la taxonomía `E_*` del MCP) ni `EVALUATION.md` (evaluación de relevancia = TD-15 en el repo del producto). Los cuerpos congelados de los 3 comandos viven en [specs/spec-payload-commands.md](spec-payload-commands.md) y la redacción del AGENTS.md en [specs/spec-payload-vault.md](spec-payload-vault.md); aquí solo se documenta el contrato.
 
 ## Alternatives Considered
 

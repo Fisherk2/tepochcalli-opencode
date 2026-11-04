@@ -118,47 +118,46 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 
 ## Ola 3 — Contenido congelado (paralelo: T5 ‖ T6)
 
-### [ ] T5 — Los 5 system prompts (verbatim)
+### [x] T5 — Los 5 system prompts (verbatim)
 
 - Subagente: `prompt-engineer` · Skills: `context-engineering`, `obsidian-markdown`, `opencode`
 - Tools: `context7`, `codebase-memory-mcp`
 - Fichero: NUEVO `specs/spec-payload-agents.md`
-- [ ] 5 cuerpos ≤60 líneas, **in English** (D-P4-6); la spec que los surrounds sigue en español
-- [ ] **Esqueleto de casa** (guía): `# NAME — ROLE` · `## ROLE & DIRECTIVE` · `### PERSONALITY` (Tone/Opening/Closing/Ritual/Taboo/E.g.) · `### CAPABILITIES` · `### RULES` · `## SOURCES OF TRUTH` · `## COMPOSITION`
-- [ ] `### DELEGATION PROTOCOL` sustituido por cláusula explícita de **no-delegación** (D9), declarada en el `.md` y en la spec
-- [ ] 6/6 elementos por agente mapeados a las secciones de casa: persona UH · propósito + bandeja · MCP-first · no-contaminación · formato de cita · cláusula «the vault's AGENTS.md governs and is editable»
-- [ ] ≤60 líneas: el ejemplo de la guía tiene ~123 → comprimir y **declarar qué secciones se recortan**
-- [ ] Persona de cada agente = traducción fiel de su fila en `docs/UH.md` (mismo rol, mismo alcance; sin reinterpretar la metodología)
-- [ ] Itzamná enruta y no ejecuta ni delega
-- [ ] 0 skills inexistentes citadas
-- [ ] Frontmatter conforme a T1 y coherente con los YAML de T4
-- [ ] Fichero <500 líneas
-- Deps: T4 · Verificación: `wc -l` + grep de los 6 elementos + grep de skills + **chequeo de idioma (0 marcadores del español)** + md-lint
+- [x] 5 cuerpos ≤60 líneas (**56/54/58/58/56**), **in English** (D-P4-6); la spec que los surrounds sigue en español
+- [x] **Esqueleto de casa** (guía): `# NAME — ROLE` · `## ROLE & DIRECTIVE` · `### PERSONALITY` · `### CAPABILITIES` · `### RULES` · `## SOURCES OF TRUTH` · `## COMPOSITION`
+- [x] `### DELEGATION PROTOCOL` sustituido por `### NO-DELEGATION` (D9), declarado en el `.md` y en la spec
+- [x] 6/6 elementos por agente mapeados (tabla §Mapeo)
+- [x] ≤60 líneas: compresión declarada (personality de 6 líneas, capacidades en frases, reglas de la guía descartadas)
+- [x] Persona = traducción fiel de `docs/UH.md`; Itzamná enruta y no ejecuta ni delega
+- [x] 0 skills inexistentes citadas (`xlsx`, `excel-analysis`, `markdown-mermaid-writing` verificadas; `data-transform` retirada por la matriz → eliminada)
+- [x] Frontmatter conforme a T1: `description` entrecomillado «Name - Role», `mode: primary`; permisos por puntero a `spec-payload-permissions.md` (sin duplicar 90 reglas)
+- [x] Fichero **443** líneas
+- Deps: T4 · Verificación: `wc -l` + grep de los 6 elementos + grep de skills + chequeo de idioma (0) + md-lint
 
-### [ ] T6 — Los 9 cuerpos de comando (verbatim)
+### [x] T6 — Los 9 cuerpos de comando (verbatim)
 
 - Subagente: `technical-writer` · Skills: `context-engineering`, `obsidian-markdown`, `opencode`, `documentation-and-adrs`
 - Tools: `context7`, `codebase-memory-mcp`
 - Fichero: NUEVO `specs/spec-payload-commands.md`
-- [ ] 9 cuerpos ≤35 líneas, **in English** (D-P4-6), frontmatter `{description (1 line, English), agent}` (sin `model`, sin `subagent`)
-- [ ] **Esqueleto de casa** (guía) adaptado: `## Pre-Flight` (frescura del índice + `search` antes de leer crudo) · `## Phase …` (fase metodológica) · `## Escalation` (`E_*` → `rag_status()` + `fix_hint`; dudas → `question`) · `## Suggested Next Step` con cita de bloque `> …` (siguiente comando de la cadena)
-- [ ] ≤35 líneas: el ejemplo de la guía tiene ~99 → comprimir y **declarar qué secciones se recortan**
-- [ ] 7/7 elementos por comando: fase UH · `$ARGUMENTS`/`$1` · MCP-first 7 tools · protocolo `E_*`→`rag_status` · destino = su bandeja D9.2 · formato de cita · no-contaminación
-- [ ] `/research`, `/validate`, `/cite`: el español original queda en la spec como contrato de referencia; el bloque inglés es el congelado — traducción fiel (mismos estados de `procedencia`, mismo gate, mismas clasificaciones); divergencia semántica = enmienda fechada
-- [ ] 0 ocurrencias de `!`cmd`` y de `@paths`
-- [ ] `/transform`: solo skills existentes + gaps declarados sin inventar
-- [ ] Fichero <500 líneas
-- Deps: T3, T4 · Verificación: `wc -l` + greps + `agent:` válidos + **chequeo de idioma (0 marcadores del español)** + md-lint
+- [x] 9 cuerpos ≤35 líneas (**24/30/26/24/24/24/24/25/24**), **in English**, frontmatter `{description, agent}` sin `model`/`subagent`
+- [x] **Esqueleto de casa** adaptado: `## Pre-Flight` · `## Phase …` · `## Escalation` · `## Suggested Next Step` con cita `> …`
+- [x] ≤35 líneas: compresión declarada
+- [x] 7/7 elementos por comando (tabla §Mapa)
+- [x] `/research`, `/validate`, `/cite`: **3/3 cuerpos españoles byte-idénticos** a HEAD como contrato de referencia, con reglas de fidelidad (4 estados, gate determinista, 4 clasificaciones)
+- [x] 0 ocurrencias de `!`cmd`` y de `@paths`
+- [x] `/transform`: solo skills existentes + gaps declarados
+- [x] Fichero **474** líneas
+- Deps: T3, T4 · Verificación: `wc -l` + greps + `agent:` válidos + chequeo de idioma (0 en los 9 bloques EN) + md-lint
 
 ### 🚦 Checkpoint CP-C — fin de T5+T6
 
-- [ ] 5 prompts ≤60 líneas con los 6 elementos
-- [ ] 9 comandos ≤35 líneas con los 7 elementos
-- [ ] 0 `!`cmd`` / `@paths`
-- [ ] Cada destino de escritura = su bandeja (D9.2)
-- [ ] **0 marcadores del español en los 14 bloques del payload** (D-P4-6)
-- [ ] Esqueleto de casa presente en los 14 ficheros (secciones de la guía, con las sustituidas declaradas)
-- [ ] md-lint sin errores nuevos vs baseline
+- [x] 5 prompts ≤60 líneas con los 6 elementos
+- [x] 9 comandos ≤35 líneas con los 7 elementos
+- [x] 0 `!`cmd`` / `@paths`
+- [x] Cada destino de escritura = su bandeja (D9.2)
+- [x] **0 marcadores del español en los 14 bloques del payload** (D-P4-6), con la exención de nombres propios y tokens de enum (`ok_con_avisos`)
+- [x] Esqueleto de casa presente en los 14 ficheros (NO-DELEGATION declarada en los 5)
+- [x] md-lint sin errores nuevos vs baseline
 
 ---
 
@@ -239,3 +238,7 @@ _Cada nota registra: qué se hizo, qué se encontró que no estaba en el plan, y
 - **T1 (2026-11-04):** §Reglas de formato reescrita (107 líneas) con URLs v2.1.2. Hallazgo: `doom_loop` y `lsp` **no** son acciones del catálogo oficial V2 («not current V2 Core permission actions»); se marcan como `casa`/`no` y se conservan solo por la vía de acciones ampliables por plugin. Se corrigieron tres contradicciones de D-P4-6 (fecha 2026-10-21 en cabecera y Goals; `description` y cuerpo «en español»).
 - **T2 (2026-11-04):** inventario verificado 209/170/9, MISSING=0, 112 sin citar. La fila 15 citaba familias inexistentes (`gis-*`, `marketing-*`, … = 0 dirs) y «≈120» era falso: medido **109** out-of-domain. Fila 4 mal sumada (14−11=3 pero solo 2 ganadoras nombradas) → se nombró `paper-lookup`. Las muestras **no** están en el payload: las crea el instalador (`installer.rs`), con cuerpo y PDF en español → Phase 5 renombra constantes, traduce cuerpo y regenera el asset. `01-Tasks/` (mayúscula) existe y `01-tasks/` no: riesgo de caso en macOS/Windows. Matriz movida a `spec-payload-skills.md` (182 líneas).
 - **CP-A (2026-11-04):** verde salvo el umbral de `spec-payload-vault.md` (585), que solo baja a <500 cuando T6 mueva los cuerpos de comando — el fichero ya estaba en 528 antes de Phase 4 (D-P4-9). Se avanza con el umbral como deuda declarada, no como verde.
+- **T3 (2026-11-04):** la tabla 9×4 antigua tenía 4 `⟵G` falsos (`scholar-evaluation`, `review-writing`, `idea-refine`, `data-transform`); corregidos. `scholar-evaluation` se añadió a la fila 14 (era la base de `/validate` y `/review` y caía en el barrido). Las 3 tools del conversor se asignan a `/transform` (justificado contra `tepochcalli-mcp/SKILL.md`).
+- **T4 (2026-11-04):** permisos en forma de bloque = 390 líneas; D-P4-11 los extrae a `spec-payload-permissions.md` (408) y deja el vault en 463. Simulación last-match-wins 14/14. Se añadieron reglas de higiene (`external_directory`, `.env`, `.tepochcalli/config/**`) que el array global hacía de facto; sin ellas, al borrar las 313 reglas se reabriría la lectura de secretos.
+- **T5/T6 (2026-11-04):** 14 bloques con el esqueleto de casa (5 prompts 56/54/58/58/56; 9 comandos 24-30). `data-transform` citada por error en el prompt de Tlacuilo (la matriz la retira) → eliminada. Los 3 cuerpos españoles de referencia son byte-idénticos a HEAD. El vault baja a **310** líneas.
+- **CP-C (2026-11-04):** verde. El chequeo de idioma exime nombres propios y tokens de enum (`ok_con_avisos`, `sin_ancla`, …); sin esa exención, `con` dentro de `ok_con_avisos` daría un falso positivo.
