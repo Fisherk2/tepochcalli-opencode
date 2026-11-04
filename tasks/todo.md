@@ -6,14 +6,14 @@
 
 ## Baseline del gate de linters (T0)
 
-Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
+Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 
 | Métrica | Valor en HEAD (2026-11-04) | Nota |
 | --- | --- | --- |
-| Errores de `just md-lint` (`docs specs AGENTS.md SPEC.md`) | — | baseline D12: el gate **no** está verde; el criterio es **cero errores nuevos** |
-| Bloques mermaid en `docs/` + `specs/` | — | render obligatorio de los nuevos |
-| `wc -l specs/*.md` | — | `spec-payload-vault.md` = 528 (rojo: umbral <500) |
-| `git status --short` | — | debe quedar vacío antes de empezar |
+| Errores de `just md-lint` (`docs specs AGENTS.md SPEC.md`) | **1** — `docs/WORKFLOW.md:166` (MD005) | baseline D12: el gate **no** está verde; el criterio es **cero errores nuevos** |
+| Bloques mermaid en `docs/` + `specs/` | **13** — ARCHITECTURE 5 · UH 2 · APPFLOW 2 · spec-rag-engine 1 · spec-markitdown 1 · spec-installer-wizard 1 · spec-agent-workflow 1 | render obligatorio de los nuevos |
+| `wc -l specs/*.md` | `spec-payload-vault.md` = **528** (rojo: umbral <500); resto <500 | dividir en 4 specs (D-P4-4) → T2/T5/T6 |
+| `git status --short` | solo `?? agent_example.md` · `?? command_example.md` | los dos ejemplos de la guía (D-P4-8) quedan untracked |
 
 ---
 
@@ -26,51 +26,51 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 
 ## Ola 1 — Fundamentos (paralelo: T1 ‖ T2)
 
-### [ ] T0 — Baseline del gate de linters
+### [x] T0 — Baseline del gate de linters
 
 - Subagente: `developer-tooling-engineer` · Skills: `bash-defensive-patterns`, `context-engineering` · Tools: shell, npx
 - Salida: 4 números (md-lint, mermaid, `wc -l`, `git status`) reportados al orquestador
-- [ ] `just md-lint` ejecutado y recuento reportado
-- [ ] Bloques mermaid contados por fichero
-- [ ] `wc -l specs/*.md` con los 4 objetivos marcados
-- [ ] `git status --short` vacío
+- [x] `just md-lint` ejecutado y recuento reportado
+- [x] Bloques mermaid contados por fichero
+- [x] `wc -l specs/*.md` con los 4 objetivos marcados
+- [x] `git status --short` vacío (salvo los dos ejemplos untracked de D-P4-8)
 - Deps: — · Verificación: números reportados
 
-### [ ] T1 — Reglas de formato OpenCode V2 (re-verificadas) + vocabulario de acciones
+### [x] T1 — Reglas de formato OpenCode V2 (re-verificadas) + vocabulario de acciones
 
 - Subagente: `developer-tooling-engineer` · Skills: `opencode`, `source-driven-development`, `find-docs`
 - Tools: `context7`, `gitmcp`, `vercel-grep`
 - Fichero: `specs/spec-payload-vault.md` (§Reglas de formato)
-- [ ] Cada regla con URL oficial + versión `v2.1.2` + fecha 2026-11-04
-- [ ] Tabla del vocabulario de acciones V2; las acciones de casa (`todowrite`, `lsp`, `question`) **se conservan** (las docs admiten acciones de plugin); lo prohibido es `permission:` singular + los 7 campos legacy
-- [ ] Discrepancia `agents.mdx` vs `permissions.mdx` resuelta a favor de la **lista**, citada
-- [ ] Checklist de no-regresión de frontmatter (7 campos legacy + `permission:` singular + `subagent` en comandos)
-- [ ] **Guía de formato del repo citada como canónica** (D-P4-8): `agent_example.md` y `command_example.md` (raíz, **sin commitear**) — solo por ruta, sin copiar su contenido
-- [ ] **Regla de idioma (D-P4-6)**: payload (`agents/*.md`, `commands/*.md`, `AGENTS.md` del vault) en **inglés**; repo en español — con la lista de marcadores del español para el chequeo y la excepción de los nombres propios
+- [x] Cada regla con URL oficial + versión `v2.1.2` + fecha 2026-11-04
+- [x] Tabla del vocabulario de acciones V2; las acciones de casa (`todowrite`, `lsp`, `question`) **se conservan** (las docs admiten acciones de plugin); lo prohibido es `permission:` singular + los 7 campos legacy
+- [x] Discrepancia `agents.mdx` vs `permissions.mdx` resuelta a favor de la **lista**, citada
+- [x] Checklist de no-regresión de frontmatter (7 campos legacy + `permission:` singular + `subagent` en comandos)
+- [x] **Guía de formato del repo citada como canónica** (D-P4-8): `agent_example.md` y `command_example.md` (raíz, **sin commitear**) — solo por ruta, sin copiar su contenido
+- [x] **Regla de idioma (D-P4-6)**: payload (`agents/*.md`, `commands/*.md`, `AGENTS.md` del vault) en **inglés**; repo en español — con la lista de marcadores del español para el chequeo y la excepción de los nombres propios
+- Hallazgo: `doom_loop` **no** es acción oficial en v2.1.2 («`doom_loop` and `lsp` are not current V2 Core permission actions»); se marca `casa`/`no` en la tabla, sin falso citation
 - Deps: T0 · Verificación: grep de URLs + md-lint sin errores nuevos + revisión del orquestador
 
-### [ ] T2 — Inventario real + matriz de conflictos 1:1
+### [x] T2 — Inventario real + matriz de conflictos 1:1
 
 - Subagentes (secuencial): `codebase-archaeologist` → `knowledge-synthesizer`
 - Skills: `codebase-memory`, `context-engineering`, `documentation-and-adrs` · Tools: `codebase-memory-mcp`, `vercel-grep`, shell
 - Fichero: NUEVO `specs/spec-payload-skills.md`
-- [ ] Recuento con comando + fecha: **209** skills · **170** agentes · **9** comandos
-- [ ] 0 skills inventadas (grep 1:1 contra el `ls`) · 0 huérfanas
-- [ ] 209/209 clasificadas (CONSERVAR / CONSOLIDAR+ganadora / RETIRAR / INSTALAR-GAP) o barridas por la fila 15
-- [ ] Gaps (Jupyter, R, Graphviz/PlantUML, LaTeX manuscrito) declarados sin inventar nombres
-- [ ] `tepochcalli-mcp` (fila 17) y TD-22/OfficeCLI coherentes con `docs/TECH_DEBT.md`
-- [ ] **Muestras inventariadas (D-P4-7)**: `00-Resources/ejemplo.md` + `ejemplo.pdf` (constantes `PLACEHOLDER_MD_NAME`/`PLACEHOLDER_PDF_NAME`, asset `crates/tepochcalli/assets/ejemplo.pdf`) y `01-Tasks/{outline,rubric,todo}.md` → nombre objetivo en inglés (`example.md`, `example.pdf`) + contenido esperado; anotar la caja `01-Tasks/` vs canónico `01-tasks/` (vecina de TD-8)
-- [ ] Recuento **derivado** de skills del payload base vs objetivo **<60**
-- [ ] Fichero <500 líneas (si supera 450 → avisar: contingencia O-2)
-- Deps: T0 · Verificación: script de cobertura (faltantes 0, huérfanos 0) + `wc -l` + md-lint
+- [x] Recuento con comando + fecha: **209** skills · **170** agentes · **9** comandos
+- [x] 0 skills inventadas (grep 1:1 contra el `ls`) · 0 huérfanas (112 presentes sin citar, cubiertas por la fila 15)
+- [x] 209/209 clasificadas (34+21+5 CONSERVAR/CONSOLIDAR · 37 RETIRAR · 0 INSTALAR-GAP · 112 barrido)
+- [x] Gaps (Jupyter, R, Graphviz/PlantUML, LaTeX manuscrito) declarados sin inventar nombres
+- [x] `tepochcalli-mcp` (fila 17) y TD-22/OfficeCLI coherentes con `docs/TECH_DEBT.md` (frontera v1 vs 0.2.0)
+- [x] **Muestras inventariadas (D-P4-7)**: son artefactos de instalación (`installer.rs:46-58`), `00-Resources/` está vacío; objetivo `example.md`/`example.pdf`; cuerpo y PDF en español a regenerar; caja `01-Tasks/` vs `01-tasks/` anotada
+- [x] Recuento **derivado**: base estricta **60** (falla `<60` por 0/1); corte de 10 remnants → 50, flagged como D-P4-10 (owner/FTR), no aplicado
+- [x] Fichero <500 líneas (**182**)
 
 ### 🚦 Checkpoint CP-A — fin de T1+T2
 
-- [ ] Reglas de formato citadas (URL + versión + fecha)
-- [ ] Inventario 1:1 verificado (209/170/9)
-- [ ] 0 skills inventadas
-- [ ] Las 4 specs objetivo <500 líneas
-- [ ] md-lint sin errores nuevos vs baseline
+- [x] Reglas de formato citadas (URL + versión + fecha)
+- [x] Inventario 1:1 verificado (209/170/9)
+- [x] 0 skills inventadas
+- [~] Las 4 specs objetivo <500 líneas → `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` **585** (baja a <500 cuando T6 mueva los cuerpos de comando; ver nota D-P4-9)
+- [x] md-lint sin errores nuevos vs baseline
 
 ---
 
@@ -224,8 +224,15 @@ Pendiente de T0: lo rellena el orquestador con el reporte del subagente.
 | D-P4-6 | **Los artefactos del payload van en INGLÉS** (5 agents, 9 commands, `AGENTS.md` del vault, `description`); la prosa del repo sigue en español | dueño | 2026-11-04 |
 | D-P4-7 | **Las muestras del payload van en inglés** (nombre y contenido): `ejemplo.md`/`ejemplo.pdf` → `example.md`/`example.pdf`; el renombrado del wizard es de Phase 5 | dueño | 2026-11-04 |
 | D-P4-8 | **La guía de formato son `agent_example.md` y `command_example.md`** (raíz, **sin commitear**): fijan el header y el esqueleto de cuerpo; el plan solo referencia las rutas | dueño | 2026-11-04 |
+| D-P4-9 | **CP-A se lee sobre las specs que existen en ese momento**: `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` 585 baja a <500 cuando T6 mueva los cuerpos de comando (el fichero ya partía de 528, rojo antes de Phase 4) | orquestador | 2026-11-04 |
+| D-P4-10 | **Corte de 10 remnants en dominio** (`polars`, `dask`, `vaex`, `zarr-python`, `pyzotero`, `scientific-schematics`, `exa-search`, `perplexity-search`, `patents-search`, `database-lookup`) para que la base baje de 60 a 50 y cumpla `<60` — **pendiente de aprobación del dueño en el FTR**, no aplicado | dueño (pendiente) | 2026-11-04 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)
 
 _Cada nota registra: qué se hizo, qué se encontró que no estaba en el plan, y la decisión que tomado._
+
+- **T0 (2026-11-04):** baseline medido — 1 error MD005 pre-existente (`docs/WORKFLOW.md:166`), 13 bloques mermaid, `spec-payload-vault.md` 528 → 620 tras T1. Nada escrito.
+- **T1 (2026-11-04):** §Reglas de formato reescrita (107 líneas) con URLs v2.1.2. Hallazgo: `doom_loop` y `lsp` **no** son acciones del catálogo oficial V2 («not current V2 Core permission actions»); se marcan como `casa`/`no` y se conservan solo por la vía de acciones ampliables por plugin. Se corrigieron tres contradicciones de D-P4-6 (fecha 2026-10-21 en cabecera y Goals; `description` y cuerpo «en español»).
+- **T2 (2026-11-04):** inventario verificado 209/170/9, MISSING=0, 112 sin citar. La fila 15 citaba familias inexistentes (`gis-*`, `marketing-*`, … = 0 dirs) y «≈120» era falso: medido **109** out-of-domain. Fila 4 mal sumada (14−11=3 pero solo 2 ganadoras nombradas) → se nombró `paper-lookup`. Las muestras **no** están en el payload: las crea el instalador (`installer.rs`), con cuerpo y PDF en español → Phase 5 renombra constantes, traduce cuerpo y regenera el asset. `01-Tasks/` (mayúscula) existe y `01-tasks/` no: riesgo de caso en macOS/Windows. Matriz movida a `spec-payload-skills.md` (182 líneas).
+- **CP-A (2026-11-04):** verde salvo el umbral de `spec-payload-vault.md` (585), que solo baja a <500 cuando T6 mueva los cuerpos de comando — el fichero ya estaba en 528 antes de Phase 4 (D-P4-9). Se avanza con el umbral como deuda declarada, no como verde.

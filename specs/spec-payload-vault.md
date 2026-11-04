@@ -5,7 +5,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (blueprint confirmado por el usuario 2026-10-21)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2, desviación Pochteca D9.3, reglas del AGENTS del vault), specs/spec-vault-structure.md (zonas D9.1), specs/spec-mcp-server.md (7 tools + taxonomía `E_*`), docs/UH.md (tabla Agentes Primarios — inmutable), docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución); reglas de formato OpenCode V2 verificadas contra docs oficiales el 2026-10-21
+* **Traceability:** specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2, desviación Pochteca D9.3, reglas del AGENTS del vault), specs/spec-vault-structure.md (zonas D9.1), specs/spec-mcp-server.md (7 tools + taxonomía `E_*`), docs/UH.md (tabla Agentes Primarios — inmutable), docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución); reglas de formato OpenCode V2 re-verificadas contra docs oficiales v2.1.2 el 2026-11-04
 
 ## Summary
 
@@ -32,7 +32,7 @@ aplican el diseño. Un despacho anterior autorizó reescribir el payload; el usu
 ### Goals
 
 * Documentar verbatim-fiel el blueprint de permisos (5 YAML), comandos (9) y `AGENTS.md` del vault (7 secciones).
-* Congelar las reglas de formato OpenCode V2 verificadas 2026-10-21 (frontmatter permitido, last-match-wins, prohibiciones).
+* Congelar las reglas de formato OpenCode V2 re-verificadas v2.1.2 el 2026-11-04 (frontmatter permitido, last-match-wins, prohibiciones).
 * Definir los criterios de aceptación de la ejecución (Phase 5), linkables desde docs/WORKFLOW.md.
 
 ### Non-Goals (fuera de scope — decisión usuario 2026-10-21)
@@ -50,27 +50,119 @@ patrón nativo V2: el campo `agent:` de un comando cambia la sesión al primary 
 
 ## Detailed Design
 
-### Reglas de formato OpenCode V2 (verificadas en docs oficiales 2026-10-21)
+### Reglas de formato OpenCode V2 (re-verificadas en docs oficiales v2.1.2, 2026-11-04)
 
-* **Agent** (`.opencode/agents/<name>.md`): frontmatter con campos {`description`, `mode`, `model`,
-  `permissions`, `steps`, `hidden`, `color`}; el cuerpo Markdown ES el system prompt.
-* `permissions` = lista ordenada de `{action, resource, effect}`; `action` ∈ {shell, edit, subagent,
-  read, glob, grep, webfetch, websearch, skill, …} (wildcards válidos); `resource` para read/edit es
-  un path glob (`01-tasks/research/**`, `~`/$HOME expanden); `effect` ∈ allow|ask|deny.
-  **LAST MATCHING RULE WINS: reglas amplias primero, excepciones después.**
-* **PROHIBIDO cualquier campo legacy** en el frontmatter: `temperature`, `top_p`, `prompt`,
-  `permission` (singular), `tools`, `disable`, `maxSteps`.
-* **Command** (`.opencode/commands/<name>.md`): frontmatter opcional {`description`, `agent`,
-  `model`, `subagent`}; el cuerpo es la plantilla de prompt (NO existe clave `template`).
-  Placeholders: `$ARGUMENTS` (string completo), `$1`/`$2` (posicionales).
-  **Bloques shell !`cmd` PROHIBIDOS** (advertencia de args no confiables); `@paths` no expanden en
-  plantillas almacenadas — no usar. `subagent: true` se deja OMITIDO: los comandos corren en la
-  sesión sobre el primary seleccionado (patrón de ruteo V2).
+Cada regla de esta sección lleva su URL oficial con **versión** (OpenCode v2.1.2) y **fecha de
+verificación** (2026-11-04); ninguna afirmación proviene de memoria del modelo. La guía canónica de
+formato de este repo son `agent_example.md` y `command_example.md` (raíz, **untracked**, D-P4-8): de
+esos dos paths se toma SOLO la plantilla de frontmatter y el esqueleto del cuerpo — su contenido no
+se copia en esta spec.
 
-### Blueprint de permisos por agente (YAML; cuerpo ≤60 líneas por archivo, español)
+#### Agent (`.opencode/agents/<name>.md`)
 
-Los cinco archivos llevan `mode: primary`, `description` en español (1 línea) y SIN `model`
-(vive en `opencode.json`). Cada cuerpo (system prompt, español, ≤60 líneas) incluye: persona UH
+| field | forma V2 | regla | fuente (v2.1.2) |
+| --- | --- | --- | --- |
+| `description` | string | Entrecomillado, patrón «Name - Role» (D-P4-8); es lo que ve el modelo al elegir subagente. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+| `mode` | `primary` \| `subagent` \| `all` | Los 5 primarios declaran `mode: primary` explícito; no se depende del default. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+| `permissions` | lista ordenada de `{action, resource, effect}` | Ver §Semántica de `permissions`. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) · [permissions.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/permissions.mdx) |
+| `model` | `provider/model#variant` | **Omitido en los `.md`**: el modelo vive en `opencode.json`, sin duplicar. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+| `steps` | entero positivo | Tope de pasos de modelo (el último pide resumen en texto); el payload no lo usa. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+| `hidden` | bool | Solo visibilidad (listados, descubrimiento, catálogo de subagentes): «controls visibility, not security». Omitido. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+| `color` | hex de 6 dígitos (`"#ff6b6b"`) | Solo UI. Omitido. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+| body | Markdown | El cuerpo ES el system prompt; en Markdown **no** existe `system` en el frontmatter. | [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx) |
+
+#### Semántica de `permissions`
+
+* Regla = tres campos string: `action` (acción de tool), `resource` (path, comando, URL, query, skill
+  ID o agent ID) y `effect` (`allow` \| `deny` \| `ask`). Wildcards de valor completo: `*` (cero o más
+  caracteres, incluye `/`) y `?` (un carácter); `~`/`$HOME` expanden solo en `read`, `edit` y
+  `external_directory`. Sin regla que case, el efecto es `ask`.
+* **Last match wins**: «The last matching rule wins, so the specific exceptions follow the broad
+  rule» → reglas amplias primero, excepciones después.
+* **Orden de fusión**: «OpenCode combines rules in order and uses the last match. Lower-priority
+  configuration is loaded first, global rules are appended next, and agent rules are appended last»,
+  y «Agent rules are appended after global rules; they do not replace the global array». El array
+  global se **concatena antes**, nunca se sustituye: **por eso D-P4-2 elimina el array global de 313
+  reglas** de `obsidian-workspace/opencode.json` (fuera él, cada agente queda determinado solo por su
+  bloque y un `allow` global no puede colarse detrás).
+* En un chequeo multi-recurso cualquier `deny` deniega; si no, cualquier `ask` pregunta. Un subagente
+  custom usa sus propios permisos, no un subconjunto de los del padre.
+* Fuente: [permissions.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/permissions.mdx).
+
+#### Vocabulario de acciones V2
+
+| acción | uso | ¿catálogo oficial? | nota |
+| --- | --- | --- | --- |
+| `read` | lectura de archivo | sí | resource = path interno relativo o absoluto externo |
+| `edit` | `edit`/`write`/`patch` | sí | resource = path destino |
+| `glob` | patrón de glob pedido | sí | |
+| `grep` | regex pedida | sí | no el path de búsqueda |
+| `shell` | comando producido por el scanner | sí | corre con la autoridad del usuario; allowlist estrecha |
+| `subagent` | id del agente hijo | sí | |
+| `skill` | id de skill | sí | |
+| `question` | `*` | sí | |
+| `webfetch` | URL pedida | sí | |
+| `websearch` | query | sí | |
+| `external_directory` | frontera de directorio externo (acaba en `/*`) | sí | default `allow`; se comprueba antes de `read`/`edit` |
+| `<server>_<tool>` | `*` para una tool MCP (`tepochcalli-rag_search`) | sí | caracteres no soportados pasan a `_` |
+| `execute` | `*`; un deny elimina Code Mode | sí | las tools anidadas aplican sus propias reglas |
+| `doom_loop` | reservada | **no** | «`doom_loop` and `lsp` are not current V2 Core permission actions»; no la usa el payload |
+| `todowrite` | acción de casa (stubs y `agent_example.md`) | casa | casa — no en el catálogo de las docs; se conservan porque los nombres de acción son cadenas ampliables por plugin |
+| `lsp` | acción de casa (stubs y `agent_example.md`) | casa | casa — no en el catálogo de las docs; se conservan porque los nombres de acción son cadenas ampliables por plugin |
+
+Fuente del catálogo (y de las dos acciones `opencode_*_mcp_resource`, no usadas): [permissions.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/permissions.mdx).
+
+#### Command (`.opencode/commands/<name>.md`)
+
+| field | forma V2 | regla | fuente (v2.1.2) |
+| --- | --- | --- | --- |
+| `description` | string | Opcional; se muestra en listas y descubrimiento. | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `agent` | id de agente | Cambia la sesión al primary antes de enviar el prompt (ruteo V2, sin spawn). | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `model` | `provider/model#variant` | Override opcional; el payload no lo usa (modelos en `opencode.json`). | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `subagent` | bool | `true` = hijo en background, `false` = sesión actual, omitido = hijo solo si el agente es `mode: subagent`. **Omitido en los 9 comandos**: corren en la sesión del primary. | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `subtask` | alias de `subagent` | **Deprecated**, prohibido en el payload. | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `template` | string | **Solo JSON**; en Markdown el body es la plantilla («Do not put `template` in Markdown frontmatter»). | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| body | Markdown | El cuerpo recortado es siempre la plantilla de prompt. | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `$ARGUMENTS` | placeholder | String completo tal como se escribió. | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| `$1`/`$2` | placeholder | Posicionales; quotes agrupan y se quitan; el mayor consume el resto; faltantes = string vacío. | [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) |
+| bloques `` !`cmd` `` | shell inline | **PROHIBIDOS — decisión del proyecto**: las docs advierten que corren al evaluar el comando, fuera del flujo de permisos del agente, y que los argumentos no son confiables. | decisión del proyecto (racional: [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) §Shell) |
+| `@paths` | adjunto | **PROHIBIDOS — decisión del proyecto**: «Stored templates do not expand `@path`» (queda como texto plano, no adjunta nada). | decisión del proyecto (racional: [commands.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/commands.mdx) §Attachments) |
+
+#### Discrepancia resuelta
+
+`agents.mdx` §Permissions muestra un mapa abreviado de «common actions» y `permissions.mdx` publica
+la lista canónica con sus recursos. Se resuelve a favor de la **lista** de `permissions.mdx`: es la
+referencia canónica de la semántica de permisos, y su frase literal —«OpenCode combines rules in order
+and uses the last match»— es la que gobierna el diseño. Lo de `agents.mdx` es un subconjunto
+ilustrativo, no el catálogo (omite `question`, `external_directory`, `execute` y `<server>_<tool>`).
+Fuente: [permissions.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/permissions.mdx) · [agents.mdx](https://github.com/anomalyco/opencode/blob/v2.1.2/services/www/src/docs/content/agents.mdx).
+
+#### Checklist de no-regresión de frontmatter
+
+* Cero `permission:` singular (V2 solo conoce `permissions`).
+* Cero `temperature`, `top_p`, `prompt`, `tools`, `disable`, `maxSteps` (legacy V1).
+* Cero `subtask` y cero `subagent` en `.opencode/commands/*.md` (los 9 corren en la sesión).
+* `todowrite` y `lsp` permitidos: son cadenas de acción válidas, no campos legacy.
+* `description` entrecomillado con patrón «Name - Role» (agentes) y en inglés.
+* `mode: primary` presente y explícito en los 5 agentes.
+* Sin `model` en ningún `.md` (vive solo en `opencode.json`): un `model` por agente, no dos.
+
+#### Regla de idioma del payload (D-P4-6)
+
+* Artefactos materializados en `obsidian-workspace/` (`.opencode/agents/*.md`, `.opencode/commands/*.md`,
+  `AGENTS.md` del vault, muestras `example.md`/`example.pdf`) → **INGLÉS**.
+* Documentación del repo (`specs/`, `docs/`, `tasks/`) → **ESPAÑOL**.
+* Comprobación mecánica en los bloques del payload: cero ocurrencias de `ñ`, `¿`, `¡` y de la lista de
+  palabras inequívocas `el|la|los|las|para|con|por|una|del|que|cómo|según`. Una vocal acentuada por
+  sí sola **no** es evidencia (aparece en nombres propios).
+* Excepción: los nombres propios son contrato y no se traducen — agentes (Itzamná, Nezahualcóyotl,
+  Pochteca, Chilam, Tlacuilo), bandejas, tools, estados de `procedencia` y formato de cita.
+
+### Blueprint de permisos por agente (YAML; cuerpo ≤60 líneas por archivo, inglés — D-P4-6)
+
+Los cinco archivos llevan `mode: primary`, `description` en inglés (1 línea, patrón «Name - Role», D-P4-6)
+y SIN `model`
+(vive en `opencode.json`). Cada cuerpo (system prompt, inglés, ≤60 líneas) incluye: persona UH
 (1-2 líneas); propósito en el workflow con su bandeja exacta; MCP-first (`search` de
 `tepochcalli-rag` antes de lectura cruda de `00-Resources/`, `index_refresh()` con dudas de
 frescura, ante cualquier `E_*` → `rag_status()` + reportar el `fix_hint`, no el error crudo);
@@ -434,44 +526,9 @@ Referencia cruzada de cada comando contra el inventario REAL. Las columnas de sk
 | `/transform` | xlsx-official⟵G, excel-analysis⟵G, data-transform⟵G, scientific-slides, pptx-official⟵G, markdown-mermaid-writing (mindmap), matplotlib⟵G, scientific-visualization⟵G, infographics | read · edit `02-drafts/**` (fuente) y `05-outputs/**` (salida) | search · rag_status; `excel` MCP: disabled y break `--offline` → manda la skill (grupo 3); `jupyter` MCP: disabled, sin skill → GAP | ninguno; Jupyter/Graphviz/R = GAP Anexo A, se declaran sin inventar |
 | `/update` | obsidian-markdown⟵G, scientific-writing⟵G | read · glob · grep · edit `02-drafts/**` | search · index_refresh (si hay ingesta nueva) · add_source solo si el usuario lo pide · rag_status | ninguno |
 
-### Matriz de conflictos/redundancias de skills (inventario REAL, 2026-10-21; + skill nueva 2026-11-03)
+### Matriz de conflictos/redundancias de skills
 
-Contra `ls obsidian-workspace/.opencode/skills/` = **208 dirs** (recuento de esta ola). Veredictos: **CONSERVAR / CONSOLIDAR (nominando ganadora) / RETIRAR (out-of-domain) / INSTALAR-GAP**. Cobertura: filas 1-13 nombran 58 dirs en conflicto explícito; fila 14 suma 14 ganadoras del núcleo en dominio; fila 15 barre el resto por familia (~120 out-of-domain según Anexo A; el remanente en dominio no listado se falla CONSERVAR por el criterio de la fila 14); fila 16 gaps = 0 dirs hoy. Phase 5 repite el `ls` y cierra el recuento 1:1 por fila (métrica WORKFLOW: 100% del inventario).
-
-| Grupo | Skills miembros (inventario real) | Solape/conflicto | Veredicto | Acción Phase 5 |
-| --- | --- | --- | --- | --- |
-| 1. PDF ×5 | pdf, pdf-anthropic, pdf-processing, pdf-processing-pro, liteparse | cuatro wrappers de la misma conversión; liteparse duplica al conversor del motor (markitdown, spec-rag-engine) | CONSOLIDAR — gana `pdf` (general) + `pdf-processing-pro` (documentos largos) | retirar 3 (pdf-anthropic, liteparse, uno de processing) |
-| 2. Office ×6 | docx, docx-official, pptx, pptx-official, xlsx, xlsx-official | duplicado exacto por familia | CONSOLIDAR — ganan `docx-official`, `pptx-official`, `xlsx-official` | retirar 3 variantes libres |
-| 3. Excel/MCP | excel-analysis, data-transform + entrada `excel` MCP en opencode.json (disabled; `uvx` → rompe `--offline`) | tres caminos para CSV/Excel | CONSOLIDAR — gana la vía skill (offline-safe) | retirar 1 (`data-transform` si `excel-analysis` cubre); dejar/eliminar la entrada MCP disabled |
-| 4. Literatura ×14 | literature, literature-search, literature-review, research-literature, academic-literature-search, paper-lookup, arxiv-search, biorxiv-search, medrxiv-search, pubmed-search, pubmed-database, openalex-database, bgpt-paper-search, paperzilla | buscadores redundantes; las bases bio/med específicas son out-of-domain para el payload genérico | CONSOLIDAR — ganan `research-lookup` (general) + `arxiv-search` + `pubmed-search` | retirar 11 |
-| 5. Deep research ×4 | deep-research, deep-research-swarm, tooluniverse-literature-deep-research, research-lookup | variantes de orquestación duplican búsqueda; swarm = coste de tokens contra criterio 4 | CONSOLIDAR — ganan `deep-research` + `research-lookup` | retirar 2 (swarm, tooluniverse) |
-| 6. markitdown skill × markitdown MCP | skill `markitdown` + MCP `markitdown` (retirado del payload en la review Phase 2 y **definitivamente** en Phase 3.5: la conversión es en proceso, D29/ADR-011) | mismo convertidor por dos canales | CONSERVAR la skill con nota: el flujo RAG usa `add_source`/`convert_*` de `tepochcalli-rag`; la skill queda para conversión ad-hoc multi-archivo sin tocar índice. **El MCP standalone ya no existe** | mantener la skill; nota en AGENTS.md del vault |
-| 7. Obsidian trío + instructions | obsidian-markdown, obsidian-vault, obsidian-cli | vault×cli se solapan en gestión de notas; el json del workspace lista además `markdown-mermaid-writing` | CONSOLIDAR — ganan `obsidian-markdown` (formato) + `obsidian-cli` (gestión); `obsidian-vault` se fusiona | retirar 1; actualizar `instructions` de `opencode.json` si se retira la skill |
-| 8. Estadística ×4 | statistical-analysis, data-stats-analysis, statsmodels, statistical-power | data-stats-analysis duplica el rango de statistical-analysis | CONSOLIDAR — ganan `statistical-analysis` + `statsmodels` (statistical-power como helper CONSERVAR) | retirar 1 |
-| 9. Visualización ×5 | matplotlib, seaborn, plotly, data-viz-plots, scientific-visualization | wrappers sobre los mismos backends | CONSOLIDAR — entry point `scientific-visualization` + backends `matplotlib`/`seaborn`/`plotly` | retirar 1 (`data-viz-plots`) |
-| 10. Brainstorm/ideas ×6 | brainstorming, scientific-brainstorming, hypothesis-generation, hypogenic, idea-refine, what-if-oracle | ideación redundante | CONSOLIDAR — ganan `scientific-brainstorming` + `hypothesis-generation`; `idea-refine` queda para /synthesize | retirar 3 (brainstorming, hypogenic, what-if-oracle) |
-| 11. Escritura ×5 | article-writing, scientific-writing, scientific-manuscript, doc-coauthoring, review-writing | scientific-manuscript solapa con scientific-writing (nota Anexo A); article-writing es divulgación/diseminación | CONSOLIDAR — gana `scientific-writing`; CONSERVAR `doc-coauthoring`, `review-writing`, `article-writing` (roles distintos) | retirar 1 (scientific-manuscript) |
-| 12. RAG-chat paralelo | open-notebook | NotebookLM-like local: solape frontal con tepochcalli-rag (que ES el producto) | RETIRAR | retirar 1 |
-| 13. Creativo/visual suelto | generate-image | generación de imagen creativa, fuera de la metodología | RETIRAR (infographics se CONSERVA: salida de `/transform`) | retirar 1 |
-| 14. Núcleo metodológico sin conflicto (restantes en dominio) | p. ej. citation-management, experimental-design, writing-plans, scientific-problem-selection, scientific-critical-thinking, analytical-method-validation, uncertainty-and-units, venue-templates, scientific-slides, paper-2-web, exploratory-data-analysis, networkx, sympy, shap | sin solape material para el pipeline 9/5 | CONSERVAR | mantener en payload base |
-| 15. Out-of-domain para payload genérico (grosso del remanente) | scanpy, pydeseq2, qiime2-amplicon, neuropixels-analysis, diffdock, qiskit, matlab, geopandas y `gis-*` (×14), `marketing-*` (×37), `finance-*`/`sales-*`/`legal-*`/`healthcare-*`/`paid-media-*`/`product-*`/`design-*`, y el resto del inventario no nombrado arriba | no corresponden a las 14 categorías UH de investigación general | RETIRAR → "skill pack" opcional futuro | retirar del payload base (Anexo A; PACK=1 en CI para no romper referencias); el remanente en dominio (p. ej. polars, dask, vaex, zarr-python, pyzotero, scientific-schematics, exa-search, perplexity-search, patents-search, database-lookup, wikipedia-search, multi-search-engine) se falla CONSERVAR por el criterio de la fila 14 |
-| 16. Gaps UH (sin skill hoy) | jupyter (cuadernos), R (graficación estadística), Graphviz/PlantUML (diagramas), LaTeX de manuscrito (`latex-posters` no cubre manuscrito) | categorías #10/#11/#14 de UH sin cubrir | INSTALAR-GAP | Phase 5 instala según Anexo A o declara won't (gate WORKFLOW) |
-| 17. `tepochcalli-mcp` (nueva, Phase 3.5 — H4) | `tepochcalli-mcp/SKILL.md` en `obsidian-workspace/.opencode/skills/tepochcalli-mcp/` — no existía en el `ls` de 2026-10-21; hoy está en el payload | catálogo único de decisión de las 7 tools de `tepochcalli-rag` + fallback `anydoc`; solapa con la skill `markitdown` en «convertir», pero esta decide **cuándo** usar cada tool | CONSERVAR (nueva; registrada por OM-6 para que la matriz de Phase 4 cubra el 100 %) | Phase 5 la cuenta como entrada del inventario: **209 dirs** (208 + 1); ninguna otra skill la duplica |
-
-* Cierre de cobertura: filas 1-14 nombran explícitamente 72 de los 208 dirs del `ls`; fila 15 barre el resto por familia con criterio decidido (RETIRAR out-of-domain ≈120 / CONSERVAR remanente en dominio); fila 16 declara los gaps; **fila 17 añade la skill `tepochcalli-mcp` de Phase 3.5 (fuera del `ls` de 2026-10-21) ⇒ el inventario de Phase 5 parte de 209 dirs**. **Objetivo del payload final: <60 skills en el payload base** (métrica heredada de WORKFLOW Phase 5).
-* **Decisión explícita (2026-10-28): 0 skills nuevas para el protocolo de opendraft.** Los
-  gates heredados (procedencia, check de claim, gate de compilación) son invariantes de
-  workflow — deben correr SIEMPRE — y en OpenCode un cuerpo de comando se ejecuta siempre,
-  mientras que una skill es oportunista (el harness decide si la carga): por eso los gates
-  viven en los cuerpos de `/research`, `/validate` y `/cite`, jamás en una skill.
-  `citation-management` (CONSERVAR, fila 14) cubre la mecánica DOI→BibTeX/dedupe/validación de
-  metadata; el protocolo la complementa desde el comando, no la duplica. **Ruta de extracción
-  nominada** (única, contra el objetivo <60 de TD-7): si el protocolo de procedencia de
-  `/research` no cabe en el cuerpo ≤35 líneas, extraer UNA skill `procedance-verification`
-  (triggers: verificar existencia de una referencia académica; pasos: consultar ≥2 bases,
-  clasificar en los 4 estados, serializar `procedencia`; salida: lista
-  `{fuente, estado, url_o_doi, fecha_consulta}`) — solo entonces, y anotándola en esta matriz.
-  (Origen del protocolo: análisis de federicodeponte/opendraft, 2026-10-28.)
+Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario 209, matriz de 17 filas y recuento derivado; D-P4-4).
 
 ## Alternatives Considered
 
