@@ -15,8 +15,10 @@ la entrada de wire `mcp.servers.markitdown` era superficie sin cliente):
    serializador es byte-idéntico al original congelado en
    `tests/fixtures/opencode_payload_before_t9.json` (copia de
    `git show HEAD:obsidian-workspace/opencode.json`; re-congelado en el
-   review 5-ejes 2026-11-03 porque R-04 pineó las versiones de los 5
-   plugins `@latest` — cambio autorizado del payload, el resto manos off).
+   review 5-ejes 2026-11-03 porque R-04 pineó las versiones de los
+   plugins `@latest` — cambio autorizado del payload, el resto manos off;
+   re-congelado 2026-11-04 por orden del owner: los 6 plugins pasan a
+   `@latest` (política @latest, reversión de R-04).
    Cualquier
    cambio de clave, valor u ORDEN en el resto rompe la igualdad de bytes.
 """
