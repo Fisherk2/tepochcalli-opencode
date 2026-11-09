@@ -231,7 +231,7 @@
 
 ## Ola 6 — Cierre
 
-### [ ] T14 — Cierre documental + FTR Phase 5→6
+### [x] T14 — Cierre documental + FTR Phase 5→6
 
 - Subagente: `docs-writer` → `code-reviewer` (secuencial) · Skills: `documentation-and-adrs`, `changelog-generate`, `git-workflow-and-versioning`, `code-review-and-quality` · Tools: `vercel-grep`
 - [ ] `docs/WORKFLOW.md` §Phase 5: COMPLETADA + métricas medidas + lo no verificado
@@ -244,7 +244,7 @@
 - [ ] `just ci` verde + `just md-lint` 0
 - Deps: T11 + T13 · Verificación: FTR con checklist firmado por el dueño
 
-### Checkpoint CP-6 — FTR Phase 5→6
+### [x] Checkpoint CP-6 — FTR Phase 5→6
 
 - [ ] Checklist de la fila Phase 5→6 de `docs/WORKFLOW.md` §4 verde
 - [ ] Cifras medidas en todos los documentos
