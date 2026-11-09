@@ -3,6 +3,8 @@
 > **Fecha:** 2026-11-04 · **Orquestador:** Moctezuma · **Plan:** [tasks/plan.md](plan.md)
 > **Verificación de esta fase:** SOLO linters (markdownlint + mermaid render + greps). **La suite de pruebas no se ejecuta.**
 > **Prohibido escribir en `obsidian-workspace/**`** (Phase 4 es diseño puro).
+> **Estado 2026-11-09:** Phase 4 **COMPLETADA** — gate BLUEPRINT APPROVED concedido por congelamiento del dueño
+> (40 definitivas, `cf17f31`/`2e62e60`, D-P4-12); T8/CP-E cerrados a nivel de gate; Phase 5 **READY TO PLAN** (vía `/plan`).
 
 ## Baseline del gate de linters (T0)
 
@@ -187,27 +189,27 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 
 ## Ola 5 — Cierre y FTR
 
-### [ ] T8 — Cierre documental + FTR Phase 4→5
+### [x] T8 — Cierre documental + FTR Phase 4→5 (cerrado a nivel de gate 2026-11-09, D-P4-12)
 
 - Subagentes (secuencial): `code-reviewer` → `git-workflow-manager`
 - Skills: `code-review-and-quality`, `git-workflow-and-versioning`, `changelog-generate`
 - Tools: `codebase-memory-mcp`, `gitmcp`
 - Ficheros: `SPEC.md`, `AGENTS.md`, `docs/WORKFLOW.md`, `docs/TECH_DEBT.md`, `CHANGELOG.md`
-- [ ] 4 specs en el índice de `SPEC.md`; `spec-payload-vault.md` → `Approved` tras el FTR
-- [ ] Índice de `AGENTS.md` (repo) con las 3 specs nuevas, ≤200 líneas
-- [ ] `docs/WORKFLOW.md` §Phase 4 COMPLETADA con métricas reales + entrada FTR en §4
-- [ ] `docs/WORKFLOW.md` §Phase 3.5: la referencia a `tasks/plan.md` apunta al commit (D-P4-5)
-- [ ] `docs/TECH_DEBT.md`: TD-7, TD-8, TD-14a/TD-14b, TD-22, TD-6 actualizados
-- [ ] Impacto de D-P4-6 registrado; D-P4-7 revocada (sin renombrado de constantes ni del asset `ejemplo.pdf` en Phase 5)
-- [ ] `CHANGELOG.md` con entrada de Phase 4
-- [ ] `git diff --stat -- obsidian-workspace` **vacío**
-- [ ] `agent_example.md` y `command_example.md` siguen **untracked** (`??` en `git status --short`) y **no entran en ningún commit** (D-P4-8)
-- [ ] Commits atómicos Conventional Commits ≤72 columnas + trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>`
-- Deps: T7 · Verificación: md-lint + render mermaid + `wc -l` + enlaces + **FTR con el usuario**
+- [x] Las 5 specs en el índice de `SPEC.md` con estado `Approved` (BLUEPRINT APPROVED 2026-11-09, freeze 40)
+- [ ] Índice de `AGENTS.md` (repo) con las 3 specs nuevas, ≤200 líneas (fuera de esta ola mínima — sin cambio)
+- [x] `docs/WORKFLOW.md` §Phase 4 COMPLETADA con métricas reales + entrada FTR en §4 (gate concedido por congelamiento)
+- [x] `docs/WORKFLOW.md` §Phase 3.5: la referencia a `tasks/plan.md` apunta al commit (D-P4-5, ya cumplido)
+- [ ] `docs/TECH_DEBT.md`: TD-7, TD-8, TD-14a/TD-14b, TD-22, TD-6 actualizados (fuera de esta ola mínima — sin cambio)
+- [x] Impacto de D-P4-6 registrado; D-P4-7 revocada (sin renombrado de constantes ni del asset `ejemplo.pdf` en Phase 5)
+- [ ] `CHANGELOG.md` con entrada de Phase 4 (fuera de esta ola mínima — sin cambio; hoy solo working tree, sin commit)
+- [x] `git diff --stat -- obsidian-workspace` **vacío**
+- [x] `agent_example.md` y `command_example.md` siguen **untracked** (`??` en `git status --short`) y **no entran en ningún commit** (D-P4-8)
+- [ ] Commits atómicos Conventional Commits ≤72 columnas + trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>` (fuera de esta ola — frente ordena working tree sin commit)
+- Deps: T7 · Verificación: md-lint + render mermaid + `wc -l` + enlaces + **FTR concedido por congelamiento (D-P4-12)**
 
-### 🚦 Checkpoint CP-E — gate de fase
+### 🚦 Checkpoint CP-E — gate de fase (concedido 2026-11-09, D-P4-12)
 
-- [ ] **BLUEPRINT APPROVED por el usuario** (FTR Phase 4→5) → status `Approved` en `SPEC.md`
+- [x] **BLUEPRINT APPROVED por el dueño** (congelamiento en 40 definitivas, `cf17f31`/`2e62e60`) → status `Approved` en `SPEC.md` y en las 5 cabeceras
 - [ ] md-lint sin errores nuevos vs baseline
 - [ ] mermaid render: 0 fallos
 - [ ] 0 escrituras en `obsidian-workspace/**`
@@ -230,6 +232,7 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 | D-P4-9 | **CP-A se lee sobre las specs que existen en ese momento**: `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` 585 baja a <500 cuando T6 mueva los cuerpos de comando (el fichero ya partía de 528, rojo antes de Phase 4) | orquestador | 2026-11-04 |
 | D-P4-10 | **Retirada (2026-11-04): no se ejecuta ningún corte de skills**; el dueño revisará manualmente cada skill del payload más adelante. No se registra excepción ni deuda nueva | dueño | 2026-11-04 |
 | D-P4-11 | **5.ª spec `spec-payload-permissions.md`**: la forma en bloque de la guía (action/resource/effect en líneas propias) triplica la sección de permisos (390 líneas) e impide el umbral <500; se extrae a su propia spec y `spec-payload-vault.md` queda en 366 | orquestador | 2026-11-04 |
+| D-P4-12 | **Congelamiento en 40 skills + gate BLUEPRINT APPROVED concedido**: el dueño congela el diseño (40 definitivas, `cf17f31`/`2e62e60`); T8/CP-E se cierran a nivel de gate; las 5 specs → Approved; Phase 5 READY TO PLAN (plan vía `/plan`, sin ejecución) | dueño | 2026-11-09 |
 | | | | |
 
 ## Notas de ejecución (rellenar al avanzar)
@@ -237,6 +240,13 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 _Cada nota registra: qué se hizo, qué se encontró que no estaba en el plan, y la decisión que tomado._
 
 - **FTR 2026-11-04 — NO aprobado aún (decisión del dueño):** Phase 4 sigue abierta y las 5 specs siguen **Proposed**. El dueño revisará el blueprint antes de conceder el gate. Decisiones de esa revisión: **D-P4-10 retirada** (sin corte de skills; revisará manualmente cada una más adelante, sin registrar excepción) y **D-P4-7 revocada** (las muestras `ejemplo.md`/`ejemplo.pdf` se quedan como están, nombre y contenido en español). Ambas propagadas a specs, WORKFLOW, TECH_DEBT, CHANGELOG, plan y todo.
+
+- **Cierre 2026-11-09 — gate concedido por congelamiento (D-P4-12, frente documental mínimo, sin commit):** el dueño
+  congela el diseño en 40 skills definitivas (`cf17f31` + `2e62e60`); las 5 specs del payload pasan a **Approved**,
+  SPEC.md/WORKFLOW/plan/todo declaran Phase 4 **COMPLETADA** y Phase 5 **READY TO PLAN** (plan vía `/plan`, sin
+  ejecución). Alcance de esta ola: SPEC.md, WORKFLOW.md, plan/todo y las 5 cabeceras; `obsidian-workspace/`
+  intacto, ADRs y `docs/UH.md` intactos. Fuera de esta ola (quedan `[ ]` en T8): índice de `AGENTS.md`,
+  `docs/TECH_DEBT.md`, `CHANGELOG.md` y los commits.
 
 - **T0 (2026-11-04):** baseline medido — 1 error MD005 pre-existente (`docs/WORKFLOW.md:166`), 13 bloques mermaid, `spec-payload-vault.md` 528 → 620 tras T1. Nada escrito.
 - **T1 (2026-11-04):** §Reglas de formato reescrita (107 líneas) con URLs v2.1.2. Hallazgo: `doom_loop` y `lsp` **no** son acciones del catálogo oficial V2 («not current V2 Core permission actions»); se marcan como `casa`/`no` y se conservan solo por la vía de acciones ampliables por plugin. Se corrigieron tres contradicciones de D-P4-6 (fecha 2026-10-21 en cabecera y Goals; `description` y cuerpo «en español»).

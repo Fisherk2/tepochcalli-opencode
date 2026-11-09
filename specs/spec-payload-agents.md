@@ -1,6 +1,6 @@
 # Spec: System prompts de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Proposed (gate: BLUEPRINT APPROVED por el usuario)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
 * **Fase:** Phase 4 (diseño) — calpulli T5; Phase 5 materializa los 5 cuerpos de forma literal
 * **Date:** 2026-11-04
 * **Author:** prompt-engineer (calpulli T5, Phase 4)

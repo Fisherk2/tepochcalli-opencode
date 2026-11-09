@@ -1,6 +1,6 @@
 # Spec: Skills del payload — inventario definitivo y tabla de invocación
 
-* **Status:** Proposed (gate: BLUEPRINT APPROVED por el usuario)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
 * **Fase:** Phase 4 (diseño) — Phase 5 verifica, no ejecuta cortes
 * **Date:** 2026-11-09 (congela inventario; rev. 2026-11-04 SUPERSEDED, ver §Histórico)
 * **Author:** Arquitecto (calpulli T2b, Phase 4)

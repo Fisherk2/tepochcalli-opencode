@@ -1,6 +1,6 @@
 # Spec: Permisos de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Proposed (gate: BLUEPRINT APPROVED por el usuario)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
 * **Fase:** Phase 4 (diseño) — especificación hermana de [specs/spec-payload-vault.md](spec-payload-vault.md) (D-P4-4/D-P4-11); Phase 5 ejecuta literal
 * **Date:** 2026-11-04
 * **Author:** Arquitecto (calpulli T4, Phase 4)

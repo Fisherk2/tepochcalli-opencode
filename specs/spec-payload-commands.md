@@ -1,6 +1,6 @@
 # Spec: Cuerpos de los 9 comandos del payload (inglés materializado, contrato español)
 
-* **Status:** Proposed (gate: BLUEPRINT APPROVED por el usuario)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
 * **Fase:** Phase 4 (diseño) — Phase 5 ejecuta literal, sin reinterpretación (D-P4-1)
 * **Date:** 2026-11-04
 * **Author:** Technical Writer (calpulli T6, Phase 4)

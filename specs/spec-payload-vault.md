@@ -1,6 +1,6 @@
 # Spec: Blueprint del payload del vault — agentes, comandos y AGENTS.md (OpenCode V2)
 
-* **Status:** Proposed
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
 * **Fase:** Phase 4 (diseño) — lienzo vivo de esta spec; gate: BLUEPRINT APPROVED por el usuario; Phase 5 ejecuta literal (sin reinterpretación)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (blueprint confirmado por el usuario 2026-10-21)
@@ -18,7 +18,7 @@ materializa. El contenido de esos artefactos vive repartido en las specs hermana
 [`spec-payload-skills.md`](spec-payload-skills.md) (inventario, matriz y tabla 9×4).
 **No se escribe nada ahora**: por decisión explícita del usuario (2026-10-21),
 `obsidian-workspace/` queda intacto bajo /spec; la ejecución del blueprint es labor de **Phase 5
-vía /plan**, por agentes autorizados, de forma LITERAL desde estas specs (hoy Proposed; Phase 5 solo tras el gate BLUEPRINT APPROVED). Los permisos
+vía /plan**, por agentes autorizados, de forma LITERAL desde estas specs (Approved 2026-11-09; Phase 5 se planifica vía `/plan`). Los permisos
 por agente viven SOLO en los `.md`; los modelos viven SOLO en `opencode.json` (no duplicar en
 ambos lugares).
 
