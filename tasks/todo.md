@@ -185,7 +185,7 @@
 - [ ] RED demostrado antes de implementar
 - Deps: T2-T10 · Verificación: `just ci` verde + cobertura ≥ 95 %
 
-### Checkpoint CP-4 — Contrato estático verde
+### [x] Checkpoint CP-4 — Contrato estático verde
 
 - [ ] `just ci` verde
 - [ ] 42/42 probes · 40/40 skills con hash idéntico · 0 huérfanos
