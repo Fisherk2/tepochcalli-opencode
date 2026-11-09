@@ -1,6 +1,6 @@
 # Spec: Cuerpos de los 9 comandos del payload (inglés materializado, contrato español)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (D-P5-2: skills citadas alineadas al congelado de 40; reglas V2 re-verificadas contra el tag v2.2.6)
 * **Fase:** Phase 4 (diseño) — Phase 5 ejecuta literal, sin reinterpretación (D-P4-1)
 * **Date:** 2026-11-04
 * **Author:** Technical Writer (calpulli T6, Phase 4)
@@ -267,7 +267,7 @@ Call `list_formats` before promising any format; `search` (top_k ≤ 8) to confi
 
 ## Phase: Dissemination
 1. Source content from `02-drafts/` and `03-citations/` only; an artifact never introduces claims absent from the draft.
-2. Use only skills that exist today: `xlsx-official`/`excel-analysis` (CSV/Excel), `scientific-slides`/`pptx-official` (presentations), `markdown-mermaid-writing` (mind map via Mermaid `mindmap`), `matplotlib`/`scientific-visualization` (figures), `infographics`, `markitdown` (ad-hoc conversion).
+2. Use only skills that exist today: `spreadsheet-analysis`/`data-analysis` (CSV/Excel), `posters-generator` (presentations), `markdown-mermaid-writing` (mind map via Mermaid `mindmap`), `data-plotting` (figures), `pdf`/`image-prompt-generator` (ad-hoc conversion).
 3. Jupyter notebook, R, Graphviz/PlantUML and LaTeX manuscript are GAPS: declare them as pending Phase 5 (Annex A) — never invent a skill name or fake the output.
 4. `convert_document`/`convert_base64` write a readable `.md` to disk; that file is not the citable source (the original stays indexed via `index_refresh`).
 5. Write the artifacts in `05-outputs/` plus a manifest note with frontmatter `{command, agent, source_draft, formats, date}`; citations inside artifacts keep `source_path » heading (chars x–y)`.

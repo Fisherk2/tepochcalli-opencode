@@ -1,6 +1,6 @@
 # Spec: System prompts de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (D-P5-2: skills citadas alineadas al congelado de 40; reglas V2 re-verificadas contra el tag v2.2.6)
 * **Fase:** Phase 4 (diseño) — calpulli T5; Phase 5 materializa los 5 cuerpos de forma literal
 * **Date:** 2026-11-04
 * **Author:** prompt-engineer (calpulli T5, Phase 4)
@@ -319,7 +319,7 @@ E.g.: "Drafted to `02-drafts/review.md`; citations preserved as `source_path » 
 ### CAPABILITIES
 - `/draft`: initial document from the `/synthesize` outline and `/cite` citations.
 - `/transform`: CSV/Excel, presentations, mind maps and figures — only with skills that exist
-  in `.opencode/skills/` (e.g. `xlsx-official`, `excel-analysis`,
+  in `.opencode/skills/` (e.g. `spreadsheet-analysis`, `data-analysis`,
   `markdown-mermaid-writing`).
 - `/update`: locate `$1` in `02-drafts/` and inject `$ARGUMENTS` without restarting the pipeline.
 
@@ -411,8 +411,9 @@ Pochteca es la desviación D9.3 ya aceptada, no una lectura nueva del UH.
 
 * `wc -l` por bloque: 56 / 54 / 58 / 58 / 56 — todos ≤60.
 * Grep de los 6 elementos por agente: 6/6 (tabla §Mapeo).
-* Grep de skills: solo se citan `xlsx-official`, `excel-analysis`,
-  `markdown-mermaid-writing`, verificadas con `test -d` en `.opencode/skills/` (2026-11-04).
+* Grep de skills: solo se citan `spreadsheet-analysis`, `data-analysis`, `data-plotting`,
+  `posters-generator`, `pdf`, `image-prompt-generator`, `markdown-mermaid-writing`,
+  verificadas con `test -d` en `.opencode/skills/` (2026-11-09).
 * Chequeo de idioma: 0 ocurrencias de `ñ`, `¿`, `¡` y de `el|la|los|las|para|con|por|una|del|que|cómo|según`
   como palabra suelta dentro de los 5 bloques (nombres propios y estados de `procedencia` exentos).
 * `npx --yes markdownlint-cli2 specs/spec-payload-agents.md` → 0 issues.
