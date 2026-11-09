@@ -337,7 +337,7 @@ fn f5_ok_runs_sync_frozen_with_project_env() {
         );
     }
     assert_eq!(calls[0].1, ["python", "install", "3.12"]);
-    assert_eq!(calls[1].1, ["venv", "venv"]);
+    assert_eq!(calls[1].1, ["venv", "--clear", "venv"]);
     assert_eq!(calls[2].1, ["sync", "--frozen"]);
     // The import check runs the venv interpreter (R6/T4: the tools subpackage
     // and the flow's document extractor must import), never the system python.

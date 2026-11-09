@@ -517,10 +517,12 @@ fn sync_project(
         &env,
         F5_SYNC_TIMEOUT,
     )?;
+    // El venv es estado derivado: `--clear` hace la reinstalación idempotente
+    // (la compensación F5 ya lo borra en fallo).
     run_checked(
         proc,
         program,
-        &["venv", VENV_DIR_NAME],
+        &["venv", "--clear", VENV_DIR_NAME],
         project,
         &env,
         F5_SYNC_TIMEOUT,
