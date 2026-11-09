@@ -172,7 +172,7 @@
 
 ## Ola 4 — El gate D9 ejecutable
 
-### [ ] T11 — Fixtures de permisos D9.3 + contrato estático del payload
+### [x] T11 — Fixtures de permisos D9.3 + contrato estático del payload
 
 - Subagente: `test-engineer` → `python-pro` (secuencial) · Skills: `test-driven-development`, `design-patterns`, `clean-code`, `doubt-driven-development` · Tools: —
 - [ ] `tests/unit/test_payload_permissions.py`: intérprete last-match-wins + **42/42** probes
@@ -195,7 +195,7 @@
 
 ## Ola 5 — Los gates de la fase
 
-### [ ] T12 — Install e2e del wizard sobre el payload final
+### [x] T12 — Install e2e del wizard sobre el payload final
 
 - Subagente: `rust-engineer` · Skills: `bash-defensive-patterns`, `test-driven-development`, `doubt-driven-development` · Tools: —
 - [ ] Payload empaquetado con la misma lista de exclusiones de `release.yml` (raíz del tar = contenido del vault)
