@@ -1,495 +1,617 @@
-# Plan de implementación — Phase 4 (blueprint del payload del vault)
+# Plan de implementación — Phase 5 (ejecución del blueprint del payload)
 
 <!-- markdownlint-disable MD036 -->
-<!-- Los rótulos de bloque (`**Criterios de aceptación**`) son pseudo-encabezados
-     deliberados: 9 calpullis repetirían el mismo título real (MD024). -->
 
-> **Fecha:** 2026-11-04 · **Autor:** Moctezuma (orquestador) · **Modo:** solo planificación (cero código)
-> **Fase:** Phase 4 — Diseño del agent workflow (blueprint) · **Gate de fase:** BLUEPRINT APPROVED — **concedido 2026-11-09 por congelamiento del dueño** (40 definitivas, `cf17f31`/`2e62e60`, D-P4-12)
-> **Fuente de verdad:** `docs/WORKFLOW.md` §Phase 4 · `specs/spec-payload-vault.md` (lienzo vivo, hoy `Proposed`)
-> **Alcance de verificación:** SOLO linters (markdownlint + mermaid render + greps de no-regresión).
-> **La suite de pruebas NO se ejecuta en esta fase** (decisión del dueño, 2026-11-04): Phase 4 no toca código.
+> **Fecha:** 2026-11-09 · **Autor:** Moctezuma (orquestador) · **Modo:** solo planificación (cero código)
+> **Fase:** Phase 5 — Payload + Skills audit (ejecución) · **Gate de fase:** FTR Phase 5→6
+> **Fuente de verdad:** `docs/WORKFLOW.md` §Phase 5 · `specs/spec-payload-{vault,skills,permissions,agents,commands}.md` (Approved 2026-11-09)
+> **Precedente:** D-P4-5 — `tasks/plan.md` y `tasks/todo.md` se sobrescriben; el plan de Phase 4 queda en el historial de git (`337c012`).
 
 ## 1. Objetivo y no-objetivos
 
-**Objetivo:** cerrar el *blueprint* del payload — los 5 system prompts de agente, los 9 cuerpos de comando, los 5
-bloques de permisos, la tabla de invocación 9×4 y la matriz de conflictos — hasta estado **Approved**, para que
-Phase 5 pueda ejecutarlo **literal** (sin reinterpretación).
+**Objetivo:** ejecutar **literalmente** el blueprint Approved de Phase 4 sobre `obsidian-workspace/`:
+materializar los 15 artefactos de texto (5 agentes + 9 comandos + `AGENTS.md` del vault), limpiar la
+configuración del payload, completar el scaffold canónico del vault y cerrar los dos gates de la
+fase — **permission fixtures D9.3** y **methodology e2e (D9)** — con la evidencia medida.
 
-**Idioma (D-P4-6):** el blueprint se redacta en español, pero **todo lo que se materializa dentro de
-`obsidian-workspace/` va en inglés** — los 5 `.opencode/agents/*.md`, los 9 `.opencode/commands/*.md` y el
-`AGENTS.md` del vault (incluidos sus `description`). Las **muestras** que instala el wizard quedan
-fuera de la regla: conservan su nombre y su contenido en español (D-P4-7 revocada, 2026-11-04).
-La documentación del repo (`specs/`, `docs/`, `tasks/`) permanece en español. Los **nombres propios** (agentes,
-bandejas, tools, estados de `procedencia`, el formato de cita) son contrato y no se traducen.
+**Idioma (D-P4-6):** los 15 artefactos del payload se escriben en **inglés**; la prosa del repo
+(`specs/`, `docs/`, `tasks/`) sigue en **español**. Las muestras del instalador (`ejemplo.md`,
+`ejemplo.pdf`) conservan nombre y contenido en español (D-P4-7 revocada).
 
-**D-P4-7 (revocada 2026-11-04):** las muestras del payload **no** se renombran ni se traducen. `ejemplo.md`,
-`ejemplo.pdf`, el cuerpo del `.md` y el asset `crates/tepochcalli/assets/ejemplo.pdf` se quedan como están;
-no hay cambios de constantes del wizard en Phase 5 por esta decisión.
-
-**No-objetivos (fuera de Phase 4):**
+**No-objetivos (fuera de Phase 5):**
 
 | Fuera | Por qué |
 | --- | --- |
-| Escribir en `obsidian-workspace/**` | Phase 4 es documentación pura; la prohibición ES un entregable verbal de la fase |
-| Tocar `obsidian-workspace/opencode.json` | La decisión sobre el array `permissions` se **documenta** aquí y se **ejecuta** en Phase 5 |
-| Traducir al inglés la documentación del repo (`specs/`, `docs/`, `tasks/`) | D-P4-6 solo alcanza al payload; la prosa del repo sigue en español (CODE_STYLE) |
-| **Commitear `agent_example.md` / `command_example.md`** | Son la guía de formato del dueño y **no se commitean** (D-P4-8): se referencian por ruta y el plan se mantiene autosuficiente |
-| Modificar código Python/Rust, contratos MCP, ADRs | Los contratos D1-D11 están `Accepted`; cambiarlos exige ADR nuevo |
+| Modificar, añadir o eliminar skills de `obsidian-workspace/.opencode/skills/` | Las 40 son **definitivas** (D-P4-12, decisión del dueño 2026-11-09); Phase 5 **verifica presencia** (40/40) y nada más |
+| Cambiar los contratos MCP, los ADRs o el motor | D1–D11 están `Accepted`; tocarlos exige ADR nuevo |
+| Ejecutar la metodología de 9 comandos con LLM automatizada | Decisión del dueño: contrato estático automatizado + corrida manual con evidencia (D-P5-3) |
 | Tocar `docs/UH.md`, `README.md`, `LICENSE`, `opencode.json` (raíz) | Pre-commit checklist del `AGENTS.md` del repo |
-| Instalar/retirar skills del payload | Es la acción de Phase 5 (Anexo A), no el diseño de Phase 4 |
+| Cambiar las muestras del instalador (`ejemplo.md`/`ejemplo.pdf`) | D-P4-7 revocada; las crea el wizard en F3, no el payload |
+| Instalar OfficeCLI / retirar la entrada `excel` del MCP | TD-22 es **feature 0.2.0**, fuera de v1 |
+| Retirar o consolidar skills del pack Códice | Congelado: 40 conservadas, 0 retiradas, 0 consolidadas |
 
-## 2. Decisiones tomadas (dueño, 2026-11-04)
+## 2. Decisiones tomadas (dueño, 2026-11-09)
 
 | # | Decisión | Efecto en el plan |
 | --- | --- | --- |
-| D-P4-1 | **Congelar los 9 comandos verbatim en Phase 4** (no solo 3) | T6 reescribe los 6 restantes; Phase 5 = copiar y verificar |
-| D-P4-2 | **Eliminar el array global `permissions`** (313 reglas) del payload | T4 decide y documenta; la ejecución es Phase 5 |
-| D-P4-3 | **Solo corregir la FORMA del bloque de permisos** (`permissions` como lista; nunca `permission:` singular); las acciones de casa (`todowrite`, `lsp`, `question`) **se conservan** — lo fija la guía (D-P4-8); **sin** reglas MCP por agente | T1 documenta la forma y el catálogo; T4 no añade acciones `tepochcalli_rag_*` |
-| D-P4-4 | **Dividir el blueprint en 4 specs** (<500 líneas cada una) | T2/T5/T6 crean las 3 nuevas; T8 actualiza índices |
-| D-P4-5 | **Sobrescribir `tasks/plan.md` y `tasks/todo.md`** | El plan de Phase 3.5 queda solo en el historial de git; WORKFLOW §Phase 3.5 pasa a apuntar al commit |
-| D-P4-6 | **Los artefactos del payload se redactan en INGLÉS** (5 system prompts, 9 cuerpos de comando, `AGENTS.md` del vault, `description` de los agentes); la prosa del repo (specs, docs, `tasks/`) sigue en español | T5, T6 y T7 redactan en inglés; T1 fija el criterio y el chequeo; el gate CP-C verifica 0 marcadores del español en los bloques del payload. Precedente: la skill `tepochcalli-mcp` del payload ya está en inglés |
-| D-P4-7 | **Revocada (2026-11-04): las muestras del payload se quedan como están** (`ejemplo.md`/`ejemplo.pdf`, contenido en español) | T2 las inventaría sin cambio; T8 no registra cambios del wizard |
-| D-P4-8 | **La guía de formato del repo son `agent_example.md` y `command_example.md`** (raíz del repo, **sin commitear**): fijan el header y el esqueleto de cuerpo de los `.md` de agente y de comando | El plan **solo referencia las rutas** (no copia ni extrae el contenido); T1+T5+T6 la citan como formato canónico; T8 verifica que sigan **untracked** |
-| D-P4-12 | **Congelamiento en 40 skills + gate BLUEPRINT APPROVED concedido (2026-11-09)** | T8/CP-E se cierran; las 5 specs → Approved; Phase 5 READY TO PLAN (plan vía `/plan`, sin ejecución) |
+| **D-P5-1** | **Las 40 skills del payload son definitivas.** Phase 5 verifica que las 40 estén en `.opencode/skills/` y **no modifica, añade ni elimina ninguna** | T11 asserta el inventario nombre a nombre (40/40, 0 diff de contenido); ninguna ola toca `skills/` |
+| **D-P5-2** | **Enmienda fechada al blueprint Approved:** `/transform` y Tlacuilo citaban 8 skills que el congelado de 40 eliminó (`xlsx-official`, `excel-analysis`, `scientific-slides`, `pptx-official`, `matplotlib`, `scientific-visualization`, `infographics`, `markitdown`). Se sustituyen por las **reales** del `ls` de 40. `.opencode/skills/` intacto | **T1** (gate previo, bloquea T4 y T7) — vuelve a Phase 4 con enmienda fechada, como manda `docs/WORKFLOW.md` §Phase 5 |
+| **D-P5-3** | **Gate D9 = contrato estático automatizado + corrida manual con evidencia** (no e2e automático con LLM) | T11 = contrato ejecutable; T13 = protocolo + corrida manual con checklist y evidencia |
+| **D-P5-4** | **`opencode.json` del payload:** se borra el array global de 313 reglas `permissions` (D-P4-2/D-P4-3) y `instructions` se corrige a rutas **relativas al vault** (`.opencode/skills/<skill>/SKILL.md`); `references` se conserva | T9 |
+| **D-P5-5** | **Scaffold:** `01-Tasks/` se **renombra** a `01-tasks/` (TD-8: renombrar, nunca crear) y sus 3 ficheros de 0 bytes se eliminan; se crean `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/` con `.gitkeep` | T10 |
+| **D-P5-6** | **`.gitignore` del vault** nuevo en el payload con las 5 rutas de `specs/spec-vault-structure.md` §Estrategia gitignore | T10 |
+| **D-P5-7** | **`tasks/plan.md` y `tasks/todo.md` se sobrescriben** (precedente D-P4-5); el plan de Phase 4 queda en git (`337c012`) | Este commit |
+| **D-P5-8** | **No se crean muestras en `00-Resources/` del repo:** el blueprint Approved (`spec-payload-skills.md` §Inventario de muestras) fija que las crea el instalador en F3; el texto de `docs/WORKFLOW.md` §Phase 5 («muestras en `00-Resources/`») queda precisado por el blueprint, más reciente | T10 (`.gitkeep` solo) + T12 (el install las materializa) |
+| **D-P5-9** | **El fixture del merge conservador se sustituye por un merge sintético** (cierra TD-30): el test deja de comparar el payload consigo mismo y demuestra el merge sobre una entrada fabricada | T9 |
 
-## 3. Estado real verificado (2026-11-04, lectura del repo)
+## 3. Estado real verificado (2026-11-09, lectura del repo)
 
-Evidencia de partida — cada línea se cita en el calpulli que la usa:
+Cada línea de esta tabla está medida, no supuesta; el comando que la evidencia va en el calpulli que la usa.
 
 | Hecho | Valor medido | Dónde |
 | --- | --- | --- |
-| Blueprint actual | 528 líneas (umbral `specs/` = **<500**) | `specs/spec-payload-vault.md` |
-| Skills del payload | **40** dirs definitivos (decisión del dueño 2026-11-09; el 2026-11-04 eran 209 = 208 + `tepochcalli-mcp` de Phase 3.5 — SUPERSEDED) | `ls obsidian-workspace/.opencode/skills/` |
-| Agentes del payload | **170** `.md` (5 primarios + 165 del pack Códice) | `ls obsidian-workspace/.opencode/agents/` |
-| Comandos del payload | **9** `.md`, **4 líneas** cada uno, `description:` **vacía**, sin cuerpo | `obsidian-workspace/.opencode/commands/` |
-| Array global de permisos | **313** reglas heredadas del pack Códice | `obsidian-workspace/opencode.json` → `permissions` |
-| MCP del payload | `tepochcalli-rag` activo; `anydoc`, `excel`, `jupyter` en `disabled: true` | ídem → `mcp.servers` |
-| `default_agent` | `"itzamna"` (primary, visible) | ídem |
-| Bug heredado | `tlacuilo.md` lleva el título «# CHILAM — THE AUDITOR»; `chilam.md` tiene `edit * allow` | `obsidian-workspace/.opencode/agents/` |
-| Stubs con `todowrite` | los 5 agentes primarios usan `action: todowrite` (no existe en V2) | ídem |
-| Formato OpenCode V2 | `permissions` (lista `action`/`resource`/`effect`, last-match-wins), `mode: primary\|subagent\|all`, `hidden`, `color`; comandos: `description`/`agent`/`model`/`subagent` (`template` solo en JSON); `default_agent` debe ser primary · **fuente:** docs oficiales `v2.1.2` (ctx7, 2026-11-04) | T1 |
+| Skills del payload | **40 dirs** | `ls obsidian-workspace/.opencode/skills \| wc -l` |
+| Agentes del payload | **170 `.md`** (5 primarios + 165 del pack Códice) | `find obsidian-workspace/.opencode/agents -name '*.md' \| wc -l` |
+| Comandos del payload | **9 `.md`**, todos de **4 líneas** (stub: `description:` vacío + `agent:`) | `wc -l obsidian-workspace/.opencode/commands/*.md` |
+| Agentes primarios actuales | 83–135 líneas; permisos **distintos** del blueprint (`subagent * allow`, `edit * ask`/`allow`, sin `external_directory` deny, sin denies de `*.env` ni de `.tepochcalli/config/**`, sin superficies por bandeja) | lectura de los 5 `.md` |
+| `AGENTS.md` del vault | **79 líneas**, template genérico con placeholders (`[Describe the project's purpose…]`) | `obsidian-workspace/AGENTS.md` |
+| `opencode.json` del payload | array global `permissions` de **313 reglas**; `instructions` = rutas **relativas al repo** (`obsidian-workspace/.opencode/skills/…`); `default_agent` = `itzamna` (correcto); `agents` con 5 primarios + `build/plan/explore/general` | `python -c "json.load(...)"` |
+| Scaffold | `00-Resources/` (vacía), `01-Tasks/` con 3 ficheros de 0 bytes; **faltan** `01-tasks/`, `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/`; **no hay `.gitignore`** en el payload | `ls -la obsidian-workspace/` |
+| `.gitignore` del repo | ya ignora `obsidian-workspace/.tepochcalli/{venv,db,models,bin,config}/` | `.gitignore:206-210` |
+| Blueprint vs payload | 8 skills citadas en las specs **no existen** en el `ls` de 40 | `test -d` por nombre |
+| Asset de release | el tar del payload = **árbol completo** `obsidian-workspace/` con raíz = contenido del vault, excluyendo `venv/db/models/bin/config` y caches | `.github/workflows/release.yml:186-217` |
+| Merge del wizard | `merge_tree` copia **sin sobrescribir** (lo existente gana); F8 solo toca `mcp.servers.tepochcalli-rag` | `crates/tepochcalli/src/adapters/payload.rs:326-388` · `phase8.rs` |
+| Baseline de linters | `just md-lint` → **0 issues** en `docs specs AGENTS.md SPEC.md` | medido 2026-11-09 |
+| Tests | 703 passed + 3 `slow`, cobertura 97 % (gate 95) | `docs/WORKFLOW.md` §Phase 3.5 (M14) |
 
 ## 4. Grafo de dependencias
 
 ```mermaid
-graph LR
-    T0["T0 baseline de linters"] --> T1
-    T1["T1 reglas de formato V2"] --> T4["T4 permisos de los 5 agentes"]
-    T0 --> T2["T2 inventario + matriz de conflictos"]
-    T2 --> T3["T3 tabla de invocación 9x4"]
+graph TB
+    T0["T0 · baseline y auditoría<br/>(read-only)"]
+    T1["T1 · enmienda fechada<br/>del blueprint (skills)"]
+    T2["T2 · itzamna (piloto)"]
+    T3["T3 · nezahualcoyotl · pochteca · chilam"]
+    T4["T4 · tlacuilo"]
+    T5["T5 · /rubric /synthesize /draft /update"]
+    T6["T6 · /research /validate /cite /review"]
+    T7["T7 · /transform"]
+    T8["T8 · AGENTS.md del vault"]
+    T9["T9 · opencode.json + fixture sintético"]
+    T10["T10 · scaffold canónico + .gitignore"]
+    T11["T11 · fixtures de permisos D9.3<br/>+ contrato del payload"]
+    T12["T12 · install e2e del wizard"]
+    T13["T13 · methodology e2e (D9)"]
+    T14["T14 · cierre documental + FTR 5→6"]
+
+    T0 --> T1
+    T1 --> T4
+    T1 --> T7
+    T2 --> T3
     T3 --> T4
-    T4 --> T5["T5 5 system prompts"]
-    T3 --> T6["T6 9 cuerpos de comando"]
-    T4 --> T6
-    T5 --> T7["T7 coherencia y cierre del blueprint"]
-    T6 --> T7
-    T7 --> T8["T8 cierre documental + FTR 4->5"]
+    T2 --> T11
+    T3 --> T11
+    T4 --> T11
+    T5 --> T11
+    T6 --> T11
+    T7 --> T11
+    T8 --> T11
+    T9 --> T11
+    T10 --> T11
+    T11 --> T12
+    T12 --> T13
+    T13 --> T14
+    T11 --> T14
 ```
 
-- **Paralelizables:** `T1 ‖ T2` (ficheros distintos, sin dependencia) → `T3 ‖ T4` (ficheros distintos) → `T5 ‖ T6`
-  (ficheros distintos). Dentro de una tarea con varios subagentes el orden es **secuencial** (ver §6).
-- **Secuenciales obligatorios:** `T5 → T7 → T8` y `T6 → T7 → T8` (T7 reconcilia a los dos autores paralelos).
+**Por qué este orden.** El grafo sube desde el texto (T1→T4/T7) al artefacto (T2-T10), y solo
+después se miden (T11-T13). Dos reglas lo imponen:
 
-## 5. Los calpullis
+- **T1 bloquea a T4 y T7** porque son los dos artefactos que citan skills inexistentes:
+  materializarlos antes de enmendar escribiría en el payload un cuerpo que el blueprint veta.
 
-Cada calpulli deja el blueprint **completo y coherente** en su parte (slicing vertical: un artefacto entero +
-su checklist, no una capa horizontal). Verificación: **solo linters**.
+- **T11 (el contrato) va antes que T12/T13 (la ejecución)** porque un e2e sobre un payload que no
+  pasa el contrato estático produce evidencia no comparable (lección de Phase 3.5 (c): un golden
+  se valida por cómo se genera, no por su color).
 
----
+**Paralelismo dentro de cada ola:** las olas 1, 2, 3 y 4 no tienen dependencia entre sí más allá de
+lo dibujado; T2-T10 se reparten por artefacto (fichero), no por capa. T8, T9 y T10 son
+independientes entre sí y pueden solaparse con las olas 1 y 2.
 
-### T0 — Baseline del gate de linters
+## 5. Calpullis
 
-**Objetivo:** fijar números, no impresiones. El gate de markdownlint **no está verde** (deuda D12: 422 errores
-históricos en `docs specs AGENTS.md SPEC.md`); sin baseline, «cero errores nuevos» no es verificable.
-
-**Entregable:** reporte al orquestador con (a) total de errores de markdownlint en HEAD + desglose por fichero,
-(b) número de bloques mermaid en `docs/` + `specs/`, (c) `wc -l` de `specs/*.md`, (d) `git status --short` vacío.
-El orquestador vuelca los números en `tasks/todo.md` §Baseline.
-
-**Criterios de aceptación**
-
-- [ ] `just md-lint` ejecutado en HEAD y su recuento reportado (no se arregla el baseline: D12 lo permite)
-- [ ] Bloques mermaid contados y lista de ficheros que los contienen
-- [ ] `wc -l specs/*.md` con los 4 ficheros objetivo marcados (>500 = rojo)
-- [ ] Ningún fichero del repo modificado
-
-**Verificación:** `just md-lint 2>&1 | tail -3` (salida legible) · `npx -y @mermaid-js/mermaid-cli --version`
-(disponibilidad, sin render todavía) · `git status --short` vacío.
-
-**Dependencias:** ninguna. **Ficheros tocados:** ninguno (solo lectura).
-**Subagente:** `developer-tooling-engineer` · **Skills:** `bash-defensive-patterns` (recuentos fiables),
-`context-engineering` · **Tools/MCP:** shell, npx.
+Cada calpulli es una rebanada **vertical**: entrega un artefacto completo y su prueba. «El usuario
+puede X» — no «la capa Y está escrita».
 
 ---
 
-### T1 — Reglas de formato OpenCode V2 (re-verificadas) + vocabulario de acciones
+### Task T0: Baseline del payload y auditoría de divergencias
 
-**Objetivo:** reemplazar la sección de formato del blueprint (verificada 2026-10-21) por una versión
-**re-verificada hoy contra la documentación oficial `v2.1.2`**, con la discrepancia entre las dos páginas de docs
-resuelta y citada.
+**Descripción:** medir el estado real del payload contra el blueprint Approved antes de escribir
+nada. Produce la evidencia de los 4 hallazgos que activan D-P5-1..D-P5-9 y los números base que
+comparan las olas siguientes. **Cero escrituras** en `obsidian-workspace/`.
 
-**Entregable:** §Reglas de formato OpenCode V2 en `specs/spec-payload-vault.md`, reescrita.
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] Las 4 divergencias quedan documentadas con el comando que las evidencia (no con prosa): 8 skills inexistentes (un `test -d` por nombre), permisos divergentes de los 5 agentes (diff bloque a bloque contra `spec-payload-permissions.md`), array global de 313 (`json.load` + `len`), `instructions` rotas, scaffold incompleto.
+- [ ] Baseline numérico registrado: `wc -l` de los 15 artefactos (5 agentes, 9 comandos, `AGENTS.md`), `ls .opencode/skills | wc -l` = 40, `len(opencode.json["permissions"])` = 313, `just md-lint` = 0.
+- [ ] Hash del árbol de skills (`find .opencode/skills -type f | sort | xargs sha256sum`) guardado para demostrar en T11 que las 40 no cambiaron (D-P5-1).
+- [ ] `git status --short` y `git diff --stat -- obsidian-workspace` vacíos al cerrar.
 
-- [ ] Cada regla (frontmatter de agente; `permissions` como **lista** `action`/`resource`/`effect`; last-match-wins;
-      `mode: primary|subagent|all`; `hidden`; `color`; `steps`; frontmatter de comando `description`/`agent`/`model`/`subagent`;
-      `template` solo en JSON; `default_agent` debe ser primary) lleva **URL oficial + versión + fecha**
-- [ ] Tabla del **vocabulario de acciones V2** (`read`, `edit`, `glob`, `grep`, `shell`, `subagent`, `skill`,
-      `question`, `webfetch`, `websearch`, `external_directory`, `doom_loop`, `<server>_<tool>`, `execute`) +
-      nota de que las acciones son **cadenas que un plugin puede ampliar** (docs oficiales: *«V2 action names are
-      strings, so plugins may define more actions»*), por lo que las acciones de casa (`todowrite`, `lsp`,
-      `question`, usadas por la guía y por los stubs) **se conservan**; la prohibición real es
-      **`permission:` singular** (V1 legacy) y los 7 campos legacy
-- [ ] Discrepancia entre `agents.mdx` (mapa singular) y `permissions.mdx` (lista) **resuelta a favor de la lista**,
-      con la fuente canónica citada y el razonamiento
-- [ ] Checklist de no-regresión de frontmatter (los 7 campos legacy + `permission:` singular + `subagent` en comandos)
-- [ ] **Guía de formato del repo** (D-P4-8) citada como canónica para el header y el esqueleto de cuerpo:
-      `agent_example.md` y `command_example.md` (raíz del repo, **sin commitear**) — el plan solo referencia las
-      rutas; no se copia su contenido ni se commitean
-- [ ] **Regla de idioma del payload** (D-P4-6) fijada por escrito: los artefactos que se materializan en
-      `obsidian-workspace/` (`.opencode/agents/*.md`, `.opencode/commands/*.md`, `AGENTS.md` del vault) van en
-      **inglés**; la documentación del repo (`specs/`, `docs/`, `tasks/`) va en español — con la **lista de marcadores
-      del español** para el chequeo mecánico (`ñ`, `¿`, `¡`, y una lista corta de palabras inequívocas) y la
-      excepción de los **nombres propios** (agentes, bandejas, tools, estados de `procedencia`, que son contrato)
-- [ ] Cero referencias a APIs no verificadas (R2/R3: sin cita no hay decisión)
+**Verificación:** los comandos y su salida cruda quedan en el informe del calpulli (commit o `tasks/`); nadie firma un AC sin el número al lado.
 
-**Verificación:** grep de `http` + `v2.1.2` en la sección (≥1 URL por grupo de reglas) · la sección cita las rutas
-de la guía (`agent_example.md`, `command_example.md`) como formato canónico · `just md-lint` sin errores
-nuevos vs T0 · revisión del orquestador contra la fuente.
+**Dependencias:** — · **Scope:** S (lectura + informe)
 
-**Dependencias:** T0. **Fichero:** `specs/spec-payload-vault.md` (§Reglas de formato).
-**Subagente:** `developer-tooling-engineer` · **Skills:** `opencode` (comportamiento real de OpenCode V2),
-`source-driven-development` (todo va con cita), `find-docs` · **Tools/MCP:** `context7` (docs oficiales),
-`gitmcp` (repo `anomalyco/opencode@dev` para el schema), `vercel-grep`.
+**Ficheros probables:** ninguno escrito en `obsidian-workspace/`; el informe va al cuerpo del commit y a `tasks/todo.md`.
 
 ---
 
-### T2 — Inventario real del payload + matriz de conflictos 1:1
+### Task T1: Enmienda fechada del blueprint (skills inexistentes)
 
-**Objetivo:** la matriz actual se construyó contra el `ls` del 2026-10-21 (208 dirs) y hoy hay 209. La métrica de
-WORKFLOW es «recuento `ls` vs filas = 100 %». Este calpulli la vuelve verdad.
+**Descripción:** cerrar la divergencia D-1 antes de materializar. Es el regreso a Phase 4 que
+`docs/WORKFLOW.md` §Phase 5 exige cuando el blueprint y la realidad divergen: **enmienda fechada a
+la spec, no parche en el payload**. Corrige dos ficheros de spec para que los cuerpos citen solo
+skills reales del `ls` de 40, **sin tocar `.opencode/skills/`** (D-P5-1).
 
-**Entregable:** NUEVO `specs/spec-payload-skills.md` con §Inventario real + §Matriz de conflictos.
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] `specs/spec-payload-commands.md` §`/transform` paso 2: las 8 skills inexistentes sustituidas por reales del congelado — CSV/Excel → `spreadsheet-analysis` + `data-analysis`; presentaciones → `posters-generator`; figuras → `data-plotting`; mind map → `markdown-mermaid-writing`; conversión ad-hoc → `pdf` + `image-prompt-generator` — y la lista de **GAP** (Jupyter, R, Graphviz/PlantUML, LaTeX de manuscrito) se conserva literal.
+- [ ] `specs/spec-payload-agents.md` §Tlacuilo CAPABILITIES: `xlsx-official`/`excel-analysis` sustituidos por los reales; el resto de las skills citadas en los 5 cuerpos verificadas contra el `ls` de 40.
+- [ ] Ambas specs llevan marca de enmienda fechada **2026-11-09** y conservan `Status: Approved` (es una enmienda, no una decisión nueva ⇒ sin ADR).
+- [ ] La tabla 9×4 de `spec-payload-skills.md` sigue siendo coherente con los cuerpos enmendados (ninguna skill citada allí que no exista).
+- [ ] Invariante verificada por script: **todo** nombre de skill citado en las 5 specs del payload existe en `ls .opencode/skills` — 0 huérfanos.
+- [ ] `git diff --stat -- obsidian-workspace/.opencode/skills` **vacío** (D-P5-1).
+- [ ] Reglas de formato V2 re-verificadas contra el tag vigente de OpenCode (≥ v2.1.2) con fecha y URL; si el tag cambió, la desviación se registra antes de escribir nada (R2, cero asunción).
 
-- [ ] Recuento con comando y fecha: **209** skills, **170** agentes, **9** comandos
-- [ ] Cada skill citada en la matriz **existe** en el `ls` → **cero skills inventadas** (grep 1:1, 0 huérfanas)
-- [ ] Cada skill del inventario queda **clasificada** (CONSERVAR / CONSOLIDAR con ganadora / RETIRAR / INSTALAR-GAP)
-      o barrida por la fila 15 con el criterio escrito → cobertura **100 %** de los 209
-- [ ] Gaps (Jupyter, R, Graphviz/PlantUML, LaTeX de manuscrito) declarados **sin inventar nombres**
-- [ ] `tepochcalli-mcp` (fila 17) y el estado de TD-22 / OfficeCLI reflejados **sin contradecir** `docs/TECH_DEBT.md`
-- [ ] **Muestras del payload inventariadas** (sin cambio, D-P4-7 revocada): `00-Resources/ejemplo.md` + `ejemplo.pdf`
-      (constantes del wizard `PLACEHOLDER_MD_NAME`/`PLACEHOLDER_PDF_NAME`, asset
-      `crates/tepochcalli/assets/ejemplo.pdf`); se anota la discrepancia de caja `01-Tasks/` vs canónico
-      `01-tasks/` (vecina de TD-8) para que Phase 5 la resuelva
-- [ ] Recuento derivado (no estimado) de las skills que quedarían en el payload base → contraste con el objetivo **<60**
-- [ ] El archivo queda **<500 líneas**
+**Verificación:** barrido de nombres de skill con 0 huérfanos; `git diff --stat -- obsidian-workspace/.opencode/skills` vacío; `just md-lint` 0; revisión del dueño (CP-0) antes de T4/T7.
 
-**Verificación:** script de cobertura (conjunto citado vs `ls`: faltantes = 0, huérfanos = 0) · `wc -l` ·
-`just md-lint` sin errores nuevos.
+**Dependencias:** T0 · **Scope:** M (2 specs + 1 script de barrido)
 
-**Dependencias:** T0. **Fichero:** NUEVO `specs/spec-payload-skills.md`. **SUPERSEDED 2026-11-09:** el recuento 209 y la matriz de 17 filas quedan congelados en 40 dirs definitivos (decisión del dueño); Phase 5 solo verifica presencia.
-**Subagentes (secuenciales):** `codebase-archaeologist` (recuento + trazabilidad del inventario) **→**
-`knowledge-synthesizer` (redacción de la matriz de 17 filas con veredicto y acción de Phase 5).
-**Skills:** `codebase-memory` (grafo para el repo, no para el payload), `context-engineering`, `documentation-and-adrs`.
-**Tools/MCP:** `codebase-memory-mcp`, `vercel-grep`, shell (`ls` del payload — **solo lectura**).
+**Ficheros probables:** `specs/spec-payload-commands.md` · `specs/spec-payload-agents.md` · `specs/spec-payload-skills.md` (solo si la tabla 9×4 cita skills inexistentes)
 
 ---
 
-### T3 — Tabla de invocación por comando (9×4)
+### Task T2: Agente `itzamna` (piloto vertical)
 
-**Objetivo:** cerrar la columna que WORKFLOW §Phase 4 nombra como agenda: skills concretas del inventario real,
-herramientas nativas, MCPs a ejecutar (las 7 de `tepochcalli-rag`, incluidas las 3 del conversor; `anydoc` solo
-como fallback disabled) y subagentes permitidos.
+**Descripción:** materializar **el primer agente completo** — frontmatter + bloque `permissions` +
+cuerpo de 56 líneas — y el verificador que lo prueba. Es la rebanada vertical que valida el método
+(orden last-match-wins, budgets, idioma) antes de escalar a los otros cuatro.
 
-**Entregable:** §Tabla de invocación en `specs/spec-payload-skills.md`.
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] `obsidian-workspace/.opencode/agents/itzamna.md` = frontmatter (`description: "Itzamna - Supreme Orchestrator"`, `mode: primary`, bloque `permissions` de 16 reglas de `spec-payload-permissions.md` §Itzamná, **sin `model`**) + cuerpo literal de `spec-payload-agents.md`.
+- [ ] `wc -l` ≤ 60 (objetivo 56).
+- [ ] Cero campos legacy: `temperature|top_p|prompt:|permission:|tools:|disable|maxSteps`.
+- [ ] Los 6 elementos del contrato T5 presentes: persona UH, propósito + bandeja, MCP-first, no-contaminación, formato de cita `source_path » heading (chars x–y)`, cláusula «the vault's `AGENTS.md` governs and is editable».
+- [ ] Cero marcadores del español (D-P4-6): `ñ`, `¿`, `¡` y palabras sueltas `el|la|los|las|para|con|por|una|del|que|cómo|según` — exentos nombres propios y tokens de enum.
+- [ ] Simulador last-match-wins verde: `edit *` → deny · `read 00-Resources/x.md` → allow · `read .env` → deny · `read sub/.env.local` → deny · `read .tepochcalli/config/tepochcalli.toml` → deny.
 
-- [ ] 9 filas × 4 columnas; los 9 comandos del payload con su `agent:` correcto
-- [ ] Cada skill citada existe en el `ls` (0 huérfanas) y marca `⟵G` solo donde la matriz consolidó
-- [ ] Herramientas nativas con **vocabulario V2** (`read`, `glob`, `grep`, `edit`, `webfetch`, `websearch`, `question`)
-- [ ] MCPs: solo las **7** de `tepochcalli-rag`; las 3 del conversor (`convert_document`, `convert_base64`,
-      `list_formats`) asignadas al comando que las usa; `anydoc` marcado **fallback disabled** (no disponible por
-      defecto, se usa solo si el conversor falla con formato fuera de catálogo, con permiso del usuario)
-- [ ] `excel` y `jupyter` siguen `disabled: true` → declarados **GAP**, no tools usables
-- [ ] Columna de subagentes = **ninguno** en las 9 filas (los 5 primarios llevan `subagent * deny`)
-- [ ] `officecli` **no** se cita como skill ni MCP (es binario del wizard, decisión 0.2.0 de TD-22)
+**Verificación:** el simulador corre como test (T11 lo aterriza; T2 lo deja escrito y ejecutable a mano) · `npx --yes markdownlint-cli2 obsidian-workspace/.opencode/agents/itzamna.md` (si el bloque congelado no pasa el lint, la desviación se corrige **en la spec**, no en el payload).
 
-**Verificación:** los 7 nombres de tool extraídos de `server.py` (`.tepochcalli/mcp/tepochcalli_mcp/server.py`)
-contrastados contra la tabla (0 diferencias) · grep de nombres de skill contra el `ls` (0 huérfanas) · md-lint.
+**Dependencias:** T0 · **Scope:** S (1 fichero de payload + verificador)
 
-**Dependencias:** T2. **Fichero:** `specs/spec-payload-skills.md`.
-**Subagente:** `workflow-architect` · **Skills:** `api-and-interface-design` (contrato de tools),
-`opencode`, `context-engineering` · **Tools/MCP:** `context7`, `codebase-memory-mcp` (contrato MCP real), `gitmcp`.
+**Ficheros probables:** `obsidian-workspace/.opencode/agents/itzamna.md`
 
 ---
 
-### T4 — Blueprint de permisos de los 5 agentes + decisión sobre el array global
+### Task T3: Agentes `nezahualcoyotl`, `pochteca`, `chilam`
 
-**Objetivo:** los 5 YAML de permisos son la **frontera de seguridad** de la metodología (separación de poderes).
-Hoy están escritos contra un formato viejo y el payload arrastra 313 reglas globales que los contradicen.
+**Descripción:** los tres agentes limpios del blueprint (sin skills inexistentes). Cada uno con su
+bloque `permissions` —deny-list de `external_directory` + secretos, y superficie de escritura
+acotada a su bandeja— y su cuerpo congelado.
 
-**Entregable:** §Blueprint de permisos + §Nota de fusión en `specs/spec-payload-vault.md`.
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] `nezahualcoyotl.md` (54 líneas), `pochteca.md` (58), `chilam.md` (58): frontmatter + bloque de permisos + cuerpo, todos ≤ 60 líneas.
+- [ ] Probes D9.3 verdes: Pochteca `edit 01-tasks/research/x.md` → allow, `edit 02-drafts/x.md` → deny, `edit 01-tasks/x.md` → deny; Nezahualcóyotl `edit 01-tasks/plan.md` → allow, `edit 01-tasks/research/x.md` → deny; Chilam `edit 03-citations/x.md` → allow, `edit 04-review/x.md` → allow, `edit 02-drafts/x.md` → deny.
+- [ ] Nezahualcóyotl sin `webfetch`/`websearch`; Chilam sin `webfetch`/`websearch`; Pochteca con web permitida (desviación D9.3 del UH, ya documentada).
+- [ ] Los 5 `subagent * deny` presentes en los 5 bloques (los ~165 subagentes Códice quedan catalogados pero inertes).
+- [ ] Cero marcadores del español; cero campos legacy.
 
-- [ ] 5 bloques YAML en la **forma de la guía** (D-P4-8): lista `permissions` con `action:`/`resource:`/`effect:`
-      **en líneas propias** (no el mapa en línea `{action: …, resource: …, effect: …}` del blueprint actual),
-      con las acciones de casa (`todowrite`, `lsp`, `question`) **conservadas**, sin `permission:` singular y
-      sin los 7 campos legacy
-- [ ] **last-match-wins respetado**: reglas amplias primero, excepciones al final (ej. Nezahualcóyotl:
-      `edit * deny` → `edit 01-tasks/** allow` → `edit 01-tasks/research/** deny` **último**)
-- [ ] Superficies efectivas por agente: Pochteca `01-tasks/research/**`; Nezahualcóyotl `01-tasks/` (sin research);
-      Chilam `03-citations/` + `04-review/`; Tlacuilo `02-drafts/` + `05-outputs/` (+ 10+ a petición) con deny-list
-      (sin shell, sin web, deny de `.obsidian/**`, `.opencode/**`, `.tepochcalli/**`, `00-Resources/**`);
-      Itzamná sin `edit`, sin `subagent`, sin `shell`
-- [ ] **D-P4-2 registrada**: el array global `permissions` (313 reglas) de `obsidian-workspace/opencode.json`
-      **se elimina en Phase 5** → permisos SOLO en los `.md`; §Nota de fusión reescrita con el porqué
-- [ ] Normas de frontmatter según la guía: `description` **entrecomillado** con el patrón «Name - Role»
-      (`"Pochteca - The Explorer"`), `mode: primary`, **sin `model`** (`model`/`steps`/`color`
-      viven en el bloque `agents` de `opencode.json`); `default_agent` → `itzamna` (primary, visible) como
-      verificación de Phase 5
-- [ ] Divergencia con la guía **documentada, no copiada**: la guía usa `subagent * allow` + deny por nombre
-      (patrón del orquestador Códice); el blueprint mantiene `subagent * deny` para los 5 (catálogo inerte, D9) —
-      la razón queda escrita en §Nota de fusión
-- [ ] Nota de riesgo asumido (D-P4-3): sin reglas MCP por agente, `add_source`/`convert_*` quedan accesible para
-      todos → el control es de prompt, no de permiso → declarado en §Trade-offs
+**Verificación:** simulador last-match-wins con los probes por agente · markdownlint del payload en verde · diff contra el bloque de la spec, línea a línea.
 
-**Verificación:** los 5 YAML parsean y una simulación de última-coincidencia (guion de ~20 líneas, en el informe)
-contrasta resultado esperado vs real en ≥3 reglas por agente · grep de campos legacy = 0 · md-lint.
+**Dependencias:** T2 (patrón probado) · **Scope:** M (3 ficheros)
 
-**Dependencias:** T1 (vocabulario), T3 (qué tools usa cada agente) · **Fichero:** `specs/spec-payload-vault.md`.
-**Subagente:** `security-architect` · **Skills:** `security-and-hardening`, `design-patterns` (patrón *policy/guard*:
-deny-list frente a allow-list), `opencode` · **Tools/MCP:** `context7`, `gitmcp`.
+**Ficheros probables:** `obsidian-workspace/.opencode/agents/{nezahualcoyotl,pochteca,chilam}.md`
 
 ---
 
-### T5 — Los 5 system prompts (verbatim, congelados)
+### Task T4: Agente `tlacuilo`
 
-**Objetivo:** hoy solo existen las **descripciones** de qué debe contener cada cuerpo; Phase 5 no puede copiar lo
-que no está escrito. Este calpulli redacta los 5 prompts definitivos.
+**Descripción:** el quinto agente, con deny-list completa (12 denies detrás de `edit * allow`) y el
+cuerpo corregido según la enmienda de T1 (CAPABILITIES citaba skills inexistentes).
 
-**Entregable:** NUEVO `specs/spec-payload-agents.md` (5 cuerpos + contrato de los `.md` de agente).
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] `tlacuilo.md`: 56 líneas, frontmatter con `description: "Tlacuilo - The Engineer"`, `mode: primary`, sin `model`.
+- [ ] Deny-list **entera y en orden**: `.obsidian/**`, `.opencode/**`, `.tepochcalli/**`, `00-Resources/**`, `01-tasks/**`, `03-citations/**`, `04-review/**`, `.git/**`, `AGENTS.md`, `opencode.json`, `tepochcalli.toml` — todos detrás de `edit * allow`.
+- [ ] Probes D9.3 verdes: `edit 05-outputs/x.csv` → allow · `edit 02-drafts/x.md` → allow · `edit 00-Resources/x.md` → deny · `edit AGENTS.md` → deny · `edit opencode.json` → deny · `edit .git/config` → deny.
+- [ ] Sin `webfetch`/`websearch`; `subagent * deny`; `shell * deny`.
+- [ ] CAPABILITIES cita **solo** skills del `ls` de 40 (enmienda de T1 aplicada).
+- [ ] Cero marcadores del español; cero campos legacy.
 
-- [ ] 5 cuerpos, **≤60 líneas** cada uno, **in English** (D-P4-6); la spec que los surrounds sigue en español
-- [ ] **Esqueleto de casa** (guía D-P4-8): `# NAME — ROLE` · `## ROLE & DIRECTIVE` · `### PERSONALITY`
-      (Tone / Opening / Closing / Ritual / Taboo / E.g.) · `### CAPABILITIES` · `### RULES` ·
-      `## SOURCES OF TRUTH` · `## COMPOSITION` (*Invoke directly when* / *Invoke via* / *Do not invoke from*)
-- [ ] `### DELEGATION PROTOCOL` de la guía **se sustituye** por una cláusula explícita de **no-delegación**
-      (D9: ningún agente delega en subagentes) — la sustitución se declara en el propio `.md` y en la spec
-- [ ] Los 6 elementos obligatorios **mapeados a las secciones de casa**: persona UH → `ROLE & DIRECTIVE` +
-      `PERSONALITY` · propósito y bandeja → `ROLE & DIRECTIVE` + `CAPABILITIES` · MCP-first, no-contaminación,
-      formato de cita y cláusula del `AGENTS.md` → `RULES` · fuentes de verdad → `SOURCES OF TRUTH`
-- [ ] El ejemplo de la guía ocupa ~123 líneas y el tope del vault es **≤60** → los cuerpos se **comprimen**
-      (frases en vez de listas largas) y cada `.md` declara qué secciones de la guía se recortan
-- [ ] La persona de cada agente es la **traducción fiel** de su fila en `docs/UH.md` (fuente inmutable en español):
-      mismo rol, mismo alcance, mismo nombre propio; la traducción no reinterpretan la metodología
-- [ ] Cada cuerpo incluye los 6 elementos obligatorios: persona UH (1-2 líneas) · propósito + **su bandeja exacta** ·
-      MCP-first (`search` antes de leer crudo de `00-Resources/`; `index_refresh()` si duda de frescura; ante `E_*` →
-      `rag_status()` + `fix_hint`, nunca el error crudo) · no-contaminación (WARN si hay archivos del usuario en
-      bandejas 01-05) · formato de cita `source_path » heading (chars x–y)` · «el `AGENTS.md` del vault manda y es editable»
-- [ ] Itzamná: enruta y resume, **no** ejecuta el pipeline y **no** delega en subagentes
-- [ ] Cada prompt nombra solo herramientas y skills **existentes** (grep 1:1 contra el `ls`)
-- [ ] Frontmatter de cada `.md` conforme a §Reglas de formato (T1) y coherente con los YAML de T4
-- [ ] Fichero **<500 líneas**
+**Verificación:** simulador last-match-wins · markdownlint del payload · barrido de nombres de skill sobre el fichero (0 huérfanos).
 
-**Verificación:** `wc -l` por bloque (≤60) · grep de los 6 elementos por agente (6/6) · grep de skills inexistentes = 0 ·
-chequeo de idioma: 0 marcadores del español (`ñ`, `¿`, `¡`, lista de palabras) en los 5 bloques · md-lint.
+**Dependencias:** T1 + T3 · **Scope:** S (1 fichero)
 
-**Dependencias:** T4 · **Fichero:** NUEVO `specs/spec-payload-agents.md`.
-**Subagente:** `prompt-engineer` · **Skills:** `context-engineering` (presupuesto de prompt),
-`obsidian-markdown` (formato del vault), `opencode` · **Tools/MCP:** `context7`, `codebase-memory-mcp`.
+**Ficheros probables:** `obsidian-workspace/.opencode/agents/tlacuilo.md`
 
 ---
 
-### T6 — Los 9 cuerpos de comando (verbatim, congelados)
+### Task T5: Comandos `/rubric`, `/synthesize`, `/draft`, `/update`
 
-**Objetivo:** hacer literal la ejecución de Phase 5 (D-P4-1). Los 3 cuerpos ya congelados se **traducen al inglés
-con fidelidad semántica** (el español de la spec queda como contrato de referencia; el bloque inglés es el que se
-congela para Phase 5); los 6 restantes se redactan hoy, también en inglés (D-P4-6).
+**Descripción:** los cuatro comandos de fase lineal (una fase, una bandeja, una nota). Materializar
+el cuerpo congelado de `spec-payload-commands.md` con su frontmatter mínimo.
 
-**Entregable:** NUEVO `specs/spec-payload-commands.md` (9 cuerpos + tabla de contratos + esqueleto obligatorio).
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] Los 4 `.md` con frontmatter `{description, agent}` y cuerpo literal de la spec: `/rubric` (agent `nezahualcoyotl`, 24 líneas), `/synthesize` (`nezahualcoyotl`, 24), `/draft` (`tlacuilo`, 24), `/update` (`tlacuilo`, 24).
+- [ ] `wc -l` ≤ 35 cada uno.
+- [ ] Esqueleto de casa completo: `## Pre-Flight` · `## Phase …` · `## Escalation` · `## Suggested Next Step` con cita en bloque.
+- [ ] Cero `model`, cero `subtask`, cero `subagent:`, cero bloques `` !`cmd` ``, cero `@paths`.
+- [ ] Bandeja y frontmatter de salida exactos: `/rubric` → `01-tasks/` `{command, agent, date}`; `/synthesize` → `01-tasks/` `{command, agent, phase, date}`; `/draft` → `02-drafts/` `{command, agent, outline, date}`; `/update` → `02-drafts/` `{command, agent, date, revision_note}`.
+- [ ] `E_*` → `rag_status()` + `fix_hint` (nunca el error crudo) presente en los 4.
+- [ ] Cero marcadores del español.
 
-- [ ] 9 cuerpos, **≤35 líneas** cada uno, **in English** (D-P4-6), con frontmatter `{description (1 line, English), agent: <id>}` (sin `model`,
-      sin `subagent`) y cuerpo con: fase metodológica UH nombrada · uso explícito de `$ARGUMENTS` y/o `$1` ·
-      MCP-first con las **7** tools (catálogo único: la skill `tepochcalli-mcp`) · protocolo `E_*` → `rag_status` ·
-      **destino de escritura = su bandeja** (D9.2) + contrato de frontmatter cuando aplique · formato de cita ·
-      no-contaminación donde lee bandejas
-- [ ] **Esqueleto de casa** (guía D-P4-8), adaptado a la metodología: `## Pre-Flight` (estado del índice:
-      `index_refresh()` si dudamos de la frescura + `search` antes de leer crudo) · `## Phase …` (la fase
-      metodológica) · `## Escalation` (`E_*` → `rag_status()` + `fix_hint`; dudas de intención → `question`) ·
-      `## Suggested Next Step` cerrado con cita de bloque `> …` (el comando siguiente de la cadena, como la guía)
-- [ ] El ejemplo de la guía ocupa ~99 líneas y el tope del vault es **≤35** → los cuerpos se **comprimen** y cada
-      uno declara qué secciones de la guía se recortan
-- [ ] `/research`, `/validate`, `/cite`: el español original se conserva en la spec como **contrato de referencia** y
-      el bloque inglés se congela para Phase 5 — traducción **fiel** (mismos estados de `procedencia`, mismo gate
-      determinista, mismas clasificaciones `respaldada`/`sin_ancla`/`cita_ajena`/`sin_cita`); cualquier divergencia
-      semántica se anota como enmienda fechada
-- [ ] Prohibido `!`cmd`` y `@paths`; cero menciones a `model`/`subagent` en el frontmatter
-- [ ] `/transform` cita solo skills **existentes hoy** y declara los gaps (Jupyter/R/Graphviz/LaTeX) sin inventar nombres
-- [ ] Fichero **<500 líneas**
+**Verificación:** barrido de los 4 ficheros (líneas, frontmatter, prohibiciones, idioma) · diff contra la spec bloque a bloque.
 
-**Verificación:** `wc -l` por bloque (≤35) · grep de `!` y `@` = 0 · los 9 `agent:` resuelven a los 5 primarios
-válidos · chequeo de idioma: 0 marcadores del español en los 9 bloques · md-lint.
+**Dependencias:** T0 · **Scope:** M (4 ficheros)
 
-**Dependencias:** T3 (tools por comando), T4 (permisos) · **Fichero:** NUEVO `specs/spec-payload-commands.md`.
-**Subagente:** `technical-writer` · **Skills:** `context-engineering`, `obsidian-markdown`, `opencode`,
-`documentation-and-adrs` · **Tools/MCP:** `context7`, `codebase-memory-mcp`.
+**Ficheros probables:** `obsidian-workspace/.opencode/commands/{rubric,synthesize,draft,update}.md`
 
 ---
 
-### T7 — Coherencia del blueprint y cierre de las preguntas abiertas
+### Task T6: Comandos `/research`, `/validate`, `/cite`, `/review`
 
-**Objetivo:** dos autores en paralelo (T5 ‖ T6) más los calpullis previos dejan un blueprint que hay que
-**reconciliar** antes de pedir el visto bueno: un solo estilo, una sola regla MCP-first, cero preguntas abiertas.
+**Descripción:** la cadena de evidencia y sus gates deterministas —el corazón de TD-14—: la
+`procedencia` de 4 estados, el chequeo claim↔índice de 4 clases y el gate de compilación sin red.
 
-**Entregable:** `specs/spec-payload-vault.md` (§AGENTS.md del vault revisado, §Testing, §Open Questions,
-§Decisiones) + `specs/spec-agent-workflow.md` (enlaces y estado).
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] Los 4 `.md` con frontmatter `{description, agent}` y cuerpo literal: `/research` (`pochteca`, 30 líneas), `/validate` (`chilam`, 26), `/cite` (`chilam`, 24), `/review` (`chilam`, 24). Todos ≤ 35.
+- [ ] `/research`: `procedencia` **siempre serializada** (aunque `[]`) de `{fuente, estado, url_o_doi, fecha_consulta}`; los 4 estados (`verificada`, `web_search_unconfirmed`, `no_encontrada`, `inaccesible`); `web_search_unconfirmed` nunca se presenta como `verificada`.
+- [ ] `/validate`: las 4 clases (`respaldada`, `sin_ancla`, `cita_ajena`, `sin_cita`); la ambigüedad **nunca** cuenta como `respaldada`; `verdict` ∈ {`ok`, `ok_con_avisos`, `rechazado`}; `ok` imposible con `sin_ancla`/`sin_cita`.
+- [ ] `/cite`: gate determinista **sin red y sin juicio de modelo**; referencia sin `procedencia` ⇒ falla **nombrando el culpable** con cero salida parcial; 0 supervivientes ⇒ fallo, nunca bibliografía vacía; `web_search_unconfirmed` se compila **marcado**.
+- [ ] `/review`: no edita el borrador del autor; todo hallazgo nombra su ubicación.
+- [ ] Cero `model`/`subtask`/`subagent:`/`` !`cmd` ``/`@paths`; cero marcadores del español.
 
-- [ ] §Blueprint `AGENTS.md` del vault **reescrito en inglés** (D-P4-6; hoy está en español en la spec) y revisado:
-      **≤120 líneas**, 7 secciones, coherente con T5/T6 (mismo formato
-      de cita, mismos 4 estados de procedencia, misma regla MCP-first)
-- [ ] §Testing del blueprint con criterios **ejecutables** por Phase 5 (los greps ya listados + los nuevos:
-      cero `todowrite`, cero campos legacy, todo nombre de skill citado existe, `default_agent` resuelve a `itzamna`,
-      ningún `.md` duplica `model` que ya define `opencode.json`, todo `.md` de agente ≤60 líneas y todo comando ≤35,
-      **cero marcadores del español en los bloques del payload**)
-- [ ] §Open Questions: la del array global **resuelta** (D-P4-2) y la de `default_agent` de
-      `spec-agent-workflow.md` resuelta por evidencia (`default_agent: "itzamna"` es primary y visible)
-- [ ] Enlaces entre specs resueltos tras la división (→ `spec-payload-skills.md`, `-agents.md`, `-commands.md`)
-- [ ] §Decisiones con fecha y autor (D-P4-1..D-P4-5 + las de Phase 4 que surjan)
-- [ ] §Trade-offs incluye el riesgo asumido de D-P4-3 (control de tools MCP por prompt, no por permiso)
+**Verificación:** barrido de los 4 ficheros · comprobación de que los nombres de campo en español (`fuentes`, `método`, `procedencia`, `estado`, `fuente`, `url_o_doi`, `fecha_consulta`) están **intactos** (son contrato de datos) · tokens de enum intactos.
 
-**Verificación:** script de enlaces relativos (0 rotos) · grep de las secciones referenciadas ·
-`just md-lint` sin errores nuevos · `wc -l` de las 4 specs (<500).
+**Dependencias:** T0 · **Scope:** M (4 ficheros)
 
-**Dependencias:** T5, T6 · **Ficheros:** `specs/spec-payload-vault.md`, `specs/spec-agent-workflow.md`.
-**Subagente:** `docs-writer` · **Skills:** `documentation-and-adrs`, `agent-md-refactor` (progressive disclosure
-del `AGENTS.md` del vault), `context-engineering` · **Tools/MCP:** `codebase-memory-mcp`, `vercel-grep`.
+**Ficheros probables:** `obsidian-workspace/.opencode/commands/{research,validate,cite,review}.md`
 
 ---
 
-### T8 — Cierre documental + FTR Phase 4→5
+### Task T7: Comando `/transform`
 
-**Objetivo:** dejar el blueprint **Approved** y la documentación del repo coherente con él.
+**Descripción:** el único comando con conversor y con gaps declarados. Depende de la enmienda de T1
+porque su paso 2 es el que citaba las 8 skills inexistentes.
 
-**Entregable:** `SPEC.md` (índice), `AGENTS.md` (índice de documentación), `docs/WORKFLOW.md` (§Phase 4 + §4 FTR),
-`docs/TECH_DEBT.md`, `CHANGELOG.md`, commits atómicos.
+**Criterios de aceptación:**
 
-**Criterios de aceptación**
+- [ ] `transform.md`: frontmatter `{description, agent: tlacuilo}`, cuerpo de 25 líneas, ≤ 35.
+- [ ] Paso 2 cita **solo** skills reales del congelado de 40 (enmienda T1 aplicada) y **declara** los gaps (Jupyter, R, Graphviz/PlantUML, LaTeX de manuscrito) como pendientes, sin inventar nombres ni simular artefactos.
+- [ ] `list_formats` se llama antes de prometer un formato; `convert_document`/`convert_base64` producen un `.md` en disco que **no** es la fuente citable (el original sigue indexado vía `index_refresh`).
+- [ ] Bandeja `05-outputs/` + nota de manifiesto con frontmatter `{command, agent, source_draft, formats, date}`.
+- [ ] Cero `model`/`subtask`/`subagent:`/`` !`cmd` ``/`@paths`; cero marcadores del español.
 
-- [ ] Las 4 specs en el índice de `SPEC.md` con su estado; `spec-payload-vault.md` → **Approved** tras el FTR
-- [ ] `AGENTS.md` (repo): índice de documentación con las 3 specs nuevas, sin superar su línea guía de 200 líneas
-- [ ] `docs/WORKFLOW.md` §Phase 4: estado **COMPLETADA** con **métricas reales** (209/170/9; 5 prompts; 9 cuerpos;
-      líneas por fichero; nº de skills tras la matriz) + entrada del FTR Phase 4→5 en §4 con checklist
-- [ ] `docs/WORKFLOW.md` §Phase 3.5: la referencia «plan y detalle en `tasks/plan.md` y `tasks/todo.md» pasa a apuntar
-      al commit (D-P4-5: el contenido anterior vive en el historial)
-- [ ] `docs/TECH_DEBT.md`: TD-7 (diseño hecho → ejecución en Phase 5), TD-8 (alias `00-resources` decidido →
-      remediación Phase 5), TD-14a/TD-14b (regla de cita y gate determinista documentados → ejecución Phase 5),
-      TD-22 (OfficeCLI 0.2.0, sin skill en el payload v1), TD-6 (MCP-first ya redactado en el `AGENTS.md` del vault)
-- [ ] Impacto de **D-P4-6** registrado para Phase 5; **D-P4-7 revocada**: no hay renombrado de constantes ni
-      del asset `ejemplo.pdf`, y por tanto no hay re-verificación F3 asociada a esta fase
-- [ ] `CHANGELOG.md`: entrada de Phase 4
-- [ ] Cero escrituras en `obsidian-workspace/**` (verificado con `git diff --stat -- obsidian-workspace`)
-- [ ] Los dos ejemplos de la guía (`agent_example.md`, `command_example.md`) siguen **untracked**
-      (`git status --short` los muestra como `??`) y **no entran en ningún commit** (D-P4-8)
-- [ ] Commits atómicos Conventional Commits (≤72 columnas) con trailer `Co-Authored-By: Moctezuma <dev@fisherk2.com>`
+**Verificación:** barrido del fichero · barrido de nombres de skill (0 huérfanos) · diff contra la spec enmendada.
 
-**Verificación:** `just md-lint` (cero errores **nuevos** vs T0) · render mermaid de los bloques nuevos (0 fallos) ·
-`wc -l` de las 4 specs (<500) · enlaces relativos (0 rotos) · FTR con el usuario (**gate**).
+**Dependencias:** T1 · **Scope:** S (1 fichero)
 
-**Dependencias:** T7 · **Ficheros:** `SPEC.md`, `AGENTS.md`, `docs/WORKFLOW.md`, `docs/TECH_DEBT.md`, `CHANGELOG.md`.
-**Subagentes (secuenciales):** `code-reviewer` (revisión de 5 ejes del blueprint: cobertura, coherencia,
-permisos, no-regresión, honestidad de las métricas) **→** `git-workflow-manager` (commits atómicos).
-**Skills:** `code-review-and-quality`, `git-workflow-and-versioning`, `changelog-generate`.
-**Tools/MCP:** `codebase-memory-mcp`, `gitmcp`.
+**Ficheros probables:** `obsidian-workspace/.opencode/commands/transform.md`
 
-## 6. Asignación de subagentes, skills y tools
+---
 
-| Calpulli | Subagente(s) | Skills | Tools / MCPs | Ficheros |
+### Task T8: `AGENTS.md` del vault
+
+**Descripción:** el system prompt distribuido que gobierna los 5 agentes y los 9 comandos. Sustituye
+el template genérico de 79 líneas por el bloque congelado de 67 líneas.
+
+**Criterios de aceptación:**
+
+- [ ] `obsidian-workspace/AGENTS.md` = bloque congelado de `spec-payload-vault.md` §Blueprint, literal.
+- [ ] 7 secciones: *What this vault is* · *Ownership zones* · *MCP-first rule* · *Command → agent → tray map* · *Citations, traceability and sources* · *Note format* · *Editability clause*.
+- [ ] `wc -l` ≤ 120 (objetivo 67).
+- [ ] El formato de cita `source_path » heading (chars x–y)`, los 4 estados de `procedencia` y las 4 clases de claim coinciden **token a token** con `spec-payload-commands.md` y `spec-payload-agents.md` (verificado por script de coincidencia literal, no a ojo).
+- [ ] El mapa comando→agente→bandeja de §4 coincide con D9.2 y con los 9 `agent:` de los comandos.
+- [ ] Cero marcadores del español; cero placeholders `[...]` residuales del template.
+
+**Verificación:** script de coincidencia token a token de los 3 vocabulario compartidos (cita, 4 estados, 4 clases) contra las 3 specs · barrido de placeholders · markdownlint.
+
+**Dependencias:** T0 · **Scope:** S (1 fichero)
+
+**Ficheros probables:** `obsidian-workspace/AGENTS.md`
+
+---
+
+### Task T9: `opencode.json` del payload + fixture sintético del merge
+
+**Descripción:** limpiar la configuración del harness en el payload y **cerrar TD-30**: el test del
+merge conservador deja de comparar el payload consigo mismo y demuestra el merge sobre una entrada
+fabricada.
+
+**Criterios de aceptación:**
+
+- [ ] Array global `permissions` (313 reglas) **eliminado** (D-P4-2/D-P4-3): la política efectiva de cada agente pasa a ser su bloque, auditable.
+- [ ] `instructions` corregidas a rutas **relativas al vault**: `.opencode/skills/obsidian-markdown/SKILL.md`, `.opencode/skills/obsidian-cli/SKILL.md`, `.opencode/skills/obsidian-vault/SKILL.md`, `.opencode/skills/markdown-mermaid-writing/SKILL.md` (D-P5-4) — y cada ruta **existe** dentro del vault construido.
+- [ ] `agents` conserva los 5 primarios con `model`/`color`/`request`/`steps` y **sin** arrays de permisos; `default_agent` = `"itzamna"`; `mcp.servers` intacto (lo gestiona F8).
+- [ ] `references` conservado sin cambios.
+- [ ] `tests/fixtures/opencode_payload_before_t9.json` **sustituido** por una entrada **sintética** (`opencode_payload_synthetic.json`): un `opencode.json` fabricado con `permissions`, `agents`, `mcp.servers` sin `tepochcalli-rag` y otras claves.
+- [ ] `tests/unit/test_opencode_payload_registration.py` demuestra sobre esa entrada sintética que (a) el resto del documento es **byte-idéntico** tras el merge y (b) solo se inserta `tepochcalli-rag` con la forma exacta del contrato (D17: `python -m`, nunca console script) y (c) `markitdown` no se registra (D29).
+- [ ] Segundo test sobre el payload real: parseable, **sin** array global `permissions`, `default_agent` == `itzamna`, `instructions` resolubles.
+- [ ] `just python-test` verde.
+
+**Verificación:** los 2 tests nuevos en rojo antes de implementarlos (RED demostrado) y en verde después · `just python-lint` + `just python-fmt-check` verdes.
+
+**Dependencias:** T0 · **Scope:** M (1 payload + 1 fixture + 1 test)
+
+**Ficheros probables:** `obsidian-workspace/opencode.json` · `tests/fixtures/opencode_payload_synthetic.json` · `tests/unit/test_opencode_payload_registration.py`
+
+---
+
+### Task T10: Scaffold canónico del vault + `.gitignore`
+
+**Descripción:** completar el árbol del vault que `spec-vault-structure.md` §Árbol canónico declara y
+que el payload hoy no cumple. Resuelve **TD-8** (alias de carpeta) y el *Action Item* de
+`04-review/`/`05-outputs/`.
+
+**Criterios de aceptación:**
+
+- [ ] `01-Tasks/` **renombrada** a `01-tasks/` con `git mv` (TD-8: renombrar, **nunca crear** — en FS case-insensitive `create_dir_all` adoptaría la carpeta existente y dejaría dos ortografías).
+- [ ] Los 3 ficheros de 0 bytes (`outline.md`, `rubric.md`, `todo.md`) **eliminados**: no portan información y un artefacto vacío en la bandeja confunde al pipeline (decisión registrada en D-P5-5).
+- [ ] Creadas `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/` con `.gitkeep` (git no trackea carpetas vacías ⇒ sin `.gitkeep` el asset publicado no las lleva).
+- [ ] `00-Resources/` con `.gitkeep` (la carpeta y las 2 muestras las crea el wizard en F3; el payload la declara vacía — D-P5-8).
+- [ ] `obsidian-workspace/.gitignore` **nuevo** con las 5 rutas de `spec-vault-structure.md` §Estrategia gitignore: `.tepochcalli/venv/`, `.tepochcalli/bin/`, `.tepochcalli/db/`, `.tepochcalli/models/`, `.tepochcalli/config/`.
+- [ ] `git ls-files obsidian-workspace` muestra las 6 bandejas representadas (con `.gitkeep`) y `01-Tasks` **no** aparece.
+
+**Verificación:** `git ls-files` + `ls -la obsidian-workspace/` + `git status --short` (solo los ficheros intencionados) · el `ls` post-install de T12 confirma la capitalización canónica en el vault real.
+
+**Dependencias:** T0 · **Scope:** S (renombre + 6 `.gitkeep` + 1 `.gitignore`)
+
+**Ficheros probables:** `obsidian-workspace/01-tasks/**` · `obsidian-workspace/{02-drafts,03-citations,04-review,05-outputs,00-Resources}/.gitkeep` · `obsidian-workspace/.gitignore`
+
+---
+
+### Task T11: Fixtures de permisos D9.3 + contrato estático del payload
+
+**Descripción:** el **gate D9 ejecutable**. Dos piezas: el simulador last-match-wins con los 42
+probes de la spec, y el contrato de los 15 artefactos. Es lo que permite que T12 y T13 Produzcan
+evidencia comparable.
+
+**Criterios de aceptación:**
+
+- [ ] `tests/unit/test_payload_permissions.py`: intérprete last-match-wins (glob `*` cruza `/`, `?` = un carácter, sin coincidencia ⇒ `ask`) + los **42 probes** de `spec-payload-permissions.md` §Verificación → **42/42 esperado == real**.
+- [ ] Los 5 agentes declaran `subagent * deny`; lectura de secretos denegada en los 5 (`.env`, `sub/.env`, `.env.local`, `config/.env`, `secrets.env`, `.tepochcalli/config/tepochcalli.toml`); cero reglas muertas.
+- [ ] `tests/unit/test_payload_contract.py`: inventario de skills **exactamente** las 40 del congelado, nombre a nombre, y **hash de contenido idéntico** al de T0 (D-P5-1: 0 modificadas, 0 añadidas, 0 eliminadas).
+- [ ] Todo nombre de skill citado en los 15 artefactos **existe** en el `ls` (0 huérfanos).
+- [ ] Presupuestos: cada agente ≤ 60 líneas, cada comando ≤ 35, `AGENTS.md` ≤ 120 (`wc -l` por fichero).
+- [ ] Higiene de frontmatter: cero `temperature|top_p|prompt:|permission:|tools:|disable|maxSteps`; cero `subtask`/`subagent:` en comandos; cero `` !`cmd` `` y cero `@paths` en los 9 cuerpos.
+- [ ] Idioma: 0 marcadores del español en los 15 artefactos, con las exenciones de D-P4-6 (nombres propios y tokens de enum como `ok_con_avisos`).
+- [ ] Config: `default_agent` resuelve a `itzamna` y `itzamna.md` declara `mode: primary`; `model` **no** se repite en ningún `.md`.
+- [ ] `just python-test` verde y cobertura ≥ 95 % (los tests nuevos no tocan `flow/`/`mcp/` ⇒ no pueden bajar el gate) · `just python-lint` y `just python-fmt-check` verdes.
+
+**Verificación:** los tests en **RED** antes de existir (RED demostrado en el commit) y en verde después · `just ci` completo verde.
+
+**Dependencias:** T2, T3, T4, T5, T6, T7, T8, T9, T10 · **Scope:** M (2 ficheros de test + soporte)
+
+**Ficheros probables:** `tests/unit/test_payload_permissions.py` · `tests/unit/test_payload_contract.py`
+
+---
+
+### Task T12: Install e2e del wizard sobre el payload final
+
+**Descripción:** instalar el payload con el wizard real sobre un vault efímero y comprobar que el
+árbol resultante cumple el contrato del vault y del harness. Es el `install` que exige el gate de
+Phase 5.
+
+**Criterios de aceptación:**
+
+- [ ] El payload se **empaqueta igual que el asset de release**: `tar -czf` con la misma lista de exclusiones de `.github/workflows/release.yml` (`.obsidian`, `venv`, `db`, `models`, `bin`, `config`, caches, `__pycache__`, `*.pyc`, `target`), raíz del tar = contenido del vault.
+- [ ] `cargo run --locked --manifest-path crates/tepochcalli/Cargo.toml -- install --non-interactive --skip-model --vault <tmp> --payload <tmp>/payload` → **0 errores**.
+- [ ] Árbol del vault instalado = el canónico: `00-Resources/`, `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/`, `.opencode/{agents,commands,skills}/`, `AGENTS.md`, `opencode.json`, `.gitignore` — **con la capitalización correcta** (riesgo FS case-insensitive, TD-8).
+- [ ] Los 5 agentes instalado llevan su bloque `permissions`; los 9 comandos su cuerpo; `AGENTS.md` sus 7 secciones.
+- [ ] `opencode.json` instalado **sin** array global `permissions` y con `mcp.servers.tepochcalli-rag` inyectado por F8 con la forma exacta del contrato.
+- [ ] Las 2 muestras del wizard presentes en `00-Resources/` (`ejemplo.md` + `ejemplo.pdf`).
+- [ ] `.gitignore` instalado con las 5 rutas.
+- [ ] **Idempotencia:** 2ª corrida → 0 duplicados, 0 diffs (el merge no sobrescribe).
+- [ ] `just rust-ci` verde.
+
+**Verificación:** el árbol se asserta con un script (no a ojo) y el resultado se pega en el informe · `just rust-smoke` sigue verde (el crate no cambia, pero el gate corre).
+
+**Dependencias:** T11 · **Scope:** M (script de assert + ejecución)
+
+**Ficheros probables:** `tests/e2e/test_payload_install_contract.py` (o script equivalente) — el crate Rust no se modifica.
+
+---
+
+### Task T13: Methodology e2e (D9) — corrida manual con evidencia
+
+**Descripción:** el segundo gate de la fase. Decisión D-P5-3: **contrato estático automatizado**
+(ya en T11) **+ corrida manual con evidencia** de los 9 comandos sobre el vault instalado por T12.
+
+**Criterios de aceptación:**
+
+- [ ] Protocolo escrito y versionado (`docs/diagnosis/` o `tasks/`): vault instalado, corpus mínimo (las 2 muestras del wizard), orden `/rubric → /research → /validate → /synthesize → /cite → /draft → /review → /transform → /update`, y qué se asserta por comando.
+- [ ] Checklist assertado **por comando**: (a) aterrizaje en **su** bandeja única (mapa D9.2, total y único); (b) frontmatter exacto (`{agent, timestamp, fuentes, método, procedencia}` en `01-tasks/research/`; `{command, agent, target_doc, verdict}` en `04-review/`); (c) **cero contaminación cruzada** entre bandejas; (d) regla MCP-first observada (`search` antes de leer crudo de `00-Resources/`); (e) no-contaminación (el agente avisa si encuentra archivos del usuario en las bandejas 01-05).
+- [ ] Evidencia capturada: transcript de tool-calls + árbol final del vault, referenciados en el informe de cierre.
+- [ ] Lo **no verificado** se escribe como no verificado (lección de Phase 3.5 (b)); ningún "verde" sin método.
+
+**Verificación:** el checklist se rellena con la salida real; el FTR lo revisa. Si el dueño no ejecuta la corrida, Phase 5 **no se cierra** y la Fase queda abierta con el motivo declarado.
+
+**Dependencias:** T12 · **Scope:** L (corrida completa, 9 comandos)
+
+**Ficheros probables:** `docs/diagnosis/phase5-methodology-e2e.md` (protocolo + evidencia)
+
+---
+
+### Task T14: Cierre documental + FTR Phase 5→6
+
+**Descripción:** cerrar la fase con las métricas **medidas** (no estimadas) y el FTR de `docs/WORKFLOW.md` §4.
+
+**Criterios de aceptación:**
+
+- [ ] `docs/WORKFLOW.md` §Phase 5: estado **COMPLETADA**, métricas medidas con su método (n + percentil si aplica), y la lista explícita de lo **no** verificado (CI nunca ejecutada — M6; suite `slow`; Windows; release).
+- [ ] `docs/TECH_DEBT.md`: TD-6, TD-7, TD-8, TD-14 y TD-30 actualizados con la evidencia de cierre.
+- [ ] `SPEC.md`: las 5 specs del payload siguen `Approved` con la marca de enmienda fechada; los estados de las demás specs no cambian.
+- [ ] `CHANGELOG.md`: entrada de Phase 5.
+- [ ] `docs/ARCHITECTURE.md`: **sin** diagrama nuevo (Phase 5 no cambia las capas; sólo el harness del vault) — como mucho una línea si el payload altera algún inventario.
+- [ ] FTR Phase 5→6 con el checklist de `docs/WORKFLOW.md` §4: Anexo A ejecutadas (40 presentes, 0 retiros) · permission fixtures D9.3 verdes · methodology e2e verdes · coherencia blueprint ↔ archivos generados.
+- [ ] `just ci` verde y `just md-lint` 0 en el commit de cierre.
+
+**Verificación:** revisión cruzada de las 4 specs del payload contra los 15 artefactos generados (mismo diff que en T11, ejecutado por persona distinta del ejecutor — *pair review*).
+
+**Dependencias:** T11, T13 · **Scope:** M (5 documentos)
+
+**Ficheros probables:** `docs/WORKFLOW.md` · `docs/TECH_DEBT.md` · `SPEC.md` · `CHANGELOG.md` · `docs/ARCHITECTURE.md`
+
+## 6. Asignación de subagentes, skills y herramientas
+
+### 6.1 Subagentes por calpulli
+
+| Calpulli | Subagente principal | Subagente(s) de apoyo | Orden | Por qué |
 | --- | --- | --- | --- | --- |
-| T0 | `developer-tooling-engineer` | `bash-defensive-patterns`, `context-engineering` | shell, npx (mermaid-cli) | — (solo lectura) |
-| T1 | `developer-tooling-engineer` | `opencode`, `source-driven-development`, `find-docs` | `context7`, `gitmcp`, `vercel-grep` | `specs/spec-payload-vault.md` |
-| T2 | `codebase-archaeologist` → `knowledge-synthesizer` | `codebase-memory`, `context-engineering`, `documentation-and-adrs` | `codebase-memory-mcp`, `vercel-grep`, shell | NUEVO `specs/spec-payload-skills.md` |
-| T3 | `workflow-architect` | `api-and-interface-design`, `opencode`, `context-engineering` | `context7`, `codebase-memory-mcp`, `gitmcp` | `specs/spec-payload-skills.md` |
-| T4 | `security-architect` | `security-and-hardening`, `design-patterns`, `opencode` | `context7`, `gitmcp` | `specs/spec-payload-vault.md` |
-| T5 | `prompt-engineer` | `context-engineering`, `obsidian-markdown`, `opencode` | `context7`, `codebase-memory-mcp` | NUEVO `specs/spec-payload-agents.md` |
-| T6 | `technical-writer` | `context-engineering`, `obsidian-markdown`, `opencode`, `documentation-and-adrs` | `context7`, `codebase-memory-mcp` | NUEVO `specs/spec-payload-commands.md` |
-| T7 | `docs-writer` | `documentation-and-adrs`, `agent-md-refactor`, `context-engineering` | `codebase-memory-mcp`, `vercel-grep` | `specs/spec-payload-vault.md`, `specs/spec-agent-workflow.md` |
-| T8 | `code-reviewer` → `git-workflow-manager` | `code-review-and-quality`, `git-workflow-and-versioning`, `changelog-generate` | `codebase-memory-mcp`, `gitmcp` | `SPEC.md`, `AGENTS.md`, `docs/WORKFLOW.md`, `docs/TECH_DEBT.md`, `CHANGELOG.md` |
+| T0 | `codebase-archaeologist` | — | — | Auditoría de divergencias entre blueprint y estado real; lectura, no escritura |
+| T1 | `technical-writer` | `prompt-engineer` | **secuencial**: texto → revisión de coherencia | Enmienda de spec: el texto lo escribe quien redacta; la coherencia con la tabla 9×4 la revisa quien conoce los cuerpos |
+| T2 | `security-architect` | `prompt-engineer` | **secuencial**: permisos → cuerpo | El bloque `permissions` es la frontera de seguridad (orden last-match); el cuerpo lo escribe quien redacta prompts |
+| T3 | `security-architect` | `prompt-engineer` | **secuencial** (por agente) | Ídem T2, 3 pares |
+| T4 | `security-architect` | `prompt-engineer` | **secuencial** | Ídem T2; depende de T1 |
+| T5 | `technical-writer` | — | — | 4 cuerpos de comando, un único estilo; sin gates de seguridad nuevos |
+| T6 | `technical-writer` | `prompt-engineer` | **secuencial**: gate → prosa | `/validate` y `/cite` llevan gates deterministas: el que define la regla escribe, el que la redacta la hace legible sin suavizarla |
+| T7 | `technical-writer` | — | — | 1 fichero; depende de T1 |
+| T8 | `prompt-engineer` | — | — | Es un system prompt distribuido, no un documento de repo |
+| T9 | `python-pro` | — | — | Cambio de config + fixture + test: uno solo, para que el test y el fixture no se desincronicen |
+| T10 | `minimal-change-engineer` | — | — | Renombrar y crear lo mínimo; cero rediseño del scaffold |
+| T11 | `test-engineer` | `python-pro` | **secuencial**: test → revisión | El simulador y el contrato se escriben y luego se revisan contra la spec |
+| T12 | `rust-engineer` | — | — | El e2e pasa por el crate del wizard; nadie más tiene el contexto de F3/F8 |
+| T13 | `testing-evidence-collector` | `testing-reality-checker` | **secuencial**: captura → juicio | Primero se recoge la evidencia; después se juzga si demuestra lo que dice |
+| T14 | `docs-writer` | `code-reviewer` | **secuencial**: cierre → revisión | El redactor cierra; el revisor comprueba que ninguna cifra es estimada |
 
-**MCPs/plugins disponibles en el workspace** (raíz `opencode.json`): `codebase-memory-mcp` ✅, `context7` ✅,
-`vercel-grep` ✅, `gitmcp` ✅, `chrome-devtools` ⛔ (disabled), `excel` ⛔ (disabled), `jupyter` ⛔ (disabled).
-Plugins: `opencode-rpc`, `opencode-navigator`, `opencode-skills-collection`, `opencode-skill-creator`,
-`opencode-search-plugin`, `ponytail` — ninguno interviene en Phase 4 (no se ejecuta código del payload).
+### 6.2 Skills por calpulli
 
-**Por qué estos subagentes y no otros:** T1/T0 son verificación de tooling y hechos verificables →
-`developer-tooling-engineer`; T2 es arqueología de inventario → `codebase-archaeologist`, y la síntesis de la
-matriz → `knowledge-synthesizer`; T3 es un mapeo de flujo command→herramientas → `workflow-architect`;
-T4 es superficie de escritura y separación de poderes → `security-architect`; T5/T6 son redacción de prompts →
-`prompt-engineer` y `technical-writer` (paralelos, ficheros distintos); T7 es reconciliación editorial →
-`docs-writer`; T8 es veredicto y publicación → `code-reviewer` + `git-workflow-manager`.
+| Calpulli | Skills |
+| --- | --- |
+| T0 | `codebase-memory`, `context-engineering` |
+| T1 | `documentation-and-adrs`, `prompt-engineering`, `source-driven-development` |
+| T2, T3, T4 | `prompt-engineering`, `security-and-hardening`, `design-patterns` (el intérprete last-match-wins es *Chain of Responsibility*), `clean-code` |
+| T5, T6, T7 | `prompt-engineering`, `documentation-and-adrs` |
+| T8 | `prompt-engineering`, `obsidian-markdown` |
+| T9 | `test-driven-development`, `incremental-implementation`, `api-and-interface-design` |
+| T10 | `git-workflow-and-versioning`, `bash-defensive-patterns` |
+| T11 | `test-driven-development`, `design-patterns`, `clean-code`, `doubt-driven-development` |
+| T12 | `bash-defensive-patterns`, `test-driven-development`, `doubt-driven-development` |
+| T13 | `doubt-driven-development`, `document-verification` |
+| T14 | `documentation-and-adrs`, `changelog-generate`, `git-workflow-and-versioning`, `code-review-and-quality` |
 
-**Orden dentro de una tarea con dos subagentes (secuencial):** primero quien **recoge los hechos**
-(arqueólogo, reviewer), después quien **redacta el artefacto** (sintetizador, git). Al revés, el redactor
-trabajaría sobre inventario no verificado.
+### 6.3 Herramientas (MCPs y plugins) por calpulli
 
-## 7. Checkpoints (gates) — solo linters
+MCPs disponibles en el workspace (raíz `opencode.json`): `codebase-memory-mcp`, `context7`,
+`chrome-devtools`, `excel`, `jupyter`, `vercel-grep`, `gitmcp`. Plugins: `opencode-rpc`,
+`opencode-navigator`, `opencode-skills-collection`, `opencode-skill-creator`,
+`opencode-search-plugin`, `ponytail`.
 
-| Gate | Momento | Criterios de paso |
+| Calpulli | Herramientas | Para qué |
 | --- | --- | --- |
-| **CP-A** | fin de T1+T2 | Reglas de formato citadas (URL + versión + fecha) · inventario contado 1:1 (209/170/9) · **0 skills inventadas** · 4 specs <500 líneas |
-| **CP-B** | fin de T3+T4 | Los 7 nombres de tool del servidor MCP coinciden con la tabla 9×4 · cada skill citada existe · **0** campos legacy y **0** `permission:` singular (`todowrite` se conserva como acción de casa, D-P4-3) · YAMLs parsean y la simulación last-match-wins coincide con lo esperado |
-| **CP-C** | fin de T5+T6 | 5 prompts ≤60 líneas con los 6 elementos obligatorios · 9 comandos ≤35 líneas con los 7 elementos obligatorios · **0** ocurrencias de `!`cmd``/`@paths` · cada destino de escritura = su bandeja D9.2 · **0 marcadores del español en los 14 bloques del payload (D-P4-6)** · esqueleto de casa presente en los 14 ficheros (secciones de la guía, con las sustituidas declaradas) |
-| **CP-D** | fin de T7 | `AGENTS.md` del vault ≤120 líneas y coherente con T5/T6 · enlaces relativos 0 rotos · preguntas abiertas 0 · md-lint sin errores nuevos |
-| **CP-E** | fin de T8 | **BLUEPRINT APPROVED** (FTR Phase 4→5, concedido 2026-11-09 por congelamiento del dueño, D-P4-12) · status `Approved` en `SPEC.md` · md-lint sin errores nuevos · mermaid render 0 fallos · `git diff --stat -- obsidian-workspace` vacío |
+| T0 | `codebase-memory-mcp`, `vercel-grep` | Grafo del repo y barrido de literales (`permissions`, `01-Tasks`, `instructions`) |
+| T1 | `gitmcp`, `context7` | Re-verificar las reglas de formato V2 contra el tag vigente (`agents.mdx`, `permissions.mdx`, `commands.mdx`) |
+| T2–T8 | `gitmcp` | Contrastar cada artefacto con la spec y con la doc oficial |
+| T9 | — | Trabajo local: JSON, fixture y test |
+| T10 | `vercel-grep` | Barrido de referencias a `01-Tasks` en el crate y los tests |
+| T11 | — | Tests locales; el MCP `tepochcalli-rag` no interviene (los artefactos son texto) |
+| T12 | — | Ejecución local del crate |
+| T13 | MCP `tepochcalli-rag` del **payload** (stdio local) | La metodología e2e ejercita las 7 tools reales: es el contrato lo que se valida |
+| T14 | `vercel-grep` | Revisión cruzada de números citados entre docs |
 
-## 8. Omens (riesgos) y mitigación
+## 7. Checkpoints (puertas de calidad entre olas)
 
-| # | Omen | Prob. | Impacto | Mitigación en el plan |
+**Ningún checkpoint se avanza en rojo.** Cada CP lista lo que debe estar **verde** para pasar.
+
+### CP-0 — Enmienda aprobada (tras T1)
+
+- [ ] Enmienda fechada aplicada a las specs del blueprint y **aprobada por el dueño**.
+- [ ] 0 nombres de skill inexistentes en las 5 specs del payload.
+- [ ] `git diff --stat -- obsidian-workspace/.opencode/skills` vacío.
+
+### CP-1 — Los 5 agentes materializados (tras T4)
+
+- [ ] 5 `.md` con frontmatter + bloque `permissions` + cuerpo, ≤ 60 líneas cada uno.
+- [ ] Simulador last-match-wins verde en los 5 (probes de D9.3 por agente).
+- [ ] 0 campos legacy; 0 marcadores del español; 0 skills inexistentes citadas.
+- [ ] `git diff --stat -- obsidian-workspace` muestra **solo** los 5 ficheros de agente.
+
+### CP-2 — Los 9 comandos materializados (tras T7)
+
+- [ ] 9 `.md` con frontmatter + cuerpo, ≤ 35 líneas cada uno.
+- [ ] 0 `subtask`, 0 `subagent:`, 0 `` !`cmd` ``, 0 `@paths`.
+- [ ] Los 9 `agent:` resuelven a un primario del mapa D9.2; cada `agent:` coincide con el de la spec.
+- [ ] 0 marcadores del español; los nombres de campo en español del frontmatter intactos.
+
+### CP-3 — Vault y config coherentes (tras T8 + T9 + T10)
+
+- [ ] `AGENTS.md` con sus 7 secciones, ≤ 120 líneas, vocabulario compartido token a token con las specs.
+- [ ] `opencode.json` sin array global de permisos; `instructions` resolubles en el vault; `default_agent` = `itzamna`.
+- [ ] Scaffold: 6 bandejas con capitalización canónica y `.gitkeep`; `.gitignore` con las 5 rutas.
+- [ ] `git ls-files obsidian-workspace` sin `01-Tasks` y con las 6 bandejas presentes.
+
+### CP-4 — Contrato estático verde (tras T11)
+
+- [ ] `just ci` verde (suite completa + cobertura ≥ 95 % + bench-smoke + rust-ci).
+- [ ] 42/42 probes de permisos; 40/40 skills con hash idéntico al de T0; 0 huérfanos de skill.
+- [ ] `just md-lint` 0.
+
+### CP-5 — Gates de la fase verdes (tras T12 + T13)
+
+- [ ] Install e2e verde: árbol canónico, capitalización correcta, `tepochcalli-rag` inyectado por F8, 2 muestras presentes, idempotencia.
+- [ ] Methodology e2e: 9/9 comandos con checklist assertado y evidencia capturada.
+- [ ] Lo no verificado, escrito como no verificado.
+
+### CP-6 — FTR Phase 5→6 (tras T14)
+
+- [ ] Checklist de `docs/WORKFLOW.md` §4 (fila Phase 5→6) verde.
+- [ ] `docs/WORKFLOW.md`, `docs/TECH_DEBT.md`, `SPEC.md` y `CHANGELOG.md` actualizados con **cifras medidas**.
+- [ ] Revisión cruzada blueprint ↔ artefactos por un segundo par de ojos.
+
+## 8. Riesgos y mitigaciones (omens)
+
+| Omen | Prob. | Impacto | Mitigación | Contingencia |
 | --- | --- | --- | --- | --- |
-| O-1 | La división en 4 specs deja referencias rotas (WORKFLOW §Phase 3.5 → `tasks/plan.md`; `spec-agent-workflow.md` → blueprint) | alta | medium | T7 corrige enlaces; T8 actualiza la referencia de §Phase 3.5 (D-P4-5) |
-| O-2 | `spec-payload-skills.md` puede pasar de 500 líneas (matriz de 209 skills) | media | medium | Contingencia: dividir en `-skills.md` (invocación) + `-inventory.md` (matriz). T2 avisa si supera 450 líneas |
-| O-3 | T5 ‖ T6 con dos autores → deriva de estilo y de reglas | media | medium | T7 reconcilia con checklist explícito; los greps de CP-C son mecánicos y no dependen del estilo |
-| O-4 | El gate de markdownlint **no está verde** (D12) → «verde» es imposible como criterio | alta | bajo | T0 fija el baseline; el criterio real es **cero errores nuevos** (D12 lo permite) |
-| O-5 | Dos páginas de docs oficiales muestran sintaxis de permisos distinta (lista vs `permission:` singular) | media | alto | T1 lo resuelve citando la fuente canónica y lo deja escrito en el blueprint; T4 usa la lista |
-| O-6 | Sin reglas MCP por agente (D-P4-3), `add_source`/`convert_*` quedan llamables por cualquiera | alta | medio | Riesgo **asumido y documentado** en §Trade-offs (T7); el control pasa a ser de prompt (T5/T6) |
-| O-7 | Los stubs heredados traen errores (`tlacuilo.md` con título de Chilam, `chilam.md` con `edit * allow`, `todowrite`) que el blueprint no puede propagar | alta | medium | T1/T4 fijan el vocabulario y las superficies; T5/T6 no heredan nada del stub |
-| O-8 | `default_agent: "itzamna"` solo resuelve si el `.md` es primary y visible | baja | alto | T4 lo normiza (`mode: primary`, sin `hidden`) y T8 lo verifica como criterio de Phase 5 |
-| O-9 | Al sobrescribir `tasks/plan.md`, se pierde el plan de Phase 3.5 salvo en git | alta | bajo | D-P4-5 (decisión del dueño); T8 actualiza la referencia de WORKFLOW al commit |
-| O-10 | La traducción al inglés (D-P4-6) puede **perder semántica**: `docs/UH.md` es la fuente inmutable en español y los estados de `procedencia`/el formato de cita son contrato | media | alto | El español original **se conserva** en la spec como contrato de referencia y el inglés es el bloque congelado; T5/T6 exigen fidelidad explícita (mismos estados, mismo gate, mismas clasificaciones) y T7 reconcilia bloque inglés ↔ bloque español; el chequeo de idioma excluye los nombres propios |
-| O-11 | D-P4-7 tocaba el **asset del wizard**: `ejemplo.pdf` tiene offsets verificados; renombrarlo o regenerarlo podía romper la Fase 3 | baja | bajo | **Cerrado:** D-P4-7 revocada (2026-11-04); el asset se queda como está y no hay cambio en Phase 5 |
-| O-12 | La guía de formato (D-P4-8) son dos ficheros **sin commitear**: pueden no estar en otra sesión, otra rama o un checkout limpio | media | medio | Riesgo **asumido por el dueño** (D-P4-8): el plan solo referencia las rutas. Si T5/T6 no las encuentran, **se paran y lo reportan** — no se improvisa el formato ni se reescribe la guía |
-| O-13 | Los topes del vault (≤60 líneas por agente, ≤35 por comando) son **menores** que los ejemplos de la guía (123 y 99 líneas): al comprimir se puede perder contenido normativo | alta | medio | T5/T6 declaran qué secciones recortan; los 6/7 elementos obligatorios y los contratos de frontmatter **no** son negociables (prioridad sobre el esqueleto); T7 verifica cobertura contra la checklist, no contra la extensión |
+| El texto congelado en las specs no pasa markdownlint | media | bajo | Verificación por calpulli; la desviación se corrige **en la spec** (fuente única), nunca en el payload | Registrar la desviación y aplicarla en la enmienda |
+| El simulador last-match-wins no reproduce el intérprete real de OpenCode | media | **alto** | T1 re-verifica la doc oficial con fecha y tag; 42 probes contrastados; T13 lo detecta en vivo | Si difieren, se amendan los bloques de permisos y se repite CP-1 |
+| La corrida manual (T13) no la ejecuta el dueño | media | **alto** | El FTR no se cierra sin evidencia; el bloqueo queda declarado | Phase 5 queda **abierta** con el motivo — no se declara verde |
+| Borrar el array de 313 rompe el fixture byte-idéntico | alta | medio | T9 sustituye el fixture por un **merge sintético** (TD-30) antes de tocar el payload | Revisar el fixture congelado original en git |
+| El rename `01-Tasks`→`01-tasks` choca con un FS case-insensitive | media | medio | Renombrar (nunca crear) y `ls` tras el install | Corrección manual del vault instalado |
+| Las carpetas vacías no llegan al asset publicado | baja | medio | `.gitkeep` en las 6 bandejas | Verificación en T12 sobre el tar real |
+| F8 reintroduce permisos globales en el vault | baja | **alto** | T12 asserta que el `opencode.json` instalado no tiene array global | Auditar el merge de F8 |
+| La enmienda de T1 es rechazada | baja | **alto** | T1 es gate previo (CP-0) | Phase 5 vuelve a Phase 4 (WORKFLOW §Phase 5) |
+| El payload y el repo se desincronizan tras 15 ficheros | media | medio | Un commit por calpulli + `git diff --stat -- obsidian-workspace` en cada CP | `git checkout` del fichero afectado |
+| La suite `slow` (3 tests) no corre | alta | bajo | Se declara en «lo no verificado»; `just python-test-slow` separado | Registrar la cifra |
 
-## 9. Trazabilidad blueprint ↔ fuentes
+## 9. Métricas de cierre (se miden; no se estiman)
 
-| Sección del blueprint | Origen | Calpulli |
-| --- | --- | --- |
-| Reglas de formato OpenCode V2 | Docs oficiales `v2.1.2` (ctx7, 2026-11-04) | T1 |
-| **Formato del header y del esqueleto de cuerpo** | **`agent_example.md` y `command_example.md`** (raíz del repo, sin commitear) — guía del dueño (D-P4-8) | T1, T4, T5, T6 |
-| Permisos de los 5 agentes | `spec-payload-vault.md` §Blueprint (existente) + `spec-agent-workflow.md` D9.3 | T4 |
-| Tabla de invocación 9×4 | `spec-payload-vault.md` (existente) + inventario real | T3 |
-| Matriz de conflictos | `spec-payload-vault.md` §Matriz + `spec-agent-workflow.md` Anexo A + TECH_DEBT TD-7/TD-22 | T2 |
-| 5 system prompts | `docs/UH.md` (tabla Agentes Primarios) + D9.2 + TD-14 · **traducción fiel al inglés** (D-P4-6) | T5 |
-| 9 cuerpos de comando | `docs/UH.md` (9 comandos) + D9.2 + bodies ya congelados · **traducción fiel al inglés** (D-P4-6) | T6 |
-| `AGENTS.md` del vault | `spec-agent-workflow.md` §Requisitos (9 requisitos) + TD-14a + TD-6 · **reescrito en inglés** (D-P4-6) | T7 |
-| Decisión del array global | Pregunta al dueño 2026-11-04 (D-P4-2) | T4 |
+| # | Métrica | Cómo se mide | Gate |
+| --- | --- | --- | --- |
+| M1 | Skills: **40 presentes, 0 modificadas, 0 añadidas, 0 eliminadas** | `ls` + `sha256sum` del árbol antes (T0) y después (T11) | D-P5-1 |
+| M2 | Agentes: 5 bloques de permisos + 5 cuerpos, **≤ 60 líneas** cada uno | `wc -l` por fichero | CP-1 |
+| M3 | Permisos: **42/42 probes** con esperado == real | Simulador last-match-wins | CP-4 |
+| M4 | Comandos: 9 cuerpos, **≤ 35 líneas**, 0 inline shell, 0 `@paths` | `wc -l` + barrido | CP-2 |
+| M5 | `AGENTS.md`: 7 secciones, **≤ 120 líneas**, vocabulario compartido token a token | `wc -l` + script de coincidencia literal | CP-3 |
+| M6 | `opencode.json`: **0** reglas de permisos globales; `instructions` resolubles | `json.load` + aserción sobre el vault instalado | CP-3 / CP-5 |
+| M7 | Scaffold: **6 bandejas** con capitalización canónica + `.gitignore` con 5 rutas | `git ls-files` + `ls` del vault instalado | CP-3 / CP-5 |
+| M8 | Install e2e: **0 errores**, idempotencia sin duplicados | Script de aserción sobre el vault efímero | CP-5 |
+| M9 | Methodology e2e: **9/9** comandos con checklist y evidencia | Checklist firmado + transcript | CP-5 |
+| M10 | Gates de repo: `just ci` verde, cobertura **≥ 95 %**, `just md-lint` **0** | Recetas del Justfile | CP-4 |
 
-## 10. Cierre
+## 10. Open Questions
 
-Plan sin código. FTR Phase 4→5 verde (CP-E concedida 2026-11-09 por congelamiento del dueño, D-P4-12):
-Phase 5 queda **READY TO PLAN** — se planifica vía `/plan` y solo entonces se ejecuta **literal**
-este blueprint sobre `obsidian-workspace/`, sin reinterpretación.
+Ninguna abierta. Las 4 divergencias detectadas en T0 se resolvieron con el dueño el 2026-11-09
+(D-P5-1..D-P5-9). Si T13 no puede ejecutarse, se declara como bloqueo abierto — no como verde.
 
-> «let it be recorded in `tasks/`» — dependencias, criterios de aceptación y gates quedan en `tasks/plan.md`
-> (este documento) y `tasks/todo.md` (lista ejecutable).
+## 11. Referencias
+
+- `docs/WORKFLOW.md` §Phase 5 (objetivo, gate, validación D9) y §4 (FTR Phase 5→6)
+- `specs/spec-payload-vault.md` (reglas de formato V2, blueprint del `AGENTS.md`) · `specs/spec-payload-skills.md` (inventario de 40, tabla 9×4, muestras) · `specs/spec-payload-permissions.md` (5 bloques, 42 probes) · `specs/spec-payload-agents.md` (5 cuerpos) · `specs/spec-payload-commands.md` (9 cuerpos)
+- `specs/spec-agent-workflow.md` (D9.2 mapa de bandejas, D9.3 desviación, Anexo A) · `specs/spec-vault-structure.md` (árbol canónico, gitignore)
+- `docs/TECH_DEBT.md` (TD-6, TD-7, TD-8, TD-14, TD-22, TD-30) · `docs/ARCHITECTURE.md` · `docs/CODE_STYLE.md`
+- `crates/tepochcalli/src/adapters/payload.rs` (merge sin sobrescribir) · `application/phase8.rs` (F8) · `.github/workflows/release.yml` (empaquetado del asset)
+- Plan de Phase 4 (histórico): commit `337c012`
