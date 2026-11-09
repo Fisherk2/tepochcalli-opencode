@@ -22,7 +22,7 @@
 
 ## Ola 0 — Fundamentos
 
-### [ ] T0 — Baseline del payload y auditoría de divergencias
+### [x] T0 — Baseline del payload y auditoría de divergencias
 
 - Subagente: `codebase-archaeologist` · Skills: `codebase-memory`, `context-engineering` · Tools: `codebase-memory-mcp`, `vercel-grep`
 - [ ] Tabla de 4 divergencias con el comando que las evidencia
@@ -31,7 +31,7 @@
 - [ ] `git status --short` y `git diff --stat -- obsidian-workspace` vacíos
 - Deps: — · Verificación: informe con números crudos
 
-### [ ] T1 — Enmienda fechada del blueprint (skills inexistentes)
+### [x] T1 — Enmienda fechada del blueprint (skills inexistentes)
 
 - Subagente: `technical-writer` → `prompt-engineer` (secuencial) · Skills: `documentation-and-adrs`, `prompt-engineering`, `source-driven-development` · Tools: `gitmcp`, `context7`
 - [ ] `spec-payload-commands.md` §`/transform`: 8 skills inexistentes → reales del `ls` de 40; GAP literales intactos
@@ -43,7 +43,7 @@
 - [ ] `git diff --stat -- obsidian-workspace/.opencode/skills` **vacío**
 - Deps: T0 · Verificación: barrido de skills 0 huérfanos · `just md-lint` 0
 
-### Checkpoint CP-0 — Enmienda aprobada por el dueño
+### [x] Checkpoint CP-0 — Enmienda aprobada por el dueño
 
 - [ ] Enmienda aprobada explícitamente (T4 y T7 quedan desbloqueados)
 - [ ] `.opencode/skills/` sin cambios
@@ -52,7 +52,7 @@
 
 ## Ola 1 — Los 5 agentes
 
-### [ ] T2 — `itzamna` (piloto vertical)
+### [x] T2 — `itzamna` (piloto vertical)
 
 - Subagente: `security-architect` → `prompt-engineer` (secuencial) · Skills: `prompt-engineering`, `security-and-hardening`, `design-patterns`, `clean-code` · Tools: `gitmcp`
 - [ ] `obsidian-workspace/.opencode/agents/itzamna.md`: frontmatter (16 reglas) + cuerpo de 56 líneas
@@ -61,7 +61,7 @@
 - [ ] Probes: `edit *` deny · `read 00-Resources/x.md` allow · `read .env` deny · `read .tepochcalli/config/*` deny
 - Deps: T0 · Verificación: simulador last-match-wins + markdownlint del payload
 
-### [ ] T3 — `nezahualcoyotl`, `pochteca`, `chilam`
+### [x] T3 — `nezahualcoyotl`, `pochteca`, `chilam`
 
 - Subagente: `security-architect` → `prompt-engineer` (secuencial, por agente) · Skills: idem T2 · Tools: `gitmcp`
 - [ ] 3 ficheros (54/58/58 líneas), todos ≤ 60
@@ -70,7 +70,7 @@
 - [ ] `subagent * deny` en los 3
 - Deps: T2 · Verificación: simulador + diff contra la spec
 
-### [ ] T4 — `tlacuilo` (depende de T1)
+### [x] T4 — `tlacuilo` (depende de T1)
 
 - Subagente: `security-architect` → `prompt-engineer` (secuencial) · Skills: idem T2 · Tools: `gitmcp`
 - [ ] `tlacuilo.md` 56 líneas con deny-list completa (12 denies tras `edit * allow`)
@@ -78,7 +78,7 @@
 - [ ] CAPABILITIES con skills reales (enmienda de T1 aplicada)
 - Deps: T1 + T3 · Verificación: simulador + barrido de skills
 
-### Checkpoint CP-1 — Los 5 agentes materializados
+### [x] Checkpoint CP-1 — Los 5 agentes materializados
 
 - [ ] 5 `.md` completos, ≤ 60 líneas
 - [ ] Simulador verde en los 5
@@ -88,7 +88,7 @@
 
 ## Ola 2 — Los 9 comandos
 
-### [ ] T5 — `/rubric`, `/synthesize`, `/draft`, `/update`
+### [x] T5 — `/rubric`, `/synthesize`, `/draft`, `/update`
 
 - Subagente: `technical-writer` · Skills: `prompt-engineering`, `documentation-and-adrs` · Tools: `gitmcp`
 - [ ] 4 ficheros, 24 líneas cada uno, ≤ 35
@@ -98,7 +98,7 @@
 - [ ] `E_*` → `rag_status()` + `fix_hint` en los 4
 - Deps: T0 · Verificación: barrido de los 4 + diff contra la spec
 
-### [ ] T6 — `/research`, `/validate`, `/cite`, `/review`
+### [x] T6 — `/research`, `/validate`, `/cite`, `/review`
 
 - Subagente: `technical-writer` → `prompt-engineer` (secuencial) · Skills: `prompt-engineering`, `documentation-and-adrs` · Tools: `gitmcp`
 - [ ] 4 ficheros (30/26/24/24 líneas), ≤ 35
@@ -109,7 +109,7 @@
 - [ ] Nombres de campo en español intactos (`fuentes`, `método`, `procedencia`, `estado`, `fuente`, `url_o_doi`, `fecha_consulta`)
 - Deps: T0 · Verificación: barrido + tokens de enum intactos
 
-### [ ] T7 — `/transform` (depende de T1)
+### [x] T7 — `/transform` (depende de T1)
 
 - Subagente: `technical-writer` · Skills: `prompt-engineering`, `documentation-and-adrs` · Tools: `gitmcp`, `context7`
 - [ ] `transform.md` 25 líneas, ≤ 35
@@ -118,7 +118,7 @@
 - [ ] Bandeja `05-outputs/` + manifiesto `{command, agent, source_draft, formats, date}`
 - Deps: T1 · Verificación: barrido + 0 skills huérfanas
 
-### Checkpoint CP-2 — Los 9 comandos materializados
+### [x] Checkpoint CP-2 — Los 9 comandos materializados
 
 - [ ] 9 `.md` completos, ≤ 35 líneas
 - [ ] 0 inline shell · 0 `@paths` · 0 `subtask`/`subagent:`
@@ -129,7 +129,7 @@
 
 ## Ola 3 — Vault, config y scaffold (paralelo entre sí)
 
-### [ ] T8 — `AGENTS.md` del vault
+### [x] T8 — `AGENTS.md` del vault
 
 - Subagente: `prompt-engineer` · Skills: `prompt-engineering`, `obsidian-markdown` · Tools: `gitmcp`
 - [ ] Bloque congelado de `spec-payload-vault.md` literal; 7 secciones
@@ -139,7 +139,7 @@
 - [ ] 0 marcadores del español · 0 placeholders `[...]` residuales
 - Deps: T0 · Verificación: script de coincidencia literal + markdownlint
 
-### [ ] T9 — `opencode.json` del payload + fixture sintético
+### [x] T9 — `opencode.json` del payload + fixture sintético
 
 - Subagente: `python-pro` · Skills: `test-driven-development`, `incremental-implementation`, `api-and-interface-design` · Tools: —
 - [ ] Array global de 313 `permissions` **eliminado**
@@ -151,7 +151,7 @@
 - [ ] RED demostrado antes de implementar
 - Deps: T0 · Verificación: `just python-test` + lint + fmt verdes
 
-### [ ] T10 — Scaffold canónico + `.gitignore` del vault
+### [x] T10 — Scaffold canónico + `.gitignore` del vault
 
 - Subagente: `minimal-change-engineer` · Skills: `git-workflow-and-versioning`, `bash-defensive-patterns` · Tools: `vercel-grep`
 - [ ] `git mv 01-Tasks → 01-tasks` (renombrar, nunca crear)
@@ -162,7 +162,7 @@
 - [ ] `git ls-files` sin `01-Tasks` y con las 6 bandejas
 - Deps: T0 · Verificación: `git ls-files` + `ls -la` + `git status --short`
 
-### Checkpoint CP-3 — Vault y config coherentes
+### [x] Checkpoint CP-3 — Vault y config coherentes
 
 - [ ] `AGENTS.md` con 7 secciones, ≤ 120 líneas, vocabulario compartido verificado
 - [ ] `opencode.json` sin array global; `instructions` resolubles
