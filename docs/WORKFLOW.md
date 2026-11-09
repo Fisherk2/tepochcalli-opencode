@@ -1,6 +1,6 @@
 # Implementation Plan — Tepochcalli v1
 
-**Date:** 2026-10-21 (rev. 11 — Phase 4 **COMPLETADA** 2026-11-09: blueprint definitivo en 5 specs **Approved** (freeze 40 del dueño, `cf17f31`/`2e62e60`); gate BLUEPRINT APPROVED concedido por el congelamiento; Phase 5 **READY TO PLAN** (no iniciada — se planifica vía `/plan`). rev. 10 — Phase 4 **COMPLETADA** 2026-11-04 a nivel de checklist: blueprint del payload en 5 specs <500 líneas (209 skills · 170 agentes · 9 comandos verificados), 0 links rotos, md-lint 0 errores (pagado el único MD005 del baseline) y `git diff --stat -- obsidian-workspace` vacío; **FTR pendiente de aprobación del usuario** — Phase 5 no arranca sin BLUEPRINT APPROVED. rev. 9 — Phase 3.5 **COMPLETADA** 2026-11-04: review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final 703 passed+3 slow, coverage 97 %, bench-smoke PASS, rust-ci ok; baseline escala NTFS-3G FAIL / btrfs PASS → Phase 6; Phase 4 lista para planificar. rev. 8 — Phase 3.5 **cerrada con FTR aprobado** 2026-11-03: 7 tools, índice multi-raíz, dieta y skill; ADR-009/010/011 **Accepted**. rev. 7 — Phase 3.5 planificada 2026-11-02: 3 ADR (009/010/011) + 4 specs enmendadas + D28-D67; rev. 6 estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
+**Date:** 2026-10-21 (rev. 12 — Phase 5 **COMPLETADA 2026-11-09** con la salvedad **D-P5-10**: payload materializado y gates estático + install e2e verdes en local; la corrida **D9** (methodology e2e de los 9 comandos) se **difiere al QA de cierre de proyecto** y se entrega el runbook `tests/phase5-methodology-runbook.md` — nada se declara verde sin método. rev. 11 — Phase 4 **COMPLETADA** 2026-11-09: blueprint definitivo en 5 specs **Approved** (freeze 40 del dueño, `cf17f31`/`2e62e60`); gate BLUEPRINT APPROVED concedido por el congelamiento. rev. 10 — Phase 4 **COMPLETADA** 2026-11-04 a nivel de checklist: blueprint del payload en 5 specs <500 líneas (209 skills · 170 agentes · 9 comandos verificados), 0 links rotos, md-lint 0 errores (pagado el único MD005 del baseline) y `git diff --stat -- obsidian-workspace` vacío; **FTR pendiente de aprobación del usuario** — Phase 5 no arranca sin BLUEPRINT APPROVED. rev. 9 — Phase 3.5 **COMPLETADA** 2026-11-04: review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final 703 passed+3 slow, coverage 97 %, bench-smoke PASS, rust-ci ok; baseline escala NTFS-3G FAIL / btrfs PASS → Phase 6; Phase 4 lista para planificar. rev. 8 — Phase 3.5 **cerrada con FTR aprobado** 2026-11-03: 7 tools, índice multi-raíz, dieta y skill; ADR-009/010/011 **Accepted**. rev. 7 — Phase 3.5 planificada 2026-11-02: 3 ADR (009/010/011) + 4 specs enmendadas + D28-D67; rev. 6 estado de fases: Phase 1 completada 2026-10-23, Phase 2 completada 2026-10-28, Phase 3 completada 2026-10-28 y cerrada con revisión formal 5-ejes 2026-10-29; Phase 4 listo para planificar; rev. 3 renumeró Payload→5, E2E→6) | **Author:** Arquitecto (entrevista /spec) | **Methodology:** Especificación-driven, fases con gates (doc para `/plan`)
 
 > Cada fase tiene: objetivo, entregables, dependencias, métricas de cierre y **gate** — la fase
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
@@ -15,10 +15,10 @@
 | 2 | MCP Server | `tepochcalli-rag` conecta a OpenCode con contratos D6 — 4 tools: `search`, `index_refresh`, `add_source`, `rag_status` *(histórico: hoy son 7 — ver Phase 3.5)* | opencode listá tools; `search` devuelve chunks citados <500ms en fixture; asserts de token-budget (≤1600 payload) en tests; taxonomía `E_*` + precedencia `INDEX_EMPTY` cubiertas (contract tests D7.3) |
 | 3 | Wizard | Instalador Rust atomico end-to-end | VM limpia (Linux/macOS/Windows, sin Python/Node) → `curl \| sh` → vault instalado + índice inicial + `mcp.servers` validados, con un comando; prueba de idempotencia (2 corridas); instalación con menú de embedder (D7.1) en sus 5 salidas |
 | 4 | Diseño del agent workflow (blueprint) | Completar specs/spec-payload-vault.md hasta Approved: system prompts definitivos de los 5 agentes, permisos YAML (last-match-wins), templates de los 9 comandos, tabla de invocación 9×4 y matriz de conflictos contra el inventario REAL de skills — documentación pura, cero escritura de payload | BLUEPRINT APPROVED por el usuario (status → Approved en SPEC.md index); matriz cubre el 100% del inventario (recuento ls vs filas); cero skills/subagents inventados; permisos sin campos legacy V2 |
-| 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e |
+| 5 | Payload + Skills audit (ejecución) | Ejecución LITERAL del blueprint Approved sobre `obsidian-workspace/` | `obsidian-workspace/` = payload versión-release generado del blueprint; muestras md+PDF; acciones Anexo A ejecutadas (duplicados consolidados, gaps Jupyter/R/Graphviz-PlantUML/LaTeX instalados o declarados won't); alias 00-Resources resuelto (TD-8); Validación del agent workflow (D9) verde: permission fixtures + methodology e2e *(2026-11-09: fixtures verdes; methodology e2e diferida a QA de cierre — D-P5-10, runbook entregado)* |
 | 6 | E2E Acceptance | Validar los 7 criterios de UH.md sobre sistema completo | Aceptación: tabla §6.3 toda verde en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 
-> **Estado (2026-11-04):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 3.5 (conversor + multi-raíz + dieta + skill) COMPLETADA 2026-11-04** — FTR aprobado 2026-11-03 (7 tools, ADR-009/010/011 **Accepted**, 4 specs enmendadas definitivas) + review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final `just ci` verde local: **703 passed + 3 `slow`**, cobertura **97 %** (gate 95 %), bench-smoke **PASS**, rust-ci **ok** (§Phase 3.5); **Phase 4 (blueprint) COMPLETADA 2026-11-09** — blueprint definitivo en 5 specs **Approved** (freeze 40 del dueño, `cf17f31`/`2e62e60`); gate BLUEPRINT APPROVED concedido por el congelamiento (§4). **Phase 5 READY TO PLAN** (no iniciada; se planifica vía `/plan`, sin ejecución en esta ola). GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
+> **Estado (2026-11-09):** Phase 1 **completada** (§Phase 1); Phase 2 (server MCP) **completada** — FTR Phase 2→3 verde y aprobado 2026-10-27, rito de calidad posterior y gate final `just ci` verde 2026-10-28 (§Phase 2, §4); **Phase 3 (wizard) completada** — FTR Phase 3→4 verde y aprobado 2026-10-28 (§4), cierre posterior con revisión formal de 5 ejes 2026-10-29 (suite local 311 passed / 0 failed / 2 ignored, 31 commits, deuda nueva TD-23..TD-25); **Phase 3.5 (conversor + multi-raíz + dieta + skill) COMPLETADA 2026-11-04** — FTR aprobado 2026-11-03 (7 tools, ADR-009/010/011 **Accepted**, 4 specs enmendadas definitivas) + review 5-ejes post-FTR (6 commits `e191a45`..`6e00aa9`) + plugins del payload a @latest (`ad7575c`, revierte R-04 por orden del dueño); gate final `just ci` verde local: **703 passed + 3 `slow`**, cobertura **97 %** (gate 95 %), bench-smoke **PASS**, rust-ci **ok** (§Phase 3.5); **Phase 4 (blueprint) COMPLETADA 2026-11-09** — blueprint definitivo en 5 specs **Approved** (freeze 40 del dueño, `cf17f31`/`2e62e60`); gate BLUEPRINT APPROVED concedido por el congelamiento (§4); **Phase 5 (payload) COMPLETADA 2026-11-09** — payload materializado (15 artefactos de texto + 40 skills intactas con hash idéntico al baseline), `opencode.json` sin el array global de 313 reglas, scaffold canónico, gate estático 42/42 probes e install e2e idempotente; **salvedad D-P5-10: la corrida D9 (methodology e2e) queda diferida al QA de cierre de proyecto** con runbook entregado (§Phase 5). GitHub Actions nunca ha corrido (M6 de Phase 1, extendida a Phase 3 en `docs/TECH_DEBT.md`) — **no se declara CI verde**.
 
 ## 2. Phase Breakdown
 
@@ -201,8 +201,42 @@
 
 ### Phase 5 — Payload + Skills audit (ejecución)
 
-* **Estado (2026-11-09): READY TO PLAN — no iniciada.** El blueprint Approved de Phase 4 la desbloquea
-  para **planificación** (vía `/plan`); la ejecución literal arranca solo con su propio plan.
+* **Estado (2026-11-09): COMPLETADA — con salvedad D-P5-10.** Ejecución literal del blueprint Approved
+  en las olas T0-T13 (commits `f3a0a7c` plan y `06925ca`..`eeb62b6`): payload materializado y gates de
+  la fase corridos en local. **La corrida D9 (methodology e2e de los 9 comandos) NO se ejecutó** —
+  decisión del dueño (**D-P5-10**) de diferirla al **QA de cierre de proyecto**; se entrega el runbook
+  `tests/phase5-methodology-runbook.md` como mitigación y el FTR Phase 5→6 la registra como **no
+  ejecutada**, nunca como verde. Deuda de QA: TD-31.
+* **Métricas medidas (2026-11-09, ninguna estimación):**
+  * **Skills:** **40 dirs / 687 ficheros**, hash del árbol
+    `169fe2c99fd58c71566342b076afd9098ae19dd13222ced96634963d617fc398` **idéntico al baseline T0** —
+    0 altas, 0 bajas, 0 ediciones.
+  * **5 agentes:** reglas `permissions` **16/18/17/18/27**
+    (itzamna/nezahualcoyotl/pochteca/chilam/tlacuilo); cuerpos **55/53/57/57/55** líneas (≤60);
+    0 campos legacy, 0 `model`, markdownlint 0.
+  * **9 comandos:** **24/30/26/24/24/24/24/25/24** líneas (≤35), byte-idénticos a
+    `spec-payload-commands.md`; 0 `subtask`/`subagent:`/`` !`cmd` ``/`@paths`.
+  * **`AGENTS.md` del vault:** **74 líneas**, 7 secciones; vocabulario (cita, 4 estados, 4 clases)
+    verificado token a token.
+  * **`opencode.json`:** array global de **313 reglas eliminado**; `instructions` = 4 rutas
+    vault-relative resolubles; `default_agent: itzamna`; 5 agentes sin arrays de permisos;
+    `mcp.servers` y `references` intactos.
+  * **Scaffold:** `01-Tasks/` renombrada a `01-tasks/` (TD-8), 3 ficheros de 0 bytes eliminados,
+    6 bandejas con `.gitkeep`, `.gitignore` del vault con 5 rutas.
+  * **Gate estático (T11):** **42/42 probes**, 30 denies de secretos (5 agentes × 6 rutas),
+    5 `subagent * deny`, 0 reglas muertas; contrato de 40 skills con hash; `just ci` verde,
+    cobertura **97 %** (gate 95 %), `md-lint` 0.
+  * **Install e2e (T12):** payload empaquetado con las exclusiones de `release.yml`;
+    `install --non-interactive --skip-model` ×2 → exit 0; 5 agentes + 9 comandos + `AGENTS.md`
+    instalados; F8 inyecta `tepochcalli-rag` (forma `python -m`); 2 muestras en `00-Resources/`;
+    `.gitignore` con 5 rutas; **idempotencia**: digest
+    `ffa4db0e29ad6c20fdbb52db9e7ef4f959c7fe1dda5756d4df625b713eac0151` (**875 ficheros**)
+    antes/después, 0 duplicados, 0 `.bak`. **Bug real corregido:** la 2.ª instalación fallaba en F5
+    (`uv venv` sobre un venv existente y la compensación lo borraba) → `uv venv --clear` (venv
+    derivado) + test RED→GREEN en `int_install_f4_f5.rs`.
+* **Lo NO verificado (declarado, no verde):** corrida D9 de los 9 comandos (**D-P5-10**, diferida al
+  QA de cierre con runbook entregado); GitHub Actions **nunca ha corrido** (M6); Windows/PowerShell;
+  release/cargo-dist; suite `slow`.
 * Ejecución LITERAL del blueprint Approved de Phase 4: los archivos del payload se generan del spec-payload-vault Approved, **sin reinterpretación**; divergencia descubierta en vuelo = volver a Phase 4 (enmienda al blueprint), no parche ad-hoc.
 * Objetivo: `obsidian-workspace/` listo como asset de release (mirror del modelo `template/` de codice-opencode): muestras en `00-Resources/` (md+PDF, opcionalmente docx para TD de markitdown), `.gitignore` del vault, AGENTS.md del vault con reglas MCP-first, ejecución del saneamiento del Anexo A (spec-agent-workflow), scaffold alineado a la convención de carpetas con `04-review/` y `05-outputs/` creadas (Action Item spec-vault-structure), y validación explícita del agent workflow (D9, bloque abajo). Ejecución según blueprint [specs/spec-payload-vault.md](../specs/spec-payload-vault.md).
 * Dependencias: Phase 2 (contratos) + Phase 3 (payload se instala con wizard) + Phase 4 (blueprint Approved).
@@ -217,8 +251,8 @@
   * Nezahualcóyotl: escritura solo de planificación (rúbricas, esquemas) en `01-tasks/`; sin web ni redacción final.
 * **(b) Methodology e2e (golden vault)**: corrida completa `/rubric → /research → /validate → /synthesize → /cite → /draft → /review → /transform → /update` assertando: cada artefacto aterriza en SU bandeja única (mapa D9.2); frontmatter `{agent, timestamp, fuentes, método}` en las notas de `01-tasks/research/` y `{command, agent, target_doc, verdict}` en los informes de `04-review/`; cero contaminación cruzada entre bandejas; regla MCP-first observada (`search` antes de lectura cruda de `00-Resources/`); regla no-contaminación observada (el agente WARN si encuentra archivos depositados por el usuario dentro de las bandejas 01-05).
 
-* Métricas: inventario final = **40 skills congeladas** (decisión del dueño 2026-11-09; objetivo <60 **cumplido**); Phase 5 verifica presencia (40 presentes, 0 retiros), no ejecuta cortes; acciones de gaps documentadas; alias `00-Resources` resuelto (renombrar scaffold o soporte explícito en wizard); permission fixtures (a) y methodology e2e (b) verdes.
-* Gate: `install` sobre el payload final → golden vault e2e pasa; + permission fixtures D9.3 y methodology e2e (D9) verdes.
+* Métricas: inventario final = **40 skills congeladas** (decisión del dueño 2026-11-09; objetivo <60 **cumplido**); Phase 5 verifica presencia (40 presentes, 0 retiros), no ejecuta cortes; acciones de gaps documentadas; alias `00-Resources` resuelto (renombrar scaffold o soporte explícito en wizard); permission fixtures (a) verdes y methodology e2e (b) **diferida (D-P5-10)**.
+* Gate: `install` sobre el payload final → golden vault e2e pasa; + permission fixtures D9.3 y methodology e2e (D9) verdes. **Salvedad 2026-11-09: la methodology e2e queda diferida (D-P5-10); el gate se cierra con permission fixtures estáticas + install e2e + runbook entregado, y la corrida D9 pasa al QA de cierre.**
 
 ### Phase 6 — E2E Acceptance (los 7 criterios)
 
@@ -295,7 +329,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 | Phase 2→3 | contratos vs código | shapes = spec-mcp-server | arquitecto |
 | Phase 3→4 | wizard crate + docs de cierre | CP-A..D (6/6 cada uno) + FTR checklist + suite local | Usuario |
 | Phase 4→5 | blueprint: 5 specs del payload (`spec-payload-vault` **Approved** + `skills`/`permissions`/`agents`/`commands`) | tabla invocación + matriz conflictos + permisos V2 sin legacy — **checklist verde 2026-11-04 + gate concedido 2026-11-09 (freeze 40)** | Usuario + arquitecto |
-| Phase 5→6 | payload + skills | Anexo A acciones ejecutadas + permission fixtures + methodology e2e verdes + coherencia blueprint vs archivos generados | Usuario |
+| Phase 5→6 | payload + skills | Anexo A acciones ejecutadas + permission fixtures + methodology e2e verdes + coherencia blueprint vs archivos generados — **checklist ejecutado 2026-11-09 con la salvedad "methodology e2e diferido (D-P5-10); runbook entregado"** | Usuario |
 
 **FTR Phase 0→1 — ejecutado 2026-10-23 (T12), checklist verde** (corrido sobre `specs/`, `docs/`, `AGENTS.md` y `SPEC.md`):
 

@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (Phase 5 — payload materializado, 2026-11-09)
+
+- **Payload materializado** — 15 artefactos de texto en `obsidian-workspace/`: **5 agentes**
+  (`itzamna`, `nezahualcoyotl`, `pochteca`, `chilam`, `tlacuilo`; cuerpos de 55/53/57/57/55 líneas,
+  ≤60), **9 comandos** (24-30 líneas, ≤35, byte-idénticos a `spec-payload-commands.md`) y el
+  **`AGENTS.md` del vault** (7 secciones, 74 líneas) con la regla MCP-first, la de cita y la de
+  no-contaminación de bandejas.
+- **Permisos por agente en forma de bloque** (16/18/17/18/27 reglas) con 30 denies de secretos
+  (5 agentes × 6 rutas), 5 `subagent * deny` y 0 reglas muertas; 0 campos legacy, 0 `model` repetido.
+- **40 skills congeladas** (D-P5-1): 40 dirs / 687 ficheros, hash del árbol
+  `169fe2c9…17fc398` **idéntico al baseline T0** — 0 altas, 0 bajas, 0 ediciones; contrato estático
+  nombre a nombre con hash.
+- **Scaffold canónico:** las 6 bandejas (`01-tasks/` con `research/`, `02-drafts/`, `03-citations/`,
+  `04-review/`, `05-outputs/`, `00-Resources/`) con `.gitkeep`, y **`.gitignore` del vault** con las
+  5 rutas de `spec-vault-structure`.
+- **Gate estático del payload (`tests/unit/test_payload_permissions.py` +
+  `test_payload_contract.py`):** 42/42 probes del intérprete last-match-wins, 0 nombres de skill
+  inexistentes y presupuestos de líneas assertados.
+
+### Changed (Phase 5 — payload materializado)
+
+- **`opencode.json` del payload sin el array global de 313 reglas `permissions`** (D-P5-4): la
+  política efectiva de cada agente es su bloque. `instructions` pasa a 4 rutas **vault-relative**
+  resolubles; `default_agent: itzamna`; `mcp.servers` y `references` intactos.
+- **`01-Tasks/` renombrada a `01-tasks/`** (TD-8: renombrar, nunca crear) y sus 3 ficheros de 0
+  bytes eliminados.
+- **El fixture del merge conservador se sustituye por un merge sintético** (D-P5-9): el test ya no
+  compara el payload consigo mismo; fabrica servers de usuario y demuestra que el merge los preserva.
+- **La enmienda fechada D-P5-2** sustituye las 8 skills inexistentes que citaban `/transform` y
+  Tlacuilo por las reales del inventario de 40; `.opencode/skills/` queda intacto.
+
+### Fixed (Phase 5 — payload materializado)
+
+- **La segunda instalación fallaba en F5**: `uv venv` sobre un venv ya existente devolvía error y la
+  compensación borraba el venv (dejando el vault sin runtime). Ahora F5 usa `uv venv --clear` sobre
+  el venv derivado; test RED→GREEN en `int_install_f4_f5.rs`, y el e2e de dos instalaciones deja el
+  digest del árbol idéntico (`ffa4db0e…eac0151`, 875 ficheros) con 0 duplicados y 0 `.bak`.
+
+### Not verified (Phase 5 — payload materializado)
+
+- **Corrida D9 (methodology e2e de los 9 comandos)**: **diferida al QA de cierre de proyecto**
+  (D-P5-10). Se entrega el runbook `tests/phase5-methodology-runbook.md`; la deuda queda como TD-31
+  y el gate Phase 5→6 se firma con esa salvedad, **no** como verde.
+- GitHub Actions **nunca ha corrido** (M6); Windows/PowerShell, release/cargo-dist y la suite `slow`
+  tampoco se ejecutaron.
+
 ### Added (Phase 4 — blueprint del payload, 2026-11-04)
 
 - **Cinco specs del payload** (<500 líneas cada una): `spec-payload-vault` (spec padre: reglas de
