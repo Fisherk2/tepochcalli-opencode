@@ -212,8 +212,9 @@
 ### [ ] T13 — Methodology e2e (D9) — corrida manual con evidencia
 
 - Subagente: `testing-evidence-collector` → `testing-reality-checker` (secuencial) · Skills: `doubt-driven-development`, `document-verification` · Tools: MCP `tepochcalli-rag` del payload
-- [ ] Protocolo escrito y versionado (`docs/diagnosis/phase5-methodology-e2e.md`)
-- [ ] Corrida de los 9 comandos en orden sobre el vault de T12
+- [x] Protocolo escrito y versionado (`tasks/phase5-methodology-e2e.md`)
+- [x] Runbook de QA con prompts por comando (`tests/phase5-methodology-runbook.md`, corpus de fotosíntesis)
+- [ ] Corrida de los 9 comandos en orden sobre el vault de T12 (la ejecuta QA con el runbook)
 - [ ] Checklist por comando: bandeja única · frontmatter exacto · cero contaminación cruzada · MCP-first observado · no-contaminación
 - [ ] Evidencia: transcript de tool-calls + árbol final del vault
 - [ ] Lo no verificado escrito como no verificado
