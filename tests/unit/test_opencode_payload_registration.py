@@ -1,93 +1,131 @@
-"""Registro T9 en `obsidian-workspace/opencode.json` con merge conservador (D-d, plan §6).
+"""Contrato del `opencode.json` del payload y merge conservador de F8 (T9).
 
-Tres afirmaciones graduadas por el AC de T9 (ajustadas en la review Phase 2,
-2026-10-27: el server markitdown standalone RETIRADO — la conversión en
-proceso (D-b, costura `_convert_seam`) es la ÚNICA consumidora de markitdown;
-la entrada de wire `mcp.servers.markitdown` era superficie sin cliente):
+Cierra **TD-30**: el test anterior comparaba el payload consigo mismo. Ahora el
+merge se demuestra sobre una entrada **fabricada**
+(`tests/fixtures/opencode_payload_synthetic.json`) que ningún paso del producto
+genera, y el payload real se audita contra el contrato de D-P5-4:
 
-1. El payload sigue **parseable** y la única entrada nueva tiene la forma
-   EXACTA del contrato (`tepochcalli-rag` con `type/command/cwd/environment`)
-   — forma `python -m`, nunca console script (D17: el bit de ejecución se
-   pierde en NTFS/fuseblk); `markitdown` ya NO debe estar registrada.
-2. `excel` y `jupyter` (existentes, ambas `disabled: true`) quedan intactas.
-3. **Merge conservador demostrado, no afirmado:** al quitar las entradas
-   gestionadas, el resto del documento re-serializado con el MISMO
-   serializador es byte-idéntico al original congelado en
-   `tests/fixtures/opencode_payload_before_t9.json` (copia de
-   `git show HEAD:obsidian-workspace/opencode.json`; re-congelado en el
-   review 5-ejes 2026-11-03 porque R-04 pineó las versiones de los
-   plugins `@latest` — cambio autorizado del payload, el resto manos off;
-   re-congelado 2026-11-04 por orden del owner: los 6 plugins pasan a
-   `@latest` (política @latest, reversión de R-04).
-   Cualquier
-   cambio de clave, valor u ORDEN en el resto rompe la igualdad de bytes.
+* el array global `permissions` (313 reglas, last-match-wins) **no** existe: la
+  política efectiva de cada agente es su propio bloque (D-P4-2/D-P4-3);
+* `instructions` son rutas **relativas al vault** y cada una existe dentro de
+  `obsidian-workspace/` (D-P5-4);
+* los 5 agentes primarios siguen ahí sin arrays de permisos, y `mcp.servers` /
+  `references` quedan como estaban (el merge es del wizard, no del payload).
 """
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
-PAYLOAD_JSON = Path(__file__).resolve().parents[2] / "obsidian-workspace" / "opencode.json"
-ORIGINAL_JSON = Path(__file__).resolve().parents[1] / "fixtures" / "opencode_payload_before_t9.json"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+VAULT_ROOT = REPO_ROOT / "obsidian-workspace"
+PAYLOAD_JSON = VAULT_ROOT / "opencode.json"
+SYNTHETIC_JSON = (
+    Path(__file__).resolve().parents[1] / "fixtures" / "opencode_payload_synthetic.json"
+)
 
-# Forma exacta del AC de T9 — la entrada markitdown del jsonc de spec-markitdown
-# §Config quedó RETIRADA en la review Phase 2: se POPea en ambos lados del
-# contrato byte-idéntico para mantener viva la afirmación del resto.
-TPOCHCALLI_RAG_ENTRY = {
+PRIMARY_AGENTS = ("itzamna", "nezahualcoyotl", "pochteca", "chilam", "tlacuilo")
+INSTRUCTIONS = (
+    ".opencode/skills/obsidian-markdown/SKILL.md",
+    ".opencode/skills/obsidian-cli/SKILL.md",
+    ".opencode/skills/obsidian-vault/SKILL.md",
+    ".opencode/skills/markdown-mermaid-writing/SKILL.md",
+)
+
+# Forma EXACTA que F8 escribe (spec-installer-wizard §Merge). D17: `python -m`,
+# nunca el console script `venv/bin/tepochcalli-mcp` (el bit exec se pierde en
+# NTFS/fuseblk). El `environment` conserva las claves del usuario (D32) y solo
+# impone `TEPOCHCALLI_ROOT`.
+RAG_ENTRY: dict[str, Any] = {
     "type": "local",
     "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
     "cwd": ".",
     "environment": {
+        "INDEXER_DIR": "fake-notes",
+        "TEPOCHCALLI_TOP_K": "7",
         "TEPOCHCALLI_ROOT": ".",
-        "INDEXER_DIR": "00-Resources",
-        "TEPOCHCALLI_TOP_K": "5",
     },
     "disabled": False,
 }
-# Claves gestionadas por el wizard: se POPean en AMBOS lados del contrato
-# byte-idéntico para que la afirmación del merge conservador siga viva.
-#  * `markitdown` (D29): retirada del payload en la review Phase 2. Sigue en la
-#    tupla porque el fixture congelado es la copia PRE-T9 y todavía la contiene;
-#    el POP simétrico es lo que permite comparar el resto del JSON.
-#  * `anydoc` (D40/T14): el payload la trae como fallback `disabled: true`
-#    (D30) y no existía en el fixture pre-T9 ⇒ sin ella en la tupla, el merge
-#    parecería haber tocado una clave del usuario.
-MANAGED_KEYS = ("tepochcalli-rag", "markitdown", "anydoc")
 
 
-def test_payload_is_parseable_and_only_tepochcalli_rag_is_registered() -> None:
-    """El JSON parsea: `tepochcalli-rag` forma exacta, `markitdown` retirada."""
-    data = json.loads(PAYLOAD_JSON.read_text(encoding="utf-8"))
-    servers = data["mcp"]["servers"]
+def _f8_merge(doc: dict[str, Any]) -> None:
+    """Espejo del merge de F8 (`phase8.rs::merge_servers`) en Python.
 
-    assert servers["tepochcalli-rag"] == TPOCHCALLI_RAG_ENTRY, "forma exacta de tepochcalli-rag"
-    assert "markitdown" not in servers, (
-        "review Phase 2: sin server standalone (conversión EN PROCESO, D-b)"
-    )
-    # D17: forma `python -m`, jamás el console script venv/bin/tepochcalli-mcp.
-    assert TPOCHCALLI_RAG_ENTRY["command"][1] == "-m"
-    # Las entradas preexistentes conservan su estado (una está disabled: true).
+    Quita la entrada obsoleta `markitdown` (D29: conversión en proceso) y
+    reescribe SOLO `tepochcalli-rag`: el `environment` previo del usuario se
+    conserva en su orden y `TEPOCHCALLI_ROOT` se impone a `"."`.
+    """
+    servers = doc.setdefault("mcp", {}).setdefault("servers", {})
+    servers.pop("markitdown", None)
+    environment = dict(servers.get("tepochcalli-rag", {}).get("environment", {}))
+    environment["TEPOCHCALLI_ROOT"] = "."
+    servers["tepochcalli-rag"] = {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "environment": environment,
+        "disabled": False,
+    }
+
+
+def test_merge_on_synthetic_input_leaves_the_rest_untouched() -> None:
+    """F8 sobre una entrada fabricada: resto byte-idéntico + entrada contractual."""
+    original = json.loads(SYNTHETIC_JSON.read_text(encoding="utf-8"))
+    merged = json.loads(SYNTHETIC_JSON.read_text(encoding="utf-8"))
+
+    _f8_merge(merged)
+    entry = merged["mcp"]["servers"]["tepochcalli-rag"]
+
+    # (a) Mismo serializador a ambos lados ⇒ estructura Y orden de claves. Un
+    # diff aquí significa que el merge tocó algo que no gestiona.
+    for key in ("markitdown", "tepochcalli-rag"):
+        original["mcp"]["servers"].pop(key)
+    merged["mcp"]["servers"].pop("tepochcalli-rag")
+
+    assert json.dumps(merged, indent=2, ensure_ascii=False) == json.dumps(
+        original, indent=2, ensure_ascii=False
+    ), "el merge conservador exige que el resto del documento quede byte-idéntico"
+
+    # (b) Forma exacta del contrato, incluidas las claves de usuario del env.
+    assert entry == RAG_ENTRY
+    assert entry["command"][1] == "-m"
+
+    # (c) D29: sin server standalone de markitdown.
+    assert "markitdown" not in merged["mcp"]["servers"]
+
+
+def test_payload_is_clean_and_contractual() -> None:
+    """El payload real cumple D-P5-4: sin array global, instructions resolubles."""
+    doc = json.loads(PAYLOAD_JSON.read_text(encoding="utf-8"))
+
+    assert "permissions" not in doc, "el array global de 313 reglas debe desaparecer"
+    assert doc["default_agent"] == "itzamna"
+    assert tuple(doc["instructions"]) == INSTRUCTIONS
+    for relative in INSTRUCTIONS:
+        assert (VAULT_ROOT / relative).is_file(), f"instrucción irresoluble: {relative}"
+
+    agents = doc["agents"]
+    for name in PRIMARY_AGENTS:
+        assert name in agents, f"falta el agente primario {name}"
+        assert "permissions" not in agents[name], f"{name} debe llevar su política en el .md"
+
+    servers = doc["mcp"]["servers"]
     assert servers["excel"]["disabled"] is True
     assert servers["jupyter"]["disabled"] is True
-
-
-def test_the_rest_of_the_json_is_byte_identical_to_the_original() -> None:
-    """Quitando las entradas gestionadas de ambos lados, el resto es byte-idéntico.
-
-    `markitdown` existe en el fixture congelado de T8 y NO en el payload
-    actual (retirada en la review 2026-10-27): el POP simétrico mantiene la
-    afirmación del merge conservador (el RESTO del JSON no se toca).
-    """
-    current = json.loads(PAYLOAD_JSON.read_text(encoding="utf-8"))
-    original = json.loads(ORIGINAL_JSON.read_text(encoding="utf-8"))
-
-    for key in MANAGED_KEYS:
-        current["mcp"]["servers"].pop(key, None)
-        original["mcp"]["servers"].pop(key, None)
-
-    # Mismo serializador a ambos lados: compara estructura Y orden de claves;
-    # un diff aquí = el merge tocó algo que no debía (D-d).
-    assert json.dumps(current, indent=2, ensure_ascii=False) == json.dumps(
-        original, indent=2, ensure_ascii=False
-    ), "el merge conservador exige que el resto del JSON quede byte-idéntico"
+    assert "anydoc" in servers
+    assert servers["tepochcalli-rag"] == {
+        "type": "local",
+        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "cwd": ".",
+        "environment": {
+            "TEPOCHCALLI_ROOT": ".",
+            "INDEXER_DIR": "00-Resources",
+            "TEPOCHCALLI_TOP_K": "5",
+        },
+        "disabled": False,
+    }
+    assert "markitdown" not in servers
+    assert doc["references"], "references se conserva sin cambios"
