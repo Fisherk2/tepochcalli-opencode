@@ -264,7 +264,7 @@ Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (tabla 9×4 y sk
 
 ### Matriz de conflictos/redundancias de skills
 
-Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario 209, matriz de 17 filas y recuento derivado; D-P4-4).
+Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario definitivo: 40 congeladas 2026-11-09; matriz histórica de 17 filas SUPERSEDED; D-P4-4).
 
 ## Alternatives Considered
 
@@ -322,7 +322,7 @@ ejecutables sobre `obsidian-workspace/` tras la materialización:
 * **Frontmatter:** cero `temperature|top_p|prompt:|permission:|tools:|disable|maxSteps`.
 * **Comandos:** cero `subtask` y cero `subagent:` en `.opencode/commands/*.md`; cero bloques
   `` !`cmd` `` y cero `@paths` en los 9 cuerpos.
-* **Skills:** todo nombre de skill citado existe en el `ls` de `.opencode/skills/`.
+* **Skills:** todo nombre de skill citado existe en el `ls` de `.opencode/skills/` (40 definitivos 2026-11-09; Phase 5 verifica presencia, 0 retiros).
 * **Config:** `default_agent` resuelve a `itzamna`; ningún `.md` repite el `model` que ya define
   `opencode.json`.
 * **Idioma (D-P4-6):** cero marcadores del español en los bloques del payload — `ñ`, `¿`, `¡` y

@@ -180,12 +180,12 @@
   de payload). El blueprint quedó en **5 specs** — `spec-payload-vault` (366 líneas, spec padre),
   `spec-payload-skills` (226), `spec-payload-permissions` (408), `spec-payload-agents` (443),
   `spec-payload-commands` (476) — todas <500 y todas en **Proposed**; `spec-agent-workflow` (231)
-  sigue en Proposed. Verificado sobre el inventario real: **209 skills · 170 agentes · 9 comandos**,
+  sigue en Proposed. Verificado sobre el inventario real: **209 skills · 170 agentes · 9 comandos** (2026-11-04; SUPERSEDED 2026-11-09 por el congelado de 40),
   **0 skills/subagentes inventados**; cuerpos de los 5 agentes 56/54/58/58/56 líneas, 9 comandos
   24-30 líneas, `AGENTS.md` del vault (blueprint) 67 líneas — todo en inglés (D-P4-6) y
   dentro de los techos de la spec. **92 links relativos** entre las 6 specs: **0 rotos**; markdownlint
-  **0 errores** (se pagó el único MD005 del baseline); ningún bloque mermaid añadido en la fase. **Skills base: 60 distintas** — el
-  objetivo <60 falla por 1. Por decisión del dueño (2026-11-04) **no se ejecuta ningún corte**:
+  **0 errores** (se pagó el único MD005 del baseline); ningún bloque mermaid añadido en la fase. **Congelado 2026-11-09: 40 skills definitivas** — el
+  objetivo <60 CUMPLIDO (40<60, congelado del dueño 2026-11-09); la matriz de 17 filas queda SUPERSEDED y Phase 5 solo verifica presencia. Por decisión del dueño (2026-11-04) **no se ejecuta ningún corte**:
   revisará manualmente cada skill del payload (D-P4-10 retirada). **D-P4-9**: CP-A se leyó sobre las specs existentes en ese momento;
   **D-P4-11**: los permisos se extrajeron a la 5.ª spec para respetar <500.
   **FTR pendiente de aprobación del usuario; Phase 5 no arranca sin BLUEPRINT APPROVED.**
@@ -194,7 +194,7 @@
   determinísticos de los 9 comandos. AGENDA: (i) §Tabla de invocación por comando — 9 filas × 4 columnas {skills concretas del inventario real, herramientas nativas, MCPs a ejecutar (`tepochcalli-rag` tools por comando, incluidas las 3 del conversor; `anydoc` solo como fallback disabled), subagentes permitidos}; (ii) §Matriz de conflictos/redundancias de skills contra el inventario REAL de `obsidian-workspace/.opencode/skills/` (lectura only) — entregada con **17 filas** que cubren el 100 % del inventario.
 * Naturaleza: **documentación pura — cero escritura de payload**. `obsidian-workspace/` sigue vedado; la prohibición es un deliverable verbal de esta fase, no código.
 * Dependencias: Phase 0 (contratos D9); puede correr en paralelo a Phases 1-3 (no los necesita — los contratos MCP ya están Accepted).
-* Métricas (medidas en el FTR del 2026-11-04): la matriz cubre el 100% del inventario (recuento `ls` vs filas ⇒ **17 filas / 209 skills**); cada skill referenciada en la tabla existe o está marcada GAP; cero skills/subagents inventados; permisos YAML sin campos legacy V2.
+* Métricas (medidas en el FTR del 2026-11-04; SUPERSEDED 2026-11-09 por el congelado de 40): la matriz cubría el 100% del inventario entonces (recuento `ls` vs filas ⇒ **17 filas / 209 skills**); cada skill referenciada en la tabla existe o está marcada GAP; cero skills/subagents inventados; permisos YAML sin campos legacy V2.
 * **Gate: BLUEPRINT APPROVED por el usuario** (status de las 5 specs del payload → Approved en el
   índice de SPEC.md). Checklist verde 2026-11-04 (§4); **la aprobación es lo que falta y no se
   declara que exista**. Sin gate verde, Phase 5 NO arranca.
@@ -215,7 +215,7 @@
   * Nezahualcóyotl: escritura solo de planificación (rúbricas, esquemas) en `01-tasks/`; sin web ni redacción final.
 * **(b) Methodology e2e (golden vault)**: corrida completa `/rubric → /research → /validate → /synthesize → /cite → /draft → /review → /transform → /update` assertando: cada artefacto aterriza en SU bandeja única (mapa D9.2); frontmatter `{agent, timestamp, fuentes, método}` en las notas de `01-tasks/research/` y `{command, agent, target_doc, verdict}` en los informes de `04-review/`; cero contaminación cruzada entre bandejas; regla MCP-first observada (`search` antes de lectura cruda de `00-Resources/`); regla no-contaminación observada (el agente WARN si encuentra archivos depositados por el usuario dentro de las bandejas 01-05).
 
-* Métricas: inventario final de skills ≤ objetivo (<60 en payload base); acciones de gaps documentadas; alias `00-Resources` resuelto (renombrar scaffold o soporte explícito en wizard); permission fixtures (a) y methodology e2e (b) verdes.
+* Métricas: inventario final = **40 skills congeladas** (decisión del dueño 2026-11-09; objetivo <60 **cumplido**); Phase 5 verifica presencia (40 presentes, 0 retiros), no ejecuta cortes; acciones de gaps documentadas; alias `00-Resources` resuelto (renombrar scaffold o soporte explícito en wizard); permission fixtures (a) y methodology e2e (b) verdes.
 * Gate: `install` sobre el payload final → golden vault e2e pasa; + permission fixtures D9.3 y methodology e2e (D9) verdes.
 
 ### Phase 6 — E2E Acceptance (los 7 criterios)
@@ -343,7 +343,7 @@ instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Cicl
 * **0 links rotos**: 92 links relativos revisados en las 6 specs.
 * **markdownlint: 0 errores** en `specs/`, `tasks/`, `docs/`, `AGENTS.md` y `SPEC.md`. El único error del baseline D12 (`docs/WORKFLOW.md:166`, MD005 de indentación) se corrigió en este cierre con un dedent de una línea; no queda ninguno.
 * **Payload intacto**: `git diff --stat -- obsidian-workspace` **vacío**; ningún commit de la fase escribe `obsidian-workspace/`.
-* **Skills — D-P4-10 retirada (2026-11-04)**: la base estricta es **60** y el objetivo <60 falla por 1; el dueño **no aprueba ningún corte** y revisará manualmente cada skill del payload más adelante. No se registra excepción.
+* **Skills — congelado 2026-11-09 (decisión del dueño): 40 dirs definitivos**, objetivo <60 **cumplido**; la matriz de 17 filas queda SUPERSEDED y Phase 5 solo verifica presencia (0 retiros). (El 2026-11-04 la base estricta era **60** y el objetivo fallaba por 1 — D-P4-10 retirada.)
 * **Artefactos de guía**: `agent_example.md` y `command_example.md` siguen **untracked** en la raíz (D-P4-8); no se commitean.
 * **Lo NO verificado**: nada de Phase 5 se ejecuta aquí (permission fixtures y methodology e2e son sus gates); GitHub Actions sigue sin haber corrido (M6).
 

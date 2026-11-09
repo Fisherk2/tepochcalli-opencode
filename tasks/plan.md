@@ -59,7 +59,7 @@ Evidencia de partida — cada línea se cita en el calpulli que la usa:
 | Hecho | Valor medido | Dónde |
 | --- | --- | --- |
 | Blueprint actual | 528 líneas (umbral `specs/` = **<500**) | `specs/spec-payload-vault.md` |
-| Skills del payload | **209** dirs (208 + `tepochcalli-mcp` de Phase 3.5) | `ls obsidian-workspace/.opencode/skills/` |
+| Skills del payload | **40** dirs definitivos (decisión del dueño 2026-11-09; el 2026-11-04 eran 209 = 208 + `tepochcalli-mcp` de Phase 3.5 — SUPERSEDED) | `ls obsidian-workspace/.opencode/skills/` |
 | Agentes del payload | **170** `.md` (5 primarios + 165 del pack Códice) | `ls obsidian-workspace/.opencode/agents/` |
 | Comandos del payload | **9** `.md`, **4 líneas** cada uno, `description:` **vacía**, sin cuerpo | `obsidian-workspace/.opencode/commands/` |
 | Array global de permisos | **313** reglas heredadas del pack Códice | `obsidian-workspace/opencode.json` → `permissions` |
@@ -190,7 +190,7 @@ WORKFLOW es «recuento `ls` vs filas = 100 %». Este calpulli la vuelve verdad.
 **Verificación:** script de cobertura (conjunto citado vs `ls`: faltantes = 0, huérfanos = 0) · `wc -l` ·
 `just md-lint` sin errores nuevos.
 
-**Dependencias:** T0. **Fichero:** NUEVO `specs/spec-payload-skills.md`.
+**Dependencias:** T0. **Fichero:** NUEVO `specs/spec-payload-skills.md`. **SUPERSEDED 2026-11-09:** el recuento 209 y la matriz de 17 filas quedan congelados en 40 dirs definitivos (decisión del dueño); Phase 5 solo verifica presencia.
 **Subagentes (secuenciales):** `codebase-archaeologist` (recuento + trazabilidad del inventario) **→**
 `knowledge-synthesizer` (redacción de la matriz de 17 filas con veredicto y acción de Phase 5).
 **Skills:** `codebase-memory` (grafo para el repo, no para el payload), `context-engineering`, `documentation-and-adrs`.

@@ -63,11 +63,12 @@ Medido en HEAD `d04e5ac` (2026-11-04) por el orquestador.
 - [x] **Muestras inventariadas (sin cambio, D-P4-7 revocada)**: son artefactos de instalación (`installer.rs:46-58`), `00-Resources/` está vacío; `ejemplo.md`/`ejemplo.pdf` y su contenido en español se quedan como están; caja `01-Tasks/` vs `01-tasks/` anotada
 - [x] Recuento **derivado**: base estricta **60** (falla `<60` por 1); **sin corte**: el dueño revisará manualmente cada skill (D-P4-10 retirada)
 - [x] Fichero <500 líneas (**182**)
+- Congelado 2026-11-09: **40 dirs definitivo** (decisión del dueño) — recuento 209 y matriz 17 filas SUPERSEDED; Phase 5 solo verifica presencia, 0 retiros
 
 ### 🚦 Checkpoint CP-A — fin de T1+T2
 
 - [x] Reglas de formato citadas (URL + versión + fecha)
-- [x] Inventario 1:1 verificado (209/170/9)
+- [x] Inventario 1:1 verificado (209/170/9) — SUPERSEDED 2026-11-09: **40 dirs definitivo** (decisión del dueño)
 - [x] 0 skills inventadas
 - [~] Las 4 specs objetivo <500 líneas → `spec-payload-skills.md` 182 ✔; `spec-payload-vault.md` **585** (baja a <500 cuando T6 mueva los cuerpos de comando; ver nota D-P4-9)
 - [x] md-lint sin errores nuevos vs baseline

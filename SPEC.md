@@ -111,7 +111,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
 | [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Proposed | spec padre: reglas de formato V2, blueprint del AGENTS.md del vault, testing ejecutable y decisiones Phase 4 |
-| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Proposed | Inventario real 209/170/9 + matriz de 17 filas + muestras del instalador |
+| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Proposed | Inventario definitivo 40 congeladas (2026-11-09) + tabla 9×4 + muestras del instalador; matriz 17 filas SUPERSEDED |
 | [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | Proposed | 5 bloques `permissions` V2 (forma en bloque) + nota de fusión (D-P4-2) |
 | [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | Proposed | 5 system prompts en inglés con el esqueleto de casa (≤60 líneas) |
 | [specs/spec-payload-commands.md](specs/spec-payload-commands.md) | Proposed | 9 cuerpos en inglés (≤35 líneas) + contrato de referencia español |
