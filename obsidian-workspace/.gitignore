@@ -1,0 +1,5 @@
+.tepochcalli/venv/
+.tepochcalli/bin/
+.tepochcalli/db/
+.tepochcalli/models/
+.tepochcalli/config/
