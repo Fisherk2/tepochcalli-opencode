@@ -3,7 +3,8 @@
 > **Fecha:** 2026-11-09 · **Fase:** Phase 5 (gate D9) · **Decisión:** D-P5-3
 > **Plan:** [tasks/plan.md](plan.md) §T13 · **Precondición:** [T12](todo.md) (vault instalado)
 > **Runbook de QA:** [tests/phase5-methodology-runbook.md](../tests/phase5-methodology-runbook.md)
-> **Estado:** protocolo y runbook listos; **corrida pendiente de QA** (sin corrida, la fase queda ABIERTA).
+> **Estado:** protocolo y runbook listos. **D-P5-10:** la corrida se difiere al QA de cierre de proyecto;
+> Phase 5 cierra con esta deuda declarada (nunca como verificada).
 
 ## Por qué manual y no automatizado
 

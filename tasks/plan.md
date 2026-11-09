@@ -43,6 +43,7 @@ fase — **permission fixtures D9.3** y **methodology e2e (D9)** — con la evid
 | **D-P5-7** | **`tasks/plan.md` y `tasks/todo.md` se sobrescriben** (precedente D-P4-5); el plan de Phase 4 queda en git (`337c012`) | Este commit |
 | **D-P5-8** | **No se crean muestras en `00-Resources/` del repo:** el blueprint Approved (`spec-payload-skills.md` §Inventario de muestras) fija que las crea el instalador en F3; el texto de `docs/WORKFLOW.md` §Phase 5 («muestras en `00-Resources/`») queda precisado por el blueprint, más reciente | T10 (`.gitkeep` solo) + T12 (el install las materializa) |
 | **D-P5-9** | **El fixture del merge conservador se sustituye por un merge sintético** (cierra TD-30): el test deja de comparar el payload consigo mismo y demuestra el merge sobre una entrada fabricada | T9 |
+| **D-P5-10** | **T13 cierra con el runbook; la corrida D9 de los 9 comandos se difiere al QA de cierre de proyecto** (decisión del dueño 2026-11-09). El FTR Phase 5→6 registra la metodología como **no ejecutada** (deuda de QA declarada), nunca como verde | T13 (protocolo + runbook en `tests/phase5-methodology-runbook.md`) · T14 lo declara en WORKFLOW/TECH_DEBT |
 
 ## 3. Estado real verificado (2026-11-09, lectura del repo)
 

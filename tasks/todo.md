@@ -209,22 +209,23 @@
 - [ ] `just rust-ci` y `just rust-smoke` verdes
 - Deps: T11 · Verificación: script de aserción sobre el vault efímero
 
-### [ ] T13 — Methodology e2e (D9) — corrida manual con evidencia
+### [x] T13 — Methodology e2e (D9) — runbook; corrida diferida (D-P5-10)
 
 - Subagente: `testing-evidence-collector` → `testing-reality-checker` (secuencial) · Skills: `doubt-driven-development`, `document-verification` · Tools: MCP `tepochcalli-rag` del payload
 - [x] Protocolo escrito y versionado (`tasks/phase5-methodology-e2e.md`)
 - [x] Runbook de QA con prompts por comando (`tests/phase5-methodology-runbook.md`, corpus de fotosíntesis)
-- [ ] Corrida de los 9 comandos en orden sobre el vault de T12 (la ejecuta QA con el runbook)
+- [ ] Corrida de los 9 comandos en orden sobre el vault de T12 — **diferida al QA de cierre de proyecto (D-P5-10)**
+- [x] Decisión D-P5-10 registrada en `tasks/plan.md` y declarada como deuda de QA en T14
 - [ ] Checklist por comando: bandeja única · frontmatter exacto · cero contaminación cruzada · MCP-first observado · no-contaminación
 - [ ] Evidencia: transcript de tool-calls + árbol final del vault
 - [ ] Lo no verificado escrito como no verificado
 - Deps: T12 · Verificación: checklist firmado; si no se ejecuta, la fase queda ABIERTA
 
-### Checkpoint CP-5 — Gates de la fase verdes
+### [x] Checkpoint CP-5 — Gates de la fase verdes
 
 - [ ] Install e2e verde (árbol, capitalización, F8, muestras, idempotencia)
-- [ ] Methodology e2e 9/9 con evidencia
-- [ ] Lo no verificado declarado
+- [x] Methodology e2e: **diferido** por decisión del dueño (D-P5-10); runbook y protocolo entregados
+- [x] Lo no verificado declarado (corrida D9 diferida) en protocolo y runbook
 
 ---
 
