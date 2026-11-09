@@ -2,7 +2,8 @@
 
 > **Fecha:** 2026-11-09 · **Fase:** Phase 5 (gate D9) · **Decisión:** D-P5-3
 > **Plan:** [tasks/plan.md](plan.md) §T13 · **Precondición:** [T12](todo.md) (vault instalado)
-> **Estado:** protocolo listo; **ejecución pendiente del dueño** (sin corrida, la fase queda ABIERTA).
+> **Runbook de QA:** [tests/phase5-methodology-runbook.md](../tests/phase5-methodology-runbook.md)
+> **Estado:** protocolo y runbook listos; **corrida pendiente de QA** (sin corrida, la fase queda ABIERTA).
 
 ## Por qué manual y no automatizado
 
@@ -69,6 +70,10 @@ Enums que deben aparecer intactos donde corresponda: `procedencia` ∈ {`verific
 
 ## Procedimiento
 
+El guion operativo con los prompts listos para copiar está en
+[tests/phase5-methodology-runbook.md](../tests/phase5-methodology-runbook.md) (corpus de
+fotosíntesis). Este protocolo solo fija el contrato; el runbook es lo que ejecuta QA.
+
 1. **Preparar**: fijar el vault de T12 y comprobar las 6 precondiciones; anotar la salida de
    `rag_status()` como línea base.
 2. **Ejecutar un comando a la vez** con un prompt fijo y realista sobre el corpus:
@@ -104,7 +109,7 @@ ejecuta, su fila se marca `NO EJECUTADO`, no `ok`.
 * 9/9 comandos ejecutados y 45/45 puntos (9 × 5) con evidencia enlazada.
 * Cualquier `fallo` se documenta con su causa; si afecta al contrato, vuelve a Phase 4 como
   enmienda fechada (no se parchea el payload).
-* Si el dueño no ejecuta la corrida, **Phase 5 no se cierra**: la fase queda ABIERTA con el
+* Si QA no ejecuta la corrida, **Phase 5 no se cierra**: la fase queda ABIERTA con el
   motivo declarado (D-P5-3).
 
 ## Lo que este protocolo NO verifica
