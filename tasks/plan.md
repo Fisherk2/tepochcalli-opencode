@@ -307,13 +307,13 @@ porque su paso 2 es el que citaba las 8 skills inexistentes.
 ### Task T8: `AGENTS.md` del vault
 
 **Descripción:** el system prompt distribuido que gobierna los 5 agentes y los 9 comandos. Sustituye
-el template genérico de 79 líneas por el bloque congelado de 67 líneas.
+el template genérico de 79 líneas por el bloque congelado (74 líneas tras la enmienda T8 de blancos).
 
 **Criterios de aceptación:**
 
 - [ ] `obsidian-workspace/AGENTS.md` = bloque congelado de `spec-payload-vault.md` §Blueprint, literal.
 - [ ] 7 secciones: *What this vault is* · *Ownership zones* · *MCP-first rule* · *Command → agent → tray map* · *Citations, traceability and sources* · *Note format* · *Editability clause*.
-- [ ] `wc -l` ≤ 120 (objetivo 67).
+- [ ] `wc -l` ≤ 120 (objetivo 74).
 - [ ] El formato de cita `source_path » heading (chars x–y)`, los 4 estados de `procedencia` y las 4 clases de claim coinciden **token a token** con `spec-payload-commands.md` y `spec-payload-agents.md` (verificado por script de coincidencia literal, no a ojo).
 - [ ] El mapa comando→agente→bandeja de §4 coincide con D9.2 y con los 9 `agent:` de los comandos.
 - [ ] Cero marcadores del español; cero placeholders `[...]` residuales del template.
