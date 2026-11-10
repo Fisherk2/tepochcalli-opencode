@@ -94,7 +94,6 @@ def test_merge_on_synthetic_input_leaves_the_rest_untouched() -> None:
 
     # (b) Forma exacta del contrato, incluidas las claves de usuario del env.
     assert entry == RAG_ENTRY
-    assert entry["command"][1] == "-m"
 
     # (c) D29: sin server standalone de markitdown.
     assert "markitdown" not in merged["mcp"]["servers"]
