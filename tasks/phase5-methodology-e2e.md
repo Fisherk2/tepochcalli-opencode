@@ -9,7 +9,9 @@
 ## Por qué manual y no automatizado
 
 D-P5-3: el gate D9 tiene dos piezas. La primera es el **contrato estático automatizado**
-(`tests/unit/test_payload_permissions.py` + `tests/unit/test_payload_contract.py`, T11). La
+(`tests/unit/test_payload_permissions.py` + `test_frontmatter_schema.py` +
+`test_opencode_config_schema.py`; el contrato de contenido `test_payload_contract.py` se retiró
+el 2026-11-09 — ver CHANGELOG). La
 segunda es esta **corrida manual con evidencia**: un LLM real ejecutando los 9 comandos sobre un
 vault real. No se automatiza porque el resultado depende del modelo (no determinista) y porque el
 criterio es observar el **comportamiento de ruteo y citación**, no comparar bytes.

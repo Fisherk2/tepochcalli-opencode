@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (guardrails de esquema OpenCode V2, 2026-11-09)
+
+- **Tests de forma, no de contenido** — `tests/unit/test_frontmatter_schema.py` (170 agentes vs
+  `Config.AgentEncoded`, 9 comandos vs `CommandEncoded` sin `template`, 40 skills con `name` +
+  `description` no vacíos) y `tests/unit/test_opencode_config_schema.py` (`opencode.json` vs el
+  esquema oficial vendorizado en `tests/fixtures/opencode-config.schema.json`). 11 controles
+  negativos prueban que el portero rechaza instancias mutadas; fuentes: docs oficiales de agents,
+  commands y skills de OpenCode V2 + `https://opencode.ai/config.json` (descargado 2026-11-09).
+
+### Removed (2026-11-09, decisión del dueño)
+
+- **Tests de contenido sobre `obsidian-workspace/.opencode/`** —
+  `tests/unit/test_payload_contract.py` (hash de las 40 skills, presupuestos de líneas, idioma,
+  citas) y `tests/unit/test_opencode_skill_catalogue.py` (cuerpo de la skill `tepochcalli-mcp` vs
+  el servidor). El alcance de tests sobre el payload queda en **frontmatters + esquema de
+  `opencode.json`**; la puerta 42/42 de `test_payload_permissions.py` (permisos = frontmatter de
+  agentes) se conserva.
+
 ### Added (Phase 5 — payload materializado, 2026-11-09)
 
 - **Payload materializado** — 15 artefactos de texto en `obsidian-workspace/`: **5 agentes**
