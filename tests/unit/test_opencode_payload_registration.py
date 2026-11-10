@@ -38,9 +38,12 @@ INSTRUCTIONS = (
 # nunca el console script `venv/bin/tepochcalli-mcp` (el bit exec se pierde en
 # NTFS/fuseblk). El `environment` conserva las claves del usuario (D32) y solo
 # impone `TEPOCHCALLI_ROOT`.
+# Única fuente de verdad del comando del server (Rule of Three: 3 usos abajo).
+RAG_COMMAND = [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"]
+
 RAG_ENTRY: dict[str, Any] = {
     "type": "local",
-    "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+    "command": RAG_COMMAND,
     "cwd": ".",
     "environment": {
         "INDEXER_DIR": "fake-notes",
@@ -64,7 +67,7 @@ def _f8_merge(doc: dict[str, Any]) -> None:
     environment["TEPOCHCALLI_ROOT"] = "."
     servers["tepochcalli-rag"] = {
         "type": "local",
-        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "command": RAG_COMMAND,
         "cwd": ".",
         "environment": environment,
         "disabled": False,
@@ -118,7 +121,7 @@ def test_payload_is_clean_and_contractual() -> None:
     assert "anydoc" in servers
     assert servers["tepochcalli-rag"] == {
         "type": "local",
-        "command": [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"],
+        "command": RAG_COMMAND,
         "cwd": ".",
         "environment": {
             "TEPOCHCALLI_ROOT": ".",

@@ -146,7 +146,7 @@ def payload_files(vault: Path) -> list[Path]:
     ]
     for root in roots:
         files.extend(p for p in root.rglob("*") if p.is_file())
-    return [p for p in files if p.name != "" and not p.name.endswith(".bak")]
+    return [p for p in files if not p.name.endswith(".bak")]
 
 
 def tree_digest(vault: Path) -> tuple[str, int]:
