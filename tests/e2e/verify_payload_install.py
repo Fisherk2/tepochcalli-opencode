@@ -13,6 +13,9 @@ it packages `obsidian-workspace/` exactly like the release asset
 adds a second install and proves the payload tree is byte-identical with no
 new files and no `*.bak` leftover. Exit code is non-zero on the first failed
 assertion group, with a clear `FAIL: ...` line per missing contract item.
+
+Requiere red en --install: F4/F5 descargan el asset uv pineado, managed Python
+y deps de PyPI.
 """
 
 from __future__ import annotations
@@ -21,16 +24,19 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
+from collections import Counter
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 PAYLOAD_SRC = REPO / "obsidian-workspace"
 CARGO_MANIFEST = REPO / "crates" / "tepochcalli" / "Cargo.toml"
 
-# Mirror of `.github/workflows/release.yml` (payload asset exclusions).
+# Mirror of `.github/workflows/release.yml` (payload asset exclusions);
+# `_assert_tar_excludes_match_release()` guarda la igualdad contra el YAML.
 TAR_EXCLUDES = [
     "./.obsidian",
     "./.tepochcalli/venv",
@@ -52,6 +58,7 @@ TAR_EXCLUDES = [
 ]
 
 # The 5 primary workspace agents: name -> (permission rules, mode).
+# Cifras según spec-payload-permissions §Blueprint de permisos por agente.
 EXPECTED_AGENTS = {
     "itzamna": (16, "primary"),
     "nezahualcoyotl": (18, "primary"),
@@ -61,6 +68,7 @@ EXPECTED_AGENTS = {
 }
 
 # The 9 commands: name -> exact body line count (`wc -l`).
+# Cifras según spec-payload-commands §Contrato de cada comando + §Cuerpos congelados.
 EXPECTED_COMMANDS = {
     "rubric": 24,
     "research": 30,
@@ -94,6 +102,7 @@ EXPECTED_GITIGNORE = {
     ".tepochcalli/config/",
 }
 
+# Espejo file-local; madre de producto: `phase8.rs::expected_rag_entry`, misma shape D17.
 RAG_COMMAND = [".tepochcalli/venv/bin/python", "-m", "tepochcalli_mcp"]
 
 failures: list[str] = []
@@ -136,7 +145,14 @@ def payload_files(vault: Path) -> list[Path]:
         vault / ".opencode" / "skills",
         *[
             vault / name
-            for name in ("01-tasks", "02-drafts", "03-citations", "04-review", "05-outputs")
+            for name in (
+                "00-Resources",
+                "01-tasks",
+                "02-drafts",
+                "03-citations",
+                "04-review",
+                "05-outputs",
+            )
         ],
     ]
     files = [
@@ -288,6 +304,24 @@ def assert_vault(vault: Path) -> None:
         check(not missing, f".gitignore missing routes: {sorted(missing)}")
 
 
+def _assert_tar_excludes_match_release() -> None:
+    """Fail loudly if `TAR_EXCLUDES` diverges from the `tar --exclude` in release.yml.
+
+    Infraestructura own-tool guard: falla con excepción (no es un contrato del
+    vault, es el requisito del empaquetado de la release).
+    """
+    yaml_path = REPO / ".github" / "workflows" / "release.yml"
+    yaml_text = yaml_path.read_text(encoding="utf-8")
+    release_excludes = Counter(re.findall(r"--exclude(?:=|\s)+'?([^'\s]+)'?", yaml_text))
+    expected = Counter(TAR_EXCLUDES)
+    if release_excludes != expected:
+        raise RuntimeError(
+            "TAR_EXCLUDES diverges from .github/workflows/release.yml: "
+            f"missing={sorted(expected - release_excludes)} "
+            f"extra={sorted(release_excludes - expected)}"
+        )
+
+
 def package_payload(work: Path) -> Path:
     """Package `obsidian-workspace/` exactly like the release asset and extract it."""
     archive = work / "payload.tar.gz"
@@ -323,6 +357,8 @@ def run_install(
 ) -> subprocess.CompletedProcess[bytes]:
     """Run the real wizard (`install --non-interactive --skip-model`) and return the result."""
     env = dict(os.environ)
+    # determinismo: el mirror del host no debe redirigir la descarga del asset pineado.
+    env.pop("TEPOCHCALLI_RELEASE_BASE_URL", None)
     if cargo_target_dir:
         env["CARGO_TARGET_DIR"] = cargo_target_dir
     cmd = [
@@ -340,7 +376,12 @@ def run_install(
         "--payload",
         str(payload),
     ]
-    return subprocess.run(cmd, check=False, env=env)
+    try:
+        return subprocess.run(cmd, check=False, env=env, timeout=1200)
+    except subprocess.TimeoutExpired:
+        # 124: exit code convencional de timeout; el caller solo mira returncode.
+        print(f"WARN: install timed out after 1200s ({' '.join(cmd[1:])})", file=sys.stderr)
+        return subprocess.CompletedProcess(args=cmd, returncode=124)
 
 
 def main() -> int:
@@ -376,6 +417,8 @@ def main() -> int:
         help="CARGO_TARGET_DIR for the wizard build (fuseblk exec-bit workaround)",
     )
     args = parser.parse_args()
+
+    _assert_tar_excludes_match_release()
 
     if args.idempotency and not args.install:
         parser.error("--idempotency requires --install (there is no second run to make)")
