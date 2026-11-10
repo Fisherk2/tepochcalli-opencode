@@ -652,7 +652,7 @@ fn f8_real_venv_loopback_ok_then_degraded() {
     write_config(vault.path(), &user_config());
     let proc = StdCommandRunner;
 
-    // Warm-up (medido 2026-11-10): el repo vive en fuseblk (NTFS-3g) y la
+    // Warm-up (medido en corrida 2026-11-09/10): el repo vive en fuseblk (NTFS-3g) y la
     // importación en frío del venv bloquea al hijo en I/O FUSE
     // (`fuse_chan_send` / `folio_wait_bit_common`, CPU 7s en 40s de vida)
     // hasta >120 s: el PROBE_TIMEOUT lo mata y el gate se pone rojo sin que
