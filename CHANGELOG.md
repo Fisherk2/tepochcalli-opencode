@@ -25,6 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `opencode.json`**; la puerta 42/42 de `test_payload_permissions.py` (permisos = frontmatter de
   agentes) se conserva.
 
+### Fixed (2026-11-10)
+
+- **Loopback real de F8 en el gate (`int_phase_f8_mcp_merge`)** — el probe colgaba >120 s en
+  I/O FUSE (el venv de 2.1 GB vive en `fuseblk`/NTFS-3g; el hijo pasaba bloqueado en
+  `fuse_chan_send`/`folio_wait_bit_common` con 7 s de CPU en 40 s de vida) y `PROBE_TIMEOUT` lo
+  mataba: 2 corridas de `just ci` en rojo. Fix en el test (no en el producto): warm-up de la
+  importación con el mismo hijo/cwd/env antes de cronometrar. RED documentado; `just ci` verde.
+
 ### Added (Phase 5 — payload materializado, 2026-11-09)
 
 - **Payload materializado** — 15 artefactos de texto en `obsidian-workspace/`: **5 agentes**

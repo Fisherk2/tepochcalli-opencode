@@ -652,6 +652,29 @@ fn f8_real_venv_loopback_ok_then_degraded() {
     write_config(vault.path(), &user_config());
     let proc = StdCommandRunner;
 
+    // Warm-up (medido 2026-11-10): el repo vive en fuseblk (NTFS-3g) y la
+    // importación en frío del venv bloquea al hijo en I/O FUSE
+    // (`fuse_chan_send` / `folio_wait_bit_common`, CPU 7s en 40s de vida)
+    // hasta >120 s: el PROBE_TIMEOUT lo mata y el gate se pone rojo sin que
+    // el cableado esté mal. Este test verifica intérprete/cwd/env/JSON, no
+    // latencia en frío — se calienta la caché con el mismo hijo, cwd y env
+    // del probe real antes de cronometrar nada.
+    let models = runtime.join("models").to_string_lossy().into_owned();
+    let warm = proc
+        .run_with_timeout(
+            repo_python.to_str().expect("python path utf8"),
+            &["-c", "import tepochcalli_mcp.server"],
+            vault.path(),
+            &[
+                ("HF_HOME", models.as_str()),
+                ("SENTENCE_TRANSFORMERS_HOME", models.as_str()),
+                ("TEPOCHCALLI_ROOT", "."),
+            ],
+            std::time::Duration::from_secs(300),
+        )
+        .expect("warm-up import must complete (>300s en frío ⇒ montaje FUSE roto, no cableado)");
+    assert_eq!(warm.status, 0, "warm-up import failed: {}", warm.stderr);
+
     let first = run_phase8(&proc, vault.path(), None).expect("real ok loopback must succeed");
     assert_eq!(first.health, RagHealth::Ok);
     assert!(first.changed);
