@@ -7,7 +7,7 @@
 ## Sistema en una frase
 
 Un vault de Obsidian distribuible donde el harness **OpenCode V2** obtiene respuestas citadas
-sobre el material de investigación del usuario (`00-Resources/`) consultando —vía **MCP
+sobre el material de investigación del usuario (`00-resources/`) consultando —vía **MCP
 stdio local**— un índice vectorial **incremental** construido por **CocoIndex + LanceDB** con
 embeddings **locales** (MiniLM multilingüe), entregado por un **wizard Rust** sin requerir
 Python ni Node en el host.
@@ -18,9 +18,9 @@ Python ni Node en el host.
 graph TB
     subgraph USUARIO["Capa de Usuario — Vault Obsidian"]
         OB["Obsidian<br/>nota/PDF authoring"]
-        RES["N raíces del vault<br/>00-Resources/ por defecto"]
+        RES["N raíces del vault<br/>00-resources/ por defecto"]
         WORK["01-tasks · 02-drafts · 03-citations<br/>trabajo del usuario"]
-        VAG["AGENTS.md del vault<br/>regla MCP-first"]
+        VAG["AGENTS.md del vault<br/>guía genérica harness-agnóstica"]
     end
 
     subgraph AGENTE["Capa de Agente"]
@@ -94,7 +94,7 @@ sequenceDiagram
     S->>M: convert(Path) — biblioteca, sin server
     M-->>S: markdown (nunca viaja al wire)
     S-->>A: resumen de 5 claves {written_to, source_uri, bytes, chars, preview}
-    S->>S: (o add_source: escribe en 00-Resources/ + frontmatter de trazabilidad)
+    S->>S: (o add_source: escribe en 00-resources/ + frontmatter de trazabilidad)
     A->>S: index_refresh()
     S->>F: ciclo delta
     F-->>S: {scanned, indexed, skipped, elapsed_ms, roots}
@@ -105,8 +105,8 @@ sequenceDiagram
 
 | Componente | Capa | Ubicación | Spec/ADR |
 | --- | --- | --- | --- |
-| Vault numerado (00-Resources, 01-tasks…) | Usuario | `obsidian-workspace/` (payload) | spec-vault-structure |
-| AGENTS.md del vault (MCP-first) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow |
+| Vault numerado (00-resources, 01-tasks…) + `10-templates/` | Usuario | `obsidian-workspace/` (payload) | spec-vault-structure, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
+| AGENTS.md del vault (guía genérica harness-agnóstica, EN) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
 | `opencode.json` (`mcp.servers`) | Agente | `<vault>/opencode.json` | spec-markitdown §config |
 | `tepochcalli-rag` (**7 tools**: `search`/`index_refresh()`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` — Phase 3.5) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — 4 tools entregadas en Phase 2 (T1-T8); 3 del conversor en Phase 3.5 (ADR-009) | spec-mcp-server, ADR-005, ADR-009, ADR-010 |
@@ -127,7 +127,7 @@ sequenceDiagram
 | **Suite Phase 3.5 (T1–T16):** **670 passed + 3 `slow`**, cobertura **97 %** (gate 95 %); contract tests e2e de las 7 tools, negativos de B′, multi-raíz y documentos; `bench_delta.py` re-medido (Δ texto p95 **4 299 ms**, n=20 nearest-rank) | Verificación | repo `tests/` | WORKFLOW §Phase 3.5 |
 | **CI Phase 1:** `phase1.yml` (ruff → suite → smoke Δ) | Verificación | `.github/workflows/phase1.yml` — **solo verificación local; nunca corrió en GitHub Actions (M6)** | T11, WORKFLOW §Phase 1 |
 | Wizard TUI Rust + cargo-dist | Distribución | repo `crates/` (Phase 3) + Releases | ADR-003, spec-installer-wizard |
-| **Payload materializado (Phase 5, 2026-11-09):** 15 artefactos de texto (5 agentes + 9 comandos + `AGENTS.md` del vault) + 40 skills congeladas + scaffold canónico; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5 |
+| **Payload materializado (Phase 5, 2026-11-09; formato revisado 2026-11-11):** 15 artefactos de texto (5 agentes con permisos inline + 9 comandos + `AGENTS.md` genérico del vault) + 41 skills + global 313 reglas + scaffold `00-resources/`/`10-templates/`; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
 
 ## Engine components (hexagonal view)
 
@@ -220,7 +220,7 @@ graph TB
         DB[("LanceDB<br/>.tepochcalli/db/")]
     end
 
-    RES["00-Resources/"]
+    RES["00-resources/"]
 
     OC -->|"stdio JSON-RPC"| SRV
     SRV --> TS
@@ -281,6 +281,7 @@ graph TB
 | [ADR-009](../specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Accepted | 2026-11-03 |
 | [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` + `source_path` relativo al vault (rev. 2 2026-11-03) | Accepted | 2026-11-03 |
 | [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
+| [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills | Accepted | 2026-11-11 |
 
 ## Key decisions summary
 

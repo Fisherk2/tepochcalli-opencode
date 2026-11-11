@@ -41,6 +41,7 @@ coste si se ignora, y acción/oráculo para pagarla.
 | **TD-30** | **El fixture de merge está rebasado**: `tests/fixtures/opencode_payload_before_t9.json` se regeneró con el payload actual, así que el test «byte-idéntico» compara el payload **consigo mismo**; no hay un merge sintético que demuestre que el wizard preserva claves del usuario | T14 (D40/`MANAGED_KEYS`), T16 | El test verde **no** prueba el merge conservador que su nombre afirma; una regresión del merge pasaría | Crear un fixture **pre-merge sintético** (servers del usuario + `tepochcalli-rag` ausente) y correr el merge real de F8/`phase8` contra él; regenerar solo ese fixture, nunca el payload. **CERRADA 2026-11-09 (Phase 5):** D-P5-9 sustituyó el fixture rebasado por un **merge sintético** (servers del usuario + `tepochcalli-rag` ausente) en T9, y T12 demostró la idempotencia real de dos instalaciones: digest `ffa4db0e…eac0151` (**875 ficheros**) antes/después, 0 duplicados, 0 `.bak` |
 | **TD-31** | **Corrida D9 (methodology e2e de los 9 comandos) diferida al QA de cierre (D-P5-10)**: la validación del agent workflow sobre el golden vault —`/rubric → /research → … → /update` con bandejaje D9.2, frontmatter assertado, MCP-first y no-contaminación— **no se ejecutó**; Phase 5 cierra con el contrato estático (42/42 probes) y el install e2e, no con la corrida | D-P5-10 (decisión del dueño, 2026-11-09); T13 | El flujo de 9 comandos puede tener un fallo de bandejaje o de frontmatter que ningún gate estático ve; el FTR Phase 5→6 se firma con esa parte **no verificada** | **Mitigación entregada:** protocolo (`tasks/phase5-methodology-e2e.md`) + runbook con prompts por comando y corpus de fotosíntesis (`tests/phase5-methodology-runbook.md`). **Pago:** correr el runbook completo sobre un vault instalado en el QA de cierre de proyecto y adjuntar transcript de tool-calls + árbol final; si falla, vuelve a Phase 4/5 con enmienda fechada |
 | **TD-32** | **Advertencias del umbral CODE_STYLE en el wizard (registradas 2026-11-09)**: `src/application/installer.rs` (795 líneas) y `tests/int_phase_f8_mcp_merge.rs` (854 líneas) caen en el tramo 701-1000 — permitidas solo justificadas, **con advertencia** de refactorizar lo antes posible; además `struct RecordingProc` está clonado 6× entre los ficheros de test (`e2e_maintenance`, `e2e_swap`, `int_embedder_menu`, `int_install_f4_f5`, `int_phase_f7_index`, `int_phase_f8_mcp_merge`) | Revisión CODE_STYLE §Umbral (2026-11-09) | Cada tarea que toque fases del instalador o el merge de F8 agranda ficheros muy por encima del objetivo de 500; el `RecordingProc` duplicado multiplica el coste de mantenimiento de los tests | Extraer a <500 en el próximo toque de cada fichero: `installer.rs` por fase (aislamiento de capas según spec-installer-wizard), `ConsentUi`+`secret_config` y `RecordingProc` a `crates/tepochcalli/tests/common/` (soporte compartido, no es target de test) |
+| **TD-33** | **Formato revisado del payload (2026-11-10/11, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md))**: 9 commits del dueño cambian el formato canónico — `AGENTS.md` genérico harness-agnóstico (la regla MCP-first sale del `AGENTS.md` y queda solo en los prompts), permisos inline + global 313 reglas (D-P4-2/D-P5-4 SUPERSEDED), `00-resources/` + `10-templates/` (`INDEXER_DIR` en minúsculas; el fallback del contrato `00-Resources` no cambia), 41 skills (D-P5-1 SUPERSEDED) | `baf2993`..`1c4a90b` | Specs que describan el blueprint Phase 5 como vigente mienten sobre el payload; TD-6/TD-14 con evidencia vieja ("MCP-first en el `AGENTS.md`"); TD-31 debe correr contra el formato revisado | **Pagada en esta ola (solo docs, sin código):** ADR-012 + enmiendas 2026-11-11 en las 4 specs del payload y SPEC.md; TD-6/TD-14/TD-7/TD-8 anotados abajo; re-verificar bloques inline si el global cambia |
 
 ## Revisión Phase 1 (gate CP-D, 2026-10-23)
 
@@ -247,6 +248,22 @@ corrido** (M6) y la corrida **D9 no se ejecutó** (TD-31). Cambios en este regis
 
 Ninguna asciende a blocker de Phase 6. **El FTR Phase 5→6 se firma con la salvedad TD-31:** la
 methodology e2e no está verde, está **diferida**.
+
+## Revisión formato payload (2026-11-11, ADR-012)
+
+Re-review solo-docs tras las 9 revisiones del dueño (`baf2993`..`1c4a90b`); sin código,
+sin gates corridos. TD-33 nace y se paga en la misma ola (ADR-012 + enmiendas).
+
+| ID | Estado (2026-11-11) | Evidencia / próxima acción |
+| --- | --- | --- |
+| **TD-6** | **Evidencia desactualizada** — el `AGENTS.md` del vault ya no contiene la regla MCP-first (guía genérica `baf2993`); la regla vive en los system prompts | El tracker del plugin/tool sigue en Phase 6+; la corrida TD-31 debe observar MCP-first en prompts, no en el `AGENTS.md` |
+| **TD-7** | **Reabierta como 41** — `math-typesetting-guide` (`1c4a90b`) rompe el freeze D-P5-1; objetivo <60 sigue cumplido (41 < 60) | `spec-payload-skills.md` enmendada; sin corte ni consolidación |
+| **TD-8** | **Extendida** — `00-Resources/` → `00-resources/` + `10-templates/`; el fallback del contrato (`00-Resources`, ADR-010) no cambia | En Linux son rutas distintas (sensible a case); el instalador debe materializar el case de `INDEXER_DIR` |
+| **TD-14** | **Evidencia desactualizada** — igual que TD-6: (a) la regla de cita ya no está en el `AGENTS.md` sino en los prompts; (b) `/validate` y `/cite` intactos | Sin cambio de contrato ADR-005; TD-31 observa la regla en prompts |
+| **TD-31** | Sin cambio — sigue diferida al QA de cierre | Corre contra el formato revisado (permisos inline + global, `00-resources/`, 41 skills) |
+| **TD-33** | **Nueva y pagada** — formato revisado documentado | ADR-012 + 4 specs enmendadas + SPEC.md; re-verificar inline si el global cambia |
+
+Ninguna asciende a blocker de Phase 6.
 
 ## Deuda no aceptada (evitada por diseño)
 

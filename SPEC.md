@@ -55,10 +55,10 @@ repo                                # este repositorio (producto + plantilla)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
 │   ├── spec-*.md                   #   12 specs (motor, MCP, vault, embeddings, wizard… + 5 del payload)
-│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03
+│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03 + ADR-012 Accepted 2026-11-11
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
-    ├── 00-Resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10+ biblioteca personal
+    ├── 00-resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10-templates/ · 10+ biblioteca personal
     ├── .opencode/{agents,commands,skills}/
     ├── .tepochcalli/               # runtime RAG (D2): flow/ mcp/ db/ models/ venv/ bin/ config/
     ├── AGENTS.md  opencode.json
@@ -110,10 +110,10 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Approved (FTR Phase 3→4, 2026-10-28) | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
-| [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) | spec padre: reglas de formato V2, blueprint del AGENTS.md del vault, testing ejecutable y decisiones Phase 4 |
-| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) | Inventario definitivo 40 congeladas (2026-11-09) + tabla 9×4 + muestras del instalador; matriz 17 filas SUPERSEDED |
-| [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) | 5 bloques `permissions` V2 (forma en bloque) + nota de fusión (D-P4-2) |
-| [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) | 5 system prompts en inglés con el esqueleto de casa (≤60 líneas) |
+| [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 ([ADR-012](specs/adr/adr-012-formato-payload-revisado.md))** | spec padre: reglas de formato V2, blueprint del AGENTS.md del vault, testing ejecutable y decisiones Phase 4 |
+| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (41 skills, D-P5-1 SUPERSEDED)** | Inventario 41 con `math-typesetting-guide` (2026-11-11) + tabla 9×4 + muestras del instalador; matriz 17 filas SUPERSEDED |
+| [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (D-P4-2 SUPERSEDED)** | Bloques `permissions` V2 como diseño histórico + formato revisado (inline + global 313 reglas) |
+| [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (permisos inline)** | 5 system prompts en inglés con el esqueleto de casa (≤60 líneas) |
 | [specs/spec-payload-commands.md](specs/spec-payload-commands.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) | 9 cuerpos en inglés (≤35 líneas) + contrato de referencia español |
 
 (Plantillas: [specs/spec-template.md](specs/spec-template.md), [specs/adr/adr-template.md](specs/adr/adr-template.md).)
@@ -132,6 +132,12 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 > e2e. **La corrida D9 (methodology e2e de los 9 comandos) se difiere al QA de cierre de proyecto**
 > — se entrega el runbook `tests/phase5-methodology-runbook.md` y la deuda queda como TD-31. Phase 6
 > (aceptación E2E) queda habilitada.
+>
+> **Revisiones post-Phase 5 (2026-11-10/11, [ADR-012](specs/adr/adr-012-formato-payload-revisado.md)):**
+> 9 commits (`baf2993`..`1c4a90b`) fijan el formato canónico ongoing — `AGENTS.md` del
+> vault como guía genérica harness-agnóstica, permisos inline por agente + global 313
+> reglas (D-P4-2/D-P5-4 SUPERSEDED), `00-resources/` + `10-templates/`, 41 skills
+> (D-P5-1 SUPERSEDED). Las 4 specs del payload llevan enmienda 2026-11-11.
 
 ## Log de decisiones
 
@@ -148,6 +154,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: 3 tools en `tepochcalli-rag`, markitdown en proceso, resumen de 5 claves (D28/D31/D36/D39/D66) | Accepted 2026-11-03 |
 | [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` con `source_path` relativo al vault (D32/D41/D64/D65; rev. 2 2026-11-03) | Accepted 2026-11-03 |
 | [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Accepted 2026-11-03 |
+| [ADR-012](specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills (supersede D-P4-2/D-P5-1/D-P5-4) | Accepted 2026-11-11 |
 
 ## Referencias
 

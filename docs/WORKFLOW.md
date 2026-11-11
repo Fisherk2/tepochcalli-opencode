@@ -237,6 +237,10 @@
 * **Lo NO verificado (declarado, no verde):** corrida D9 de los 9 comandos (**D-P5-10**, diferida al
   QA de cierre con runbook entregado); GitHub Actions **nunca ha corrido** (M6); Windows/PowerShell;
   release/cargo-dist; suite `slow`.
+* **Revisiones post-Phase 5 (2026-11-10/11, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)):**
+  9 commits del dueño fijan el formato canónico ongoing (`AGENTS.md` genérico, permisos inline +
+  global 313 reglas, `00-resources/` + `10-templates/`, 41 skills). No reabren Phase 5: la corrida
+  TD-31 corre contra el formato revisado.
 * Ejecución LITERAL del blueprint Approved de Phase 4: los archivos del payload se generan del spec-payload-vault Approved, **sin reinterpretación**; divergencia descubierta en vuelo = volver a Phase 4 (enmienda al blueprint), no parche ad-hoc.
 * Objetivo: `obsidian-workspace/` listo como asset de release (mirror del modelo `template/` de codice-opencode): muestras en `00-Resources/` (md+PDF, opcionalmente docx para TD de markitdown), `.gitignore` del vault, AGENTS.md del vault con reglas MCP-first, ejecución del saneamiento del Anexo A (spec-agent-workflow), scaffold alineado a la convención de carpetas con `04-review/` y `05-outputs/` creadas (Action Item spec-vault-structure), y validación explícita del agent workflow (D9, bloque abajo). Ejecución según blueprint [specs/spec-payload-vault.md](../specs/spec-payload-vault.md).
 * Dependencias: Phase 2 (contratos) + Phase 3 (payload se instala con wizard) + Phase 4 (blueprint Approved).

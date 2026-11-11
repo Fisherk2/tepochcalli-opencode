@@ -1,6 +1,6 @@
 # Spec: Blueprint del payload del vault — agentes, comandos y AGENTS.md (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (T2/T8: línea en blanco tras cada `##` por MD022/MD032 y título sin placeholder `<vault name>` por MD033)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (T2/T8: línea en blanco tras cada `##` por MD022/MD032 y título sin placeholder `<vault name>` por MD033) · **Enmendada 2026-11-11** ([ADR-012](adr/adr-012-formato-payload-revisado.md): AGENTS.md genérico, minúsculas, 41 skills — ver §Enmienda 2026-11-11)
 * **Fase:** Phase 4 (diseño) — lienzo vivo de esta spec; gate: BLUEPRINT APPROVED por el usuario; Phase 5 ejecuta literal (sin reinterpretación)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (blueprint confirmado por el usuario 2026-10-21)
@@ -348,6 +348,20 @@ ejecutables sobre `obsidian-workspace/` tras la materialización:
 * El payload es texto versionado: rollback = `git checkout` del archivo. Tras la ejecución Phase 5,
   smoke: sesión nueva, `/rubric`, y verificar `opencode agents list` + routing real.
 * Señal de deriva: cualquier diff de `.opencode/agents/*.md` que no cite esta spec en el commit.
+
+## Enmienda 2026-11-11 — formato revisado ([ADR-012](adr/adr-012-formato-payload-revisado.md))
+
+El blueprint de arriba queda como **diseño histórico Phase 4**; el payload real
+(`baf2993`..`1c4a90b`) es el formato canónico ongoing:
+
+* **AGENTS.md del vault:** guía genérica en inglés (§1-9 + referencias),
+  harness-agnóstica — sustituye al bloque congelado de 7 secciones (§Blueprint). La regla
+  MCP-first vive ahora solo en los system prompts de los 5 agentes.
+* **Nomenclatura:** `00-resources/` (minúsculas) + scaffold `10-templates/`; `INDEXER_DIR`
+  = `00-resources`. El fallback del contrato (`00-Resources`, ADR-010 §4.1) no cambia.
+* **Skills:** 41 dirs (`math-typesetting-guide` agregada); D-P5-1 (freeze 40) SUPERSEDED.
+* **Permisos:** bloques inline + global 313 reglas; D-P4-2 SUPERSEDED (detalle en
+  [spec-payload-permissions](spec-payload-permissions.md) §Enmienda 2026-11-11).
 
 ## Open Questions
 

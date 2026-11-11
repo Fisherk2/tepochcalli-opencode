@@ -1,6 +1,6 @@
 # Spec: System prompts de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (D-P5-2: skills citadas alineadas al congelado de 40; reglas V2 re-verificadas contra el tag v2.2.6) · **Enmendada 2026-11-09 (T2)** (líneas en blanco MD022/MD032 tras los `###` de los 5 cuerpos; presupuesto ≤60 medido sin frontmatter)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (D-P5-2: skills citadas alineadas al congelado de 40; reglas V2 re-verificadas contra el tag v2.2.6) · **Enmendada 2026-11-09 (T2)** (líneas en blanco MD022/MD032 tras los `###` de los 5 cuerpos; presupuesto ≤60 medido sin frontmatter) · **Enmendada 2026-11-11** ([ADR-012](adr/adr-012-formato-payload-revisado.md): permisos inline, comentario single-source retirado)
 * **Fase:** Phase 4 (diseño) — calpulli T5; Phase 5 materializa los 5 cuerpos de forma literal
 * **Date:** 2026-11-04
 * **Author:** prompt-engineer (calpulli T5, Phase 4)
@@ -455,6 +455,15 @@ Pochteca es la desviación D9.3 ya aceptada, no una lectura nueva del UH.
 * Ninguna abierta. La única decisión pendiente del blueprint (borrado del array global
   `permissions` de `opencode.json`) pertenece a [specs/spec-payload-permissions.md](spec-payload-permissions.md)
   §Nota de fusión, no a los cuerpos.
+
+## Enmienda 2026-11-11 — permisos inline ([ADR-012](adr/adr-012-formato-payload-revisado.md))
+
+Los 5 cuerpos de arriba siguen vigentes; cambia el frontmatter: el payload real
+(`b4cc8ff`..`38f0248`) lleva el **bloque `permissions` inline verificado** en cada `.md`
+y **retiró el comentario** `# permissions -> specs/spec-payload-permissions.md (single
+source; never duplicated here)`. La columna «Permisos» de la tabla §Contrato se lee
+ahora como «bloque inline del `.md` + array global 313 reglas de `opencode.json`».
+Detalle en [spec-payload-permissions](spec-payload-permissions.md) §Enmienda 2026-11-11.
 
 ## References
 

@@ -1,6 +1,6 @@
 # Spec: Permisos de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](adr-012-formato-payload-revisado.md): bloques inline + global 313 reglas; D-P4-2 SUPERSEDED — ver §Enmienda 2026-11-11 al final)
 * **Fase:** Phase 4 (diseño) — especificación hermana de [specs/spec-payload-vault.md](spec-payload-vault.md) (D-P4-4/D-P4-11); Phase 5 ejecuta literal
 * **Date:** 2026-11-04
 * **Author:** Arquitecto (calpulli T4, Phase 4)
@@ -437,3 +437,14 @@ cruza `/`, `?` = un carácter, sin coincidencia ⇒ `ask`). 42 probes, 42/42 esp
 
 Lectura de secretos en los 5: `.env`, `sub/.env`, `.env.local`, `config/.env`, `secrets.env` →
 `deny`; `.tepochcalli/config/tepochcalli.toml` → `deny`. Sin reglas muertas.
+
+## Enmienda 2026-11-11 — formato revisado ([ADR-012](adr-012-formato-payload-revisado.md))
+
+Los bloques de arriba quedan como **diseño histórico Phase 4**: el payload real
+(`b4cc8ff`..`1ce44ca`) lleva **permisos inline verificados por agente** (edit acotado por
+bandeja, web/subagent/shell según rol — ver mensajes de commit) y **array global de 313
+reglas** anti-destructivo en `opencode.json`. **D-P4-2 SUPERSEDED**: la política efectiva
+vuelve a ser `global ++ bloque` (last-match-wins); los bloques inline se verificaron
+contra ese global. La §Nota de fusión se lee invertida: sin array no hay política
+completa; si el global cambia, re-verificar los 5 bloques. D-P4-3 intacta (sin reglas
+`<server>_<tool>` por agente).

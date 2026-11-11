@@ -1,6 +1,6 @@
 # Spec: Skills del payload — inventario definitivo y tabla de invocación
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED)
 * **Fase:** Phase 4 (diseño) — Phase 5 verifica, no ejecuta cortes
 * **Date:** 2026-11-09 (congela inventario; rev. 2026-11-04 SUPERSEDED, ver §Histórico)
 * **Author:** Arquitecto (calpulli T2b, Phase 4)
@@ -20,14 +20,19 @@ INSTALAR-GAP 0**. Phase 5 **verifica presencia (40 presentes, 0 retiros)** y no 
 ninguna matriz de recorte. La matriz de 17 filas de la rev. 2026-11-04 queda **SUPERSEDED**
 y se conserva solo como histórico colapsado (§Histórico) — **no ejecutar**.
 
+**Enmienda 2026-11-11 ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)):** el
+dueño autorizó la skill 41 (`math-typesetting-guide`, commit `1c4a90b`, invocada desde §3
+del `AGENTS.md` del payload). D-P5-1 (freeze 40) queda **SUPERSEDED**; el inventario pasa
+a **41 dirs**, objetivo <60 sigue cumplido (41 < 60).
+
 No es dueña de: los cuerpos de comandos, agentes y `AGENTS.md` del vault (spec del
 blueprint). **No se escribe nada en `obsidian-workspace/` en esta fase.**
 
 ## Inventario definitivo (2026-11-09)
 
 ```bash
-# fecha de la medición: 2026-11-09
-ls obsidian-workspace/.opencode/skills | wc -l                    # 40
+# fecha de la medición: 2026-11-09 (40); enmienda 2026-11-11: 41 con math-typesetting-guide
+ls obsidian-workspace/.opencode/skills | wc -l                    # 41
 find obsidian-workspace/.opencode/agents -name '*.md' | wc -l    # 170
 find obsidian-workspace/.opencode/commands -name '*.md' | wc -l  # 9
 ls obsidian-workspace/00-Resources | wc -l                        # 0 (muestras de instalación: ver abajo)
@@ -35,13 +40,14 @@ wc -c obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md # 13098 (cuer
 ```
 
 * **0 skills citadas e inexistentes**: toda referencia de comandos y agentes resuelve contra el `ls`.
-* **Cobertura 40/40**: las 40 están citadas o disponibles para la tabla 9×4; ninguna cae en barrido.
-* **40 nombres**, lectura directa (2026-11-09), orden alfabético:
+* **Cobertura 40/40** (2026-11-09): las 40 están citadas o disponibles para la tabla 9×4; ninguna cae en barrido.
+* **41 nombres** (2026-11-11: los 40 + `math-typesetting-guide`), orden alfabético:
 
 article-writing · brainstorming · citation-management · consciousness-council ·
 data-analysis · data-plotting · database-lookup · doc-coauthoring · experimental-design ·
 hypothesis-generation · idea-refine · image-prompt-generator · interview-me ·
-literature-review · literature-search-engine · markdown-mermaid-writing · obsidian-cli ·
+literature-review · literature-search-engine · markdown-mermaid-writing ·
+math-typesetting-guide · obsidian-cli ·
 obsidian-markdown · obsidian-vault · osint-skills · paper-2-web · pdf · peer-review ·
 planning-and-task-breakdown · posters-generator · research-grants ·
 research-search-protocol · scholar-evaluation · scientific-brainstorming ·
@@ -53,7 +59,7 @@ toon · websearch-engine · what-if-oracle · writing-skills
 
 | Cubo | Dirs | Qué son |
 | --- | --- | --- |
-| CONSERVAR (definitivo) | 40 | las 40 del inventario; sin recorte, sin fusión, sin instalación |
+| CONSERVAR (definitivo) | 40 (+1 enmienda 2026-11-11: `math-typesetting-guide` ⇒ 41) | las del inventario; sin recorte, sin fusión, sin instalación |
 | RETIRAR | 0 | congelado: ningún retiro en Phase 5 |
 | CONSOLIDAR | 0 | congelado: ninguna fusión en Phase 5 |
 | INSTALAR-GAP | 0 | v1 no instala ninguna skill nueva |
@@ -102,11 +108,13 @@ de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
 
 ## Cobertura y objetivo <60
 
-Cobertura del inventario: **40/40** (toda skill del `ls` está conservada; 0 huérfanas fuera
-de tabla porque el congelado no exige cita exhaustiva).
+Cobertura del inventario: **40/40** (2026-11-09; toda skill del `ls` está conservada;
+0 huérfanas fuera de tabla porque el congelado no exige cita exhaustiva).
 
 El objetivo de menos de 60 skills del payload base (métrica heredada de
-[docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 40 < 60**.
+[docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 41 < 60**
+(40 al congelado 2026-11-09 + `math-typesetting-guide` por enmienda 2026-11-11,
+[ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)).
 **No se ejecuta ningún corte ni consolidación en Phase 5** — el inventario ya está por
 debajo del umbral por decisión del dueño (2026-11-09).
 
@@ -144,7 +152,8 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 ## Open Questions
 
 * Ninguna abierta. El congelado de 40 y las muestras (sin cambio) quedan como están por
-  decisión del dueño (2026-11-09); la matriz histórica queda SUPERSEDED.
+  decisión del dueño (2026-11-09); la matriz histórica queda SUPERSEDED. Enmienda
+  2026-11-11: inventario en 41 (`math-typesetting-guide`, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)).
 
 ## References
 
