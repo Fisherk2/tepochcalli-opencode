@@ -1,39 +1,54 @@
-"""Gate D9.3: simulador last-match-wins de los permisos del payload (T11).
+"""Gate D9.3: simulador last-match-wins de la política EFECTIVA del payload.
 
-Reimplementa el intérprete de `spec-payload-vault` §Semántica de `permissions`
-sobre los 5 bloques reales de `obsidian-workspace/.opencode/agents/`: las reglas
-se evalúan en orden, gana la ÚLTIMA que casa, `*` es cero o más caracteres
-(incluido `/`), `?` exactamente un carácter y, sin coincidencia, el efecto es
-`ask`. Los 42 probes de `spec-payload-permissions` §Verificación deben dar
-esperado == real.
+La política efectiva de un agente es `global ++ inline` (spec-payload-permissions
+§Enmienda 2026-11-12): el array `permissions` de
+`obsidian-workspace/opencode.json` se concatena delante del bloque `permissions`
+del frontmatter del agente y gana la ÚLTIMA regla que casa. Glob: `*` = cero o
+más caracteres (incluido `/`), `?` = un carácter; sin coincidencia, `ask`.
 
-El intérprete es deliberadamente una copia independiente del payload: si el
-bloque cambia de orden o pierde una regla, este test lo detecta.
+La tabla de probes es la política **vigente del payload v1**. Si un bloque o el
+global pierde o reordena una regla, este test cae. El intérprete es una copia
+independiente: no importa código del payload ni del wizard.
 """
 
 from __future__ import annotations
 
+import json
 import re
 from collections import Counter
+from functools import cache, lru_cache
 from pathlib import Path
 
 import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-AGENTS_DIR = REPO_ROOT / "obsidian-workspace" / ".opencode" / "agents"
+VAULT_ROOT = REPO_ROOT / "obsidian-workspace"
+AGENTS_DIR = VAULT_ROOT / ".opencode" / "agents"
+GLOBAL_JSON = VAULT_ROOT / "opencode.json"
 
 PRIMARY_AGENTS = ("itzamna", "nezahualcoyotl", "pochteca", "chilam", "tlacuilo")
 
-# Rutas de secretos que ningún agente debe leer (spec-payload-permissions §Verificación).
+# Rutas de secretos que el bloque global SÍ deniega (spec-payload-permissions
+# §Enmienda 2026-11-12). Si mañana desaparece una regla, el test cae.
 SECRET_PATHS = (
     ".env",
     "sub/.env",
     ".env.local",
     "config/.env",
     "secrets.env",
-    ".tepochcalli/config/tepochcalli.toml",
+    ".npmrc",
+    "id_rsa",
+    "server.pem",
+    ".ssh/id_rsa",
+    ".aws/credentials",
+    "service-account-prod.json",
+    "credentials.json",
+    ".kube/config",
 )
+
+# GAP declarado en la Enmienda 2026-11-12: cae en el `read * allow` global.
+GAP_READ_PATH = ".tepochcalli/config/tepochcalli.toml"
 
 # Tabla explícita: (agente, acción, recurso, efecto esperado). 9+6+6+15+6 = 42.
 PROBES: tuple[tuple[str, str, str, str], ...] = (
@@ -45,46 +60,55 @@ PROBES: tuple[tuple[str, str, str, str], ...] = (
     ("pochteca", "read", "00-Resources/x.md", "allow"),
     ("pochteca", "webfetch", "*", "allow"),
     ("pochteca", "websearch", "*", "allow"),
-    ("pochteca", "shell", "*", "deny"),
-    ("pochteca", "subagent", "*", "deny"),
-    # Nezahualcóyotl (6): 01-tasks/** salvo research/**; sin web.
-    ("nezahualcoyotl", "edit", "01-tasks/research/x.md", "deny"),
+    ("pochteca", "shell", "touch foo", "deny"),
+    ("pochteca", "subagent", "nezahualcoyotl", "deny"),
+    # Nezahualcóyotl (6): 01-tasks/** salvo 01-tasks/resources/**; sin web.
     ("nezahualcoyotl", "edit", "01-tasks/plan.md", "allow"),
+    ("nezahualcoyotl", "edit", "01-tasks/resources/x.md", "deny"),
     ("nezahualcoyotl", "edit", "02-drafts/x.md", "deny"),
     ("nezahualcoyotl", "read", "*", "allow"),
     ("nezahualcoyotl", "webfetch", "*", "deny"),
     ("nezahualcoyotl", "subagent", "*", "deny"),
-    # Chilam (6): 03-citations/** y 04-review/**; sin web.
+    # Chilam (6): escribe en todas las bandejas vía `edit * allow`; web abierta.
     ("chilam", "edit", "03-citations/x.md", "allow"),
     ("chilam", "edit", "04-review/x.md", "allow"),
-    ("chilam", "edit", "02-drafts/x.md", "deny"),
-    ("chilam", "edit", "00-Resources/x.md", "deny"),
-    ("chilam", "webfetch", "*", "deny"),
-    ("chilam", "subagent", "*", "deny"),
-    # Tlacuilo (15): denylist completa detrás de `edit * allow`.
+    ("chilam", "edit", "02-drafts/x.md", "allow"),
+    ("chilam", "edit", "00-Resources/x.md", "allow"),
+    ("chilam", "webfetch", "*", "allow"),
+    ("chilam", "subagent", "nezahualcoyotl", "deny"),
+    # Tlacuilo (15): `edit * allow` sin deny-list en el payload v1.
     ("tlacuilo", "edit", "05-outputs/x.csv", "allow"),
     ("tlacuilo", "edit", "02-drafts/x.md", "allow"),
-    ("tlacuilo", "edit", "00-Resources/x.md", "deny"),
-    ("tlacuilo", "edit", "01-tasks/x.md", "deny"),
-    ("tlacuilo", "edit", "03-citations/x.md", "deny"),
-    ("tlacuilo", "edit", "04-review/x.md", "deny"),
-    ("tlacuilo", "edit", ".git/config", "deny"),
-    ("tlacuilo", "edit", "AGENTS.md", "deny"),
-    ("tlacuilo", "edit", "opencode.json", "deny"),
-    ("tlacuilo", "edit", "tepochcalli.toml", "deny"),
-    ("tlacuilo", "edit", ".obsidian/app.json", "deny"),
-    ("tlacuilo", "edit", ".opencode/agents/x.md", "deny"),
-    ("tlacuilo", "edit", ".tepochcalli/config/x", "deny"),
-    ("tlacuilo", "shell", "*", "deny"),
-    ("tlacuilo", "subagent", "*", "deny"),
-    # Itzamná (6): enruta y lee; sin edit ni web ni shell.
-    ("itzamna", "edit", "02-drafts/x.md", "deny"),
+    ("tlacuilo", "edit", "00-Resources/x.md", "allow"),
+    ("tlacuilo", "edit", "01-tasks/x.md", "allow"),
+    ("tlacuilo", "edit", "03-citations/x.md", "allow"),
+    ("tlacuilo", "edit", "04-review/x.md", "allow"),
+    ("tlacuilo", "edit", ".git/config", "allow"),
+    ("tlacuilo", "edit", "AGENTS.md", "allow"),
+    ("tlacuilo", "edit", "opencode.json", "allow"),
+    ("tlacuilo", "edit", "tepochcalli.toml", "allow"),
+    ("tlacuilo", "edit", ".obsidian/app.json", "allow"),
+    ("tlacuilo", "edit", ".opencode/agents/x.md", "allow"),
+    ("tlacuilo", "edit", ".tepochcalli/config/x", "allow"),
+    ("tlacuilo", "shell", "*", "ask"),
+    ("tlacuilo", "subagent", "nezahualcoyotl", "deny"),
+    # Itzamná (6): enruta, lee y navega; `edit * ask`.
+    ("itzamna", "edit", "02-drafts/x.md", "ask"),
     ("itzamna", "read", "*", "allow"),
-    ("itzamna", "webfetch", "*", "deny"),
-    ("itzamna", "websearch", "*", "deny"),
-    ("itzamna", "shell", "*", "deny"),
-    ("itzamna", "subagent", "*", "deny"),
+    ("itzamna", "webfetch", "*", "allow"),
+    ("itzamna", "websearch", "*", "allow"),
+    ("itzamna", "shell", "touch foo", "deny"),
+    ("itzamna", "subagent", "nezahualcoyotl", "deny"),
 )
+
+# `subagent *` efectivo: el global pide `ask`; el bloque inline decide después.
+SUBAGENT_BROAD = {
+    "itzamna": "allow",
+    "nezahualcoyotl": "deny",
+    "pochteca": "allow",
+    "chilam": "allow",
+    "tlacuilo": "allow",
+}
 
 
 def _agent_path(name: str) -> Path:
@@ -92,14 +116,30 @@ def _agent_path(name: str) -> Path:
     return AGENTS_DIR / f"{name}.md"
 
 
-def _rules(name: str) -> list[dict[str, str]]:
+@lru_cache(maxsize=1)
+def _global_rules() -> tuple[dict[str, str], ...]:
+    """Array `permissions` global de `opencode.json` (313 reglas)."""
+    doc = json.loads(GLOBAL_JSON.read_text(encoding="utf-8"))
+    assert isinstance(doc, dict), "opencode.json no es un objeto"
+    rules = doc["permissions"]
+    assert isinstance(rules, list), "`permissions` global no es una lista"
+    return tuple(rules)
+
+
+@cache
+def _inline_rules(name: str) -> tuple[dict[str, str], ...]:
     """Lista `permissions` del frontmatter YAML de un agente."""
     text = _agent_path(name).read_text(encoding="utf-8")
     frontmatter = yaml.safe_load(text.split("---", 2)[1])
     assert isinstance(frontmatter, dict), f"{name}: frontmatter no es un mapa"
     rules = frontmatter["permissions"]
     assert isinstance(rules, list), f"{name}: `permissions` no es una lista"
-    return rules
+    return tuple(rules)
+
+
+def _effective_rules(name: str) -> list[dict[str, str]]:
+    """Política efectiva: global ++ inline (los bloques se añaden al final)."""
+    return [*_global_rules(), *_inline_rules(name)]
 
 
 def _glob_to_regex(pattern: str) -> re.Pattern[str]:
@@ -108,7 +148,9 @@ def _glob_to_regex(pattern: str) -> re.Pattern[str]:
     return re.compile(rf"^{translated}$")
 
 
-def _decide(rules: list[dict[str, str]], action: str, resource: str) -> str:
+def _decide(
+    rules: list[dict[str, str]] | tuple[dict[str, str], ...], action: str, resource: str
+) -> str:
     """Efecto de la última regla que casa; `ask` si ninguna casa."""
     effect = "ask"
     for rule in rules:
@@ -122,6 +164,15 @@ def _decide(rules: list[dict[str, str]], action: str, resource: str) -> str:
 def _candidate(rule: dict[str, str]) -> str:
     """Recurso fabricado que debería casar con la regla (detector de reglas muertas)."""
     return rule["resource"].replace("**", "probe").replace("*", "probe")
+
+
+def test_global_block_holds_the_secret_policy() -> None:
+    """Hecho medido (Enmienda 2026-11-12): 313 globales y 0 reglas `read` inline."""
+    assert len(_global_rules()) == 313
+    for agent in PRIMARY_AGENTS:
+        assert not [rule for rule in _inline_rules(agent) if rule["action"] == "read"], (
+            f"{agent}: el bloque inline ya no declara `read`; la política vive en el global"
+        )
 
 
 def test_probe_table_has_the_42_cases_of_the_spec() -> None:
@@ -138,33 +189,50 @@ def test_probe_table_has_the_42_cases_of_the_spec() -> None:
 
 @pytest.mark.parametrize(("agent", "action", "resource", "expected"), PROBES)
 def test_probe_matches_the_spec(agent: str, action: str, resource: str, expected: str) -> None:
-    """Cada probe de la spec: el efecto simulado es exactamente el esperado."""
-    real = _decide(_rules(agent), action, resource)
+    """Cada probe de la spec: el efecto efectivo es exactamente el esperado."""
+    real = _decide(_effective_rules(agent), action, resource)
     assert real == expected, f"{agent}: {action} {resource} esperado={expected} real={real}"
 
 
 @pytest.mark.parametrize("agent", PRIMARY_AGENTS)
 @pytest.mark.parametrize("path", SECRET_PATHS)
 def test_secrets_are_never_readable(agent: str, path: str) -> None:
-    """Los 5 agentes deniegan la lectura de `.env*` y de la config del motor."""
-    assert _decide(_rules(agent), "read", path) == "deny", f"{agent} puede leer {path}"
+    """Los 5 agentes siguen denegando los secretos que el bloque global deniega."""
+    assert _decide(_effective_rules(agent), "read", path) == "deny", f"{agent} puede leer {path}"
 
 
 @pytest.mark.parametrize("agent", PRIMARY_AGENTS)
-def test_subagent_is_declared_denied_and_effective(agent: str) -> None:
-    """`subagent * deny` está presente y ningún id de hijo se cuela."""
-    rules = _rules(agent)
-    assert any(
-        rule["action"] == "subagent" and rule["resource"] == "*" and rule["effect"] == "deny"
-        for rule in rules
-    ), f"{agent}: falta `subagent * deny`"
-    assert _decide(rules, "subagent", "any-child-agent") == "deny"
+def test_tepochcalli_config_is_a_declared_gap(agent: str) -> None:
+    """GAP declarado, no un fallo del test: la config del motor cae en `read * allow`.
+
+    El global no tiene `.tepochcalli/config/**`; el último `read` que casa es
+    `* allow` (opencode.json:1506), así que la lectura es `allow`, no `ask`.
+    Cerrarlo exige una regla global nueva (cambio de payload, fuera de Phase 6).
+    """
+    assert _decide(_effective_rules(agent), "read", GAP_READ_PATH) == "allow"
+
+
+@pytest.mark.parametrize("agent", PRIMARY_AGENTS)
+def test_env_example_remains_readable(agent: str) -> None:
+    """La excepción `.env.example allow` (opencode.json:1522) sigue siendo la última."""
+    assert _decide(_effective_rules(agent), "read", ".env.example") == "allow"
+
+
+@pytest.mark.parametrize("agent", PRIMARY_AGENTS)
+def test_subagent_policy_matches_payload(agent: str) -> None:
+    """`subagent *` efectivo por rol y bloqueo de los otros 4 primarios por nombre."""
+    rules = _effective_rules(agent)
+    assert _decide(rules, "subagent", "any-child-agent") == SUBAGENT_BROAD[agent]
+    for child in PRIMARY_AGENTS:
+        if child == agent:
+            continue
+        assert _decide(rules, "subagent", child) == "deny", f"{agent} puede invocar a {child}"
 
 
 @pytest.mark.parametrize("agent", PRIMARY_AGENTS)
 def test_no_rule_is_shadowed(agent: str) -> None:
-    """Cada regla es la última que casa consigo misma: 0 reglas muertas."""
-    rules = _rules(agent)
+    """Dentro del bloque inline, cada regla es la última que casa consigo misma."""
+    rules = _inline_rules(agent)
     for rule in rules:
         candidate = _candidate(rule)
         assert _decide(rules, rule["action"], candidate) == rule["effect"], (

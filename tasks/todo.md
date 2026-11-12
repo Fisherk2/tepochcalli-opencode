@@ -316,6 +316,7 @@
 | TD-31 · corrida D9 (D-P5-10) | `docs/TECH_DEBT.md` | T14, T15 | Cerrada con evidencia, o **NO EJECUTADO** declarado |
 | M6 · CI y release | `docs/TECH_DEBT.md` | — | **Sigue abierta** (fuera de alcance, D-P6-4) |
 | TD-32 · `installer.rs` / `int_phase_f8_mcp_merge.rs` | `docs/TECH_DEBT.md` | — | **Sigue abierta** (fuera de alcance, D-P6-4) |
+| Alineación spec↔payload de permisos (hallazgo de T1) | `specs/spec-payload-permissions.md` | T1-bis | Enmendada 2026-11-12 (la política de secretos vive en el global); **856 passed / 0 failed**; GAP declarado: `.tepochcalli/config/**` = `allow` |
 | P-02 · baseline de escala NTFS vs btrfs | `docs/TECH_DEBT.md` §Review 5-ejes | T5 | Convertido en límite documentado |
 | Deriva FTS ES/EN | `docs/TECH_DEBT.md` §Review 5-ejes | T4 | Medida y decidida |
 | Criterios 1-7 de `docs/UH.md` | `docs/WORKFLOW.md` §6.3 | T4-T9 | Con cifra y origen |

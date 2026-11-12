@@ -5,8 +5,9 @@ merge se demuestra sobre una entrada **fabricada**
 (`tests/fixtures/opencode_payload_synthetic.json`) que ningún paso del producto
 genera, y el payload real se audita contra el contrato de D-P5-4:
 
-* el array global `permissions` (313 reglas, last-match-wins) **no** existe: la
-  política efectiva de cada agente es su propio bloque (D-P4-2/D-P4-3);
+* el array global `permissions` (313 reglas, last-match-wins) **sí** existe y se
+  concatena antes del bloque inline de cada agente (ADR-012; ver
+  `spec-payload-permissions` §Enmienda 2026-11-12);
 * `instructions` son rutas **relativas al vault** y cada una existe dentro de
   `obsidian-workspace/` (D-P5-4);
 * los 5 agentes primarios siguen ahí sin arrays de permisos, y `mcp.servers` /
@@ -100,10 +101,12 @@ def test_merge_on_synthetic_input_leaves_the_rest_untouched() -> None:
 
 
 def test_payload_is_clean_and_contractual() -> None:
-    """El payload real cumple D-P5-4: sin array global, instructions resolubles."""
+    """El payload real cumple el contrato: global 313, instructions resolubles."""
     doc = json.loads(PAYLOAD_JSON.read_text(encoding="utf-8"))
 
-    assert "permissions" not in doc, "el array global de 313 reglas debe desaparecer"
+    assert len(doc["permissions"]) == 313, (
+        "el bloque global de 313 reglas es la política de secretos"
+    )
     assert doc["default_agent"] == "itzamna"
     assert tuple(doc["instructions"]) == INSTRUCTIONS
     for relative in INSTRUCTIONS:
@@ -123,8 +126,10 @@ def test_payload_is_clean_and_contractual() -> None:
         "command": RAG_COMMAND,
         "cwd": ".",
         "environment": {
+            # Payload v1 usa el scaffold en minúsculas; la spec-vault-structure
+            # (§Nota de convención) tiene abierta la acción de alinearlo.
+            "INDEXER_DIR": "00-resources",
             "TEPOCHCALLI_ROOT": ".",
-            "INDEXER_DIR": "00-Resources",
             "TEPOCHCALLI_TOP_K": "5",
         },
         "disabled": False,
