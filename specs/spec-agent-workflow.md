@@ -125,6 +125,14 @@ Los cambios a `/research`, `/validate`, `/cite`, al frontmatter de evidencia y a
 
 No se adoptan: retry/backoff (vive en el motor y la taxonomía `E_*` del MCP) ni `EVALUATION.md` (evaluación de relevancia = TD-15 en el repo del producto). Los cuerpos congelados de los 9 comandos viven en [specs/spec-payload-commands.md](spec-payload-commands.md), los de los 5 agentes en [specs/spec-payload-agents.md](spec-payload-agents.md) y la redacción del AGENTS.md en [specs/spec-payload-vault.md](spec-payload-vault.md); aquí solo se documenta el contrato.
 
+### Enmienda 2026-11-12 — formato canónico ongoing (12 commits `2072121..c815eb0`)
+
+Chilam pasa de solo-auditar a auditar-y-corregir sin bandejas propias (coherente con
+`/review` revA→B); `tepochcalli-mcp` generaliza `INDEXER_DIR` y retira el fallback
+`anydoc`; `database-lookup/` borrada del payload (cero refs por `grep`, rol cubierto
+por `osint-skills`+`literature-search-engine`+`websearch-engine`). Sin cambio de
+contratos MCP (ADR-005 intacto) ni de D9.2/D9.3; TD-31 corre contra este formato.
+
 ## Alternatives Considered
 
 * **Un solo agente general sin roles:** *rechazado:* pierde el control de escritura/web que protege la trazabilidad del método.

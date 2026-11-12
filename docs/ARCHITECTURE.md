@@ -127,7 +127,7 @@ sequenceDiagram
 | **Suite Phase 3.5 (T1–T16):** **670 passed + 3 `slow`**, cobertura **97 %** (gate 95 %); contract tests e2e de las 7 tools, negativos de B′, multi-raíz y documentos; `bench_delta.py` re-medido (Δ texto p95 **4 299 ms**, n=20 nearest-rank) | Verificación | repo `tests/` | WORKFLOW §Phase 3.5 |
 | **CI Phase 1:** `phase1.yml` (ruff → suite → smoke Δ) | Verificación | `.github/workflows/phase1.yml` — **solo verificación local; nunca corrió en GitHub Actions (M6)** | T11, WORKFLOW §Phase 1 |
 | Wizard TUI Rust + cargo-dist | Distribución | repo `crates/` (Phase 3) + Releases | ADR-003, spec-installer-wizard |
-| **Payload materializado (Phase 5, 2026-11-09; formato revisado 2026-11-11):** 15 artefactos de texto (5 agentes con permisos inline + 9 comandos + `AGENTS.md` genérico del vault) + 41 skills + global 313 reglas + scaffold `00-resources/`/`10-templates/`; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
+| **Payload materializado (Phase 5, 2026-11-09; formato revisado 2026-11-11; canónico 2026-11-12):** 15 artefactos de texto (5 agentes con permisos inline + 9 comandos + `AGENTS.md` genérico del vault) + 40 skills (`database-lookup/` retirada `c815eb0`; `ls` 2026-11-12 = 40 dirs) + global 313 reglas + scaffold `00-resources/`/`10-templates/`; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
 
 ## Engine components (hexagonal view)
 

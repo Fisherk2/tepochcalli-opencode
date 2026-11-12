@@ -461,6 +461,14 @@ default APA).
 
 ## Open Questions
 
+* **Enmienda 2026-11-12 (formato canónico ongoing, 12 commits `2072121..c815eb0`):**
+  sin reescritura — peculiaridades que entraron y esta spec registra: Pre-Flight en los
+  9 cuerpos; cadena revA→B con techo revAA (`review`/`update`, resto byte-idéntico);
+  `transform` dispatcher EN de 7 ramas (A-G) hacia `05-outputs/` con deny-list explícita
+  de lo no cubierto; `update` quirúrgico de un solo scope que prohíbe re-planificar el
+  outline; deny-lists (`database-lookup` retirada: cero refs, rol cubierto por
+  `osint-skills`+`literature-search-engine`+`websearch-engine`; `anydoc` retirado de
+  `tepochcalli-mcp`). Los cuerpos del payload mandan; divergencia = enmienda fechada.
 * `/cite` declara `style` en su frontmatter de salida: ¿el estilo se repite en cada entrada o solo
   en la cabecera de la bibliografía? (decisión de Phase 5; no altera el gate).
 * Los cuerpos ingleses conservan las claves de frontmatter en español por contrato de datos: ¿se

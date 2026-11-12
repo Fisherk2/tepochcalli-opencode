@@ -111,7 +111,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
 | [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 ([ADR-012](specs/adr/adr-012-formato-payload-revisado.md))** | spec padre: reglas de formato V2, blueprint del AGENTS.md del vault, testing ejecutable y decisiones Phase 4 |
-| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (41 skills, D-P5-1 SUPERSEDED)** | Inventario 41 con `math-typesetting-guide` (2026-11-11) + tabla 9×4 + muestras del instalador; matriz 17 filas SUPERSEDED |
+| [specs/spec-payload-skills.md](specs/spec-payload-skills.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (41 skills, D-P5-1 SUPERSEDED)** · 40 desde 2026-11-12 (retiro `database-lookup/`, ver [docs/TECH_DEBT.md](docs/TECH_DEBT.md) TD-7) | Inventario 40 (`database-lookup/` retirada 2026-11-12) + tabla 9×4 + muestras del instalador; matriz 17 filas SUPERSEDED |
 | [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (D-P4-2 SUPERSEDED)** | Bloques `permissions` V2 como diseño histórico + formato revisado (inline + global 313 reglas) |
 | [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 (permisos inline)** | 5 system prompts en inglés con el esqueleto de casa (≤60 líneas) |
 | [specs/spec-payload-commands.md](specs/spec-payload-commands.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) | 9 cuerpos en inglés (≤35 líneas) + contrato de referencia español |
@@ -138,6 +138,15 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 > vault como guía genérica harness-agnóstica, permisos inline por agente + global 313
 > reglas (D-P4-2/D-P5-4 SUPERSEDED), `00-resources/` + `10-templates/`, 41 skills
 > (D-P5-1 SUPERSEDED). Las 4 specs del payload llevan enmienda 2026-11-11.
+>
+> **Formato canónico ongoing (2026-11-12, 12 commits `2072121..c815eb0`):** 9 comandos
+> endurecidos (rubric fases 0-2; research Pre-Flight+multi-fuente; validate 4 fases;
+> synthesize Pre-Flight+outline; cite Rn+gate EN; draft 3 insumos; review revA→B;
+> transform A-G EN; update quirúrgico), `chilam.md` sin bandejas propias,
+> `tepochcalli-mcp` con `INDEXER_DIR` genérico (retira `anydoc`), `database-lookup/`
+> borrada (83 ficheros, cero refs; 40 skills). **PHASE 5 COMPLETADA 2026-11-12** con la
+> salvedad D-P5-10 intacta (TD-31 diferida); **PHASE 6 (aceptación E2E) LISTA para
+> planificarse** (runbook `tests/phase5-methodology-runbook.md`).
 
 ## Log de decisiones
 
