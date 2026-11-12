@@ -51,17 +51,18 @@
 - Deps: — · Verificación: cada afirmación lleva su comando · **revisión del dueño (CP-0)**
 - **Hecho (2026-11-12):** `docs/diagnosis/phase6-protocol.md` (193 líneas, §1-§8) + `docs/TRD.md` §6.1/§6.2 (umbrales recall@5 = 1.0 y deriva FTS > 10 % relativo, `md-lint` 0). Cero mediciones.
 
-### [ ] T1 — Corpus de escala reutilizable con manifiesto
+### [x] T1 — Corpus de escala reutilizable con manifiesto
 
 - Subagente: `performance-benchmarker` · Skills: `performance-analysis`, `bash-defensive-patterns`, `test-driven-development`, `design-patterns` · Tools: —
-- [ ] Corpus de **10 000 md** (10 subdirs) + **1 000 PDF** de 1 página válidos, determinista, en `--dir` (btrfs)
-- [ ] `corpus-manifest.json`: por fichero → ruta relativa, sha256, bytes, tipo + seed + versión del generador + totales
-- [ ] **Reproducibilidad**: dos materializaciones → manifiesto **idéntico** (hash del árbol, no comparación de carpetas)
-- [ ] Reutilizable sin reindexar: el manifiesto verificado salta la materialización
-- [ ] `obsidian-workspace/.tepochcalli/{db,models}` **nunca** tocados (verificado al terminar)
-- [ ] Tamaño en disco y **tiempo de materialización** publicados
-- [ ] Sigue fuera del gate de `just ci` (no es `test_*`)
+- [x] Corpus de **10 000 md** (10 subdirs) + **1 000 PDF** de 1 página válidos, determinista, en `--dir` (btrfs)
+- [x] `corpus-manifest.json`: por fichero → ruta relativa, sha256, bytes, tipo + seed + versión del generador + totales
+- [x] **Reproducibilidad**: dos materializaciones → manifiesto **idéntico** (hash del árbol, no comparación de carpetas)
+- [x] Reutilizable sin reindexar: el manifiesto verificado salta la materialización
+- [x] `obsidian-workspace/.tepochcalli/{db,models}` **nunca** tocados (verificado al terminar)
+- [x] Tamaño en disco y **tiempo de materialización** publicados
+- [x] Sigue fuera del gate de `just ci` (no es `test_*`)
 - Deps: T0 · Verificación: `sha256sum` del árbol == manifiesto · `just ci` verde
+- **Hecho (2026-11-12):** `tests/support/corpus.py` + manifiesto canónico; 3 materializaciones con `tree_sha256 27a20c05…3ecd2` idéntico y 11 000 hashes iguales al generador de `HEAD`; **2 677 ms** / **45 M** / 11 001 ficheros en `/tmp/opencode/phase6-corpus` (btrfs); reutilización verificada (`reused: true`, `mtime_ns` intactos). Informe: `docs/diagnosis/phase6-corpus.md`.
 
 ### [ ] T2 — Coste real de un PDF de 30 páginas con markitdown (TD-2)
 

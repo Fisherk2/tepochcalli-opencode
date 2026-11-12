@@ -35,7 +35,9 @@ Qué NO es
 
 Garantías de idempotencia: igual que `bench_delta.py` — vault temporal
 borrado al final (salvo `--keep`), `obsidian-workspace/.tepochcalli/{db,models}`
-del payload NUNCA tocado (verificado al terminar).
+del payload NUNCA tocado (verificado al terminar). El corpus y su manifiesto
+`corpus-manifest.json` los materializa `tests/support/corpus.py` (Phase 6 T1):
+un solo generador para el bench, el CLI y los tests del manifiesto.
 """
 
 from __future__ import annotations
@@ -56,12 +58,20 @@ from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "support"))
 
+from corpus import (  # noqa: E402
+    DEFAULT_MD_FILES,
+    DEFAULT_PDF_FILES,
+    DEFAULT_SEED,
+    corpus_text,
+    materialize,
+)
 from model_cache import link_model_cache, offline_env, resolve_model_cache  # noqa: E402
 
-SEED = 20261103
-N_MD_FILES = 10_000
-N_PDF_FILES = 1_000
+SEED = DEFAULT_SEED
+N_MD_FILES = DEFAULT_MD_FILES
+N_PDF_FILES = DEFAULT_PDF_FILES
 N_RUNS = 20
 MODIFIED_PER_RUN = 10
 BUDGET_MS = 30_000
@@ -73,99 +83,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 PAYLOAD_DB = REPO_ROOT / "obsidian-workspace" / ".tepochcalli" / "db"
 PAYLOAD_MODELS = REPO_ROOT / "obsidian-workspace" / ".tepochcalli" / "models"
 
-WORDS = (
-    "notas citas offsets índice lancedb cocoindex chunking vault obsidian "
-    "recursos agente flujo delta refresh incremental heading párrafo "
-    "documento texto fuente confianza percentil latencia presupuesto parser "
-    "tablas unicode identidad fila tabla índice ann fts benchmark escala "
-).split()
-
-PDF_WORDS = (
-    "brisa orfandad oficina temblor rincon laurel noria aldeas comercio "
-    "tablas escala nota credito inviernos nieblas arboles cortijo "
-).split()
-"""Vocab ASCII del cuerpo del PDF: Helvetica + `Tj` sin escaping ni encoding raro."""
-
-
-def _corpus_text(i: int, rng: random.Random) -> str:
-    """Cuerpo determinista y PEQUEÑO (~0,5-1,2 KB ⇒ 1 chunk con el split 1536/192)."""
-    target = rng.randint(500, 1_100)
-    title = f"Nota {i:05d}"
-    lines = [f"# {title}", ""]
-    size = len(title) + 4
-    while size < target:
-        body = " ".join(rng.choice(WORDS) for _ in range(rng.randint(30, 60)))
-        body = body[0].upper() + body[1:] + "."
-        lines.append(body)
-        lines.append("")
-        size += len(body) + 4
-    return "\n".join(lines)
-
-
-def _minimal_pdf(title: str, body_lines: list[str]) -> bytes:
-    """PDF 1 página VÁLIDO (xref correcto, offsets computados) — no dummy vacío.
-
-    Sin dependencias nuevas: los objetos mínimos de PDF-1.4 que un extractor
-    real (pdfminer vía markitdown) parsea con texto extraíble en `contents`.
-    El vocabulario usa solo ASCII sin `(`/`)` ⇒ no hay escaping en `Tj`.
-    """
-    content = b"BT\n/F1 12 Tf\n72 720 Td\n"
-    content += b"".join(f"({line}) Tj\n0 -14 Td\n".encode("ascii") for line in body_lines)
-    content += b"ET"
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        (
-            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-            b"/Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>"
-        ),
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length %d >>\nstream\n" % len(content) + content + b"\nendstream",
-    ]
-    out = bytearray(b"%PDF-1.4\n")
-    offsets = []
-    for i, obj in enumerate(objects, 1):
-        offsets.append(len(out))
-        out += b"%d 0 obj\n" % i + obj + b"\nendobj\n"
-    xref_pos = len(out)
-    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
-    for off in offsets:
-        out += b"%010d 00000 n \n" % off
-    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (
-        len(objects) + 1,
-        xref_pos,
-    )
-    return bytes(out)
-
-
-def _seed_corpus(vault: Path) -> tuple[list[Path], list[Path]]:
-    """Escribe 10k md (10 subdirs × 1k) + 1k PDFs (1 subdir); deterministic."""
-    rng = random.Random(SEED)
-    resources = vault / "00-Resources"
-    md_paths: list[Path] = []
-    for block in range(10):
-        sub = resources / f"notas-{block:02d}"
-        sub.mkdir(parents=True, exist_ok=True)
-        for j in range(1_000):
-            i = block * 1_000 + j
-            path = sub / f"nota-{i:05d}.md"
-            path.write_text(_corpus_text(i, rng), encoding="utf-8")
-            md_paths.append(path)
-    pdfs = resources / "pdfs"
-    pdfs.mkdir(parents=True, exist_ok=True)
-    pdf_paths: list[Path] = []
-    for i in range(1_000):
-        rng_pdf = random.Random(SEED + i)
-        title = f"Informe PDF {i:05d}"
-        lines = [
-            title,
-            *[rng_pdf.choice(PDF_WORDS).capitalize() for _ in range(5)],
-        ]
-        path = pdfs / f"informe-{i:05d}.pdf"
-        path.write_bytes(_minimal_pdf(title, lines))
-        pdf_paths.append(path)
-    return md_paths, pdf_paths
-
 
 def _driver(vault: Path) -> None:
     """Corre en el subproceso: inicial + walk-only + 20 Δ, emite JSON por línea."""
@@ -174,8 +91,12 @@ def _driver(vault: Path) -> None:
     from tepochcalli_flow import app as flow_app
     from tepochcalli_flow import source
 
-    md_paths, pdf_paths = _seed_corpus(vault)
-    assert len(md_paths) == N_MD_FILES and len(pdf_paths) == N_PDF_FILES
+    # El corpus y su manifiesto los materializa `tests/support/corpus.py` (T1).
+    # Las reescrituras Δ de abajo invalidan el manifiesto A PROPÓSITO, y el
+    # vault temporal se borra al terminar (salvo `--keep`).
+    manifest = materialize(vault, md_count=N_MD_FILES, pdf_count=N_PDF_FILES, seed=SEED)
+    md_paths = [vault / entry.path for entry in manifest.files if entry.kind == "md"]
+    assert len(md_paths) == N_MD_FILES, len(md_paths)
 
     def _emit(obj: dict[str, Any]) -> None:
         print(json.dumps(obj), flush=True)
@@ -212,7 +133,7 @@ def _driver(vault: Path) -> None:
         for k in range(MODIFIED_PER_RUN):
             path = md_paths[(run * 97 + k * 13) % N_MD_FILES]
             path.write_text(
-                _corpus_text(k, random.Random(SEED + run * 1000 + k))
+                corpus_text(k, random.Random(SEED + run * 1000 + k))
                 + f"\n\nCorrida {run}: reescritura determinista del fichero {path.name}.\n",
                 encoding="utf-8",
             )

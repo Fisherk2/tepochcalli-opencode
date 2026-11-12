@@ -102,6 +102,7 @@ testpaths = [
     "../../tests/unit",
     "../../tests/integration",
     "../../tests/e2e",
+    "../../tests/support",
 ]
 # Suite de CORRECCION por defecto: los tests `slow` (mediciones de latencia)
 # quedan fuera. Es el filtro que docs/WORKFLOW.md §Phase 2/§Testing ya
