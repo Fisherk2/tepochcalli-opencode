@@ -96,6 +96,13 @@ Relevancia de criterios no numéricos: 1 (no-interferencia) → checklist e2e de
 spec-vault-structure §Testing; 5 (citas) → golden answers con asserts de `source_path`/
 `heading`/offsets reproducibles; 7 (formatos) → matriz de conversión markitdown fixtures.
 
+**Documentos binarios (D51, medidos aparte del Δ de texto).** Extracción markitdown en proceso,
+btrfs/NVMe, CPython 3.12.14: PDF de **30 páginas** = **3 144 ms p50 / 4 172 ms p95** (n=3,
+`VmHWM` 191,6 MiB); libro real de **1 313 páginas** = **128 015 ms p50** (n=3); coste por página
+**no constante** (97,5-221 ms/página según composición del documento ⇒ no se extrapola). Comando:
+`just python-bench-documents --doc-pages 30 --n 3 --json …`; detalle, n por fila y JSON en
+[docs/diagnosis/phase6-documents.md](diagnosis/phase6-documents.md).
+
 ### 6.2 Umbrales
 
 > **Vigencia:** fijados en T0 (2026-11-12) **antes de medir** (D-P6-8) y **aprobados en CP-0 el

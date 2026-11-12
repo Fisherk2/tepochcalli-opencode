@@ -64,17 +64,18 @@
 - Deps: T0 · Verificación: `sha256sum` del árbol == manifiesto · `just ci` verde
 - **Hecho (2026-11-12):** `tests/support/corpus.py` + manifiesto canónico; 3 materializaciones con `tree_sha256 27a20c05…3ecd2` idéntico y 11 000 hashes iguales al generador de `HEAD`; **2 677 ms** / **45 M** / 11 001 ficheros en `/tmp/opencode/phase6-corpus` (btrfs); reutilización verificada (`reused: true`, `mtime_ns` intactos). Informe: `docs/diagnosis/phase6-corpus.md`.
 
-### [ ] T2 — Coste real de un PDF de 30 páginas con markitdown (TD-2)
+### [x] T2 — Coste real de un PDF de 30 páginas con markitdown (TD-2)
 
 - Subagente: `performance-benchmarker` · Skills: `performance-analysis`, `observability-and-instrumentation`, `bash-defensive-patterns` · Tools: —
-- [ ] Fixture **PDF de 30 páginas** válido (xref correcto, texto extraíble) **extendiendo** `tests/fixtures/pdf/gen_fixture_pdf.py` — sin dependencia nueva
-- [ ] Medición con **n ≥ 3**: extracción + indexación, con **RSS pico** (`VmHWM`) al lado; n, método y host publicados
-- [ ] Cifra **separada** del Δ de texto (D51): no cuenta contra el presupuesto de 30 s
-- [ ] **Coste por página** publicado y contrastado con los PDF de 1 página (la extrapolación se declara como derivación)
-- [ ] Etiqueta **`medido`** (D8)
-- [ ] **Condición de TD-2 resuelva con dato**: si rompe la percepción del Δ ⇒ se abre tarea de remediación (límite de tamaño / caché de parseo) con su ADR; si no ⇒ TD-2 se cierra con la cifra
-- [ ] El fixture de 30 págs no entra en `just ci`
+- [x] Fixture **PDF de 30 páginas** válido (xref correcto, texto extraíble) **extendiendo** `tests/fixtures/pdf/gen_fixture_pdf.py` — sin dependencia nueva
+- [x] Medición con **n ≥ 3**: extracción + indexación, con **RSS pico** (`VmHWM`) al lado; n, método y host publicados
+- [x] Cifra **separada** del Δ de texto (D51): no cuenta contra el presupuesto de 30 s
+- [x] **Coste por página** publicado y contrastado con los PDF de 1 página (la extrapolación se declara como derivación)
+- [x] Etiqueta **`medido`** (D8)
+- [x] **Condición de TD-2 resuelva con dato**: si rompe la percepción del Δ ⇒ se abre tarea de remediación (límite de tamaño / caché de parseo) con su ADR; si no ⇒ TD-2 se cierra con la cifra
+- [x] El fixture de 30 págs no entra en `just ci`
 - Deps: T0 · Verificación: JSON del bench archivado + cifra en `docs/TRD.md` §6
+- **Hecho (2026-11-12):** `bench_documents.py` + `gen_fixture_pdf.py --pages`; PDF de 30 págs **3 144 ms** p50 (n=3), 335 págs **50 557 ms**, 1313 págs **128 015 ms**; RSS pico 191-255 MiB; ms/página **no** monótono (221 → 97,5) ⇒ extrapolar es inválido. Propuesta de remediación A-D redactada; **firma del dueño pendiente**. Informe: `docs/diagnosis/phase6-documents.md`.
 
 ### [ ] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
 

@@ -168,18 +168,8 @@ def _build_table_content() -> str:
     return stream
 
 
-def _assemble_pdf(content: str) -> bytes:
-    """Serializa el content stream a un PDF de 1 página con xref real (latin-1)."""
-    encoded = content.encode("latin-1")
-    objects = [
-        b"<< /Type /Catalog /Pages 2 0 R >>",
-        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
-        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
-        b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
-        b"<< /Length " + str(len(encoded)).encode() + b" >>\nstream\n" + encoded + b"\nendstream",
-    ]
+def _serialize(objects: list[bytes]) -> bytes:
+    """Ensambla objetos numerados 1..N con tabla xref real, trailer y EOF."""
     out = bytearray(b"%PDF-1.4\n%\xe2\xe3\xcf\xd3\n")
     offsets = []
     for number, body in enumerate(objects, start=1):
@@ -196,6 +186,71 @@ def _assemble_pdf(content: str) -> bytes:
     return bytes(out)
 
 
+def _assemble_pdf(content: str) -> bytes:
+    """Serializa el content stream a un PDF de 1 página con xref real (latin-1)."""
+    encoded = content.encode("latin-1")
+    return _serialize(
+        [
+            b"<< /Type /Catalog /Pages 2 0 R >>",
+            b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+            b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            b"/Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold "
+            b"/Encoding /WinAnsiEncoding >>",
+            b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+            b"<< /Length "
+            + str(len(encoded)).encode()
+            + b" >>\nstream\n"
+            + encoded
+            + b"\nendstream",
+        ]
+    )
+
+
+def _build_page_content(page: int, total: int) -> str:
+    """Página numerada que repite las secciones con una marca de página en el texto."""
+    stream = _text_op("F1", 20, 54, 720, TITLE)
+    stream += _text_op("F2", 11, 54, 694, f"Documento de {total} paginas: pagina {page}.")
+    y = 660
+    for heading, paragraphs in SECTIONS.items():
+        stream += _text_op("F1", 14, 54, y, heading)
+        y -= 24
+        for paragraph in paragraphs:
+            for line in _wrap(paragraph):
+                stream += _text_op("F2", 11, 54, y, line)
+                y -= 16
+            y -= 10
+        y -= 14
+    stream += _text_op("F2", 11, 54, 60, f"Fin de la pagina {page} de {total}.")
+    return stream
+
+
+def _assemble_multipage(contents: list[str]) -> bytes:
+    """Ensambla N páginas: catálogo, árbol de páginas, 2 fuentes y un par page/content por hoja."""
+    kids = " ".join(f"{5 + 2 * i} 0 R" for i in range(len(contents)))
+    objects = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        f"<< /Type /Pages /Kids [{kids}] /Count {len(contents)} >>".encode(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>",
+    ]
+    for index, content in enumerate(contents):
+        encoded = content.encode("latin-1")
+        objects.append(
+            f"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] "
+            f"/Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> "
+            f"/Contents {6 + 2 * index} 0 R >>".encode()
+        )
+        objects.append(
+            b"<< /Length "
+            + str(len(encoded)).encode()
+            + b" >>\nstream\n"
+            + encoded
+            + b"\nendstream"
+        )
+    return _serialize(objects)
+
+
 def build_pdf() -> bytes:
     """Genera el PDF de fixture (prosa, 1 página) en bytes, listo para escribir."""
     return _assemble_pdf(_build_content())
@@ -206,11 +261,28 @@ def build_table_pdf() -> bytes:
     return _assemble_pdf(_build_table_content())
 
 
+def build_multipage_pdf(pages: int) -> bytes:
+    """Genera un PDF válido de `pages` páginas con texto extraíble (bench de documentos).
+
+    On-demand, nunca fixture de CI: `bench_documents.py` lo usa para el caso de
+    30 páginas de TD-2. `build_pdf()` (1 página) queda intacto byte a byte.
+    """
+    if pages < 1:
+        raise ValueError(f"pages debe ser >= 1, no {pages}")
+    return _assemble_multipage([_build_page_content(i, pages) for i in range(1, pages + 1)])
+
+
 if __name__ == "__main__":
     import sys
 
     destino = sys.argv[1] if len(sys.argv) > 1 else "fixture.pdf"
-    pdf = build_table_pdf() if "--tabla" in sys.argv else build_pdf()
+    pages = 1
+    if "--pages" in sys.argv:
+        pages = int(sys.argv[sys.argv.index("--pages") + 1])
+    if "--tabla" in sys.argv:
+        pdf = build_table_pdf()
+    else:
+        pdf = build_pdf() if pages == 1 else build_multipage_pdf(pages)
     with open(destino, "wb") as handle:
         handle.write(pdf)
     print(f"{destino}: {len(pdf)} bytes")
