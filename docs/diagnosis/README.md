@@ -10,8 +10,10 @@ This directory documents technical diagnoses for issues identified in the projec
 
 ## Index
 
-| File | Issue | Date | Severity |
-|------|-------|------|----------|
+| File                                     | Issue                                                       | Date       | Severity |
+| ---------------------------------------- | ----------------------------------------------------------- | ---------- | -------- |
+| [phase6-protocol.md](phase6-protocol.md) | Protocolo de aceptación Phase 6 (protocolo, no diagnóstico) | 2026-11-12 | —        |
+
 <!-- Add entries here as diagnoses are created -->
 
 ## Workflow

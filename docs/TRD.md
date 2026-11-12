@@ -77,6 +77,8 @@ Estructura usada por el wizard (fuente: <https://opencode.ai/v2/docs/mcp-servers
 
 ## 6. Metodología de performance (criterios numéricos de UH.md)
 
+### 6.1 Método
+
 Referencia de medición: **VM limpia por plataforma**, CPU-only, 8GB, SSD; corpus = golden vault
 (muestra) para humo + **corpus sintético** 10k notas `.md` (1-8KB, ES/EN mix) + 1k PDFs
 (5-40 páginas, generado plantilla→PDF) para stress. Instrumentación: timestamps `monotonic_ms`
@@ -93,6 +95,26 @@ serializada; definición en spec-mcp-server §latencia).
 Relevancia de criterios no numéricos: 1 (no-interferencia) → checklist e2e de
 spec-vault-structure §Testing; 5 (citas) → golden answers con asserts de `source_path`/
 `heading`/offsets reproducibles; 7 (formatos) → matriz de conversión markitdown fixtures.
+
+### 6.2 Umbrales
+
+> **Vigencia:** fijados en T0 (2026-11-12) **antes de medir** (D-P6-8). Objeto de aprobación en
+> CP-0; no se ajustan después de ver el resultado. Si CP-0 los cambia, se corrigen aquí y en
+> `docs/diagnosis/phase6-protocol.md` §6 **antes** de la primera medición. El protocolo que estos
+> umbrales interpretan es §6.1.
+
+| Umbral | Valor | Método | Calpulli que lo aplica | Fuente |
+| --- | --- | --- | --- | --- |
+| **Recall@5** | **1.0** | n = **10** consultas etiquetadas ES/EN (`query → source_path` esperado) sobre el golden vault; `search(top_k=5)` en subproceso, afirmando que el `source_path` esperado aparece en el top-5 | **T3** | TD-15 (`docs/TECH_DEBT.md:26`) |
+| **Deriva FTS** | **caída de recall ES > 10 % relativo** | Comparar `ANN + FTS` (fusión RRF) contra **solo ANN**, con las mismas consultas ES etiquetadas y el mismo corpus | **T4** | Hallazgo del review 5-ejes: FTS declarada sin `language` ⇒ stemming/stopwords solo en inglés (`docs/TECH_DEBT.md:189-190`, `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/app.py:341`) |
+
+**Consecuencia de incumplir.** Incumplir un umbral **no** renegocia el umbral: produce un
+**hallazgo** que se documenta con su cifra en `docs/TECH_DEBT.md` y, si toca un contrato
+`Accepted`, exige **ADR nuevo**.
+
+**Regla de origen de cifra (D-P6-7).** Cada cifra publicada en la tabla §6.3 de
+`docs/WORKFLOW.md` lleva **bench + n + método + filesystem**; la jerarquía de evidencia es
+`medido > estimado > declarado` (D8) y un número sin comando no entra en `docs/`.
 
 ## 7. Requisitos no funcionales adicionales
 

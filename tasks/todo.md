@@ -37,18 +37,19 @@
 
 ## Ola 0 — Fundaciones de medición
 
-### [ ] T0 — Protocolo de aceptación, umbrales y auditoría de huecos
+### [x] T0 — Protocolo de aceptación, umbrales y auditoría de huecos
 
 - Subagente: `codebase-archaeologist` → `performance-benchmarker` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `planning-and-task-breakdown`, `context-engineering` · Tools: `codebase-memory-mcp`, `vercel-grep`
-- [ ] `docs/diagnosis/phase6-protocol.md`: host de referencia (btrfs/NVMe, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14) y `/mnt/HDDFish` como filesystem de contraste
-- [ ] Los 7 criterios de `docs/UH.md` copiados literalmente + el gate D9 marcado como *no criterio 8*
-- [ ] Por criterio: bench/test que lo mide hoy (o `no existe`), cifra actual con su método, calpulli que lo cierra
-- [ ] Tabla §6.3 copiada con columna `Result` vacía y columna nueva **`origen de la cifra`**
-- [ ] **Umbrales fijados ANTES de medir** en `docs/TRD.md` §6.2: recall (propuesta recall@5 = 1.0) y deriva FTS (propuesta: caída de recall ES > 10 % relativo)
-- [ ] `docs/TRD.md` §6 gana las subsecciones §6.1 (método) y §6.2 (umbrales) — la casa ya cita «TRD §6.2»
-- [ ] Deuda re-declarada: en alcance TD-2/13/15/27/28/29/34 + D-b · fuera M6 y TD-32, con su motivo
-- [ ] `git status --short` solo muestra `docs/diagnosis/phase6-protocol.md`, `docs/TRD.md`, `tasks/`
+- [x] `docs/diagnosis/phase6-protocol.md`: host de referencia (btrfs/NVMe, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14) y `/mnt/HDDFish` como filesystem de contraste
+- [x] Los 7 criterios de `docs/UH.md` copiados literalmente + el gate D9 marcado como *no criterio 8*
+- [x] Por criterio: bench/test que lo mide hoy (o `no existe`), cifra actual con su método, calpulli que lo cierra
+- [x] Tabla §6.3 copiada con columna `Result` vacía y columna nueva **`origen de la cifra`**
+- [x] **Umbrales fijados ANTES de medir** en `docs/TRD.md` §6.2: recall (propuesta recall@5 = 1.0) y deriva FTS (propuesta: caída de recall ES > 10 % relativo)
+- [x] `docs/TRD.md` §6 gana las subsecciones §6.1 (método) y §6.2 (umbrales) — la casa ya cita «TRD §6.2»
+- [x] Deuda re-declarada: en alcance TD-2/13/15/27/28/29/34 + D-b · fuera M6 y TD-32, con su motivo
+- [x] `git status --short` solo muestra `docs/diagnosis/phase6-protocol.md`, `docs/TRD.md`, `tasks/`
 - Deps: — · Verificación: cada afirmación lleva su comando · **revisión del dueño (CP-0)**
+- **Hecho (2026-11-12):** `docs/diagnosis/phase6-protocol.md` (193 líneas, §1-§8) + `docs/TRD.md` §6.1/§6.2 (umbrales recall@5 = 1.0 y deriva FTS > 10 % relativo, `md-lint` 0). Cero mediciones.
 
 ### [ ] T1 — Corpus de escala reutilizable con manifiesto
 
