@@ -41,6 +41,22 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `04-review/` y `05-outputs/`; el usuario lee, extrae y borra — no deposita ni edita);
   `10+` = biblioteca personal (no indexada v1); runtime en carpetas con prefijo punto.
 
+## Commands (Justfile first)
+
+* **Antes de ejecutar nada, lee el `Justfile` (`just --list`) y usa su receta.** Prohibido
+  invocar `uv`, `pytest`, `cargo`, `npx` o `python` crudos: el Justfile exporta
+  `UV_PROJECT_ENVIRONMENT=venv` y concentra los gates (`quality`, `ci`, `typecheck`,
+  `coverage`, `bench*`); un `uv` a mano crea un `.venv` paralelo con deriva impredecible.
+  Si lo que necesitas no tiene receta, **añádela al `Justfile`** (con comentario `#`) en el
+  mismo cambio que la usa — no la ejecutes por fuera.
+* Borrar entornos o cachés: **solo `just clean`** (destructivo y acotado). Nunca `rm -rf`
+  manual sobre `.venv`, `venv`, `__pycache__`, `.pytest_cache`, `.ruff_cache` o `.mypy_cache`.
+* **Rust en este montaje (repo en fuseblk/NTFS-3G):** `cargo` muere compilando dependencias con
+  `Permission denied (os error 13)` (build-script de `libc`). Exporta el target fuera del montaje:
+  `CARGO_TARGET_DIR=/tmp/opencode/cargo-target just rust-ci` — verificado verde 2026-11-12. Es un
+  límite del filesystem, no del código: si el gate Rust falla con `Permission denied`, mira esto
+  antes de tocar `crates/`.
+
 ## Code Style Rules
 
 * Convención completa: [docs/CODE_STYLE.md](docs/CODE_STYLE.md). Resumen obligatorio:
