@@ -56,6 +56,12 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `CARGO_TARGET_DIR=/tmp/opencode/cargo-target just rust-ci` — verificado verde 2026-11-12. Es un
   límite del filesystem, no del código: si el gate Rust falla con `Permission denied`, mira esto
   antes de tocar `crates/`.
+* **Jamás en segundo plano.** Prohibido `&`, `nohup`, `disown`, `setsid`, `( … ) &` o cualquier
+  comando que deje un proceso sobreviviendo a la llamada: un hijo huérfano **no es rastreable ni
+  cancelable** por el agente, y una medición que nadie observa no vale como evidencia. Las
+  corridas largas (benches, matrices, indexaciones) van en **primer plano y por partes** —un
+  documento, un tamaño o un tramo por llamada, cada uno con su JSON— para verlas terminar y
+  poder cortarlas. Si una tarea no cabe en una llamada, se trocea; no se suelta.
 
 ## Code Style Rules
 

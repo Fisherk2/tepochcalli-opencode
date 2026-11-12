@@ -110,6 +110,10 @@ python-bench-smoke:
 python-bench-search *args:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_search.py {{args}}
 
+# Bench de extracción/indexación de documentos con markitdown (TD-2): medición LOCAL.
+python-bench-documents *args:
+    cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_documents.py {{args}}
+
 # --- Rust wizard (Phase 3, T18): nada de `cargo` crudo fuera de estas recipes ---
 # `crate_dir` + `cd ... &&`: mismo patrón que `flow_dir` arriba (una línea
 # por receta, porque `just` no conserva `cd` entre líneas).
