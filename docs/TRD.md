@@ -98,8 +98,9 @@ spec-vault-structure §Testing; 5 (citas) → golden answers con asserts de `sou
 
 ### 6.2 Umbrales
 
-> **Vigencia:** fijados en T0 (2026-11-12) **antes de medir** (D-P6-8). Objeto de aprobación en
-> CP-0; no se ajustan después de ver el resultado. Si CP-0 los cambia, se corrigen aquí y en
+> **Vigencia:** fijados en T0 (2026-11-12) **antes de medir** (D-P6-8) y **aprobados en CP-0 el
+> 2026-11-12** por el dueño, sin cambios sobre la propuesta. No se ajustan después de ver el
+> resultado; si se cambiaran, la corrección sería aquí y en
 > `docs/diagnosis/phase6-protocol.md` §6 **antes** de la primera medición. El protocolo que estos
 > umbrales interpretan es §6.1.
 

@@ -145,8 +145,8 @@ la **fuera de alcance** se re-declara abierta, no se cierra por omisión.
 
 ## 6. Umbrales propuestos (a fijar en CP-0, D-P6-8)
 
-**Estado: PROPUESTA pendiente de aprobación del dueño en CP-0.** No son umbrales vigentes
-hasta que CP-0 los apruebe y se escriban en `docs/TRD.md` §6.2.
+**Estado: APROBADOS en CP-0 (2026-11-12) por el dueño, sin cambios sobre la propuesta.** Están
+vigentes y escritos en `docs/TRD.md` §6.2 desde antes de la primera medición.
 
 1. **Recall@5 = 1.0** sobre el golden vault, con **n = 10 consultas etiquetadas** (mix ES/EN,
    `query → source_path` esperado), siguiendo el patrón de TD-15 (`docs/TECH_DEBT.md:26`).

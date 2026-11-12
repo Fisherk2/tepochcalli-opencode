@@ -86,12 +86,12 @@
 - [ ] El test **falla** si el golden vault se vacía o si una etiqueta cambia (no es tautología)
 - Deps: T0 · Verificación: `just python-test` verde · recall publicado con n = 10
 
-### [ ] Checkpoint CP-0 — Protocolo y umbrales aprobados
+### [x] Checkpoint CP-0 — Protocolo y umbrales aprobados
 
-- [ ] Protocolo publicado con host, FS de referencia, n y método por criterio
-- [ ] **umbrados de recall y deriva FTS escritos en `docs/TRD.md` §6.2 y aprobados por el dueño**
-- [ ] Tabla de huecos completa: cada criterio tiene su calpulli
-- [ ] Tabla §6.3 copiada con la columna `origen de la cifra`
+- [x] Protocolo publicado con host, FS de referencia, n y método por criterio
+- [x] **umbrales de recall y deriva FTS escritos en `docs/TRD.md` §6.2 y aprobados por el dueño** (CP-0, 2026-11-12: recall@5 = 1.0 · deriva FTS > 10 % relativo, sin cambios)
+- [x] Tabla de huecos completa: cada criterio tiene su calpulli
+- [x] Tabla §6.3 copiada con la columna `origen de la cifra`
 
 ### [ ] Checkpoint CP-1 — Fundaciones de medición (tras T1, T2, T3)
 
