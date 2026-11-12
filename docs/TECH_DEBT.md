@@ -42,6 +42,7 @@ coste si se ignora, y acción/oráculo para pagarla.
 | **TD-31** | **Corrida D9 (methodology e2e de los 9 comandos) diferida al QA de cierre (D-P5-10)**: la validación del agent workflow sobre el golden vault —`/rubric → /research → … → /update` con bandejaje D9.2, frontmatter assertado, MCP-first y no-contaminación— **no se ejecutó**; Phase 5 cierra con el contrato estático (42/42 probes) y el install e2e, no con la corrida | D-P5-10 (decisión del dueño, 2026-11-09); T13 | El flujo de 9 comandos puede tener un fallo de bandejaje o de frontmatter que ningún gate estático ve; el FTR Phase 5→6 se firma con esa parte **no verificada** | **Mitigación entregada:** protocolo (`tasks/phase5-methodology-e2e.md`) + runbook con prompts por comando y corpus de fotosíntesis (`tests/phase5-methodology-runbook.md`). **Pago:** correr el runbook completo sobre un vault instalado en el QA de cierre de proyecto y adjuntar transcript de tool-calls + árbol final; si falla, vuelve a Phase 4/5 con enmienda fechada |
 | **TD-32** | **Advertencias del umbral CODE_STYLE en el wizard (registradas 2026-11-09)**: `src/application/installer.rs` (795 líneas) y `tests/int_phase_f8_mcp_merge.rs` (854 líneas) caen en el tramo 701-1000 — permitidas solo justificadas, **con advertencia** de refactorizar lo antes posible; además `struct RecordingProc` está clonado 6× entre los ficheros de test (`e2e_maintenance`, `e2e_swap`, `int_embedder_menu`, `int_install_f4_f5`, `int_phase_f7_index`, `int_phase_f8_mcp_merge`) | Revisión CODE_STYLE §Umbral (2026-11-09) | Cada tarea que toque fases del instalador o el merge de F8 agranda ficheros muy por encima del objetivo de 500; el `RecordingProc` duplicado multiplica el coste de mantenimiento de los tests | Extraer a <500 en el próximo toque de cada fichero: `installer.rs` por fase (aislamiento de capas según spec-installer-wizard), `ConsentUi`+`secret_config` y `RecordingProc` a `crates/tepochcalli/tests/common/` (soporte compartido, no es target de test) |
 | **TD-33** | **Formato revisado del payload (2026-11-10/11, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md))**: 9 commits del dueño cambian el formato canónico — `AGENTS.md` genérico harness-agnóstico (la regla MCP-first sale del `AGENTS.md` y queda solo en los prompts), permisos inline + global 313 reglas (D-P4-2/D-P5-4 SUPERSEDED), `00-resources/` + `10-templates/` (`INDEXER_DIR` en minúsculas; el fallback del contrato `00-Resources` no cambia), 41 skills (D-P5-1 SUPERSEDED) | `baf2993`..`1c4a90b` | Specs que describan el blueprint Phase 5 como vigente mienten sobre el payload; TD-6/TD-14 con evidencia vieja ("MCP-first en el `AGENTS.md`"); TD-31 debe correr contra el formato revisado | **Pagada en esta ola (solo docs, sin código):** ADR-012 + enmiendas 2026-11-11 en las 4 specs del payload y SPEC.md; TD-6/TD-14/TD-7/TD-8 anotados abajo; re-verificar bloques inline si el global cambia |
+| **TD-34** | **Refs a subagentes/skills sin verificar en el payload (2026-11-12)**: los 12 commits del formato canónico citan skills por nombre (`osint-skills`, `literature-search-engine`, `websearch-engine`, `tepochcalli-mcp`, `anydoc` retirado) sin que ningún gate haya verificado presencia (`ls .opencode/skills`) ni carga por comando | Ola 2026-11-12 (`2072121..c815eb0`); cero refs a `database-lookup` sí verificado por `grep` | Un comando que cargue un nombre inexistente falla en runtime del harness, invisible para `just ci` | QA de cierre: `ls .opencode/skills` vs nombres citados + `grep` de carga por comando; corre junto a TD-31 |
 
 ## Revisión Phase 1 (gate CP-D, 2026-10-23)
 
@@ -262,6 +263,23 @@ sin gates corridos. TD-33 nace y se paga en la misma ola (ADR-012 + enmiendas).
 | **TD-14** | **Evidencia desactualizada** — igual que TD-6: (a) la regla de cita ya no está en el `AGENTS.md` sino en los prompts; (b) `/validate` y `/cite` intactos | Sin cambio de contrato ADR-005; TD-31 observa la regla en prompts |
 | **TD-31** | Sin cambio — sigue diferida al QA de cierre | Corre contra el formato revisado (permisos inline + global, `00-resources/`, 41 skills) |
 | **TD-33** | **Nueva y pagada** — formato revisado documentado | ADR-012 + 4 specs enmendadas + SPEC.md; re-verificar inline si el global cambia |
+
+Ninguna asciende a blocker de Phase 6.
+
+## Revisión formato canónico (2026-11-12, 12 commits `2072121..c815eb0`)
+
+Ola del dueño: 9 comandos endurecidos + `chilam.md` + `tepochcalli-mcp` + retiro de
+`database-lookup/` (SKILL.md + 80 fichas + contrato = **83 ficheros**, 11 922 líneas
+borradas; `grep database-lookup` en el payload = cero refs, verificado 2026-11-12;
+`ls .opencode/skills` = **40 dirs**). Deuda pagada: formato canónico de los 9 comandos
+(Pre-Flight, revA→B con techo revAA, transform EN 7 ramas, update quirúrgico,
+deny-lists). Sin gates corridos: solo docs.
+
+| ID | Estado (2026-11-12) | Evidencia / próxima acción |
+| --- | --- | --- |
+| **TD-7** | **40 skills** — `database-lookup/` retirada (`c815eb0`); objetivo <60 sigue cumplido (40 < 60) | `spec-payload-skills.md` aún dice 41: enmienda de una línea pendiente en el próximo pase docs autorizado |
+| **TD-31** | Sin cambio — sigue diferida al QA de cierre | Corre contra el formato canónico (12 commits); runbook `tests/phase5-methodology-runbook.md` |
+| **TD-34** | **Nueva** — refs a subagentes/skills no verificadas en el payload | Verificación `ls .opencode/skills` + `grep` de carga por comando en el QA de cierre, junto a TD-31 |
 
 Ninguna asciende a blocker de Phase 6.
 
