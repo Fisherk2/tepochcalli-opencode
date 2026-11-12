@@ -241,6 +241,16 @@
   9 commits del dueño fijan el formato canónico ongoing (`AGENTS.md` genérico, permisos inline +
   global 313 reglas, `00-resources/` + `10-templates/`, 41 skills). No reabren Phase 5: la corrida
   TD-31 corre contra el formato revisado.
+* **Formato canónico ongoing (2026-11-12, 12 commits `2072121..c815eb0`):** el dueño endureció
+  los 9 comandos — rubric (fases 0-2 entrevista+plan), research (Pre-Flight+cadena multi-fuente),
+  validate (4 fases+tabla de severidad), synthesize (Pre-Flight de veredictos+outline diseñado),
+  cite (inventario Rn+gate EN), draft (3 insumos+compilar), review (target+revA→B), transform
+  (dispatcher A-G→`05-outputs` EN), update (quirúrgico+rev); `chilam.md` audita-y-corrige sin
+  bandejas propias; `tepochcalli-mcp` generaliza `INDEXER_DIR` y retira `anydoc`;
+  `database-lookup/` borrada (83 ficheros, cero refs en el payload, reemplazada por
+  `osint-skills`+`literature-search-engine`+`websearch-engine`). Salvedad D-P5-10 intacta.
+* **PHASE 5 COMPLETADA 2026-11-12; PHASE 6 (aceptación E2E) LISTA para planificarse**
+  (runbook `tests/phase5-methodology-runbook.md`; TD-31 diferida al QA de cierre).
 * Ejecución LITERAL del blueprint Approved de Phase 4: los archivos del payload se generan del spec-payload-vault Approved, **sin reinterpretación**; divergencia descubierta en vuelo = volver a Phase 4 (enmienda al blueprint), no parche ad-hoc.
 * Objetivo: `obsidian-workspace/` listo como asset de release (mirror del modelo `template/` de codice-opencode): muestras en `00-Resources/` (md+PDF, opcionalmente docx para TD de markitdown), `.gitignore` del vault, AGENTS.md del vault con reglas MCP-first, ejecución del saneamiento del Anexo A (spec-agent-workflow), scaffold alineado a la convención de carpetas con `04-review/` y `05-outputs/` creadas (Action Item spec-vault-structure), y validación explícita del agent workflow (D9, bloque abajo). Ejecución según blueprint [specs/spec-payload-vault.md](../specs/spec-payload-vault.md).
 * Dependencias: Phase 2 (contratos) + Phase 3 (payload se instala con wizard) + Phase 4 (blueprint Approved).
