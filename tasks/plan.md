@@ -1,471 +1,567 @@
-# Plan de implementación — Phase 5 (ejecución del blueprint del payload)
+# Plan de implementación — Phase 6 (aceptación E2E de los 7 criterios)
 
 <!-- markdownlint-disable MD036 -->
 
-> **Fecha:** 2026-11-09 · **Autor:** Moctezuma (orquestador) · **Modo:** solo planificación (cero código)
-> **Fase:** Phase 5 — Payload + Skills audit (ejecución) · **Gate de fase:** FTR Phase 5→6
-> **Fuente de verdad:** `docs/WORKFLOW.md` §Phase 5 · `specs/spec-payload-{vault,skills,permissions,agents,commands}.md` (Approved 2026-11-09)
-> **Precedente:** D-P4-5 — `tasks/plan.md` y `tasks/todo.md` se sobrescriben; el plan de Phase 4 queda en el historial de git (`337c012`).
+> **Fecha:** 2026-11-11 · **Autor:** Moctezuma (orquestador) · **Modo:** solo planificación (cero código)
+> **Fase:** Phase 6 — E2E Acceptance (los 7 criterios de `docs/UH.md`) · **Gate de fase:** FTR de aceptación + gate v1 release
+> **Fuente de verdad:** `docs/WORKFLOW.md` §Phase 6 (tabla §6.3) + `docs/TRD.md` §6 + `docs/UH.md` §criterios
+> **Precedente:** D-P5-7 — `tasks/plan.md` y `tasks/todo.md` **se sobrescriben**; el plan de Phase 5 queda en el historial de git (`93d0060`). Los protocolos de Phase 5 sobreviven en `tasks/phase5-baseline.md` y `tasks/phase5-methodology-e2e.md`.
 
 ## 1. Objetivo y no-objetivos
 
-**Objetivo:** ejecutar **literalmente** el blueprint Approved de Phase 4 sobre `obsidian-workspace/`:
-materializar los 15 artefactos de texto (5 agentes + 9 comandos + `AGENTS.md` del vault), limpiar la
-configuración del payload, completar el scaffold canónico del vault y cerrar los dos gates de la
-fase — **permission fixtures D9.3** y **methodology e2e (D9)** — con la evidencia medida.
+**Objetivo:** cerrar la fase de aceptación: **medir** los 7 criterios de `docs/UH.md` contra el
+sistema completo tal como lo tendría un usuario (vault instalado por el wizard + MCP `tepochcalli-rag`
+real por stdio), **remediar** lo que impida un criterio o un gate, **cerrar** la deuda que esta fase
+es dueña, y dejar la **evidencia medida** con la que se firma el gate de v1 release.
 
-**Idioma (D-P4-6):** los 15 artefactos del payload se escriben en **inglés**; la prosa del repo
-(`specs/`, `docs/`, `tasks/`) sigue en **español**. Las muestras del instalador (`ejemplo.md`,
-`ejemplo.pdf`) conservan nombre y contenido en español (D-P4-7 revocada).
+**Frontera de escritura (D-P6-1).** Dos cosas distintas conviven bajo `obsidian-workspace/`:
 
-**No-objetivos (fuera de Phase 5):**
+| Zona | Qué es | ¿Editable en Phase 6? |
+| --- | --- | --- |
+| **Contenido del harness** | `.opencode/` (5 agentes + 9 comandos + 40 skills), `AGENTS.md`, `opencode.json` | **NO.** Congelado en Phase 5 (D-P5-1/D-P5-2). Solo se **lee**. Si una referencia está equivocada, se reporta y se corrige en la spec del payload con enmienda fechada — **nunca** se reescribe el fichero del payload |
+| **Código del motor** | `.tepochcalli/flow/`, `.tepochcalli/mcp/` (el motor que se distribuye dentro del payload) | **Sí.** Aquí vive la remediación (`verify.py --spot-check`, `require_local_model`) |
+| Wizard | `crates/tepochcalli/` | **Sí.** |
+| Tests y docs | `tests/`, `docs/`, `specs/`, `tasks/`, `SPEC.md`, `CHANGELOG.md` | **Sí.** |
+
+**No-objetivos (fuera de Phase 6):**
 
 | Fuera | Por qué |
 | --- | --- |
-| Modificar, añadir o eliminar skills de `obsidian-workspace/.opencode/skills/` | Las 40 son **definitivas** (D-P4-12, decisión del dueño 2026-11-09); Phase 5 **verifica presencia** (40/40) y nada más |
-| Cambiar los contratos MCP, los ADRs o el motor | D1–D11 están `Accepted`; tocarlos exige ADR nuevo |
-| Ejecutar la metodología de 9 comandos con LLM automatizada | Decisión del dueño: contrato estático automatizado + corrida manual con evidencia (D-P5-3) |
-| Tocar `docs/UH.md`, `README.md`, `LICENSE`, `opencode.json` (raíz) | Pre-commit checklist del `AGENTS.md` del repo |
-| Cambiar las muestras del instalador (`ejemplo.md`/`ejemplo.pdf`) | D-P4-7 revocada; las crea el wizard en F3, no el payload |
-| Instalar OfficeCLI / retirar la entrada `excel` del MCP | TD-22 es **feature 0.2.0**, fuera de v1 |
-| Retirar o consolidar skills del pack Códice | Congelado: 40 conservadas, 0 retiradas, 0 consolidadas |
+| **M6 — ejecutar GitHub Actions y publicar una release de prueba** | Decisión de producto (publicar el repo), no de ingeniería. **No** seleccionado por el dueño (D-P6-4). La deuda sigue **abierta y declarada** |
+| **TD-32 — extraer `installer.rs` (795) y `int_phase_f8_mcp_merge.rs` (854) a <500** | No seleccionado (D-P6-4). El refactor de T11 toca `embedder_menu.rs`, no esos ficheros |
+| Modificar el contenido del harness del payload (agentes, comandos, skills, `AGENTS.md`, `opencode.json`) | D-P6-1 |
+| Cambiar el contrato MCP (ADR-005), el motor (ADR-001) o el layout (D2) | `Accepted` ⇒ un ADR nuevo, nunca una edición |
+| Optimizar el walk/index para que el Δ pase en fuseblk/NTFS-3G | D-P6-3: NTFS es **límite documentado**, no objetivo de optimización en v1 |
+| Revertir ADR-011 (reintroducir Docling) sin dato que lo justifique | D-P6-5: primero se **mide** el impacto (T10) |
+| OfficeCLI / feature 0.2.0 (TD-22) | Feature declarada fuera de v1 |
+| Publicar el repo, hacer `push`, abrir PR | Fuera del encargo de planificación |
 
-## 2. Decisiones tomadas (dueño, 2026-11-09)
+## 2. Decisiones tomadas (dueño, 2026-11-11)
 
 | # | Decisión | Efecto en el plan |
 | --- | --- | --- |
-| **D-P5-1** | **Las 40 skills del payload son definitivas.** Phase 5 verifica que las 40 estén en `.opencode/skills/` y **no modifica, añade ni elimina ninguna** | T11 asserta el inventario nombre a nombre (40/40, 0 diff de contenido); ninguna ola toca `skills/` |
-| **D-P5-2** | **Enmienda fechada al blueprint Approved:** `/transform` y Tlacuilo citaban 8 skills que el congelado de 40 eliminó (`xlsx-official`, `excel-analysis`, `scientific-slides`, `pptx-official`, `matplotlib`, `scientific-visualization`, `infographics`, `markitdown`). Se sustituyen por las **reales** del `ls` de 40. `.opencode/skills/` intacto | **T1** (gate previo, bloquea T4 y T7) — vuelve a Phase 4 con enmienda fechada, como manda `docs/WORKFLOW.md` §Phase 5 |
-| **D-P5-3** | **Gate D9 = contrato estático automatizado + corrida manual con evidencia** (no e2e automático con LLM) | T11 = contrato ejecutable; T13 = protocolo + corrida manual con checklist y evidencia |
-| **D-P5-4** | **`opencode.json` del payload:** se borra el array global de 313 reglas `permissions` (D-P4-2/D-P4-3) y `instructions` se corrige a rutas **relativas al vault** (`.opencode/skills/<skill>/SKILL.md`); `references` se conserva | T9 |
-| **D-P5-5** | **Scaffold:** `01-Tasks/` se **renombra** a `01-tasks/` (TD-8: renombrar, nunca crear) y sus 3 ficheros de 0 bytes se eliminan; se crean `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/` con `.gitkeep` | T10 |
-| **D-P5-6** | **`.gitignore` del vault** nuevo en el payload con las 5 rutas de `specs/spec-vault-structure.md` §Estrategia gitignore | T10 |
-| **D-P5-7** | **`tasks/plan.md` y `tasks/todo.md` se sobrescriben** (precedente D-P4-5); el plan de Phase 4 queda en git (`337c012`) | Este commit |
-| **D-P5-8** | **No se crean muestras en `00-Resources/` del repo:** el blueprint Approved (`spec-payload-skills.md` §Inventario de muestras) fija que las crea el instalador en F3; el texto de `docs/WORKFLOW.md` §Phase 5 («muestras en `00-Resources/`») queda precisado por el blueprint, más reciente | T10 (`.gitkeep` solo) + T12 (el install las materializa) |
-| **D-P5-9** | **El fixture del merge conservador se sustituye por un merge sintético** (cierra TD-30): el test deja de comparar el payload consigo mismo y demuestra el merge sobre una entrada fabricada | T9 |
-| **D-P5-10** | **T13 cierra con el runbook; la corrida D9 de los 9 comandos se difiere al QA de cierre de proyecto** (decisión del dueño 2026-11-09). El FTR Phase 5→6 registra la metodología como **no ejecutada** (deuda de QA declarada), nunca como verde | T13 (protocolo + runbook en `tests/phase5-methodology-runbook.md`) · T14 lo declara en WORKFLOW/TECH_DEBT |
+| **D-P6-1** | **Remediación permitida, payload de contenido congelado.** Se puede tocar código de producción (motor, wizard, tests, docs) cuando un criterio o un gate sale rojo. **Congelado:** `.opencode/` (agentes, comandos, skills), `AGENTS.md`, `opencode.json` del payload. **Editable:** `.tepochcalli/flow/`, `.tepochcalli/mcp/`, `crates/`, `tests/`, `docs/`, `specs/`. Si una referencia del payload es errónea: se reporta y se corrige en la spec, sin reescribir el payload | T7 y T11 escriben en `flow/`/`mcp/`/`crates/`; T12 solo **lee** el payload y su AC exige `git diff --stat -- obsidian-workspace` vacío |
+| **D-P6-2** | **TD-31 (corrida D9 de los 9 comandos) la ejecuta el QA humano** en OpenCode: los comandos se activan por input del usuario y **no** son automatizables. Phase 6 entrega el scaffolding de evidencia y **verifica mecánicamente** lo verificable; no simula la corrida | T14 entrega runbook + script verificador + evidencia sintética de ejemplo; T15 es la corrida del QA y su verificación. Si no se ejecuta ⇒ se declara **NO EJECUTADO**, nunca verde |
+| **D-P6-3** | **Referencia de medición = btrfs (`/tmp/opencode`, NVMe).** fuseblk/NTFS-3G (`/mnt/HDDFish`) se mide igual y se documenta como **límite conocido** con su cifra y su causa | T5 mide en ambos FS; el criterio 2 y el 6 se evalúan contra btrfs; NTFS va a la columna de límites de §6.3 |
+| **D-P6-4** | **Deuda en alcance:** TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34 y D-b. **Fuera (declarada, no silenciosamente):** M6, TD-32 y toda deuda sin plan de pago en Phase 6 (TD-3, TD-4, TD-6, TD-12, TD-30-cerrada, R5, CR-1…CR-8, Q-1…Q-3) | T2 (TD-2), T7 (TD-13), T3 (TD-15), T10 (TD-27), T11 (TD-28+TD-29), T12 (TD-34), T13 (D-b). M6 y TD-32 se **re-declaran abiertas** en T16 con su motivo |
+| **D-P6-5** | **TD-27 (PDF sin jerarquía de headings, D54) se resuelve midiendo el impacto** en el criterio 5 y decidiendo con el dato. Revertir ADR-011 (reintroducir Docling: ≈225 MB y ≈2,0 GB RSS pico) solo si el dato lo justifica, y entonces con **ADR-013** que reemplace §4.3 de ADR-011 | T10: primero la medición, después la decisión. La opción elegida **no** reescribe el payload |
+| **D-P6-6** | **D-b (Windows) se cierra como declaración honesta** del soporte en v1. Desde Linux no se puede ejecutar `install.ps1` ni `venv/Scripts/python.exe` | T13: documento de estado + decisión de soporte + propagación a `docs/TRD.md` §2 y `docs/APPFLOW.md`; **no** se declara «probado» |
+| **D-P6-7** | **El cierre de Phase 6 es un FTR de aceptación** con la tabla §6.3 de `docs/WORKFLOW.md` rellena con **cifras medidas y su origen**, nunca con un «ok». Lo no verificado se escribe como no verificado | T16; convención de la columna «origen de la cifra» fijada en T0 |
+| **D-P6-8** | **Los umbrales se fijan antes de medir.** El umbral de deriva FTS y el de recall se escriben en `docs/TRD.md` §6.2 en T0 (CP-0), no después de ver el resultado | T0 publica los umbrales; T3 y T4 los aplican sin poder ajustarlos |
 
-## 3. Estado real verificado (2026-11-09, lectura del repo)
+## 3. Estado real verificado (2026-11-11, lectura del repo)
 
-Cada línea de esta tabla está medida, no supuesta; el comando que la evidencia va en el calpulli que la usa.
+Cada línea está **medida**, no supuesta; el comando que la evidencia va en el calpulli que la usa.
 
 | Hecho | Valor medido | Dónde |
 | --- | --- | --- |
-| Skills del payload | **40 dirs** | `ls obsidian-workspace/.opencode/skills \| wc -l` |
-| Agentes del payload | **170 `.md`** (5 primarios + 165 del pack Códice) | `find obsidian-workspace/.opencode/agents -name '*.md' \| wc -l` |
-| Comandos del payload | **9 `.md`**, todos de **4 líneas** (stub: `description:` vacío + `agent:`) | `wc -l obsidian-workspace/.opencode/commands/*.md` |
-| Agentes primarios actuales | 83–135 líneas; permisos **distintos** del blueprint (`subagent * allow`, `edit * ask`/`allow`, sin `external_directory` deny, sin denies de `*.env` ni de `.tepochcalli/config/**`, sin superficies por bandeja) | lectura de los 5 `.md` |
-| `AGENTS.md` del vault | **79 líneas**, template genérico con placeholders (`[Describe the project's purpose…]`) | `obsidian-workspace/AGENTS.md` |
-| `opencode.json` del payload | array global `permissions` de **313 reglas**; `instructions` = rutas **relativas al repo** (`obsidian-workspace/.opencode/skills/…`); `default_agent` = `itzamna` (correcto); `agents` con 5 primarios + `build/plan/explore/general` | `python -c "json.load(...)"` |
-| Scaffold | `00-Resources/` (vacía), `01-Tasks/` con 3 ficheros de 0 bytes; **faltan** `01-tasks/`, `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/`; **no hay `.gitignore`** en el payload | `ls -la obsidian-workspace/` |
-| `.gitignore` del repo | ya ignora `obsidian-workspace/.tepochcalli/{venv,db,models,bin,config}/` | `.gitignore:206-210` |
-| Blueprint vs payload | 8 skills citadas en las specs **no existen** en el `ls` de 40 | `test -d` por nombre |
-| Asset de release | el tar del payload = **árbol completo** `obsidian-workspace/` con raíz = contenido del vault, excluyendo `venv/db/models/bin/config` y caches | `.github/workflows/release.yml:186-217` |
-| Merge del wizard | `merge_tree` copia **sin sobrescribir** (lo existente gana); F8 solo toca `mcp.servers.tepochcalli-rag` | `crates/tepochcalli/src/adapters/payload.rs:326-388` · `phase8.rs` |
-| Baseline de linters | `just md-lint` → **0 issues** en `docs specs AGENTS.md SPEC.md` | medido 2026-11-09 |
-| Tests | 703 passed + 3 `slow`, cobertura 97 % (gate 95) | `docs/WORKFLOW.md` §Phase 3.5 (M14) |
+| Criterios de aceptación | **7**, textuales en `docs/UH.md` (líneas 55-60) + **1 gate adicional** (D9) que **no** es criterio 8 | `docs/UH.md` · `docs/WORKFLOW.md` §Phase 6 |
+| Host de desarrollo | i7-8750H, **12 vCPU**, **15,5 GiB RAM** (≈8 GB disponibles), CPython 3.12.14, zram 7,9 GB | `free -g` · `nproc` |
+| Filesystems | repo = **fuseblk/NTFS-3G** (`/mnt/HDDFish`) · `/tmp` = **btrfs/NVMe** | `df -T` |
+| Baseline de escala (P-02) | btrfs **26 967 ms** (PASS, 90 % del budget) · NTFS-3G **39 501 ms** (FAIL) · walk-only 7,2 s (btrfs) vs **17,6 s** (NTFS) | `docs/TECH_DEBT.md` §Review 5-ejes Phase 3.5 |
+| Baseline de Δ de texto | p95 **4 299 ms** (n=20, nearest-rank) | `docs/WORKFLOW.md` §Phase 3.5 (M11) |
+| Baseline de `search` | p95 cliente **52 ms** / `took_ms` **49 ms** (n=20, corpus de 100 ficheros) | `docs/WORKFLOW.md` §Phase 2 (M2) |
+| Benchmarks que ya existen | `bench_delta.py` (Δ, corpus 50 md/txt, 20 corridas) · `bench_delta_scale.py` (escala, 10 000 md + 1 000 PDF, 20 Δ + walk-only, `--dir`/`--keep`) · `bench_search.py` (`search` p95 por etapas, corpus 100 ficheros, 20 muestras) | `tests/benchmarks/` |
+| Corpus de escala | 10 000 md en 10 subdirs + 1 000 PDF de 1 página reales (xref correcto), **seed determinista**, se **borra** al terminar salvo `--keep`; **sin manifiesto** de hash | `tests/benchmarks/bench_delta_scale.py` |
+| Golden vault | `tests/fixtures/golden_vault/00-Resources/` = 1 md + 1 pdf | `tests/fixtures/` |
+| E2E de citas | `tests/e2e/test_mcp_journey.py` ya afirma: `source_path` real, slice del original == `text` (md), `heading is None` (pdf, D54), `offsets_ref == "extract"` | `tests/e2e/` |
+| Identidad de cita | `citation.verify_slice_identity(text, char_start, char_end, chunk_text)` **ya existe** y ya se usa; el CLI `verify.py` **no** la expone para re-verificar contra el archivo vivo (TD-13) | `flow/tepochcalli_flow/citation.py:263` · `verify.py` |
+| `verify.py` | CLI de **solo lectura**: cuenta filas, consulta híbrida, imprime chunks citados. **Sin** `--spot-check` | `flow/tepochcalli_flow/verify.py` |
+| Índice FTS | `table.declare_fts_index(column="text")` — **sin `language`** ⇒ stemming/stopwords solo en inglés sobre corpus ES+EN (hallazgo abierto del review 5-ejes de Phase 3.5) | `flow/tepochcalli_flow/app.py:341` |
+| `require_local_model` | acepta `<models>/<slug>@<sha>/` si el directorio tiene **cualquier** entrada (TD-29) | `flow/tepochcalli_flow/model_store.py:5` |
+| Tamaño del wizard | `embedder_menu.rs` **894** líneas (TD-28) · `installer.rs` 795 · `int_phase_f8_mcp_merge.rs` 854 (TD-32, fuera) | `crates/tepochcalli/` |
+| Payload | **40 skills**, 5 agentes primarios + pack Códice, 9 comandos, `AGENTS.md`, `opencode.json` (30 KB) | `obsidian-workspace/.opencode/` |
+| Suite y gates | **703 passed + 3 `slow`**, cobertura **97 %** (gate 95 %), `just ci` verde **local**; GitHub Actions **nunca ha corrido** (M6) | `docs/WORKFLOW.md` §Phase 3.5 (M14) |
+| Debt register | TD-1…TD-34; **ninguna** asciende a blocker de Phase 6 | `docs/TECH_DEBT.md` §Revisión formato canónico |
+| Runbook D9 | `tests/phase5-methodology-runbook.md` (214 líneas) — **escrito contra el formato anterior** a la ola canónica del 2026-11-12 (9 comandos endurecidos, `chilam` sin bandejas) | `tests/phase5-methodology-runbook.md` |
 
 ## 4. Grafo de dependencias
 
 ```mermaid
 graph TB
-    T0["T0 · baseline y auditoría<br/>(read-only)"]
-    T1["T1 · enmienda fechada<br/>del blueprint (skills)"]
-    T2["T2 · itzamna (piloto)"]
-    T3["T3 · nezahualcoyotl · pochteca · chilam"]
-    T4["T4 · tlacuilo"]
-    T5["T5 · /rubric /synthesize /draft /update"]
-    T6["T6 · /research /validate /cite /review"]
-    T7["T7 · /transform"]
-    T8["T8 · AGENTS.md del vault"]
-    T9["T9 · opencode.json + fixture sintético"]
-    T10["T10 · scaffold canónico + .gitignore"]
-    T11["T11 · fixtures de permisos D9.3<br/>+ contrato del payload"]
-    T12["T12 · install e2e del wizard"]
-    T13["T13 · methodology e2e (D9)"]
-    T14["T14 · cierre documental + FTR 5→6"]
+    subgraph W0["Ola 0 — Fundaciones de medición"]
+        T0["T0 · protocolo, umbrales y huecos"]
+        T1["T1 · corpus 10k/1k reutilizable con manifiesto"]
+        T2["T2 · coste real del PDF de 30 páginas"]
+        T3["T3 · recall@5 con consultas etiquetadas"]
+    end
+    subgraph W1["Ola 1 — Los 7 criterios, medidos"]
+        T4["T4 · criterio 3 a escala + deriva FTS"]
+        T5["T5 · criterio 6 escala 10k/1k"]
+        T6["T6 · criterio 4 tokens por consulta"]
+        T7["T7 · criterio 5 citas + spot-check"]
+        T8["T8 · criterio 7 matriz de formatos"]
+        T9["T9 · criterio 1 no-interferencia"]
+    end
+    subgraph W2["Ola 2 — Deuda y decisiones"]
+        T10["T10 · TD-27 fate del PDF sin heading"]
+        T11["T11 · TD-28 + TD-29 hygiene"]
+        T12["T12 · TD-34 refs del payload"]
+        T13["T13 · D-b soporte Windows"]
+    end
+    subgraph W3["Ola 3 — Gate del agente y cierre"]
+        T14["T14 · scaffolding de la corrida D9"]
+        T15["T15 · corrida D9 del QA + evidencia verificada"]
+        T16["T16 · cierre documental + FTR de aceptación"]
+    end
 
     T0 --> T1
+    T0 --> T2
+    T0 --> T3
     T1 --> T4
-    T1 --> T7
-    T2 --> T3
+    T1 --> T5
     T3 --> T4
-    T2 --> T11
-    T3 --> T11
-    T4 --> T11
-    T5 --> T11
-    T6 --> T11
-    T7 --> T11
-    T8 --> T11
-    T9 --> T11
-    T10 --> T11
-    T11 --> T12
-    T12 --> T13
-    T13 --> T14
-    T11 --> T14
+    T3 --> T7
+    T4 --> T5
+    T12 --> T14
+    T14 --> T15
+    T15 --> T16
+    T4 --> T16
+    T5 --> T16
+    T6 --> T16
+    T7 --> T16
+    T8 --> T16
+    T9 --> T16
+    T10 --> T16
+    T11 --> T16
+    T12 --> T16
+    T13 --> T16
+    T2 --> T16
 ```
 
-**Por qué este orden.** El grafo sube desde el texto (T1→T4/T7) al artefacto (T2-T10), y solo
-después se miden (T11-T13). Dos reglas lo imponen:
+**Por qué este orden.** Cuatro reglas lo imponen:
 
-- **T1 bloquea a T4 y T7** porque son los dos artefactos que citan skills inexistentes:
-  materializarlos antes de enmendar escribiría en el payload un cuerpo que el blueprint veta.
+- **T0 va primero porque fija los umbrales** (D-P6-8). Si el umbral de deriva FTS o de recall se eligiera después de ver el resultado, la medición no valdría como criterio. T0 publica el protocolo **y** los umbrales en `docs/TRD.md` §6.2; T3 y T4 los aplican sin poder ajustarlos.
+- **T1 va antes de T4 y T5** porque ambos necesitan **el mismo corpus** (10 000 md + 1 000 PDF). Materializarlo dos veces cuesta dos indexaciones en frío de ~10 min cada una; con manifiesto, se materializa una vez y ambos miden sobre lo mismo (y el hash lo hace verificable).
+- **T4 → T5 son secuenciales por economía, no por dependencia técnica.** Ambos miden sobre el corpus y el índice de btrfs ya construidos: compartirlos evita la segunda indexación en frío. T5 sí depende de T4 para el caso de que la deriva FTS obligue a cambiar la configuración del índice (entonces el Δ de T5 se mide sobre el índice final).
+- **T12 → T14 → T15** es la cadena de la evidencia del agente: si un comando cita una skill que no existe, la corrida D9 falla por un motivo que no es del workflow. Se verifica **antes** de pedirle al QA que gaste la corrida.
 
-- **T11 (el contrato) va antes que T12/T13 (la ejecución)** porque un e2e sobre un payload que no
-  pasa el contrato estático produce evidencia no comparable (lección de Phase 3.5 (c): un golden
-  se valida por cómo se genera, no por su color).
-
-**Paralelismo dentro de cada ola:** las olas 1, 2, 3 y 4 no tienen dependencia entre sí más allá de
-lo dibujado; T2-T10 se reparten por artefacto (fichero), no por capa. T8, T9 y T10 son
-independientes entre sí y pueden solaparse con las olas 1 y 2.
+**Paralelismo dentro de cada ola:** T1, T2 y T3 no se tocan entre sí (ficheros distintos, sin estado compartido) ⇒ **en paralelo**. T6, T7, T8 y T9 tampoco ⇒ **en paralelo**. T10, T11, T12 y T13 ⇒ **en paralelo**. Dentro de T11, los dos subagentes también ⇒ **en paralelo** (ficheros y lenguajes distintos). Lo que **no** puede ir en paralelo son los pares secuenciales declarados en §6.1.
 
 ## 5. Calpullis
 
-Cada calpulli es una rebanada **vertical**: entrega un artefacto completo y su prueba. «El usuario
-puede X» — no «la capa Y está escrita».
+Cada calpulli es una rebanada **vertical**: entrega un resultado completo y su prueba. «El criterio N se
+puede declarar con esta cifra» — no «la capa Y está escrita».
 
 ---
 
-### Task T0: Baseline del payload y auditoría de divergencias
+### Task T0: Protocolo de aceptación, umbrales y auditoría de huecos
 
-**Descripción:** medir el estado real del payload contra el blueprint Approved antes de escribir
-nada. Produce la evidencia de los 4 hallazgos que activan D-P5-1..D-P5-9 y los números base que
-comparan las olas siguientes. **Cero escrituras** en `obsidian-workspace/`.
+**Descripción:** medir el estado real contra los 7 criterios **antes** de tocar nada y fijar el
+protocolo que todos los calpullis van a seguir: qué bench mide cada criterio, con qué n, con qué
+método de percentil, en qué filesystem, contra qué host. Produce además la tabla de huecos (qué
+existe hoy, qué falta, qué calpulli lo cierra) y **fija los umbrales** de recall y de deriva FTS
+(D-P6-8). **Cero escrituras** fuera de `docs/diagnosis/` y `tasks/`.
 
 **Criterios de aceptación:**
 
-- [ ] Las 4 divergencias quedan documentadas con el comando que las evidencia (no con prosa): 8 skills inexistentes (un `test -d` por nombre), permisos divergentes de los 5 agentes (diff bloque a bloque contra `spec-payload-permissions.md`), array global de 313 (`json.load` + `len`), `instructions` rotas, scaffold incompleto.
-- [ ] Baseline numérico registrado: `wc -l` de los 15 artefactos (5 agentes, 9 comandos, `AGENTS.md`), `ls .opencode/skills | wc -l` = 40, `len(opencode.json["permissions"])` = 313, `just md-lint` = 0.
-- [ ] Hash del árbol de skills (`find .opencode/skills -type f | sort | xargs sha256sum`) guardado para demostrar en T11 que las 40 no cambiaron (D-P5-1).
-- [ ] `git status --short` y `git diff --stat -- obsidian-workspace` vacíos al cerrar.
+- [ ] `docs/diagnosis/phase6-protocol.md` declara el **host de referencia**: btrfs/NVMe en `/tmp/opencode`, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14, y declara `/mnt/HDDFish` (fuseblk/NTFS-3G) como **filesystem de contraste** (D-P6-3).
+- [ ] Los **7 criterios** de `docs/UH.md` copiados literalmente con su cota exacta, más el **gate adicional D9** marcado como *no criterio 8*.
+- [ ] Por cada criterio: el bench o test que lo mide hoy (o `no existe`), la **cifra actual** si existe con su método, y el calpulli que lo cierra. La tabla §6.3 de `docs/WORKFLOW.md` aparece copiada con la columna `Result` vacía y una columna nueva **`origen de la cifra`** (convención de T16).
+- [ ] **Umbrales fijados ANTES de medir** y escritos en `docs/TRD.md` §6.2: umbral de recall (propuesta: recall@5 = 1.0 sobre el golden vault) y umbral de deriva FTS (propuesta: caída de recall ES > 10 % relativo al detectar la pierna FTS).
+- [ ] **Conflicto de numeración detectado y declarado**: `docs/TRD.md` §6 no tiene subsecciones; la casa cita «TRD §6.2» (TD-15) ⇒ se crean §6.1 «método» y §6.2 «umbrales» con este plan.
+- [ ] **Deuda re-declarada** con su estado real: TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34 y D-b **en alcance**; M6 y TD-32 **fuera** con su motivo (D-P6-4).
+- [ ] `git status --short` muestra **solo** `docs/diagnosis/phase6-protocol.md`, `docs/TRD.md` y `tasks/`.
 
-**Verificación:** los comandos y su salida cruda quedan en el informe del calpulli (commit o `tasks/`); nadie firma un AC sin el número al lado.
+**Verificación:** cada afirmación del protocolo lleva el comando que la produce; el FTR lo revisa (CP-0). **Ningún bench se ejecuta aquí**: el protocolo se escribe antes de medir, o el criterio se ajusta al resultado.
 
-**Dependencias:** — · **Scope:** S (lectura + informe)
+**Dependencias:** — · **Scope:** S (1 documento nuevo + 1 enmienda de TRD)
 
-**Ficheros probables:** ninguno escrito en `obsidian-workspace/`; el informe va al cuerpo del commit y a `tasks/todo.md`.
+**Ficheros probables:** `docs/diagnosis/phase6-protocol.md` · `docs/TRD.md` (§6.1/§6.2 nuevas)
 
 ---
 
-### Task T1: Enmienda fechada del blueprint (skills inexistentes)
+### Task T1: Corpus de escala reutilizable con manifiesto (habilita criterios 3 y 6)
 
-**Descripción:** cerrar la divergencia D-1 antes de materializar. Es el regreso a Phase 4 que
-`docs/WORKFLOW.md` §Phase 5 exige cuando el blueprint y la realidad divergen: **enmienda fechada a
-la spec, no parche en el payload**. Corrige dos ficheros de spec para que los cuerpos citen solo
-skills reales del `ls` de 40, **sin tocar `.opencode/skills/`** (D-P5-1).
+**Descripción:** el bench de escala ya sabe generar 10 000 md + 1 000 PDF deterministas, pero **borra
+el vault** al terminar y no deja **man-manifiesto** verificable. Phase 6 necesita el mismo corpus dos
+veces (criterio 3 y criterio 6) y necesita poder **reconstruirlo byte a byte** para que una cifra sea
+reproducible. Extraer la materialización a un módulo reutilizable con manifiesto de hashes.
 
 **Criterios de aceptación:**
 
-- [ ] `specs/spec-payload-commands.md` §`/transform` paso 2: las 8 skills inexistentes sustituidas por reales del congelado — CSV/Excel → `spreadsheet-analysis` + `data-analysis`; presentaciones → `posters-generator`; figuras → `data-plotting`; mind map → `markdown-mermaid-writing`; conversión ad-hoc → `pdf` + `image-prompt-generator` — y la lista de **GAP** (Jupyter, R, Graphviz/PlantUML, LaTeX de manuscrito) se conserva literal.
-- [ ] `specs/spec-payload-agents.md` §Tlacuilo CAPABILITIES: `xlsx-official`/`excel-analysis` sustituidos por los reales; el resto de las skills citadas en los 5 cuerpos verificadas contra el `ls` de 40.
-- [ ] Ambas specs llevan marca de enmienda fechada **2026-11-09** y conservan `Status: Approved` (es una enmienda, no una decisión nueva ⇒ sin ADR).
-- [ ] La tabla 9×4 de `spec-payload-skills.md` sigue siendo coherente con los cuerpos enmendados (ninguna skill citada allí que no exista).
-- [ ] Invariante verificada por script: **todo** nombre de skill citado en las 5 specs del payload existe en `ls .opencode/skills` — 0 huérfanos.
-- [ ] `git diff --stat -- obsidian-workspace/.opencode/skills` **vacío** (D-P5-1).
-- [ ] Reglas de formato V2 re-verificadas contra el tag vigente de OpenCode (≥ v2.1.2) con fecha y URL; si el tag cambió, la desviación se registra antes de escribir nada (R2, cero asunción).
+- [ ] Corpus de **10 000 md** (10 subdirs × 1 000) + **1 000 PDF** de 1 página válidos (xref correcto, texto extraíble), determinista (seed fija) y materializado en `--dir` (btrfs por defecto).
+- [ ] **Manifiesto** `corpus-manifest.json`: por fichero → ruta relativa, sha256, bytes, tipo; más `seed`, versión del generador y totales. **12 000+ líneas** de datos, pero **una** entrada por fichero (no por línea de prosa).
+- [ ] **Reproducibilidad**: una segunda materialización desde el mismo seed produce un manifiesto **idéntico** (verificado por hash del árbol, no por comparación de carpetas).
+- [ ] El corpus **nunca** toca `obsidian-workspace/.tepochcalli/{db,models}` — verificado al terminar (el bench ya lo garantiza; el AC lo hace explícito).
+- [ ] Tamaño total en disco y **tiempo de materialización** publicados (con el método: reloj monótono).
+- [ ] El corpus se puede **reutilizar sin reindexar**: un segundo proceso que encuentra el manifiesto verifica los hashes y salta la materialización.
+- [ ] Sigue siendo **herramienta de medición, nunca gate**: no es un `test_*`, no entra en `just ci` (regla anti-flake + coste de ~10 min).
 
-**Verificación:** barrido de nombres de skill con 0 huérfanos; `git diff --stat -- obsidian-workspace/.opencode/skills` vacío; `just md-lint` 0; revisión del dueño (CP-0) antes de T4/T7.
+**Verificación:** dos ejecuciones → manifiestos idénticos; `sha256sum` del árbol coincide con el manifiesto; `just ci` sigue verde sin el bench.
 
-**Dependencias:** T0 · **Scope:** M (2 specs + 1 script de barrido)
+**Dependencias:** T0 · **Scope:** M (módulo del corpus + bench de escala adaptado + test del manifiesto)
 
-**Ficheros probables:** `specs/spec-payload-commands.md` · `specs/spec-payload-agents.md` · `specs/spec-payload-skills.md` (solo si la tabla 9×4 cita skills inexistentes)
+**Ficheros probables:** `tests/benchmarks/bench_delta_scale.py` · `tests/support/corpus.py` (nuevo) · `tests/support/test_corpus_manifest.py` (nuevo)
 
 ---
 
-### Task T2: Agente `itzamna` (piloto vertical)
+### Task T2: Coste real de un PDF de 30 páginas con markitdown (TD-2)
 
-**Descripción:** materializar **el primer agente completo** — frontmatter + bloque `permissions` +
-cuerpo de 56 líneas — y el verificador que lo prueba. Es la rebanada vertical que valida el método
-(orden last-match-wins, budgets, idioma) antes de escalar a los otros cuatro.
+**Descripción:** la cifra **nunca medida**. La de Docling (49-51 s / 30 págs) **no se extrapola** a
+markitdown (lección de Phase 3.5 (b): *lo no medido se escribe como no medido*). Sin ella, el
+presupuesto de escala del criterio 6 **no se puede afirmar para PDFs de 30+ páginas**. Además, TD-2
+deja una condición: *«si rompe la percepción de 30 s, límite de tamaño / cache de parse (Phase 6)»*.
 
 **Criterios de aceptación:**
 
-- [ ] `obsidian-workspace/.opencode/agents/itzamna.md` = frontmatter (`description: "Itzamna - Supreme Orchestrator"`, `mode: primary`, bloque `permissions` de 16 reglas de `spec-payload-permissions.md` §Itzamná, **sin `model`**) + cuerpo literal de `spec-payload-agents.md`.
-- [ ] `wc -l` ≤ 60 (objetivo 56).
-- [ ] Cero campos legacy: `temperature|top_p|prompt:|permission:|tools:|disable|maxSteps`.
-- [ ] Los 6 elementos del contrato T5 presentes: persona UH, propósito + bandeja, MCP-first, no-contaminación, formato de cita `source_path » heading (chars x–y)`, cláusula «the vault's `AGENTS.md` governs and is editable».
-- [ ] Cero marcadores del español (D-P4-6): `ñ`, `¿`, `¡` y palabras sueltas `el|la|los|las|para|con|por|una|del|que|cómo|según` — exentos nombres propios y tokens de enum.
-- [ ] Simulador last-match-wins verde: `edit *` → deny · `read 00-Resources/x.md` → allow · `read .env` → deny · `read sub/.env.local` → deny · `read .tepochcalli/config/tepochcalli.toml` → deny.
+- [ ] Fixture **PDF de 30 páginas** válido (xref correcto, texto extraíble por pdfminer vía markitdown) generado **extendiendo `tests/fixtures/pdf/gen_fixture_pdf.py`** — **sin dependencia nueva** (R1).
+- [ ] Medición con **n ≥ 3**: tiempo de extracción + indexación del PDF de 30 págs, con el **RSS pico** (`VmHWM`) al lado. Se publica n, método y host.
+- [ ] La cifra va **separada** del Δ de texto (D51): el documento se mide aparte y **no** cuenta contra el presupuesto de 30 s. La tabla §6.3 lo refleja así.
+- [ ] **Coste por página** publicado y contrastado con el corpus de 1 000 PDF de 1 página: la extrapolación se declara como *derivación*, no como medición.
+- [ ] La cifra se etiqueta **`medido`** (jerarquía de D8: `medido > estimado > declarado`).
+- [ ] **La condición de TD-2 se resuelve con dato**: si el PDF de 30 págs rompe la percepción del Δ ⇒ se **abre una tarea de remediación** (límite de tamaño de archivo o caché de parseo) con su propio ADR, y se registra como tal en `docs/TECH_DEBT.md`. Si no rompe ⇒ TD-2 se **cierra** con la cifra y su condición.
+- [ ] El fixture de 30 págs **no** entra en el gate de `just ci` (marcado `slow` o fuera de la suite).
 
-**Verificación:** el simulador corre como test (T11 lo aterriza; T2 lo deja escrito y ejecutable a mano) · `npx --yes markdownlint-cli2 obsidian-workspace/.opencode/agents/itzamna.md` (si el bloque congelado no pasa el lint, la desviación se corrige **en la spec**, no en el payload).
+**Verificación:** el bench corre a mano y publica su JSON; el número aparece en `docs/TRD.md` §6 con su comando.
 
-**Dependencias:** T0 · **Scope:** S (1 fichero de payload + verificador)
+**Dependencias:** T0 · **Scope:** M (generador + bench + informe)
 
-**Ficheros probables:** `obsidian-workspace/.opencode/agents/itzamna.md`
+**Ficheros probables:** `tests/fixtures/pdf/gen_fixture_pdf.py` · `tests/benchmarks/bench_documents.py` (nuevo) · `docs/TRD.md` §6
 
 ---
 
-### Task T3: Agentes `nezahualcoyotl`, `pochteca`, `chilam`
+### Task T3: Eval de relevancia con consultas etiquetadas (TD-15)
 
-**Descripción:** los tres agentes limpios del blueprint (sin skills inexistentes). Cada uno con su
-bloque `permissions` —deny-list de `external_directory` + secretos, y superficie de escritura
-acotada a su bandeja— y su cuerpo congelado.
+**Descripción:** la suite afirma **forma** (shapes, F1, presupuesto) y **tiempo** (p95), pero **ninguna
+prueba pregunta «¿a la consulta X le corresponde el fichero Y en top-k?»**. Un cambio en el chunking,
+en la fusión RRF o en el embedder podría empeorar las respuestas y el sistema seguiría verde. Este
+calpulli cierra TD-15 con un golden etiquetado y un recall medido.
 
 **Criterios de aceptación:**
 
-- [ ] `nezahualcoyotl.md` (54 líneas), `pochteca.md` (58), `chilam.md` (58): frontmatter + bloque de permisos + cuerpo, todos ≤ 60 líneas.
-- [ ] Probes D9.3 verdes: Pochteca `edit 01-tasks/research/x.md` → allow, `edit 02-drafts/x.md` → deny, `edit 01-tasks/x.md` → deny; Nezahualcóyotl `edit 01-tasks/plan.md` → allow, `edit 01-tasks/research/x.md` → deny; Chilam `edit 03-citations/x.md` → allow, `edit 04-review/x.md` → allow, `edit 02-drafts/x.md` → deny.
-- [ ] Nezahualcóyotl sin `webfetch`/`websearch`; Chilam sin `webfetch`/`websearch`; Pochteca con web permitida (desviación D9.3 del UH, ya documentada).
-- [ ] Los 5 `subagent * deny` presentes en los 5 bloques (los ~165 subagentes Códice quedan catalogados pero inertes).
-- [ ] Cero marcadores del español; cero campos legacy.
+- [ ] **10 consultas etiquetadas** (query → `source_path` esperado, + `heading` esperado cuando aplique) sobre `tests/fixtures/golden_vault/`, en **mix ES/EN** (para que el conjunto detecte también la deriva del FTS que T4 mide). Las etiquetas son **datos** (fichero en `tests/fixtures/`), no lógica.
+- [ ] Test de integración **en subproceso** (patrón `index_vault` de `tests/support/mcp_server.py`): `search(top_k=5)` por consulta → **recall@5 = 1.0** sobre el fixture.
+- [ ] **Sin** aserciones de latencia (regla anti-flake de la casa): el test afirma relevancia, no tiempo.
+- [ ] El **umbral** (1.0) y su justificación quedan en `docs/TRD.md` §6.2 (fijado en T0, D-P6-8), junto al método y a n.
+- [ ] **RED demostrado** antes de implementar (el commit del test en rojo, luego en verde).
+- [ ] El test **falla** si el golden vault se vacía o si una etiqueta cambia ⇒ no es una tautología (lección de Phase 3.5 (c)).
 
-**Verificación:** simulador last-match-wins con los probes por agente · markdownlint del payload en verde · diff contra el bloque de la spec, línea a línea.
+**Verificación:** `just python-test` verde; el recall se publica con n = 10 y el nombre del fixture.
 
-**Dependencias:** T2 (patrón probado) · **Scope:** M (3 ficheros)
+**Dependencias:** T0 · **Scope:** M (fixture de etiquetas + test de integración)
 
-**Ficheros probables:** `obsidian-workspace/.opencode/agents/{nezahualcoyotl,pochteca,chilam}.md`
+**Ficheros probables:** `tests/fixtures/golden_vault/queries.json` (nuevo) · `tests/integration/test_retrieval_relevance.py` (nuevo) · `docs/TRD.md` §6.2
 
 ---
 
-### Task T4: Agente `tlacuilo`
+### Task T4: Criterio 3 a escala (10k/1k) y deriva del índice FTS ES/EN
 
-**Descripción:** el quinto agente, con deny-list completa (12 denies detrás de `edit * allow`) y el
-cuerpo corregido según la enmienda de T1 (CAPABILITIES citaba skills inexistentes).
+**Descripción:** el criterio 3 se ha medido **siempre** contra un corpus de 100 ficheros (p95 52 ms).
+UH.md no pone tamaño al corpus, pero `docs/TRD.md` §6 sí: *«100 queries muestreadas del corpus
+10k/1k»*. Además, el review 5-ejes de Phase 3.5 dejó un hallazgo **abierto**: el índice FTS se declara
+sin `language` ⇒ stemming y stopwords **solo en inglés** sobre un corpus ES+EN. Ese es un mecanismo
+concreto de deriva en la relevancia en español.
 
 **Criterios de aceptación:**
 
-- [ ] `tlacuilo.md`: 56 líneas, frontmatter con `description: "Tlacuilo - The Engineer"`, `mode: primary`, sin `model`.
-- [ ] Deny-list **entera y en orden**: `.obsidian/**`, `.opencode/**`, `.tepochcalli/**`, `00-Resources/**`, `01-tasks/**`, `03-citations/**`, `04-review/**`, `.git/**`, `AGENTS.md`, `opencode.json`, `tepochcalli.toml` — todos detrás de `edit * allow`.
-- [ ] Probes D9.3 verdes: `edit 05-outputs/x.csv` → allow · `edit 02-drafts/x.md` → allow · `edit 00-Resources/x.md` → deny · `edit AGENTS.md` → deny · `edit opencode.json` → deny · `edit .git/config` → deny.
-- [ ] Sin `webfetch`/`websearch`; `subagent * deny`; `shell * deny`.
-- [ ] CAPABILITIES cita **solo** skills del `ls` de 40 (enmienda de T1 aplicada).
-- [ ] Cero marcadores del español; cero campos legacy.
+- [ ] `search` medido sobre el corpus **10 000 md + 1 000 PDF** de T1 (índice estable), con **n = 100 queries** muestreadas del corpus, `top_k=5`, percentil **nearest-rank** declarado (`sorted[ceil(0.95·n)-1]`).
+- [ ] Se publican **las dos cifras** que ya distingue el bench hermano: `p95_client_ms` (puerta del gate: incluye IPC, es lo que vive el usuario) y `p95_server_took_ms` (punto de medición de la spec). La que decide el criterio es `p95_client_ms`.
+- [ ] La tabla **por etapa** (embed / ANN+FTS / ensamblado / IPC) se publica con su margen, como hoy: el presupuesto por etapa de `spec-mcp-server` §latencia es parte del diagnóstico si el p95 falla.
+- [ ] **Deriva FTS medida**: recall@5 de las consultas ES con la pierna FTS activa vs **FTS desactivada** (solo ANN), sobre el mismo corpus y las mismas queries. El mecanismo queda demostrado con el número, no con la suposición.
+- [ ] Si la deriva supera el umbral fijado en T0 ⇒ se evalúa la **configuración bilingüe del FTS** contra la **documentación de la versión pineada** de LanceDB (R3: leer la doc, no la memoria) y se implementa **o** se documenta el límite con su cifra y su impacto. La decisión queda escrita en `docs/TRD.md` §6.2 y `docs/TECH_DEBT.md`.
+- [ ] La cifra que decide el criterio 3 va a la tabla §6.3 con su **origen** (bench + n + método).
 
-**Verificación:** simulador last-match-wins · markdownlint del payload · barrido de nombres de skill sobre el fichero (0 huérfanos).
+**Verificación:** el JSON del bench se archiva como evidencia; `just python-bench-search` (variante de corpus) reproducible.
 
-**Dependencias:** T1 + T3 · **Scope:** S (1 fichero)
+**Dependencias:** T0, T1, T3 · **Scope:** L (bench a escala + análisis de relevancia)
 
-**Ficheros probables:** `obsidian-workspace/.opencode/agents/tlacuilo.md`
+**Ficheros probables:** `tests/benchmarks/bench_search.py` (variante `--corpus`) · `tests/benchmarks/bench_search_scale.py` (nuevo) · `docs/TRD.md` §6.2
 
 ---
 
-### Task T5: Comandos `/rubric`, `/synthesize`, `/draft`, `/update`
+### Task T5: Criterio 6 — escala 10k/1k y comparación 10 % vs 100 %
 
-**Descripción:** los cuatro comandos de fase lineal (una fase, una bandeja, una nota). Materializar
-el cuerpo congelado de `spec-payload-commands.md` con su frontmatter mínimo.
+**Descripción:** el criterio 6 dice *«sin degradación de rendimiento»* con 10 000 notas y 1 000 PDFs.
+`docs/TRD.md` §6 lo operacionaliza: *«sin regresión >2× entre tamaños»*. El bench de escala ya mide
+el Δ a 11 000 entradas y el walk-only; **falta** el brazo del 10 % (la comparación) y falta la
+medición en el filesystem de contraste con su etiqueta de límite.
 
 **Criterios de aceptación:**
 
-- [ ] Los 4 `.md` con frontmatter `{description, agent}` y cuerpo literal de la spec: `/rubric` (agent `nezahualcoyotl`, 24 líneas), `/synthesize` (`nezahualcoyotl`, 24), `/draft` (`tlacuilo`, 24), `/update` (`tlacuilo`, 24).
-- [ ] `wc -l` ≤ 35 cada uno.
-- [ ] Esqueleto de casa completo: `## Pre-Flight` · `## Phase …` · `## Escalation` · `## Suggested Next Step` con cita en bloque.
-- [ ] Cero `model`, cero `subtask`, cero `subagent:`, cero bloques `` !`cmd` ``, cero `@paths`.
-- [ ] Bandeja y frontmatter de salida exactos: `/rubric` → `01-tasks/` `{command, agent, date}`; `/synthesize` → `01-tasks/` `{command, agent, phase, date}`; `/draft` → `02-drafts/` `{command, agent, outline, date}`; `/update` → `02-drafts/` `{command, agent, date, revision_note}`.
-- [ ] `E_*` → `rag_status()` + `fix_hint` (nunca el error crudo) presente en los 4.
-- [ ] Cero marcadores del español.
+- [ ] **Δ p95** (n=20, nearest-rank) sobre el corpus de 11 000 entradas, en **btrfs (referencia)**: cifra medida + método + diferencia declarada frente a la baseline P-02 (26 967 ms).
+- [ ] **Comparación 10 % vs 100 %**: se mide el Δ **y** la latencia de `search` con el corpus al **10 %** (1 100 entradas) y al **100 %**; la regresión se publica como **ratio**, no como opinión. PASS = ratio ≤ 2× (la cota de TRD §6).
+- [ ] **Walk-only** medido aparte (coste de `source.scan_items` sobre 11k entradas, sin embed y sin Δ) — es la cifra que explica el FS lento.
+- [ ] **fuseblk/NTFS-3G**: la misma medición repetida en `/mnt/HDDFish` y el resultado publicado **como límite conocido** (D-P6-3), con la causa (walk de 11k entradas: 17,6 s medidos en Phase 3.5) y la recomendación al usuario (un vault en NTFS/OneDrive degrada el Δ; el presupuesto de 30 s es del FS local rápido).
+- [ ] La cifra que decide el criterio es la de **btrfs**; la de NTFS va a la columna de límites de §6.3 — **no** se maquilla el FAIL.
+- [ ] Los costes de **documentos** (D51) van aparte: los PDF de 30+ páginas no se mezclan con el Δ de texto (T2 aporta la cifra).
+- [ ] El bench sigue **fuera** del gate de pytest (herramienta one-shot).
 
-**Verificación:** barrido de los 4 ficheros (líneas, frontmatter, prohibiciones, idioma) · diff contra la spec bloque a bloque.
+**Verificación:** JSON de resultados con ambos FS y los dos brazos; las cifras en `docs/TRD.md` §6 y `docs/WORKFLOW.md` §6.3.
 
-**Dependencias:** T0 · **Scope:** M (4 ficheros)
+**Dependencias:** T0, T1, T4 · **Scope:** M (extensión del bench + corrida larga + informe)
 
-**Ficheros probables:** `obsidian-workspace/.opencode/commands/{rubric,synthesize,draft,update}.md`
+**Ficheros probables:** `tests/benchmarks/bench_delta_scale.py` · `tests/benchmarks/bench_scale_ratio.py` (nuevo, brazo 10 %) · `docs/TRD.md` §6
 
 ---
 
-### Task T6: Comandos `/research`, `/validate`, `/cite`, `/review`
+### Task T6: Criterio 4 — tokens por consulta (<2000 con contexto)
 
-**Descripción:** la cadena de evidencia y sus gates deterministas —el corazón de TD-14—: la
-`procedencia` de 4 estados, el chequeo claim↔índice de 4 clases y el gate de compilación sin red.
+**Descripción:** el server **garantiza** ≤1600 tokens por la fórmula `chars/4 + 25` (spec-mcp-server), y
+eso ya está testeado. Lo que UH.md pide es otra cosa: *«el consumo de tokens por consulta es inferior a
+2000 tokens (incluyendo contexto)»* — la consulta completa vista por el LLM: query + payload + la
+respuesta del agente con sus citas. Esa cifra **nunca se ha medido con un tokenizador real**.
 
 **Criterios de aceptación:**
 
-- [ ] Los 4 `.md` con frontmatter `{description, agent}` y cuerpo literal: `/research` (`pochteca`, 30 líneas), `/validate` (`chilam`, 26), `/cite` (`chilam`, 24), `/review` (`chilam`, 24). Todos ≤ 35.
-- [ ] `/research`: `procedencia` **siempre serializada** (aunque `[]`) de `{fuente, estado, url_o_doi, fecha_consulta}`; los 4 estados (`verificada`, `web_search_unconfirmed`, `no_encontrada`, `inaccesible`); `web_search_unconfirmed` nunca se presenta como `verificada`.
-- [ ] `/validate`: las 4 clases (`respaldada`, `sin_ancla`, `cita_ajena`, `sin_cita`); la ambigüedad **nunca** cuenta como `respaldada`; `verdict` ∈ {`ok`, `ok_con_avisos`, `rechazado`}; `ok` imposible con `sin_ancla`/`sin_cita`.
-- [ ] `/cite`: gate determinista **sin red y sin juicio de modelo**; referencia sin `procedencia` ⇒ falla **nombrando el culpable** con cero salida parcial; 0 supervivientes ⇒ fallo, nunca bibliografía vacía; `web_search_unconfirmed` se compila **marcado**.
-- [ ] `/review`: no edita el borrador del autor; todo hallazgo nombra su ubicación.
-- [ ] Cero `model`/`subtask`/`subagent:`/`` !`cmd` ``/`@paths`; cero marcadores del español.
+- [ ] Medición **e2e** del payload que ve el harness: `search` real (`top_k=5`) + query del usuario + esqueleto de la respuesta del agente con las citas, contado con un **tokenizador real** — no el estimador `chars/4`. El tokenizador se nombra con **versión** y se cita su fuente (R2/R3); si el del harness no es accesible desde el repo, se usa uno de referencia documentado y se declara cuál.
+- [ ] Fixture **adverso**: unicode, CJK, emoji, tablas, listas largas — se reutiliza `tests/integration/test_mcp_budget_adversarial.py` como base.
+- [ ] **Dos cifras** publicadas con su desglose: (a) **payload del server** (≤1600 por la fórmula — invariante del contrato) y (b) **total e2e** (**<2000**, el criterio de UH) = query + payload + envoltura de la respuesta.
+- [ ] La cifra total se publica con n, tokenizador y método en `docs/TRD.md` §6.
+- [ ] Si el total **excede** 2000 ⇒ el contrato MCP **no se toca** (ADR-005 congelado): el ajuste es del **techo del server** (p. ej. bajar 1600) y requiere decisión explícita del dueño + ADR si altera el contrato publicado. **Nunca** se maquilla la cifra recortando el corpus.
+- [ ] Test e2e que **falla** si el total supera 2000 con el fixture adverso (guarda viva, no un número en un doc).
 
-**Verificación:** barrido de los 4 ficheros · comprobación de que los nombres de campo en español (`fuentes`, `método`, `procedencia`, `estado`, `fuente`, `url_o_doi`, `fecha_consulta`) están **intactos** (son contrato de datos) · tokens de enum intactos.
+**Verificación:** el test corre en `just python-test` (es rápido) y la cifra publicada es reproducible.
 
-**Dependencias:** T0 · **Scope:** M (4 ficheros)
+**Dependencias:** T0 · **Scope:** M (test e2e + medidor + informe)
 
-**Ficheros probables:** `obsidian-workspace/.opencode/commands/{research,validate,cite,review}.md`
+**Ficheros probables:** `tests/e2e/test_mcp_token_budget.py` (nuevo) · `tests/support/tokenizer.py` (nuevo) · `docs/TRD.md` §6
 
 ---
 
-### Task T7: Comando `/transform`
+### Task T7: Criterio 5 — citas precisas y re-verificación contra el archivo vivo (TD-13)
 
-**Descripción:** el único comando con conversor y con gaps declarados. Depende de la enmienda de T1
-porque su paso 2 es el que citaba las 8 skills inexistentes.
+**Descripción:** la identidad F1 (`text[char_start:char_end] == chunk.text`) se afirma **al indexar**,
+en unit y en el e2e grabado — pero **nadie la re-comprueba contra el archivo vivo** después. Una
+edición externa (otra app, sync) deja chunks con offsets exactos cuyo texto ya no está en el archivo:
+la cita es estructuralmente válida y **falsa** respecto al vault ⇒ daño directo al criterio 5 (TD-13).
+La función `citation.verify_slice_identity` **ya existe**: lo que falta es exponerla en el CLI de solo
+lectura.
 
 **Criterios de aceptación:**
 
-- [ ] `transform.md`: frontmatter `{description, agent: tlacuilo}`, cuerpo de 25 líneas, ≤ 35.
-- [ ] Paso 2 cita **solo** skills reales del congelado de 40 (enmienda T1 aplicada) y **declara** los gaps (Jupyter, R, Graphviz/PlantUML, LaTeX de manuscrito) como pendientes, sin inventar nombres ni simular artefactos.
-- [ ] `list_formats` se llama antes de prometer un formato; `convert_document`/`convert_base64` producen un `.md` en disco que **no** es la fuente citable (el original sigue indexado vía `index_refresh`).
-- [ ] Bandeja `05-outputs/` + nota de manifiesto con frontmatter `{command, agent, source_draft, formats, date}`.
-- [ ] Cero `model`/`subtask`/`subagent:`/`` !`cmd` ``/`@paths`; cero marcadores del español.
+- [ ] `verify.py` gana `--spot-check N`: para N filas muestreadas, relee el `source_path` desde el vault y afirma la identidad F1 **reusando** `citation.verify_slice_identity` (no se duplica la lógica). Informe por severidad + **exit ≠ 0** si hay fallos.
+- [ ] `offsets_ref` respetado: `source` ⇒ el slice se hace contra el **archivo original**; `extract` ⇒ contra el **texto extraído** (documentos). El verificador distingue los dos casos.
+- [ ] El verificador **conserva su carácter de solo lectura**: test de snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios (patrón ya existente en la suite de Phase 1).
+- [ ] **Golden answers ampliado**: el conjunto cubre **md, txt y pdf** con `source_path` real + `heading` (nullable, D13) + offsets **reproducibles** (re-slice desde disco == `text`).
+- [ ] Para **pdf**, `heading is None` (D54) se afirma **explícitamente**: el golden **no** exige heading en PDF — la ausencia es el contrato, no un fallo.
+- [ ] Cobertura del gate intacta: el código nuevo del CLI entra en la superficie medida ⇒ `just coverage` ≥ 95 %.
+- [ ] Si el spot-check encuentra citas rotas en el corpus real, se **documenta la tasa** (no se maquilla) y, si es > 0, se abre la remediación (re-index o aviso de obsolescencia, TD-4).
 
-**Verificación:** barrido del fichero · barrido de nombres de skill (0 huérfanos) · diff contra la spec enmendada.
+**Verificación:** un test **edita el archivo** post-indexación y espera **exit ≠ 0** del verificador (RED demostrado antes de implementar el flag).
 
-**Dependencias:** T1 · **Scope:** S (1 fichero)
+**Dependencias:** T0, T3 · **Scope:** M (CLI + test + golden ampliado)
 
-**Ficheros probables:** `obsidian-workspace/.opencode/commands/transform.md`
+**Ficheros probables:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/verify.py` · `tests/unit/test_verify_spot_check.py` (nuevo) · `tests/e2e/test_mcp_journey.py` (ampliado)
 
 ---
 
-### Task T8: `AGENTS.md` del vault
+### Task T8: Criterio 7 — matriz de conversión multi-formato
 
-**Descripción:** el system prompt distribuido que gobierna los 5 agentes y los 9 comandos. Sustituye
-el template genérico de 79 líneas por el bloque congelado (74 líneas tras la enmienda T8 de blancos).
+**Descripción:** el criterio 7 pide procesar *«distintos formatos de texto»* y, si no se puede, usar el
+convertidor Markdown. Hoy el conversor cubre 8 formatos (ADR-011) y el índice acepta 8 extensiones
+(D43), pero **no existe la matriz** que lo demuestra: formato → ¿se convierte? → ¿qué `doc_kind`? →
+¿qué `offsets_ref`? → ¿indexable? El `.md` convertido **no** es la fuente citable (ADR-009) y eso
+también hay que afirmarlo.
 
 **Criterios de aceptación:**
 
-- [ ] `obsidian-workspace/AGENTS.md` = bloque congelado de `spec-payload-vault.md` §Blueprint, literal.
-- [ ] 7 secciones: *What this vault is* · *Ownership zones* · *MCP-first rule* · *Command → agent → tray map* · *Citations, traceability and sources* · *Note format* · *Editability clause*.
-- [ ] `wc -l` ≤ 120 (objetivo 74).
-- [ ] El formato de cita `source_path » heading (chars x–y)`, los 4 estados de `procedencia` y las 4 clases de claim coinciden **token a token** con `spec-payload-commands.md` y `spec-payload-agents.md` (verificado por script de coincidencia literal, no a ojo).
-- [ ] El mapa comando→agente→bandeja de §4 coincide con D9.2 y con los 9 `agent:` de los comandos.
-- [ ] Cero marcadores del español; cero placeholders `[...]` residuales del template.
+- [ ] Matriz de **9 entradas**: `md`, `txt`, `pdf`, `docx`, `pptx`, `xlsx`, `xls` (índice) + `html` y `url` (convertidor). Por celda: resultado, `doc_kind`, `offsets_ref`, indexabilidad y el `source_path` resultante.
+- [ ] La matriz se ejecuta como **test** (contract/e2e), no como tabla escrita a mano.
+- [ ] Los formatos que markitdown **no** soporta (`.doc`, `.ppt`, PDF escaneado sin OCR) se declaran **GAP** con su mensaje accionable — **no** se simulan ni se inventan.
+- [ ] `html` y `url` entran por el borde del conversor (resumen de 5 claves, ADR-009): se afirma que el `.md` **convertido no es la fuente citable** y que el original indexado sí lo es.
+- [ ] La matriz publicada en `docs/TRD.md` §6 con el resultado de cada celda (incluidos los GAP).
+- [ ] Sin dependencias nuevas (R1): los fixtures se generan con lo ya instalado (`markitdown[docx,pptx,xlsx,xls,pdf]`).
 
-**Verificación:** script de coincidencia token a token de los 3 vocabulario compartidos (cita, 4 estados, 4 clases) contra las 3 specs · barrido de placeholders · markdownlint.
+**Verificación:** el test e2e verde; la tabla de `docs/TRD.md` coincide con la salida del test.
 
-**Dependencias:** T0 · **Scope:** S (1 fichero)
+**Dependencias:** T0 · **Scope:** M (fixtures + test + tabla)
 
-**Ficheros probables:** `obsidian-workspace/AGENTS.md`
+**Ficheros probables:** `tests/e2e/test_format_matrix.py` (nuevo) · `tests/fixtures/formats/` (nuevo) · `docs/TRD.md` §6
 
 ---
 
-### Task T9: `opencode.json` del payload + fixture sintético del merge
+### Task T9: Criterio 1 — no-interferencia con Obsidian
 
-**Descripción:** limpiar la configuración del harness en el payload y **cerrar TD-30**: el test del
-merge conservador deja de comparar el payload consigo mismo y demuestra el merge sobre una entrada
-fabricada.
+**Descripción:** el primer criterio de UH.md es *«el vault de Obsidian funciona normalmente sin
+interferencias»*. `specs/spec-vault-structure.md` §Testing lo describe en prosa («`.obsidian/`
+byte-idéntico, 0 procesos escuchando puertos nuevos, 0 archivos `.`-prefijados listados») pero **no
+hay un checklist ejecutable**. Se ejecuta sobre un vault **instalado de verdad** por el wizard, no
+sobre un directorio inventado.
 
 **Criterios de aceptación:**
 
-- [ ] Array global `permissions` (313 reglas) **eliminado** (D-P4-2/D-P4-3): la política efectiva de cada agente pasa a ser su bloque, auditable.
-- [ ] `instructions` corregidas a rutas **relativas al vault**: `.opencode/skills/obsidian-markdown/SKILL.md`, `.opencode/skills/obsidian-cli/SKILL.md`, `.opencode/skills/obsidian-vault/SKILL.md`, `.opencode/skills/markdown-mermaid-writing/SKILL.md` (D-P5-4) — y cada ruta **existe** dentro del vault construido.
-- [ ] `agents` conserva los 5 primarios con `model`/`color`/`request`/`steps` y **sin** arrays de permisos; `default_agent` = `"itzamna"`; `mcp.servers` intacto (lo gestiona F8).
-- [ ] `references` conservado sin cambios.
-- [ ] `tests/fixtures/opencode_payload_before_t9.json` **sustituido** por una entrada **sintética** (`opencode_payload_synthetic.json`): un `opencode.json` fabricado con `permissions`, `agents`, `mcp.servers` sin `tepochcalli-rag` y otras claves.
-- [ ] `tests/unit/test_opencode_payload_registration.py` demuestra sobre esa entrada sintética que (a) el resto del documento es **byte-idéntico** tras el merge y (b) solo se inserta `tepochcalli-rag` con la forma exacta del contrato (D17: `python -m`, nunca console script) y (c) `markitdown` no se registra (D29).
-- [ ] Segundo test sobre el payload real: parseable, **sin** array global `permissions`, `default_agent` == `itzamna`, `instructions` resolubles.
-- [ ] `just python-test` verde.
+- [ ] Script ejecutable que, sobre un vault instalado (`install --non-interactive --skip-model`), comprueba y **publica**: (a) `.obsidian/` **byte-idéntico** antes/después de `index_refresh()` + `search` (hash de árbol, no `mtime`); (b) **0** puertos nuevos escuchando (captura `ss -ltnp` antes/después y **publica la lista**); (c) **0** ficheros con prefijo punto en el árbol visible del vault (`.tepochcalli/`, `.obsidian/`, `.git/` siguen ocultos); (d) el vault sigue siendo un vault válido (`opencode.json` parseable + `AGENTS.md` + bandejas presentes).
+- [ ] El script corre contra el vault **real** instalado por el wizard (no un `tempfile` de tests).
+- [ ] La evidencia de «0 puertos» se **archiva** (lista antes/después) — es la prueba de que el MCP es stdio y no expone nada (ADR-002/ADR-005).
+- [ ] El script **falla** (exit ≠ 0) si `.obsidian/` cambia o si aparece un puerto nuevo ⇒ es una guarda, no un informe decorativo.
+- [ ] El checklist de `spec-vault-structure.md` §Testing queda **ejecutado** y referenciado.
 
-**Verificación:** los 2 tests nuevos en rojo antes de implementarlos (RED demostrado) y en verde después · `just python-lint` + `just python-fmt-check` verdes.
+**Verificación:** el script verde sobre el vault instalado; su salida archivada como evidencia del criterio 1.
 
-**Dependencias:** T0 · **Scope:** M (1 payload + 1 fixture + 1 test)
+**Dependencias:** T0 · **Scope:** M (script + ejecución + evidencia)
 
-**Ficheros probables:** `obsidian-workspace/opencode.json` · `tests/fixtures/opencode_payload_synthetic.json` · `tests/unit/test_opencode_payload_registration.py`
+**Ficheros probables:** `tests/e2e/verify_no_interference.py` (nuevo) · `docs/TRD.md` §6
 
 ---
 
-### Task T10: Scaffold canónico del vault + `.gitignore`
+### Task T10: TD-27 — el fate de la cita PDF sin heading (D54)
 
-**Descripción:** completar el árbol del vault que `spec-vault-structure.md` §Árbol canónico declara y
-que el payload hoy no cumple. Resuelve **TD-8** (alias de carpeta) y el *Action Item* de
-`04-review/`/`05-outputs/`.
+**Descripción:** con markitdown, `heading` es `null` en **toda** cita de PDF (y docx/pptx/xlsx/xls):
+el agente no puede citar «sección 2.3» de un PDF. TD-27 lo acepta como coste explícito de ADR-011 y
+**difiere la decisión a Phase 6**. La decisión se toma **con dato**: qué significa eso para el criterio 5
+en la práctica. Revertir ADR-011 significa reintroducir Docling (≈225 MB de deps y ≈2,0 GB de RSS pico)
+contra un presupuesto de dos librerías (ADR-011) — el coste solo se paga si el dato lo justifica.
 
 **Criterios de aceptación:**
 
-- [ ] `01-Tasks/` **renombrada** a `01-tasks/` con `git mv` (TD-8: renombrar, **nunca crear** — en FS case-insensitive `create_dir_all` adoptaría la carpeta existente y dejaría dos ortografías).
-- [ ] Los 3 ficheros de 0 bytes (`outline.md`, `rubric.md`, `todo.md`) **eliminados**: no portan información y un artefacto vacío en la bandeja confunde al pipeline (decisión registrada en D-P5-5).
-- [ ] Creadas `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/` con `.gitkeep` (git no trackea carpetas vacías ⇒ sin `.gitkeep` el asset publicado no las lleva).
-- [ ] `00-Resources/` con `.gitkeep` (la carpeta y las 2 muestras las crea el wizard en F3; el payload la declara vacía — D-P5-8).
-- [ ] `obsidian-workspace/.gitignore` **nuevo** con las 5 rutas de `spec-vault-structure.md` §Estrategia gitignore: `.tepochcalli/venv/`, `.tepochcalli/bin/`, `.tepochcalli/db/`, `.tepochcalli/models/`, `.tepochcalli/config/`.
-- [ ] `git ls-files obsidian-workspace` muestra las 6 bandejas representadas (con `.gitkeep`) y `01-Tasks` **no** aparece.
+- [ ] **Medición del impacto**: sobre el corpus de T1, qué fracción de las citas de PDF en top-5 llega **sin** `heading`, y qué pasa con una query cuyo único material es un PDF (el agente no tiene a qué sección apuntar). Cifra con n y método.
+- [ ] **Decisión con dato**, de dos vías: (a) **reafirmar D54** — markitdown sin jerarquía, con la cifra del impacto al lado y el coste de revertir documentado; o (b) **revertir ADR-011** — exige **ADR-013** que reemplace §4.3 de ADR-011 y re-sincroniza `spec-mcp-server`, `spec-rag-engine`, `spec-markitdown` y `spec-vault-structure`.
+- [ ] La decisión queda **escrita** con su fecha: ADR-013 si es (b); si es (a), nota de cierre en `docs/TECH_DEBT.md` + `spec-mcp-server` §citas con la limitación y su cifra (TD-27 **cerrada** con evidencia).
+- [ ] La opción elegida **no reescribe el payload** (D-P6-1) y **no** toca el contrato MCP sin ADR.
+- [ ] La decisión es del **dueño** (cambia una decisión `Accepted`): el subagente **prepara** la opción con el dato; la firma es suya.
 
-**Verificación:** `git ls-files` + `ls -la obsidian-workspace/` + `git status --short` (solo los ficheros intencionados) · el `ls` post-install de T12 confirma la capitalización canónica en el vault real.
+**Verificación:** la cifra es reproducible con el comando que la produce; el ADR (o la nota) tiene fecha y número.
 
-**Dependencias:** T0 · **Scope:** S (renombre + 6 `.gitkeep` + 1 `.gitignore`)
+**Dependencias:** T0, T1 · **Scope:** M (medición + documento de decisión)
 
-**Ficheros probables:** `obsidian-workspace/01-tasks/**` · `obsidian-workspace/{02-drafts,03-citations,04-review,05-outputs,00-Resources}/.gitkeep` · `obsidian-workspace/.gitignore`
+**Ficheros probables:** `docs/adr/adr-013-*.md` (solo si la vía es (b)) · `docs/TECH_DEBT.md` · `specs/spec-mcp-server.md`
 
 ---
 
-### Task T11: Fixtures de permisos D9.3 + contrato estático del payload
+### Task T11: TD-28 + TD-29 — hygiene del wizard y del modelo local
 
-**Descripción:** el **gate D9 ejecutable**. Dos piezas: el simulador last-match-wins con los 42
-probes de la spec, y el contrato de los 15 artefactos. Es lo que permite que T12 y T13 Produzcan
-evidencia comparable.
+**Descripción:** dos deudas pequeñas en **lenguajes distintos**, sin estado compartido ⇒ dos
+subagentes **en paralelo**. (a) `embedder_menu.rs` tiene **894 líneas** (tramo 701-1000 de CODE_STYLE:
+permitido solo con **advertencia** de refactorizar) y mezcla menú D7.1, gate test-embed y
+materialización del snapshot. (b) `require_local_model` acepta un snapshot **a medias** porque solo
+comprueba que el directorio no esté vacío ⇒ un snapshot de otra revisión pasa el chequeo y revienta más
+tarde, donde `E_MODEL_INVALID` no se emite.
 
 **Criterios de aceptación:**
 
-- [ ] `tests/unit/test_payload_permissions.py`: intérprete last-match-wins (glob `*` cruza `/`, `?` = un carácter, sin coincidencia ⇒ `ask`) + los **42 probes** de `spec-payload-permissions.md` §Verificación → **42/42 esperado == real**.
-- [ ] Los 5 agentes declaran `subagent * deny`; lectura de secretos denegada en los 5 (`.env`, `sub/.env`, `.env.local`, `config/.env`, `secrets.env`, `.tepochcalli/config/tepochcalli.toml`); cero reglas muertas.
-- [ ] `tests/unit/test_payload_contract.py`: inventario de skills **exactamente** las 40 del congelado, nombre a nombre, y **hash de contenido idéntico** al de T0 (D-P5-1: 0 modificadas, 0 añadidas, 0 eliminadas).
-- [ ] Todo nombre de skill citado en los 15 artefactos **existe** en el `ls` (0 huérfanos).
-- [ ] Presupuestos: cada agente ≤ 60 líneas, cada comando ≤ 35, `AGENTS.md` ≤ 120 (`wc -l` por fichero).
-- [ ] Higiene de frontmatter: cero `temperature|top_p|prompt:|permission:|tools:|disable|maxSteps`; cero `subtask`/`subagent:` en comandos; cero `` !`cmd` `` y cero `@paths` en los 9 cuerpos.
-- [ ] Idioma: 0 marcadores del español en los 15 artefactos, con las exenciones de D-P4-6 (nombres propios y tokens de enum como `ok_con_avisos`).
-- [ ] Config: `default_agent` resuelve a `itzamna` y `itzamna.md` declara `mode: primary`; `model` **no** se repite en ningún `.md`.
-- [ ] `just python-test` verde y cobertura ≥ 95 % (los tests nuevos no tocan `flow/`/`mcp/` ⇒ no pueden bajar el gate) · `just python-lint` y `just python-fmt-check` verdes.
+- [ ] **(a)** `embedder_menu.rs` baja de 894 a **<500 líneas**, partiendo por responsabilidad (render del menú / gate test-embed / materialización del snapshot) **sin cambiar ni un mensaje** pinneado por `e2e_cli_help`/`int_*`.
+- [ ] **(a)** `cargo fmt` limpio, `cargo clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests** (el refactor no puede perder cobertura).
+- [ ] **(b)** `require_local_model` valida el snapshot **real** (ficheros esperados: `config.json` + pesos) en vez de «el directorio no está vacío»; un snapshot a medias o de otra revisión ⇒ `E_MODEL_INVALID` **donde hoy no se emite**.
+- [ ] **(b)** Test que falla con un snapshot a medias y con el snapshot de otra revisión (RED demostrado antes).
+- [ ] Cobertura Python ≥ 95 % tras el cambio (`just coverage`).
+- [ ] `wc -l` de ambos ficheros y el recuento de tests publicados como evidencia (TD-28 y TD-29 **cerradas**).
 
-**Verificación:** los tests en **RED** antes de existir (RED demostrado en el commit) y en verde después · `just ci` completo verde.
+**Verificación:** `just rust-ci` verde · `just python-test` + `just coverage` verde · `git diff --stat` reviewed.
 
-**Dependencias:** T2, T3, T4, T5, T6, T7, T8, T9, T10 · **Scope:** M (2 ficheros de test + soporte)
+**Dependencias:** T0 · **Scope:** M (dos ficheros de código + tests)
 
-**Ficheros probables:** `tests/unit/test_payload_permissions.py` · `tests/unit/test_payload_contract.py`
+**Ficheros probables:** `crates/tepochcalli/src/application/embedder_menu.rs` (+ módulos nuevos) · `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/embedder.py` · tests correspondientes
 
 ---
 
-### Task T12: Install e2e del wizard sobre el payload final
+### Task T12: TD-34 — refs a skills/subagentes del payload (solo lectura)
 
-**Descripción:** instalar el payload con el wizard real sobre un vault efímero y comprobar que el
-árbol resultante cumple el contrato del vault y del harness. Es el `install` que exige el gate de
-Phase 5.
+**Descripción:** la ola del formato canónico (12 commits `2072121..c815eb0`) cita skills por nombre
+(`osint-skills`, `literature-search-engine`, `websearch-engine`, `tepochcalli-mcp`) **sin que ningún
+gate verifique que existen**. Un comando que cargue un nombre inexistente falla en runtime del harness:
+invisible para `just ci`. Se verifica **antes** de pedir la corrida D9 (T14/T15) para no gastar la
+corrida del QA por un fallo de referencia.
 
 **Criterios de aceptación:**
 
-- [ ] El payload se **empaqueta igual que el asset de release**: `tar -czf` con la misma lista de exclusiones de `.github/workflows/release.yml` (`.obsidian`, `venv`, `db`, `models`, `bin`, `config`, caches, `__pycache__`, `*.pyc`, `target`), raíz del tar = contenido del vault.
-- [ ] `cargo run --locked --manifest-path crates/tepochcalli/Cargo.toml -- install --non-interactive --skip-model --vault <tmp> --payload <tmp>/payload` → **0 errores**.
-- [ ] Árbol del vault instalado = el canónico: `00-Resources/`, `01-tasks/research/`, `02-drafts/`, `03-citations/`, `04-review/`, `05-outputs/`, `.opencode/{agents,commands,skills}/`, `AGENTS.md`, `opencode.json`, `.gitignore` — **con la capitalización correcta** (riesgo FS case-insensitive, TD-8).
-- [ ] Los 5 agentes instalado llevan su bloque `permissions`; los 9 comandos su cuerpo; `AGENTS.md` sus 7 secciones.
-- [ ] `opencode.json` instalado **sin** array global `permissions` y con `mcp.servers.tepochcalli-rag` inyectado por F8 con la forma exacta del contrato.
-- [ ] Las 2 muestras del wizard presentes en `00-Resources/` (`ejemplo.md` + `ejemplo.pdf`).
-- [ ] `.gitignore` instalado con las 5 rutas.
-- [ ] **Idempotencia:** 2ª corrida → 0 duplicados, 0 diffs (el merge no sobrescribe).
-- [ ] `just rust-ci` verde.
+- [ ] `ls .opencode/skills` (40) cotejado con **todos** los nombres citados en los **9 comandos** y los **5 agentes** ⇒ **0 huérfanos**. Cada nombre citado va en una tabla con su fichero y su línea.
+- [ ] `grep` de carga por comando: cada skill citada se carga **en el comando que la cita** (no en otro), y el `agent:` de cada comando resuelve a un primario existente.
+- [ ] Verificación **de solo lectura**: `git diff --stat -- obsidian-workspace` **vacío** antes y después (D-P6-1).
+- [ ] Si algún nombre está equivocado ⇒ **no se reescribe el payload**: se reporta y (a) se corrige en la spec del payload con **enmienda fechada**, o (b) se acepta como **GAP declarado** con su mensaje. En ambos casos, el gate de T15 queda desbloqueado con la decisión tomada.
+- [ ] El informe se archiva como evidencia reutilizable por T15.
 
-**Verificación:** el árbol se asserta con un script (no a ojo) y el resultado se pega en el informe · `just rust-smoke` sigue verde (el crate no cambia, pero el gate corre).
+**Verificación:** la tabla nombre→fichero→presente; `git diff --stat -- obsidian-workspace` vacío.
 
-**Dependencias:** T11 · **Scope:** M (script de assert + ejecución)
+**Dependencias:** T0 · **Scope:** S (script de barrido + informe)
 
-**Ficheros probables:** `tests/e2e/test_payload_install_contract.py` (o script equivalente) — el crate Rust no se modifica.
+**Ficheros probables:** `tests/e2e/verify_payload_refs.py` (nuevo) · `docs/diagnosis/phase6-payload-refs.md` (nuevo)
 
 ---
 
-### Task T13: Methodology e2e (D9) — corrida manual con evidencia
+### Task T13: D-b — estado de soporte de Windows en v1
 
-**Descripción:** el segundo gate de la fase. Decisión D-P5-3: **contrato estático automatizado**
-(ya en T11) **+ corrida manual con evidencia** de los 9 comandos sobre el vault instalado por T12.
+**Descripción:** el target `x86_64-pc-windows-msvc` compila y `install.ps1` existe, pero **nunca se
+ejecutó** ni en `phase3.yml` (solo ubuntu+macos) ni a mano: ni `install.ps1`, ni
+`venv/Scripts/python.exe`, ni el smoke path-5. Desde Linux **no se puede probar** (D-P6-6). La deuda se
+cierra con una **declaración honesta** de soporte, no con un "verde".
 
 **Criterios de aceptación:**
 
-- [ ] Protocolo escrito y versionado (`docs/diagnosis/` o `tasks/`): vault instalado, corpus mínimo (las 2 muestras del wizard), orden `/rubric → /research → /validate → /synthesize → /cite → /draft → /review → /transform → /update`, y qué se asserta por comando.
-- [ ] Checklist assertado **por comando**: (a) aterrizaje en **su** bandeja única (mapa D9.2, total y único); (b) frontmatter exacto (`{agent, timestamp, fuentes, método, procedencia}` en `01-tasks/research/`; `{command, agent, target_doc, verdict}` en `04-review/`); (c) **cero contaminación cruzada** entre bandejas; (d) regla MCP-first observada (`search` antes de leer crudo de `00-Resources/`); (e) no-contaminación (el agente avisa si encuentra archivos del usuario en las bandejas 01-05).
-- [ ] Evidencia capturada: transcript de tool-calls + árbol final del vault, referenciados en el informe de cierre.
-- [ ] Lo **no verificado** se escribe como no verificado (lección de Phase 3.5 (b)); ningún "verde" sin método.
+- [ ] Estado **verificado / no verificado** enumerado: qué existe (target compilable, `install.ps1`, layout `Scripts/`, merge de `opencode.json` por plataforma, D20) y qué **nunca** se ejecutó (instalador, smoke, CI).
+- [ ] **Decisión de soporte para v1** escrita con su fecha: *Windows no soportado en v1* (recomendado) o *soportado con verificación pendiente* — con la **consecuencia para el usuario** (el camino `curl|sh` es POSIX; en Windows el camino documentado es manual) y qué habría que hacer para revertir la decisión.
+- [ ] Propagación a: `docs/TRD.md` §2 (matriz de plataformas soportadas), `specs/spec-installer-wizard.md` (nota de plataforma), `docs/APPFLOW.md` (journey de instalación si existe) y `CHANGELOG.md`. **No** se toca `README.md` ni `LICENSE` (lista de «nunca» del `AGENTS.md`).
+- [ ] `docs/TECH_DEBT.md` §D-b: **cerrada** con la decisión y su fecha.
+- [ ] `just md-lint` 0 tras la edición.
 
-**Verificación:** el checklist se rellena con la salida real; el FTR lo revisa. Si el dueño no ejecuta la corrida, Phase 5 **no se cierra** y la Fase queda abierta con el motivo declarado.
+**Verificación:** la decisión aparece citada en `docs/TRD.md` §2 y en `docs/APPFLOW.md`; enlaces relativos resuelven.
 
-**Dependencias:** T12 · **Scope:** L (corrida completa, 9 comandos)
+**Dependencias:** T0 · **Scope:** S (4 documentos)
 
-**Ficheros probables:** `docs/diagnosis/phase5-methodology-e2e.md` (protocolo + evidencia)
+**Ficheros probables:** `docs/TRD.md` · `specs/spec-installer-wizard.md` · `docs/APPFLOW.md` · `docs/TECH_DEBT.md` · `CHANGELOG.md`
 
 ---
 
-### Task T14: Cierre documental + FTR Phase 5→6
+### Task T14: Scaffolding de la corrida D9 (TD-31) — evidencia verificable
 
-**Descripción:** cerrar la fase con las métricas **medidas** (no estimadas) y el FTR de `docs/WORKFLOW.md` §4.
+**Descripción:** la corrida la ejecuta el **QA humano** (D-P6-2), pero Phase 6 no puede entregar «se
+ejecutó» sin una evidencia **comprobable**. Este calpulli entrega el andamiaje: un runbook actualizado
+al formato canónico vigente (el de Phase 5 describe los comandos **antes** de la ola del 2026-11-12) y
+un **script verificador** de la evidencia archivada que comprueba mecánicamente lo comprobable —sin
+LLM—: el árbol de bandejas, los frontmatters, la presencia de las transcripciones y la regla MCP-first.
 
 **Criterios de aceptación:**
 
-- [ ] `docs/WORKFLOW.md` §Phase 5: estado **COMPLETADA**, métricas medidas con su método (n + percentil si aplica), y la lista explícita de lo **no** verificado (CI nunca ejecutada — M6; suite `slow`; Windows; release).
-- [ ] `docs/TECH_DEBT.md`: TD-6, TD-7, TD-8, TD-14 y TD-30 actualizados con la evidencia de cierre.
-- [ ] `SPEC.md`: las 5 specs del payload siguen `Approved` con la marca de enmienda fechada; los estados de las demás specs no cambian.
-- [ ] `CHANGELOG.md`: entrada de Phase 5.
-- [ ] `docs/ARCHITECTURE.md`: **sin** diagrama nuevo (Phase 5 no cambia las capas; sólo el harness del vault) — como mucho una línea si el payload altera algún inventario.
-- [ ] FTR Phase 5→6 con el checklist de `docs/WORKFLOW.md` §4: Anexo A ejecutadas (40 presentes, 0 retiros) · permission fixtures D9.3 verdes · methodology e2e verdes · coherencia blueprint ↔ archivos generados.
-- [ ] `just ci` verde y `just md-lint` 0 en el commit de cierre.
+- [ ] Runbook **nuevo** `tests/phase6-methodology-runbook.md` (el de Phase 5 se conserva como histórico, como su protocolo): los **9 comandos** con su formato vigente (Pre-Flight, `procedencia` de 4 estados, `/validate` en 4 fases, `/transform` A-G con `list_formats` antes de prometer, `/update` quirúrgico, `chilam` sin bandejas propias), los prompts por comando y el corpus.
+- [ ] **Script verificador** `tests/e2e/verify_methodology_evidence.py`: dado el directorio de evidencia (transcripts + árbol del vault + checklist), comprueba (a) que cada artefacto aterriza en **su** bandeja única y que ninguna bandeja ajena tiene ficheros, (b) que el frontmatter de cada nota trae los campos que el formato vigente exige, (c) que existe transcripción de los **9** comandos, (d) la regla **MCP-first** (una llamada `search` antes de una lectura cruda de `00-Resources/` en el transcript). Salida: exit ≠ 0 + informe por punto.
+- [ ] El script **no juzga la prosa** (el runbook lo dice): solo lo mecánico. Lo editorial queda como veredicto del QA.
+- [ ] **Evidencia sintética de ejemplo** en `tests/fixtures/` (un vault con 9 artefactos en sus bandejas + transcripts falsos) que el script usa como **caso de prueba**: verde en la forma buena y **exit ≠ 0** ante cada defecto (bandeja ajena, frontmatter ausente, transcript faltante, MCP-first no observado).
+- [ ] Plantilla de checklist con las columnas del formato vigente + la columna de evidencia.
+- [ ] La corrida **no** se ejecuta aquí (D-P6-2): este calpulli entrega el instrumento, T15 lo usa.
 
-**Verificación:** revisión cruzada de las 4 specs del payload contra los 15 artefactos generados (mismo diff que en T11, ejecutado por persona distinta del ejecutor — *pair review*).
+**Verificación:** el script corre contra la evidencia sintética: verde en la forma buena, exit ≠ 0 en cada defecto.
 
-**Dependencias:** T11, T13 · **Scope:** M (5 documentos)
+**Dependencias:** T0, T12 · **Scope:** M (runbook + script + fixtures sintéticos)
 
-**Ficheros probables:** `docs/WORKFLOW.md` · `docs/TECH_DEBT.md` · `SPEC.md` · `CHANGELOG.md` · `docs/ARCHITECTURE.md`
+**Ficheros probables:** `tests/phase6-methodology-runbook.md` (nuevo) · `tests/e2e/verify_methodology_evidence.py` (nuevo) · `tests/fixtures/methodology_evidence/` (nuevo)
+
+---
+
+### Task T15: Corrida D9 ejecutada por el QA + evidencia verificada
+
+**Descripción:** el **QA humano** ejecuta los 9 comandos en el harness sobre un vault instalado, con el
+corpus de fotosíntesis del runbook. Los subagentes **no ejecutan** la corrida (D-P6-2): recogen la
+evidencia que el QA archive y **juzgan** si esa evidencia demuestra lo que dice. Si la corrida no se
+ejecuta, el gate se firma con esa parte declarada **NO EJECUTADO** — nunca como verde.
+
+**Criterios de aceptación:**
+
+- [ ] Evidencia archivada en `tests/evidence/phase6/`: por comando `<NN>-<comando>-transcript.txt` + `<NN>-<comando>-artifact.md`, más `vault-tree.txt` y `checklist.md` (el transcript va **crudo**: nombres y argumentos de las tools, resultados resumidos).
+- [ ] `python3 tests/e2e/verify_methodology_evidence.py tests/evidence/phase6` ⇒ **exit 0** (todo lo mecánico verde: bandejas, frontmatters, 9 transcripciones, MCP-first).
+- [ ] El checklist del runbook **relleno** con la evidencia enlazada, y los puntos no mecánicos con el veredicto del QA.
+- [ ] Lo **no verificado** se escribe como no verificado (lección de Phase 3.5 (b)): ningún «verde» sin método.
+- [ ] Si la corrida **no** se ejecuta: la tabla §6.3 marca el gate adicional como `NO EJECUTADO` con el motivo, y TD-31 **sigue abierta** con su plan de pago intacto.
+
+**Verificación:** el script verde sobre la evidencia real; el checklist con 45/45 puntos y evidencia enlazada.
+
+**Dependencias:** T14 · **Scope:** L (corrida completa del QA + archivo + verificación)
+
+**Ficheros probables:** `tests/evidence/phase6/**` (nuevo, datos de QA) · `docs/TECH_DEBT.md` (estado de TD-31)
+
+---
+
+### Task T16: Cierre documental + FTR de aceptación
+
+**Descripción:** cerrar la fase con **cifras medidas** (nunca estimadas) y el FTR de `docs/WORKFLOW.md`.
+Es el calpulli que convierte 16 resultados dispersos en **una tabla de 7 filas con su origen**.
+
+**Criterios de aceptación:**
+
+- [ ] `docs/WORKFLOW.md` §Phase 6: **tabla §6.3 rellena** — cada fila con su cifra medida, su **origen** (bench + n + método) y su veredicto; el **gate adicional D9** con su estado real; sección mantenida **< 700 líneas** (CODE_STYLE).
+- [ ] `docs/TRD.md` §6: protocolo, **umbrales** y cifras de la fase publicados (§6.1 método, §6.2 umbrales).
+- [ ] `docs/TECH_DEBT.md`: **re-revisión formal** — TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34 y D-b con su estado medido; **M6** y **TD-32** **siguen abiertas** con su motivo (D-P6-4); ninguna deuda cerrada sin evidencia.
+- [ ] `SPEC.md`: los 7 criterios de `docs/UH.md` pasan a **verificados** con fecha y enlace a la evidencia; el estado de las specs no cambia salvo enmienda autorizada.
+- [ ] `CHANGELOG.md`: entrada de Phase 6.
+- [ ] `docs/ARCHITECTURE.md`: **sin** diagrama nuevo salvo que T10 o T13 alteren el inventario (una línea si hace falta).
+- [ ] **FTR de aceptación**: checklist de los 7 criterios + el gate D9, cada fila con su cifra y su comando reproducible.
+- [ ] `just ci` verde (suite + cobertura ≥ 95 % + bench-smoke + rust-ci) y `just md-lint` 0 en el commit de cierre.
+- [ ] **Revisión cruzada de cifras**: cada número citado en `docs/WORKFLOW.md`, `docs/TRD.md`, `docs/TECH_DEBT.md` y `SPEC.md` es el **mismo** y su comando está a mano (un número, una fuente).
+
+**Verificación:** revisión cruzada por un segundo par de ojos (distinto del ejecutor) · `just ci` + `just md-lint` verdes.
+
+**Dependencias:** T2, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T15 · **Scope:** M (5 documentos)
+
+**Ficheros probables:** `docs/WORKFLOW.md` · `docs/TRD.md` · `docs/TECH_DEBT.md` · `SPEC.md` · `CHANGELOG.md` · `docs/ARCHITECTURE.md`
 
 ## 6. Asignación de subagentes, skills y herramientas
 
@@ -473,146 +569,190 @@ Phase 5.
 
 | Calpulli | Subagente principal | Subagente(s) de apoyo | Orden | Por qué |
 | --- | --- | --- | --- | --- |
-| T0 | `codebase-archaeologist` | — | — | Auditoría de divergencias entre blueprint y estado real; lectura, no escritura |
-| T1 | `technical-writer` | `prompt-engineer` | **secuencial**: texto → revisión de coherencia | Enmienda de spec: el texto lo escribe quien redacta; la coherencia con la tabla 9×4 la revisa quien conoce los cuerpos |
-| T2 | `security-architect` | `prompt-engineer` | **secuencial**: permisos → cuerpo | El bloque `permissions` es la frontera de seguridad (orden last-match); el cuerpo lo escribe quien redacta prompts |
-| T3 | `security-architect` | `prompt-engineer` | **secuencial** (por agente) | Ídem T2, 3 pares |
-| T4 | `security-architect` | `prompt-engineer` | **secuencial** | Ídem T2; depende de T1 |
-| T5 | `technical-writer` | — | — | 4 cuerpos de comando, un único estilo; sin gates de seguridad nuevos |
-| T6 | `technical-writer` | `prompt-engineer` | **secuencial**: gate → prosa | `/validate` y `/cite` llevan gates deterministas: el que define la regla escribe, el que la redacta la hace legible sin suavizarla |
-| T7 | `technical-writer` | — | — | 1 fichero; depende de T1 |
-| T8 | `prompt-engineer` | — | — | Es un system prompt distribuido, no un documento de repo |
-| T9 | `python-pro` | — | — | Cambio de config + fixture + test: uno solo, para que el test y el fixture no se desincronicen |
-| T10 | `minimal-change-engineer` | — | — | Renombrar y crear lo mínimo; cero rediseño del scaffold |
-| T11 | `test-engineer` | `python-pro` | **secuencial**: test → revisión | El simulador y el contrato se escriben y luego se revisan contra la spec |
-| T12 | `rust-engineer` | — | — | El e2e pasa por el crate del wizard; nadie más tiene el contexto de F3/F8 |
-| T13 | `testing-evidence-collector` | `testing-reality-checker` | **secuencial**: captura → juicio | Primero se recoge la evidencia; después se juzga si demuestra lo que dice |
-| T14 | `docs-writer` | `code-reviewer` | **secuencial**: cierre → revisión | El redactor cierra; el revisor comprueba que ninguna cifra es estimada |
+| T0 | `codebase-archaeologist` | `performance-benchmarker` | **secuencial**: huecos → protocolo | El arqueólogo lee el estado real y enumera qué falta por criterio; el especialista del rendimiento redacta el protocolo con n, método y umbrales — el que fija umbrales necesita ver primero los huecos |
+| T1 | `performance-benchmarker` | — | — | Corpus determinista + manifiesto reproducible: es trabajo de instrumentación de medición, no de dominio |
+| T2 | `performance-benchmarker` | — | — | Medición del coste de extracción con RSS pico; la cifra de TD-2 nunca existió y hay que publicarla con n y método |
+| T3 | `search-relevance-engineer` | — | — | recall@5 con consultas etiquetadas: es relevancia, no forma ni tiempo — el dominio de este agente |
+| T4 | `performance-benchmarker` | `search-relevance-engineer` | **secuencial**: bench a escala → deriva FTS | El bench establece la latencia p95 sobre 10k/1k; el análisis de relevancia necesita ese corpus y ese índice ya construidos para aislar la pierna FTS (solo ANN vs FTS+ANN) |
+| T5 | `performance-benchmarker` | — | — | El brazo 10 % vs 100 % y la comparación de FS son la misma familia de medición de T4 (comparte corpus e índice) |
+| T6 | `llm-architect` | `test-engineer` | **secuencial**: presupuesto → guarda e2e | El arquitecto de LLM define el desglose de tokens y el tokenizador de referencia; el tester lo convierte en una guarda viva que falla si el total supera 2000 |
+| T7 | `rag-pipeline-engineer` | `test-engineer` | **secuencial**: `--spot-check` → guardas e2e | El flag del verificador y la identidad F1 son dominio del pipeline; el test e2e (edit-after-index ⇒ exit ≠ 0, golden ampliado) necesita el flag ya existente para ejercitarlo |
+| T8 | `test-engineer` | — | — | La matriz de formatos es un contrato ejecutable con GAP declarados |
+| T9 | `test-engineer` | `security-architect` | **secuencial**: checklist → juicio de no-interferencia | El checklist comprueba lo mecánico (hash, puertos, árbol); el arquitecto de seguridad juzga si la evidencia demuestra «sin interferencias» (0 puertos = MCP stdio) |
+| T10 | `rag-pipeline-engineer` | `software-architect` | **secuencial**: medición → decisión | Primero el dato (impacto de la cita sin heading en el criterio 5); después el arquitecto decide y redacta el ADR o la nota — cambiar una decisión `Accepted` es suya |
+| T11 | `rust-refactoring-specialist` | `python-pro` | **paralelo** (dos subagentes a la vez) | Ficheros, lenguajes y suites **distintos** (`embedder_menu.rs` vs `embedder.py`), cero estado compartido ⇒ el paralelismo es seguro y cada uno mantiene su toolchain |
+| T12 | `codebase-archaeologist` | — | — | Barrido de referencias huérfanas: lectura y contraste, cero escritura |
+| T13 | `technical-writer` | — | — | Una decisión de soporte que se propaga a 4 documentos con el mismo matiz; el que redacta la difunde sin diluirla |
+| T14 | `technical-writer` | `test-engineer` | **secuencial**: runbook → verificador | El verificador comprueba exactamente lo que el runbook promete; si el verificador va primero, comprobará una lista imaginada |
+| T15 | `testing-evidence-collector` | `testing-reality-checker` | **secuencial**: recoger → juzgar | La evidencia se recoge primero (transcripts + árbol); después se juzga si demuestra lo que dice — nunca al revés |
+| T16 | `docs-writer` | `code-reviewer` | **secuencial**: cierre → revisión cruzada | El redactor consolida las cifras; el revisor comprueba que ninguna cifra es estimada y que ningún número aparece con dos valores distintos |
+
+> **Ninguno de los subagentes ejecuta la corrida D9** (D-P6-2): la ejecuta el QA humano. T15 solo
+> **recoge** lo que el QA archive y lo **verifica**.
 
 ### 6.2 Skills por calpulli
 
 | Calpulli | Skills |
 | --- | --- |
-| T0 | `codebase-memory`, `context-engineering` |
-| T1 | `documentation-and-adrs`, `prompt-engineering`, `source-driven-development` |
-| T2, T3, T4 | `prompt-engineering`, `security-and-hardening`, `design-patterns` (el intérprete last-match-wins es *Chain of Responsibility*), `clean-code` |
-| T5, T6, T7 | `prompt-engineering`, `documentation-and-adrs` |
-| T8 | `prompt-engineering`, `obsidian-markdown` |
-| T9 | `test-driven-development`, `incremental-implementation`, `api-and-interface-design` |
-| T10 | `git-workflow-and-versioning`, `bash-defensive-patterns` |
-| T11 | `test-driven-development`, `design-patterns`, `clean-code`, `doubt-driven-development` |
-| T12 | `bash-defensive-patterns`, `test-driven-development`, `doubt-driven-development` |
-| T13 | `doubt-driven-development`, `document-verification` |
-| T14 | `documentation-and-adrs`, `changelog-generate`, `git-workflow-and-versioning`, `code-review-and-quality` |
+| T0 | `documentation-and-adrs`, `source-driven-development`, `planning-and-task-breakdown`, `context-engineering` |
+| T1 | `performance-analysis`, `bash-defensive-patterns`, `test-driven-development`, `design-patterns` (el manifiesto es un *Value Object* del corpus: inmutable, con hash) |
+| T2 | `performance-analysis`, `observability-and-instrumentation`, `bash-defensive-patterns` |
+| T3 | `test-driven-development`, `source-driven-development`, `clean-code` |
+| T4 | `performance-analysis`, `observability-and-instrumentation`, `source-driven-development` (la config del FTS se verifica contra la doc de la versión pineada: R3) |
+| T5 | `performance-analysis`, `observability-and-instrumentation`, `documentation-and-adrs` |
+| T6 | `source-driven-development`, `test-driven-development`, `error-handling-patterns` |
+| T7 | `test-driven-development`, `incremental-implementation`, `debugging-and-error-recovery`, `clean-code` |
+| T8 | `test-driven-development`, `api-and-interface-design`, `documentation-and-adrs` |
+| T9 | `test-driven-development`, `bash-defensive-patterns`, `security-and-hardening`, `observability-and-instrumentation` |
+| T10 | `documentation-and-adrs`, `source-driven-development`, `performance-analysis`, `doubt-driven-development` |
+| T11 | `refactoring-patterns`, `clean-code`, `design-patterns`, `test-driven-development`, `incremental-implementation` |
+| T12 | `codebase-memory`, `documentation-and-adrs`, `context-engineering` |
+| T13 | `documentation-and-adrs`, `changelog-generate`, `technical-writer` |
+| T14 | `documentation-and-adrs`, `test-driven-development`, `bash-defensive-patterns`, `doubt-driven-development` |
+| T15 | `doubt-driven-development`, `document-verification`, `testing-evidence-collector` |
+| T16 | `documentation-and-adrs`, `changelog-generate`, `code-review-and-quality`, `git-workflow-and-versioning` |
 
 ### 6.3 Herramientas (MCPs y plugins) por calpulli
 
-MCPs disponibles en el workspace (raíz `opencode.json`): `codebase-memory-mcp`, `context7`,
-`chrome-devtools`, `excel`, `jupyter`, `vercel-grep`, `gitmcp`. Plugins: `opencode-rpc`,
-`opencode-navigator`, `opencode-skills-collection`, `opencode-skill-creator`,
-`opencode-search-plugin`, `ponytail`.
+MCPs **activos** en este workspace (raíz `opencode.json`): `codebase-memory-mcp`, `context7`, `vercel-grep`,
+`gitmcp`. **Desactivados**: `chrome-devtools`, `excel`, `jupyter` (no se habilitan: abrirían superficie
+nueva). Plugins: `opencode-rpc`, `opencode-navigator`, `opencode-skills-collection`,
+`opencode-skill-creator`, `opencode-search-plugin`, `ponytail`.
+El MCP **`tepochcalli-rag`** (7 tools) vive en el `opencode.json` del **payload**: en esta fase lo
+ejercitan los benches y los tests e2e talking por stdio real (`python -m tepochcalli_mcp`), no el harness
+del repo padre.
 
 | Calpulli | Herramientas | Para qué |
 | --- | --- | --- |
-| T0 | `codebase-memory-mcp`, `vercel-grep` | Grafo del repo y barrido de literales (`permissions`, `01-Tasks`, `instructions`) |
-| T1 | `gitmcp`, `context7` | Re-verificar las reglas de formato V2 contra el tag vigente (`agents.mdx`, `permissions.mdx`, `commands.mdx`) |
-| T2–T8 | `gitmcp` | Contrastar cada artefacto con la spec y con la doc oficial |
-| T9 | — | Trabajo local: JSON, fixture y test |
-| T10 | `vercel-grep` | Barrido de referencias a `01-Tasks` en el crate y los tests |
-| T11 | — | Tests locales; el MCP `tepochcalli-rag` no interviene (los artefactos son texto) |
-| T12 | — | Ejecución local del crate |
-| T13 | MCP `tepochcalli-rag` del **payload** (stdio local) | La metodología e2e ejercita las 7 tools reales: es el contrato lo que se valida |
-| T14 | `vercel-grep` | Revisión cruzada de números citados entre docs |
+| T0 | `codebase-memory-mcp`, `vercel-grep` | Grafo del repo (qué benches/tests existen y qué miden) + barrido de literales (`declare_fts_index`, `spot-check`, `p95`) |
+| T1 | — | Trabajo local determinista (generación + hashes); el corpus no se indexa desde el MCP |
+| T2 | — | Trabajo local: extracción con el motor + RSS con `/proc` |
+| T3 | `tepochcalli-rag` (payload, stdio) vía el helper de `tests/support/mcp_server.py` | El recall se mide sobre el **MCP real**, no sobre el lector interno |
+| T4 | `tepochcalli-rag` (payload, stdio) · `context7` | Búsqueda real a escala; **`context7`** para la doc de la versión pineada de LanceDB (config `language` del FTS) — R3, no memoria |
+| T5 | `tepochcalli-rag` (payload, stdio) | Refresh y búsqueda a escala por el camino real |
+| T6 | `tepochcalli-rag` (payload, stdio) · `context7` | Payload real para el conteo de tokens; `context7` para el tokenizador de referencia y su versión |
+| T7 | `tepochcalli-rag` (payload, stdio) · `codebase-memory-mcp` | Citas reales por el MCP; el grafo localiza los callers de `verify_slice_identity` antes de tocarlo |
+| T8 | `tepochcalli-rag` (payload, stdio) | Conversión y posterior indexación por el camino real |
+| T9 | `tepochcalli-rag` (payload, stdio) | Refresh + search reales mientras se comprueba que no aparece ningún puerto |
+| T10 | `tepochcalli-rag` (payload, stdio) · `codebase-memory-mcp` | Citas de PDF reales para medir el impacto; el grafo muestra quién consume `heading` |
+| T11 | — | Trabajo local: refactor Rust y endurecer el Python |
+| T12 | `vercel-grep` · `codebase-memory-mcp` | Barrido de nombres de skill citados en los 9 comandos y 5 agentes (read-only) |
+| T13 | `gitmcp` | Contrastar el estado de `install.ps1` / `phase3.yml` con el repo, sin afirmar nada que no esté verificado |
+| T14 | `vercel-grep` | Localizar qué comandos del formato vigente citan skills (para el barrido de T12) |
+| T15 | `tepochcalli-rag` (payload, stdio) | El QA corre en el harness del vault instalado; el verificador lee los transcripts archivados |
+| T16 | `vercel-grep` · `codebase-memory-mcp` | Revisión cruzada de las cifras citadas entre los 4 documentos |
 
 ## 7. Checkpoints (puertas de calidad entre olas)
 
 **Ningún checkpoint se avanza en rojo.** Cada CP lista lo que debe estar **verde** para pasar.
 
-### CP-0 — Enmienda aprobada (tras T1)
+### CP-0 — Protocolo y umbrales aprobados (tras T0)
 
-- [ ] Enmienda fechada aplicada a las specs del blueprint y **aprobada por el dueño**.
-- [ ] 0 nombres de skill inexistentes en las 5 specs del payload.
-- [ ] `git diff --stat -- obsidian-workspace/.opencode/skills` vacío.
+- [ ] `docs/diagnosis/phase6-protocol.md` publicado con host, filesystem de referencia, n y método por criterio.
+- [ ] **umbrales de recall y de deriva FTS escritos en `docs/TRD.md` §6.2** y **aprobados por el dueño** (D-P6-8: se fijan antes de medir).
+- [ ] Tabla de huecos completa: cada criterio tiene su calpulli.
+- [ ] Tabla §6.3 copiada con la columna `origen de la cifra` (convención fijada para T16).
 
-### CP-1 — Los 5 agentes materializados (tras T4)
+### CP-1 — Fundaciones de medición (tras T1, T2, T3)
 
-- [ ] 5 `.md` con frontmatter + bloque `permissions` + cuerpo, ≤ 60 líneas cada uno.
-- [ ] Simulador last-match-wins verde en los 5 (probes de D9.3 por agente).
-- [ ] 0 campos legacy; 0 marcadores del español; 0 skills inexistentes citadas.
-- [ ] `git diff --stat -- obsidian-workspace` muestra **solo** los 5 ficheros de agente.
+- [ ] Corpus de 11 000 entradas reproducible **byte a byte** (manifiesto verificado dos veces).
+- [ ] Coste del PDF de 30 páginas **medido** (n ≥ 3, RSS pico, etiqueta `medido`) y la condición de TD-2 resuelta.
+- [ ] Recall@5 = 1.0 sobre 10 consultas etiquetadas (n = 10) con el **umbral de T0**, no ajustado.
+- [ ] `just ci` verde (el trabajo de la ola no rompe el gate).
 
-### CP-2 — Los 9 comandos materializados (tras T7)
+### CP-2 — Criterios 3 y 6 a escala (tras T4, T5)
 
-- [ ] 9 `.md` con frontmatter + cuerpo, ≤ 35 líneas cada uno.
-- [ ] 0 `subtask`, 0 `subagent:`, 0 `` !`cmd` ``, 0 `@paths`.
-- [ ] Los 9 `agent:` resuelven a un primario del mapa D9.2; cada `agent:` coincide con el de la spec.
-- [ ] 0 marcadores del español; los nombres de campo en español del frontmatter intactos.
+- [ ] `search` p95 sobre 10k/1k con n = 100 nearest-rank; cifra de gate = `p95_client_ms`.
+- [ ] Deriva FTS ES/EN medida contra el umbral de T0; decisión escrita (config bilingüe o límite documentado con su cifra).
+- [ ] Δ p95 a escala + **ratio 10 % vs 100 %** ≤ 2× + walk-only.
+- [ ] NTFS-3G medido y **declarado límite** con su cifra y su causa.
+- [ ] Cifras de los dos criterios en la tabla §6.3 con su origen.
 
-### CP-3 — Vault y config coherentes (tras T8 + T9 + T10)
+### CP-3 — Los 7 criterios con evidencia medida (tras T6, T7, T8, T9)
 
-- [ ] `AGENTS.md` con sus 7 secciones, ≤ 120 líneas, vocabulario compartido token a token con las specs.
-- [ ] `opencode.json` sin array global de permisos; `instructions` resolubles en el vault; `default_agent` = `itzamna`.
-- [ ] Scaffold: 6 bandejas con capitalización canónica y `.gitkeep`; `.gitignore` con las 5 rutas.
-- [ ] `git ls-files obsidian-workspace` sin `01-Tasks` y con las 6 bandejas presentes.
+- [ ] Tokens: payload ≤1600 (fórmula) y **total e2e < 2000** con tokenizador real nombrado.
+- [ ] Citas: 100 % con `source_path` real + offsets reproducibles; `--spot-check` exit 0 sobre el corpus sano y **exit ≠ 0** ante una edición posterior.
+- [ ] Matriz de 9 formatos con resultado por celda y los GAP declarados.
+- [ ] No-interferencia: `.obsidian/` byte-idéntico, **0** puertos nuevos (lista archivada).
+- [ ] Las **7 filas** de §6.3 tienen cifra y origen.
 
-### CP-4 — Contrato estático verde (tras T11)
+### CP-4 — Deuda y decisiones cerradas (tras T10, T11, T12, T13)
 
-- [ ] `just ci` verde (suite completa + cobertura ≥ 95 % + bench-smoke + rust-ci).
-- [ ] 42/42 probes de permisos; 40/40 skills con hash idéntico al de T0; 0 huérfanos de skill.
-- [ ] `just md-lint` 0.
+- [ ] TD-27 decidido **con el dato** (ADR-013 o nota de cierre con la cifra).
+- [ ] `embedder_menu.rs` **<500** líneas con el mismo número de tests; `require_local_model` valida el snapshot real.
+- [ ] TD-34: **0** skills huérfanas; `git diff --stat -- obsidian-workspace` vacío.
+- [ ] D-b: decisión de soporte de Windows escrita y propagada; `just md-lint` 0.
+- [ ] M6 y TD-32 **siguen abiertas** y declaradas (no se cierran por descuido).
 
-### CP-5 — Gates de la fase verdes (tras T12 + T13)
+### CP-5 — Gate del agente (tras T14, T15)
 
-- [ ] Install e2e verde: árbol canónico, capitalización correcta, `tepochcalli-rag` inyectado por F8, 2 muestras presentes, idempotencia.
-- [ ] Methodology e2e: 9/9 comandos con checklist assertado y evidencia capturada.
-- [ ] Lo no verificado, escrito como no verificado.
+- [ ] El verificador de evidencia pasa en la forma buena y **falla** en cada defecto (bandaja ajena, frontmatter ausente, transcript faltante, MCP-first no observado).
+- [ ] Corrida D9: **9/9** comandos con transcript archivado y checklist firmado, **o** estado `NO EJECUTADO` con motivo (nunca verde sin evidencia).
 
-### CP-6 — FTR Phase 5→6 (tras T14)
+### CP-6 — FTR de aceptación (tras T16)
 
-- [ ] Checklist de `docs/WORKFLOW.md` §4 (fila Phase 5→6) verde.
-- [ ] `docs/WORKFLOW.md`, `docs/TECH_DEBT.md`, `SPEC.md` y `CHANGELOG.md` actualizados con **cifras medidas**.
-- [ ] Revisión cruzada blueprint ↔ artefactos por un segundo par de ojos.
+- [ ] Checklist de los 7 criterios + el gate D9 con **cifra y comando** en cada fila.
+- [ ] `docs/WORKFLOW.md`, `docs/TRD.md`, `docs/TECH_DEBT.md`, `SPEC.md` y `CHANGELOG.md` con **cifras medidas**; cada número, un valor (revisión cruzada hecha).
+- [ ] `just ci` verde + `just md-lint` 0.
+- [ ] Decisión del dueño sobre el **gate de v1 release** (release o rollback con nota en `docs/WORKFLOW.md`).
 
 ## 8. Riesgos y mitigaciones (omens)
 
 | Omen | Prob. | Impacto | Mitigación | Contingencia |
 | --- | --- | --- | --- | --- |
-| El texto congelado en las specs no pasa markdownlint | media | bajo | Verificación por calpulli; la desviación se corrige **en la spec** (fuente única), nunca en el payload | Registrar la desviación y aplicarla en la enmienda |
-| El simulador last-match-wins no reproduce el intérprete real de OpenCode | media | **alto** | T1 re-verifica la doc oficial con fecha y tag; 42 probes contrastados; T13 lo detecta en vivo | Si difieren, se amendan los bloques de permisos y se repite CP-1 |
-| La corrida manual (T13) no la ejecuta el dueño | media | **alto** | El FTR no se cierra sin evidencia; el bloqueo queda declarado | Phase 5 queda **abierta** con el motivo — no se declara verde |
-| Borrar el array de 313 rompe el fixture byte-idéntico | alta | medio | T9 sustituye el fixture por un **merge sintético** (TD-30) antes de tocar el payload | Revisar el fixture congelado original en git |
-| El rename `01-Tasks`→`01-tasks` choca con un FS case-insensitive | media | medio | Renombrar (nunca crear) y `ls` tras el install | Corrección manual del vault instalado |
-| Las carpetas vacías no llegan al asset publicado | baja | medio | `.gitkeep` en las 6 bandejas | Verificación en T12 sobre el tar real |
-| F8 reintroduce permisos globales en el vault | baja | **alto** | T12 asserta que el `opencode.json` instalado no tiene array global | Auditar el merge de F8 |
-| La enmienda de T1 es rechazada | baja | **alto** | T1 es gate previo (CP-0) | Phase 5 vuelve a Phase 4 (WORKFLOW §Phase 5) |
-| El payload y el repo se desincronizan tras 15 ficheros | media | medio | Un commit por calpulli + `git diff --stat -- obsidian-workspace` en cada CP | `git checkout` del fichero afectado |
-| La suite `slow` (3 tests) no corre | alta | bajo | Se declara en «lo no verificado»; `just python-test-slow` separado | Registrar la cifra |
+| La deriva del FTS ES/EN degrada el recall en español y la versión pineada de LanceDB no admite config bilingüe | media | **alto** | Medir antes de decidir (T4) y verificar la doc de la versión pineada (R3, `context7`); el umbral está fijado en T0 | Si no hay soporte: se documenta el límite con su cifra y se ajusta el presupuesto de relevancia — **no** se cambia el motor |
+| El corpus de 11 000 entradas y su índice en frío dominan el tiempo de la fase (~10 min de materialización + indexación) | alta | medio | **Una** materialización reutilizada con manifiesto (T1) y **compartida** entre T4 y T5 | Si el tiempo no da: se reduce a la mitad del corpus y se declara el corpus reducido en §6.3 (nunca sin declarar) |
+| El QA no ejecuta la corrida D9 | media | **alto** | El gate de T15 **no se firma verde** sin evidencia; el runbook y el verificador quedan entregados como mitigación | Phase 6 se firma con esa parte **NO EJECUTADO** (como D-P5-10); TD-31 sigue abierta con su plan de pago |
+| La evidencia D9 archivada no encaja con el formato que el verificador espera | media | medio | El script valida el **árbol** (formato estable) y trata el transcript como texto libre con regex tolerante; la evidencia sintética de ejemplo fija el formato de referencia | Se ajusta el verificador (no la evidencia) y se documenta la tolerancia |
+| El refactor de `embedder_menu.rs` cambia un mensaje pinneado | media | medio | Los pines de `e2e_cli_help`/`int_*` son la red; el AC prohíbe cambiar un solo mensaje y exige el mismo número de tests | `git checkout` del fichero y refactor por fases más pequeñas |
+| El tokenizador real del harness no es accesible desde el repo | media | medio | Se usa un tokenizador de referencia **nombrado con versión** y se declara cuál (R2/R3); la cifra se publica con esa salvedad | Si tampoco hay tokenizador de referencia offline: se publica el desglose en **caracteres** y se marca como *derivación*, no como medición de tokens |
+| NTFS-3G falla el criterio 2 (ya lo hace: 39 501 ms) | **alta** | medio | D-P6-3 lo declara **límite conocido** de antemano; el criterio se evalúa contra la referencia (btrfs) | Se publica la cifra de NTFS con su causa y la recomendación al usuario; no se maquilla ni se optimiza en v1 |
+| Tocar `flow/` para `--spot-check` baja la cobertura del gate 95 % | media | medio | Test propio del CLI + `just coverage` en cada commit de la ola | Se sube la cobertura del módulo tocado antes de cerrar la ola |
+| La cifra de TD-2 (PDF de 30 págs) sale tan alta que invalida el criterio 6 | baja | **alto** | Se mide **aparte** (D51) y no cuenta contra el Δ de texto; TD-2 preveía la condición | Se abre la tarea de remediación (límite de tamaño / caché de parseo) con su ADR, registrada como tal |
+| Un criterio sale rojo y la remediación toca un contrato `Accepted` | media | **alto** | D-P6-1 + la regla §8 de `docs/WORKFLOW.md`: cambiar un contrato exige ADR nuevo | Se detiene el calpulli, se documenta el desvío y el dueño decide |
+| El plan crece y la fase se diluye | media | medio | 16 calpullis con tamaño S/M (solo T4, T7 y T15 son L) y 7 checkpoints | Un calpulli que se desborda se parte en dos commits, no en dos fases |
 
 ## 9. Métricas de cierre (se miden; no se estiman)
 
 | # | Métrica | Cómo se mide | Gate |
 | --- | --- | --- | --- |
-| M1 | Skills: **40 presentes, 0 modificadas, 0 añadidas, 0 eliminadas** | `ls` + `sha256sum` del árbol antes (T0) y después (T11) | D-P5-1 |
-| M2 | Agentes: 5 bloques de permisos + 5 cuerpos, **≤ 60 líneas** cada uno | `wc -l` por fichero | CP-1 |
-| M3 | Permisos: **42/42 probes** con esperado == real | Simulador last-match-wins | CP-4 |
-| M4 | Comandos: 9 cuerpos, **≤ 35 líneas**, 0 inline shell, 0 `@paths` | `wc -l` + barrido | CP-2 |
-| M5 | `AGENTS.md`: 7 secciones, **≤ 120 líneas**, vocabulario compartido token a token | `wc -l` + script de coincidencia literal | CP-3 |
-| M6 | `opencode.json`: **0** reglas de permisos globales; `instructions` resolubles | `json.load` + aserción sobre el vault instalado | CP-3 / CP-5 |
-| M7 | Scaffold: **6 bandejas** con capitalización canónica + `.gitignore` con 5 rutas | `git ls-files` + `ls` del vault instalado | CP-3 / CP-5 |
-| M8 | Install e2e: **0 errores**, idempotencia sin duplicados | Script de aserción sobre el vault efímero | CP-5 |
-| M9 | Methodology e2e: **9/9** comandos con checklist y evidencia | Checklist firmado + transcript | CP-5 |
-| M10 | Gates de repo: `just ci` verde, cobertura **≥ 95 %**, `just md-lint` **0** | Recetas del Justfile | CP-4 |
+| **M1** | Protocolo publicado: host, FS de referencia, n y método por criterio, **umbrales fijados** | `docs/diagnosis/phase6-protocol.md` + `docs/TRD.md` §6.2 | CP-0 |
+| **M2** | Corpus de 11 000 entradas **reproducible byte a byte** (manifiesto verificado 2×) | `sha256sum` del árbol vs `corpus-manifest.json` | CP-1 |
+| **M3** | Coste del PDF de 30 págs **medido** (n ≥ 3, RSS pico, etiqueta `medido`) | bench de documentos | CP-1 |
+| **M4** | **recall@5 = 1.0** sobre 10 consultas etiquetadas (n = 10) | test de integración en subproceso | CP-1 |
+| **M5** | `search` p95 sobre 10k/1k con **n = 100** (nearest-rank), gate = `p95_client_ms` | bench a escala | CP-2 |
+| **M6** | Deriva FTS ES/EN medida contra el umbral de T0 | recall con FTS vs solo ANN | CP-2 |
+| **M7** | Δ p95 a escala (n=20) + **ratio 10 % vs 100 % ≤ 2×** + walk-only | bench de escala, ambos brazos | CP-2 |
+| **M8** | Tokens: payload **≤1600** (fórmula) y **total e2e < 2000** (tokenizador real nombrado) | test e2e con fixture adverso | CP-3 |
+| **M9** | Citas: **100 %** con `source_path` real + offsets reproducibles; `--spot-check` exit 0 (sano) / ≠0 (editado) | verificador CLI + e2e | CP-3 |
+| **M10** | Matriz de **9 formatos** con resultado por celda (y GAP declarados) | test de contrato | CP-3 |
+| **M11** | No-interferencia: `.obsidian/` byte-idéntico, **0** puertos nuevos (lista archivada) | checklist ejecutable | CP-3 |
+| **M12** | Gate D9: **9/9** con evidencia verificada, **o** `NO EJECUTADO` declarado | verificador de evidencia | CP-5 |
+| **M13** | Deuda: TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34 y D-b **cerradas con evidencia**; M6 y TD-32 **abiertas y declaradas** | `docs/TECH_DEBT.md` | CP-4 |
+| **M14** | Gates de repo: `just ci` verde, cobertura **≥ 95 %**, `just md-lint` **0** | recetas del Justfile | CP-6 |
+| **M15** | Tabla §6.3: **7 filas** con cifra medida + origen + el gate D9 | `docs/WORKFLOW.md` §Phase 6 | CP-6 |
 
 ## 10. Open Questions
 
-Ninguna abierta. Las 4 divergencias detectadas en T0 se resolvieron con el dueño el 2026-11-09
-(D-P5-1..D-P5-9). Si T13 no puede ejecutarse, se declara como bloqueo abierto — no como verde.
+Ninguna abierta que bloquee la planificación: las decisiones D-P6-1…D-P6-8 se tomaron con el dueño el
+2026-11-11 y registradas en §2. Quedan **dos decisiones que el plan toma con dato, no por opinion**
+— se resuelven dentro de la fase, con el dueño firmando:
+
+1. **T10 — TD-27 (PDF sin heading):** reafirmar D54 o revertir ADR-011. La reversión **exige** ADR-013
+   (ADR-011 es `Accepted` y no se re-edita). El dato que la justifica se produce en T10.
+2. **T13 — D-b (Windows):** soporte declarado en v1 o no. Se resuelve por escrito, sin ejecución
+   (imposible desde este host).
+
+Y **un punto que el plan deja explícito**, no abierto: **M6** (GitHub Actions + release de prueba)
+queda **fuera** de Phase 6 por decisión del dueño (D-P6-4). La deuda sigue **abierta** y se
+re-declara en T16 con su motivo: no se firmará «CI verde» ni «release publicada» en ningún documento.
 
 ## 11. Referencias
 
-- `docs/WORKFLOW.md` §Phase 5 (objetivo, gate, validación D9) y §4 (FTR Phase 5→6)
-- `specs/spec-payload-vault.md` (reglas de formato V2, blueprint del `AGENTS.md`) · `specs/spec-payload-skills.md` (inventario de 40, tabla 9×4, muestras) · `specs/spec-payload-permissions.md` (5 bloques, 42 probes) · `specs/spec-payload-agents.md` (5 cuerpos) · `specs/spec-payload-commands.md` (9 cuerpos)
-- `specs/spec-agent-workflow.md` (D9.2 mapa de bandejas, D9.3 desviación, Anexo A) · `specs/spec-vault-structure.md` (árbol canónico, gitignore)
-- `docs/TECH_DEBT.md` (TD-6, TD-7, TD-8, TD-14, TD-22, TD-30) · `docs/ARCHITECTURE.md` · `docs/CODE_STYLE.md`
-- `crates/tepochcalli/src/adapters/payload.rs` (merge sin sobrescribir) · `application/phase8.rs` (F8) · `.github/workflows/release.yml` (empaquetado del asset)
-- Plan de Phase 4 (histórico): commit `337c012`
+- `docs/WORKFLOW.md` §Phase 6 (objetivo, tabla §6.3, gate v1 release) y §4 (FTRs) · `docs/TRD.md` §6 (protocolos) · `docs/UH.md` (los 7 criterios)
+- `docs/TECH_DEBT.md` (TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34, D-b, M6, TD-32) · `docs/ARCHITECTURE.md` · `docs/CODE_STYLE.md` (umbrales de líneas) · `docs/SECURITY.md`
+- `specs/spec-mcp-server.md` (presupuesto de latencia y de tokens) · `specs/spec-rag-engine.md` (escala) · `specs/spec-vault-structure.md` §Testing (criterio 1) · `specs/spec-markitdown.md` (formatos) · `specs/spec-embeddings.md`
+- `specs/adr/adr-009-*.md` (conversor summary-only) · `adr-010` (multi-raíz) · `adr-011` (dos librerías + D54) · `adr-005` (frontera MCP) · `adr-002` (sin daemon)
+- `tests/benchmarks/bench_delta.py` · `bench_delta_scale.py` · `bench_search.py` · `tests/support/mcp_server.py` · `tests/e2e/test_mcp_journey.py` · `tests/e2e/verify_payload_install.py` · `tests/phase5-methodology-runbook.md`
+- `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/{verify.py,citation.py,app.py,model_store.py}` · `crates/tepochcalli/src/application/embedder_menu.rs` · `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/embedder.py`
+- Plan de Phase 5 (histórico): commit `93d0060`
