@@ -1,0 +1,8 @@
+# 08 /transform — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.list_formats {}
+result: catálogo sin OCR; markdown entre los formatos de salida
+tool: tepochcalli-rag.convert_document {"path": "00-resources/fotosintesis.md", "output_path": "05-outputs/fotosintesis.md"}
+result: {written_to: "05-outputs/fotosintesis.md", bytes: 2104, chars: 2104}
+tool: read 02-drafts/draft-revA.md
+tool: write 05-outputs/comparison.csv
+tool: write 05-outputs/transform-manifest.md

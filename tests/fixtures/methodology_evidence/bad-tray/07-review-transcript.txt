@@ -1,0 +1,5 @@
+# 07 /review — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.search {"query": "ciclo de Calvin estroma", "top_k": 8}
+tool: read 02-drafts/draft.md
+tool: question {"header": "Aplicar", "question": "¿Aplico los hallazgos confirmados?"}
+tool: write 02-drafts/draft-revA.md

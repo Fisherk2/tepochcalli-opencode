@@ -287,16 +287,16 @@
 
 ## Ola 3 — Gate del agente y cierre
 
-### [ ] T14 — Scaffolding de la corrida D9 (TD-31): evidencia verificable
+### [x] T14 — Scaffolding de la corrida D9 (TD-31): evidencia verificable
 
 - Subagente: `technical-writer` → `test-engineer` (secuencial) · Skills: `documentation-and-adrs`, `test-driven-development`, `bash-defensive-patterns`, `doubt-driven-development` · Tools: `vercel-grep`
-- [ ] Runbook **nuevo** `tests/phase6-methodology-runbook.md` con los **9 comandos** en su formato vigente (Pre-Flight, `procedencia` de 4 estados, `/validate` en 4 fases, `/transform` A-G con `list_formats` antes de prometer, `/update` quirúrgico, `chilam` sin bandejas)
-- [ ] El runbook de Phase 5 se conserva como histórico (no se sobrescribe)
-- [ ] Script `tests/e2e/verify_methodology_evidence.py`: (a) cada artefacto en **su** bandeja y ninguna bandeja ajena con ficheros, (b) frontmatter con los campos del formato vigente, (c) transcripción de los **9** comandos, (d) regla **MCP-first** (`search` antes de leer crudo `00-resources/`); exit ≠ 0 + informe por punto
-- [ ] El script **no juzga la prosa** (solo lo mecánico)
-- [ ] **Evidencia sintética de ejemplo** en `tests/fixtures/`: verde en la forma buena y **exit ≠ 0** ante cada defecto (bandeja ajena, frontmatter ausente, transcript faltante, MCP-first no observado)
-- [ ] Plantilla de checklist con las columnas del formato vigente + columna de evidencia
-- [ ] La corrida **no** se ejecuta aquí (D-P6-2)
+- [x] Runbook **nuevo** `tests/phase6-methodology-runbook.md` con los **9 comandos** en su formato vigente (Pre-Flight, `procedencia` de 4 estados, `/validate` en 4 fases, `/transform` A-G con `list_formats` antes de prometer, `/update` quirúrgico, `chilam` sin bandejas)
+- [x] El runbook de Phase 5 se conserva como histórico (no se sobrescribe)
+- [x] Script `tests/e2e/verify_methodology_evidence.py`: (a) cada artefacto en **su** bandeja y ninguna bandeja ajena con ficheros, (b) frontmatter con los campos del formato vigente, (c) transcripción de los **9** comandos, (d) regla **MCP-first** (`search` antes de leer crudo `00-resources/`); exit ≠ 0 + informe por punto
+- [x] El script **no juzga la prosa** (solo lo mecánico)
+- [x] **Evidencia sintética de ejemplo** en `tests/fixtures/`: verde en la forma buena y **exit ≠ 0** ante cada defecto (bandeja ajena, frontmatter ausente, transcript faltante, MCP-first no observado)
+- [x] Plantilla de checklist con las columnas del formato vigente + columna de evidencia
+- [x] La corrida **no** se ejecuta aquí (D-P6-2)
 - Deps: T0, T12 · Verificación: el script verde en la forma buena y ≠ 0 en cada defecto
 
 ### [ ] T15 — Corrida D9 ejecutada por el QA + evidencia verificada

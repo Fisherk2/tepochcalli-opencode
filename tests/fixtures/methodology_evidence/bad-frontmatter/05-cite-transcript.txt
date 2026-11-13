@@ -1,0 +1,4 @@
+# 05 /cite — transcript sintético (no es una corrida real)
+tool: read 01-tasks/research/evidence.md
+tool: write 03-citations/bibliography.md
+result: gate determinista; 0 referencias sin origin; bibliografía emitida

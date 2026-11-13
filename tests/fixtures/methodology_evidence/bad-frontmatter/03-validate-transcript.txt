@@ -1,0 +1,5 @@
+# 03 /validate — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.search {"query": "ATP respiración celular fotosíntesis", "top_k": 8}
+result: 3 chunks; 00-resources/fotosintesis.md » Claim ambiguo (chars 1900-2050)
+tool: read 01-tasks/research/evidence.md
+tool: write 04-review/validation.md

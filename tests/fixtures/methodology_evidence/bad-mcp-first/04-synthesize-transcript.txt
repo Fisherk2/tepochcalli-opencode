@@ -1,0 +1,4 @@
+# 04 /synthesize — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.search {"query": "fase luminosa tilacoides", "top_k": 8}
+tool: read 01-tasks/research/evidence.md
+tool: write 01-tasks/outline.md

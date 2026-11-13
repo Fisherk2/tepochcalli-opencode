@@ -1,0 +1,5 @@
+# 06 /draft — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.search {"query": "clorofila a absorción 430 662", "top_k": 8}
+result: 2 chunks; 00-resources/fotosintesis.md » Absorción de luz (chars 1000-1190)
+tool: read 00-resources/fotosintesis.md
+tool: write 02-drafts/draft.md

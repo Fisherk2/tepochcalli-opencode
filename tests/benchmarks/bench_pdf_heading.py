@@ -1,4 +1,4 @@
-"""Bench del impacto de D54: la cita de PDF **sin `heading`** — Phase 6 T10 (TD-27).
+r"""Bench del impacto de D54: la cita de PDF **sin `heading`** — Phase 6 T10 (TD-27).
 
 Mide las **dos capas** que D54 mezcla, porque son cosas distintas y solo una se puede
 cambiar con un ADR:
@@ -332,7 +332,8 @@ def _write_docx(path: Path) -> None:
         '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>'
         '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
         "<w:body>"
-        '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Informe Trimestral</w:t></w:r></w:p>'
+        '<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr>'
+        "<w:r><w:t>Informe Trimestral</w:t></w:r></w:p>"
         f"<w:p><w:r><w:t>{prose}</w:t></w:r></w:p>"
         '<w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr>'
         "<w:r><w:t>Resultados</w:t></w:r></w:p>"
