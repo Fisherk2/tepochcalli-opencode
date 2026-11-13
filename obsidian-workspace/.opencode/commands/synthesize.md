@@ -32,7 +32,7 @@ agent: nezahualcoyotl
 
 - Never write outside `01-tasks/`, you only write outlines.
 - If `01-tasks/` directory does not exist, create it.
-- If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) before reading raw `00-Resources/` or the research notes.
+- If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) before reading raw files under the indexed roots.
 - Any `E_*` from `tepochcalli-rag`: call `rag_status()` and report its `fix_hint` — never the raw error. Doubt about intent or arguments: `question`.
 
 ## Suggested Next Step

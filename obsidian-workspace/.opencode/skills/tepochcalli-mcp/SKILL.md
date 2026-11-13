@@ -143,10 +143,10 @@ the standalone one no longer exists.
 | "index this loose PDF too" / "only `materiales/x.pdf`" | the user sets `INDEXER_DIR` to that file (a root may be a single file) and restarts, then `index_refresh()` |
 | "what is actually indexed?" | `rag_status()` → `index.last_refresh_roots` and `index.available_roots` |
 | "I have the file in base64" | `convert_base64(data, filename="informe.docx")` or `format: "docx"` |
-| "convert this docx to markdown" | `convert_document("00-Resources/informe.docx")` → summary; read `written_to` if needed |
+| "convert this docx to markdown" | `convert_document("<your-indexed-dir>/informe.docx")` → summary; read `written_to` if needed |
 | "convert it and keep it in `05-outputs/`" | `convert_document(path, output_path="05-outputs/informe.md")` |
 | "search my sources for what they say about X" | `search("X")`; if the index is empty, `index_refresh()` first |
 | "the index is empty" / `INDEX_EMPTY` | `index_refresh()`, then `search`; if it persists, `rag_status()` and its `fix_hint` |
-| "add this paper from the web" | `add_source("https://…")` — needs `00-Resources` in `INDEXER_DIR`; otherwise it rejects **before writing** (`VALIDATION_ERROR`, `details.hint`): report it, don't retry |
+| "add this paper from the web" | `add_source("https://…")` — needs the target root in `INDEXER_DIR`; otherwise it rejects **before writing** (`VALIDATION_ERROR`, `details.hint`): report it, don't retry |
 | "which formats do you accept?" | `list_formats()` |
 | "something is wrong with the RAG" | `rag_status()` → report `health.reason` + `fix_hint`, and `config.problems` if `valid` is false |
