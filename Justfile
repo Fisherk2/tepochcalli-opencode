@@ -70,6 +70,7 @@ python-typecheck:
     cd {{flow_dir}} && uv run python -m mypy
 
 # Suite de corrección: pytest -m "not slow" (el mismo filtro que usa CI).
+# Tarda ~18 min medidos: para iterar usa `python-test-unit` o `python-test-file`.
 python-test:
     cd {{flow_dir}} && uv run python -m pytest -m "not slow"
 

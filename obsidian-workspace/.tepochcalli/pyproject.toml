@@ -107,7 +107,9 @@ testpaths = [
 # Suite de CORRECCION por defecto: los tests `slow` (mediciones de latencia)
 # quedan fuera. Es el filtro que docs/WORKFLOW.md §Phase 2/§Testing ya
 # prescribe para CI (`pytest -m "not slow"`); ver `tasks/todo.md` T11.
-# Para ejecutarlos: `uv run python -m pytest -m slow`.
+# Medido 2026-11-12: 803 tests en ~18 min (686 unit en 2:19). El coste está
+# repartido en integración/e2e, no concentrado: marcar subconjuntos no paga.
+# Para el día a día usa `python-test-unit` o `python-test-file`.
 addopts = "-m 'not slow'"
 markers = [
     "slow: medicion de latencia/bench — no pertenece a la suite de correccion",

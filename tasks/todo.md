@@ -27,6 +27,9 @@
 - **Commits atómicos:** uno por calpulli, Conventional Commits ≤ 72 cols, trailer `Co-Authored-By`.
 - **Benchmarks fuera del gate:** los benches de la fase **no** entran en `just ci` (regla anti-flake
   y coste deminutes-to-hours); se corren a mano y su JSON se archiva como evidencia.
+- **`just coverage` solo en el cierre de fase** (CP/FTR): ~1 h de suite instrumentada y calienta el
+  host hasta apagarlo. Por tarea basta `just quality`, `just python-test` o la receta dirigida
+  (`just python-test-unit`, `just python-test-file <patrón>`); la cobertura se reconcilia en T16.
 
 ## Leyenda
 
@@ -148,7 +151,7 @@
 - [ ] **Solo lectura conservada**: snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios
 - [ ] **Golden answers ampliado**: md, txt y pdf con `source_path` real + `heading` (nullable) + offsets **reproducibles**
 - [ ] Para **pdf**, `heading is None` (D54) afirmado explícitamente: el golden **no** exige heading en PDF
-- [ ] Cobertura del gate intacta: `just coverage` ≥ 95 %
+- [ ] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en T7 basta `just python-test`
 - [ ] Si el spot-check encuentra citas rotas ⇒ la **tasa** se documenta (no se maquilla) y se abre la remediación si > 0 (TD-4)
 - Deps: T0, T3 · Verificación: test que **edita** el archivo post-indexación y espera **exit ≠ 0**
 
@@ -213,9 +216,9 @@
 - [ ] **(a)** `cargo fmt` limpio, `clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests**
 - [ ] **(b)** `require_local_model` valida el snapshot **real** (`config.json` + pesos), no «el directorio no está vacío» ⇒ `E_MODEL_INVALID` donde hoy no se emite
 - [ ] **(b)** Test que falla con snapshot a medias y con snapshot de otra revisión (RED demostrado)
-- [ ] `just coverage` ≥ 95 % tras el cambio
+- [ ] `just coverage` ≥ 95 % **se verifica en el cierre de fase (T16)**, no en este calpulli; aquí basta `just python-test`
 - [ ] `wc -l` de ambos ficheros y recuento de tests publicados (TD-28 y TD-29 **cerradas**)
-- Deps: T0 · Verificación: `just rust-ci` verde · `just python-test` + `just coverage` verdes
+- Deps: T0 · Verificación: `just rust-ci` verde · `just python-test` verde (cobertura en el cierre)
 
 ### [ ] T12 — TD-34: refs a skills/subagentes del payload (solo lectura)
 

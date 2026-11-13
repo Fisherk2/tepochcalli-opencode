@@ -335,7 +335,7 @@ lectura.
 - [ ] El verificador **conserva su carácter de solo lectura**: test de snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios (patrón ya existente en la suite de Phase 1).
 - [ ] **Golden answers ampliado**: el conjunto cubre **md, txt y pdf** con `source_path` real + `heading` (nullable, D13) + offsets **reproducibles** (re-slice desde disco == `text`).
 - [ ] Para **pdf**, `heading is None` (D54) se afirma **explícitamente**: el golden **no** exige heading en PDF — la ausencia es el contrato, no un fallo.
-- [ ] Cobertura del gate intacta: el código nuevo del CLI entra en la superficie medida ⇒ `just coverage` ≥ 95 %.
+- [ ] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en este calpulli basta `just python-test`.
 - [ ] Si el spot-check encuentra citas rotas en el corpus real, se **documenta la tasa** (no se maquilla) y, si es > 0, se abre la remediación (re-index o aviso de obsolescencia, TD-4).
 
 **Verificación:** un test **edita el archivo** post-indexación y espera **exit ≠ 0** del verificador (RED demostrado antes de implementar el flag).
@@ -434,10 +434,10 @@ tarde, donde `E_MODEL_INVALID` no se emite.
 - [ ] **(a)** `cargo fmt` limpio, `cargo clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests** (el refactor no puede perder cobertura).
 - [ ] **(b)** `require_local_model` valida el snapshot **real** (ficheros esperados: `config.json` + pesos) en vez de «el directorio no está vacío»; un snapshot a medias o de otra revisión ⇒ `E_MODEL_INVALID` **donde hoy no se emite**.
 - [ ] **(b)** Test que falla con un snapshot a medias y con el snapshot de otra revisión (RED demostrado antes).
-- [ ] Cobertura Python ≥ 95 % tras el cambio (`just coverage`).
+- [ ] Cobertura Python: **no se mide aquí**; se reconcilia con `just coverage` en el cierre de fase (T16).
 - [ ] `wc -l` de ambos ficheros y el recuento de tests publicados como evidencia (TD-28 y TD-29 **cerradas**).
 
-**Verificación:** `just rust-ci` verde · `just python-test` + `just coverage` verde · `git diff --stat` reviewed.
+**Verificación:** `just rust-ci` verde · `just python-test` verde · `git diff --stat` reviewed. La cobertura se mide en el cierre de fase, no aquí.
 
 **Dependencias:** T0 · **Scope:** M (dos ficheros de código + tests)
 
@@ -707,7 +707,7 @@ del repo padre.
 | El refactor de `embedder_menu.rs` cambia un mensaje pinneado | media | medio | Los pines de `e2e_cli_help`/`int_*` son la red; el AC prohíbe cambiar un solo mensaje y exige el mismo número de tests | `git checkout` del fichero y refactor por fases más pequeñas |
 | El tokenizador real del harness no es accesible desde el repo | media | medio | Se usa un tokenizador de referencia **nombrado con versión** y se declara cuál (R2/R3); la cifra se publica con esa salvedad | Si tampoco hay tokenizador de referencia offline: se publica el desglose en **caracteres** y se marca como *derivación*, no como medición de tokens |
 | NTFS-3G falla el criterio 2 (ya lo hace: 39 501 ms) | **alta** | medio | D-P6-3 lo declara **límite conocido** de antemano; el criterio se evalúa contra la referencia (btrfs) | Se publica la cifra de NTFS con su causa y la recomendación al usuario; no se maquilla ni se optimiza en v1 |
-| Tocar `flow/` para `--spot-check` baja la cobertura del gate 95 % | media | medio | Test propio del CLI + `just coverage` en cada commit de la ola | Se sube la cobertura del módulo tocado antes de cerrar la ola |
+| Tocar `flow/` para `--spot-check` baja la cobertura del gate 95 % | media | medio | Test propio del CLI + `just coverage` **solo en el cierre de la ola** (CP-3/CP-6) | Se sube la cobertura del módulo tocado antes de cerrar la ola |
 | La cifra de TD-2 (PDF de 30 págs) sale tan alta que invalida el criterio 6 | baja | **alto** | Se mide **aparte** (D51) y no cuenta contra el Δ de texto; TD-2 preveía la condición | Se abre la tarea de remediación (límite de tamaño / caché de parseo) con su ADR, registrada como tal |
 | Un criterio sale rojo y la remediación toca un contrato `Accepted` | media | **alto** | D-P6-1 + la regla §8 de `docs/WORKFLOW.md`: cambiar un contrato exige ADR nuevo | Se detiene el calpulli, se documenta el desvío y el dueño decide |
 | El plan crece y la fase se diluye | media | medio | 16 calpullis con tamaño S/M (solo T4, T7 y T15 son L) y 7 checkpoints | Un calpulli que se desborda se parte en dos commits, no en dos fases |
