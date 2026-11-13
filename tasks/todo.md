@@ -92,16 +92,17 @@
 - [x] **C y D no se abren** (ni límite de páginas ni caché de parseo); se reabre con ADR nuevo si hay quejas reales de latencia
 - Deps: T2 · Verificación: `just python-test` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
 
-### [ ] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
+### [x] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
 
 - Subagente: `search-relevance-engineer` · Skills: `test-driven-development`, `source-driven-development`, `clean-code` · Tools: `tepochcalli-rag` (payload, stdio)
-- [ ] **10 consultas etiquetadas** (query → `source_path` esperado + `heading` cuando aplique) en mix ES/EN, como **datos** en `tests/fixtures/`
-- [ ] Test de integración **en subproceso** (patrón `index_vault` de `tests/support/mcp_server.py`): `search(top_k=5)` → **recall@5 = 1.0**
-- [ ] **Sin** aserciones de latencia (regla anti-flake)
-- [ ] Umbral (1.0) y método publicados en `docs/TRD.md` §6.2 — **el de T0**, sin ajustar
-- [ ] **RED demostrado** antes de implementar
-- [ ] El test **falla** si el golden vault se vacía o si una etiqueta cambia (no es tautología)
+- [x] **10 consultas etiquetadas** (query → `source_path` esperado + `heading` cuando aplique) en mix ES/EN, como **datos** en `tests/fixtures/`
+- [x] Test de integración **en subproceso** (patrón `index_vault` de `tests/support/mcp_server.py`): `search(top_k=5)` → **recall@5 = 1.0**
+- [x] **Sin** aserciones de latencia (regla anti-flake)
+- [x] Umbral (1.0) y método publicados en `docs/TRD.md` §6.2 — **el de T0**, sin ajustar
+- [x] **RED demostrado** antes de implementar
+- [x] El test **falla** si el golden vault se vacía o si una etiqueta cambia (no es tautología)
 - Deps: T0 · Verificación: `just python-test` verde · recall publicado con n = 10
+- **Hecho (2026-11-12):** fixture propio `tests/fixtures/relevance_vault/` (**20 notas ES/EN**, 5 familias de 4 con distractores cercanos) + `tests/fixtures/relevance_queries.json` (n = 10, 5 ES/5 EN, 10 ficheros distintos) + `tests/integration/test_search_relevance.py` (**5 tests**, subproceso, sin latencia). **recall@5 = 1.00 (10/10)**, todas en el puesto 1; etiquetas desplazadas ⇒ **0.00** (la métrica discrimina); vault vacío ⇒ `INDEX_EMPTY` y 0.00 (el gate cae, no `skip`). Comando: `just python-test-file relevance` (5 passed, 83,6 s). Umbral de §6.2 intacto (D-P6-8); RED archivado en el informe del calpulli
 
 ### [x] Checkpoint CP-0 — Protocolo y umbrales aprobados
 
