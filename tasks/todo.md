@@ -210,13 +210,14 @@
 - [x] Cifras de los dos criterios en §6.3 con su origen
 - **Hecho (2026-11-12):** `p95_client_ms` **97 ms** (T4) y **87 ms** (T5, n=100, 11k) ⇒ criterio 3 **PASS**. Deriva FTS **no se dispara** (−26,7 % a favor del híbrido; mecanismo probado con sonda, TD-35). Criterio 6: Δ **15 695 ms** vs **2 543 ms** = **6,17×** > 2× ⇒ **FAIL medido** (TD-36), Δ absoluto dentro de 30 s; NTFS **52 996 ms** como límite. Ningún umbral se tocó.
 
-### [ ] Checkpoint CP-3 — Los 7 criterios con evidencia medida (tras T6, T7, T8, T9)
+### [x] Checkpoint CP-3 — Los 7 criterios con evidencia medida (tras T6, T7, T8, T9)
 
-- [ ] Tokens: payload ≤1600 y **total e2e < 2000** con tokenizador real nombrado
-- [ ] Citas: 100 % con `source_path` real + offsets reproducibles; `--spot-check` exit 0 / ≠ 0
-- [ ] Matriz de 9 formatos con resultado por celda y GAP declarados
-- [ ] No-interferencia: `.obsidian/` byte-idéntico, **0** puertos nuevos (lista archivada)
-- [ ] Las **7 filas** de §6.3 tienen cifra y origen
+- [x] Tokens: payload ≤1600 y **total e2e < 2000** con tokenizador real nombrado
+- [x] Citas: 100 % con `source_path` real + offsets reproducibles; `--spot-check` exit 0 / ≠ 0
+- [x] Matriz de 9 formatos con resultado por celda y GAP declarados
+- [x] No-interferencia: `.obsidian/` byte-idéntico, **0** puertos nuevos (lista archivada)
+- [x] Las **7 filas** de §6.3 tienen cifra y origen
+- **Hecho (2026-11-13):** las 7 filas de `docs/WORKFLOW.md` §6.3 quedan con cifra y origen. Resultados: **1 PASS**, **2 PASS** (Δ p95 15 695 ms = 52 % de 30 s), **3 PASS** (97 ms), **4 PASS por 5 tokens** (1 995/2 000, TD-37), **5 PASS** (6/6, sabe fallar), **6 FAIL de la cota 2×** (6,17×, TD-36; el Δ absoluto sí cabe), **7 8/9 celdas + GAP declarado** (`url` sin egress, `.doc`/`.ppt`/escaneado). Ningún umbral se ajustó tras medir.
 
 ---
 
