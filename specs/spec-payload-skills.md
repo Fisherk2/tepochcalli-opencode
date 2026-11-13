@@ -10,24 +10,26 @@
 ## Summary
 
 Esta spec es dueña de tres cosas del payload: el **inventario definitivo de skills**
-(40 dirs, 2026-11-09), la **tabla de invocación comando→herramientas (9×4)** — movida aquí
+(**39 dirs al 2026-11-12**; 40 en el congelado del 2026-11-09), la **tabla de invocación
+comando→herramientas (9×4)** — movida aquí
 desde [specs/spec-payload-vault.md](spec-payload-vault.md) en T3 (D-P4-4) — y el
 **inventario de muestras** que produce el instalador (D-P4-7).
 
-**Congelado 2026-11-09 (decisión del dueño):** `obsidian-workspace/.opencode/skills/` queda
+**Congelado 2026-11-09 (decisión del dueño):** `obsidian-workspace/.opencode/skills/` quedó
 **definitivo con 40 dirs**. Veredictos: **CONSERVAR 40/40, RETIRAR 0, CONSOLIDAR 0,
-INSTALAR-GAP 0**. Phase 5 **verifica presencia (40 presentes, 0 retiros)** y no ejecuta
+INSTALAR-GAP 0**. Phase 5 **verificó presencia (40 presentes, 0 retiros)** y no ejecutó
 ninguna matriz de recorte. La matriz de 17 filas de la rev. 2026-11-04 queda **SUPERSEDED**
 y se conserva solo como histórico colapsado (§Histórico) — **no ejecutar**.
 
 **Enmienda 2026-11-11 ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)):** el
 dueño autorizó la skill 41 (`math-typesetting-guide`, commit `1c4a90b`, invocada desde §3
-del `AGENTS.md` del payload). D-P5-1 (freeze 40) queda **SUPERSEDED**; el inventario pasa
-a **41 dirs**, objetivo <60 sigue cumplido (41 < 60).
+del `AGENTS.md` del payload). D-P5-1 (freeze 40) queda **SUPERSEDED**; el inventario pasó
+a **41 dirs**, objetivo <60 seguía cumplido (41 < 60).
 
-**Enmienda 2026-11-12 — SUPERSEDED del párrafo anterior:** `database-lookup/` se retiró
-(`c815eb0`) y el inventario vuelve a **40 dirs reales** (`ls | wc -l`). El objetivo <60 se
-cumple igual (40 < 60). Ver §Enmienda 2026-11-12.
+**Enmienda 2026-11-12 — SUPERSEDED de los dos párrafos anteriores:** se retiraron
+`database-lookup/` (`c815eb0`) y `writing-skills/` (`e785072`), y el inventario queda en
+**39 dirs reales** (`ls | wc -l`). El objetivo <60 se cumple igual (39 < 60). Ver
+§Enmienda 2026-11-12 y E1, que es el inventario **vigente**.
 
 No es dueña de: los cuerpos de comandos, agentes y `AGENTS.md` del vault (spec del
 blueprint). **No se escribe nada en `obsidian-workspace/` en esta fase.**
@@ -36,8 +38,8 @@ blueprint). **No se escribe nada en `obsidian-workspace/` en esta fase.**
 
 ```bash
 # fecha de la medición: 2026-11-09 (40); enmienda 2026-11-11: 41 con math-typesetting-guide
-# re-medido 2026-11-12: 40 (retiro de database-lookup/ en c815eb0 — ver §Enmienda 2026-11-12)
-ls obsidian-workspace/.opencode/skills | wc -l                    # 40 (41 era el valor pre-retiro)
+# vigente 2026-11-12: 39 (retiros database-lookup/ y writing-skills/ — §Enmienda E1)
+ls obsidian-workspace/.opencode/skills | wc -l                    # 39
 find obsidian-workspace/.opencode/agents -name '*.md' | wc -l    # 170
 find obsidian-workspace/.opencode/commands -name '*.md' | wc -l  # 9
 ls obsidian-workspace/00-Resources | wc -l                        # 0 (muestras de instalación: ver abajo)
@@ -45,9 +47,9 @@ wc -c obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md # 13098 (cuer
 ```
 
 * **0 skills citadas e inexistentes**: toda referencia de comandos y agentes resuelve contra el `ls`.
-* **Cobertura 40/40** (2026-11-09): las 40 están citadas o disponibles para la tabla 9×4; ninguna cae en barrido.
-* **41 nombres** (2026-11-11: los 40 + `math-typesetting-guide`), orden alfabético
-  — **SUPERSEDED 2026-11-12: son 40 y `database-lookup` ya no existe** (§Enmienda E1):
+* **Cobertura 39/39** (2026-11-12): las 39 están citadas o disponibles para la tabla 9×4; ninguna cae en barrido.
+* **39 nombres vigentes**, orden alfabético — la lista de abajo es el inventario histórico de 40/41
+  con los dos retiros tachados (§Enmienda E1 es la lista buena):
 
 article-writing · brainstorming · citation-management · consciousness-council ·
 data-analysis · data-plotting · ~~database-lookup~~ (retirado en `c815eb0`) ·
@@ -60,13 +62,13 @@ planning-and-task-breakdown · posters-generator · research-grants ·
 research-search-protocol · scholar-evaluation · scientific-brainstorming ·
 scientific-critical-thinking · scientific-problem-selection · scientific-writing ·
 spreadsheet-analysis · statistical-analysis · statistical-power · tepochcalli-mcp ·
-toon · websearch-engine · what-if-oracle · writing-skills
+toon · websearch-engine · what-if-oracle · ~~writing-skills~~ (retirada en `e785072`)
 
-### Veredictos (un cubo: 40)
+### Veredictos (un cubo: 39)
 
 | Cubo | Dirs | Qué son |
 | --- | --- | --- |
-| CONSERVAR (definitivo) | 40 — ver §Enmienda E1; el «+1 ⇒ 41» de la enmienda 2026-11-11 queda **SUPERSEDED** | las del inventario; sin recorte, sin fusión, sin instalación |
+| CONSERVAR (definitivo) | **39** — ver §Enmienda E1; el «+1 ⇒ 41» de la enmienda 2026-11-11 y el 40 del congelado quedan **SUPERSEDED** | las del inventario E1; sin recorte, sin fusión, sin instalación |
 | RETIRAR | 0 | congelado: ningún retiro en Phase 5 |
 | CONSOLIDAR | 0 | congelado: ninguna fusión en Phase 5 |
 | INSTALAR-GAP | 0 | v1 no instala ninguna skill nueva |
@@ -75,9 +77,9 @@ toon · websearch-engine · what-if-oracle · writing-skills
 
 `9×4` = **9 filas** (una por comando) × **4 columnas de contenido** (skills concretas,
 herramientas nativas, MCPs a ejecutar y subagentes permitidos); la primera columna solo
-etiqueta el comando con su `agent:` de stub. Toda skill citada existe en el `ls` de 40;
+etiqueta el comando con su `agent:` de stub. Toda skill citada existe en el `ls` de 39;
 donde la rev. anterior citaba una skill que ya no existe, se sustituye por el equivalente
-de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
+de los 39 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
 `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/server.py` (`@server.tool()`):
 `search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`,
 `list_formats`, `rag_status`. Los nombres nativos son el vocabulario V2 de
@@ -88,7 +90,7 @@ de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
 > (ver §Enmienda E2, que la reemplaza). Se conserva como historia. **No usar como fuente de
 > verdad de qué carga cada comando: los cuerpos lo son.**
 
-| Comando | Skills concretas (inventario 40) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
+| Comando | Skills concretas (inventario vigente 39) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
 | --- | --- | --- | --- | --- |
 | `/rubric` (agent: `nezahualcoyotl`) | scientific-problem-selection, experimental-design, planning-and-task-breakdown | read · glob · grep · question · todowrite (el rubric es una lista de tareas) | `tepochcalli-rag`: search (dimensionar el corpus) · index_refresh (si la frescura es dudosa) · rag_status ante `E_*` | ninguno |
 | `/research` (agent: `pochteca`) | literature-search-engine, research-search-protocol, literature-review, paper-2-web, websearch-engine, osint-skills, database-lookup, tepochcalli-mcp | webfetch · websearch · read · edit `01-tasks/research/**` | `tepochcalli-rag`: search · index_refresh · add_source (ingesta externa; markitdown **en proceso**) · rag_status | ninguno |
@@ -107,9 +109,9 @@ de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
   los necesita: ingiere con `add_source`, que convierte en la misma llamada.
 * **`excel` y `jupyter` = GAP, no tools usables:** siguen `disabled: true` en `opencode.json`;
   la vía Excel es la skill `spreadsheet-analysis`. Jupyter, R, Graphviz, PlantUML y LaTeX de
-  manuscrito no tienen skill en el inventario de 40: `/transform` los declara como pendientes
+  manuscrito no tienen skill en el inventario vigente: `/transform` los declara como pendientes
   de Phase 5 sin inventar nombres.
-* **`venue-templates` = GAP declarado:** sin skill de plantillas de venue en los 40; `/cite`
+* **`venue-templates` = GAP declarado:** sin skill de plantillas de venue en las 39; `/cite`
   usa `citation-management` + `paper-2-web`.
 * **`officecli` no se cita** como skill ni como MCP: es binario del wizard (TD-22, feature 0.2.0).
 * **Permisos MCP:** el mapeo `<server>_<tool>` por agente es de T4
@@ -122,19 +124,20 @@ de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
 
 ## Cobertura y objetivo <60
 
-Cobertura del inventario: **40/40** (2026-11-09; toda skill del `ls` está conservada;
+Cobertura del inventario: **39/39** (2026-11-12; toda skill del `ls` está conservada;
 0 huérfanas fuera de tabla porque el congelado no exige cita exhaustiva).
 
 El objetivo de menos de 60 skills del payload base (métrica heredada de
-[docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 40 < 60**
+[docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 39 < 60**
 (40 al congelado 2026-11-09 + `math-typesetting-guide` 2026-11-11 − `database-lookup/`
-retirada 2026-11-12, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) y `c815eb0`).
+retirada 2026-11-12 − `writing-skills/` retirada 2026-11-12, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md),
+`c815eb0` y `e785072`).
 **No se ejecuta ningún corte ni consolidación en Phase 5** — el inventario ya está por
 debajo del umbral por decisión del dueño (2026-11-09).
 
 **Nota TD-22 (OfficeCLI, 0.2.0) — sin contradicción:** TD-22 gobierna la **feature 0.2.0**;
 si OfficeCLI entrara, su tarea retiraría entonces las skills de ofimática que toque. En v1
-las 40 se quedan.
+las 39 se quedan.
 
 **Decisión explícita (se mantiene): 0 skills nuevas para el protocolo de opendraft.** Los
 gates heredados (procedencia, check de claim, gate de compilación) son invariantes de
@@ -165,10 +168,11 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 
 ## Open Questions
 
-* Ninguna abierta. El congelado de 40 y las muestras (sin cambio) quedan como están por
-  decisión del dueño (2026-11-09); la matriz histórica queda SUPERSEDED. La enmienda
-  2026-11-11 (inventario en 41) queda **SUPERSEDED** por la enmienda 2026-11-12: **40 dirs
-  reales** tras el retiro de `database-lookup/` (§Enmienda E1).
+* Ninguna abierta. El congelado y las muestras (sin cambio) quedan como están por
+  decisión del dueño (2026-11-09); la matriz histórica queda SUPERSEDED. Las enmiendas
+  2026-11-11 (inventario en 41) y el 40 del congelado quedan **SUPERSEDED** por la enmienda
+  2026-11-12: **39 dirs reales** tras los retiros de `database-lookup/` (`c815eb0`) y
+  `writing-skills/` (`e785072`) (§Enmienda E1).
 
 ## References
 
@@ -176,12 +180,12 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 * [specs/spec-agent-workflow.md](spec-agent-workflow.md) — Anexo A: auditoría de 208 skills (2026-10-21) y gaps accionables
 * [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) — TD-7 (skills infladas) y TD-22 (OfficeCLI 0.2.0)
 * [docs/UH.md](../docs/UH.md) — áreas de investigación pedidas (sin numeración en la fuente)
-* [docs/WORKFLOW.md](../docs/WORKFLOW.md) — Phase 4 (diseño) y Phase 5 (payload + verificación 40)
+* [docs/WORKFLOW.md](../docs/WORKFLOW.md) — Phase 4 (diseño) y Phase 5 (payload + verificación 40, hoy 39)
 * [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — capas y contratos que el payload debe respetar
 * `crates/tepochcalli/src/application/installer.rs` (muestras del instalador) y `crates/tepochcalli/assets/ejemplo.pdf`
 * [AGENTS.md](../AGENTS.md) — R1/R2 (no reinventar, cero asunción) y umbrales de líneas por fichero
 
-## Enmienda 2026-11-12 — inventario real 40 y delegaciones reales
+## Enmienda 2026-11-12 — inventario real 39 y delegaciones reales
 
 **Origen.** Auditoría `T12` ([docs/diagnosis/phase6-payload-refs.md](../docs/diagnosis/phase6-payload-refs.md),
 commit `bdb2da8`): **0 referencias huérfanas** en el payload y **3 defectos documentales**
@@ -253,7 +257,7 @@ de tool** del MCP son los del contrato (`search`, `index_refresh`, `add_source`,
 | `/update` (`tlacuilo`) | `tepochcalli-mcp` :10 (repetida en :15, inocuo) · `osint-skills` :19 · `literature-search-engine` :26 · `websearch-engine` :27 · `obsidian-markdown` + `obsidian-vault` :35 — **6** | `index_refresh` :10 · `add_source` :10 · `search` :15 · `websearch`/`webfetch` :17 · `rag_status` :48 | `search-specialist` :15 · `scientific-literature-researcher` :26 · `obsidian-vault-writer` :35 — **3** |
 
 **Control de cuadre:** 10 + 9 + 5 + 4 + 4 + 6 + 9 + 8 + 6 = **61** cargas de skill en los 9
-cuerpos, y los **40** nombres de E1 resuelven (el verificador de T12 da 0 huérfanos sobre
+cuerpos, y los **39** nombres de E1 resuelven (el verificador de T12 da 0 huérfanos sobre
 111 referencias). La spec deja de asignar
 `database-lookup`, `literature-review`, `paper-2-web` (en `/research`), `statistical-analysis`
 y `statistical-power` (en `/validate`), `writing-skills` (en `/draft`) y `obsidian-cli`
