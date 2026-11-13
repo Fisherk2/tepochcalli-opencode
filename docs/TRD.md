@@ -189,6 +189,59 @@ exige. Cifras, límites (n = 6 filas; muestreo determinista por orden de almacen
 [docs/acceptance/citations.json](acceptance/citations.json). TD-13 queda **cerrada**; la
 obsolescencia del índice sigue siendo TD-4 (el spot-check la detecta, `index_refresh()` la cura).
 
+### 6.3 Matriz de formatos (criterio 7)
+
+**Medición (T8, 2026-11-13).** El criterio 7 no es una tabla escrita a mano: es un test
+parametrizado (`tests/e2e/test_format_matrix.py`) que construye un vault con los 7 formatos
+indexables + un PDF escaneado + las fuentes del conversor, lo indexa y **lee cada celda del wire**
+(`search` por stdio: `source_path`, `offsets_ref`, `heading`) y del índice (columna `doc_kind` de
+LanceDB). Las dos tablas de abajo son **salida literal del test** — `test_published_matrix_matches_docs_trd`
+falla si este documento y la medición divergen. Sin dependencias nuevas (R1): los fixtures se
+generan con la stdlib (`zipfile`, `struct`) y los extras ya instalados (`openpyxl`, `python-pptx`);
+el `.xls` es un BIFF2 mínimo escrito con `struct` porque `xlwt` no está.
+
+**Qué garantiza cada borde.** El **índice** procesa originales (D49): `md/markdown/txt` con
+`offsets_ref="source"` y `pdf/docx/pptx/xlsx/xls` con `offsets_ref="extract"` y `heading` nulo
+(D54). El **conversor** produce un `.md` en disco y devuelve solo el resumen de 5 claves (ADR-009):
+`written_to` **no** es una cita — la cita de un binario es su original indexado, y para `html` el
+artefacto `.md` solo se vuelve citable tras `index_refresh` (el `.html` no está en la whitelist).
+En la corrida medida, el refresh posterior a las dos conversiones indexó los 2 artefactos y saltó
+los 8 originales ya memoizados (`{scanned: 10, indexed: 2, skipped: 8}`, sin latencia publicada:
+este calpulli no mide tiempo).
+
+| formato | entrada | resultado | doc_kind | offsets_ref | indexable | source_path | nota |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| md | índice | PASS | md | source | sí | 00-Resources/nota.md | — |
+| txt | índice | PASS | txt | source | sí | 00-Resources/prosa.txt | — |
+| pdf | índice | PASS | pdf | extract | sí | 00-Resources/articulo.pdf | heading nulo (D54) |
+| docx | índice | PASS | docx | extract | sí | 00-Resources/informe.docx | heading nulo pese al `#` del original (D54) |
+| pptx | índice | PASS | pptx | extract | sí | 00-Resources/diapositivas.pptx | heading nulo (D54) |
+| xlsx | índice | PASS | xlsx | extract | sí | 00-Resources/hoja.xlsx | heading nulo (D54) |
+| xls | índice | PASS | xls | extract | sí | 00-Resources/legado.xls | BIFF2 mínimo generado con `struct` (sin `xlwt`) |
+| html | conversor | PASS | md | source | sí, tras index_refresh | 00-Resources/pagina.md | el `.html` original no está en la whitelist: nunca es citable |
+| url | conversor | GAP | — | — | no verificado | — | sin egress (`nonet`) y el guard SSRF rechaza loopback; exige host con red o allowlist (ADR) |
+
+**GAP declarados (no soportados), ejecutados contra el wire — no simulados:**
+
+| formato | entrada | resultado | doc_kind | offsets_ref | indexable | source_path | nota |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| .doc | índice/conversor | GAP | — | — | no | — | sin convertidor legacy en markitdown 0.1.9: `VALIDATION_ERROR` + catálogo; guarda como `.docx` o pasa el texto a `.md` |
+| .ppt | índice/conversor | GAP | — | — | no | — | sin convertidor legacy en markitdown 0.1.9: `VALIDATION_ERROR` + catálogo; guarda como `.pptx` o pasa el texto a `.md` |
+| pdf escaneado | índice/conversor | GAP | — | — | no | — | sin capa de texto y sin OCR: `skipped` al indexar y `SOURCE_UNREACHABLE` + `GUIDE_OCR` al convertir (OCR manual y reintenta) |
+
+**La celda `url` es GAP con su método declarado, no un PASS.** El camino `http(s)` de `add_source`
+exige red: el host de la suite corre con el canario `nonet` (cero egress) y
+`paths._deny_internal_host` rechaza loopback/privadas por diseño (SSRF, W-02), así que un servidor
+HTTP local **no** puede servir el caso feliz — lo único ejecutable es el rechazo del borde
+(`VALIDATION_ERROR`, sin escritura). Probar el camino feliz exige un host con red o un allowlist de
+loopback que hoy no existe (sería política de seguridad: ADR). El conversor equivalente offline
+(`file:`, mismo `markitdown` en proceso) queda cubierto por la celda `html`.
+
+Comando: `TEPOCHCALLI_FORMAT_MATRIX_EVIDENCE="$PWD/docs/acceptance/format-matrix.json" just
+python-test-file format_matrix` (~2 min). Detalle, fixtures y mensajes literales:
+[docs/acceptance/format-matrix.md](acceptance/format-matrix.md) · JSON
+[docs/acceptance/format-matrix.json](acceptance/format-matrix.json).
+
 **Regla de origen de cifra (D-P6-7).** Cada cifra publicada en la tabla §6.3 de
 `docs/WORKFLOW.md` lleva **bench + n + método + filesystem**; la jerarquía de evidencia es
 `medido > estimado > declarado` (D8) y un número sin comando no entra en `docs/`.

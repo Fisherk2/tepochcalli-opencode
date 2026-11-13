@@ -1,0 +1,111 @@
+{
+  "command": "TEPOCHCALLI_FORMAT_MATRIX_EVIDENCE=\"/mnt/HDDFish/Documents/Programacion/PROYECTOS/14-tepochcalli-opencode/docs/acceptance/format-matrix.json\" just python-test-file format_matrix",
+  "vault": "temporal: 7 fixtures indexables + escaneado + fuentes del conversor",
+  "indexed_sources": [
+    "00-Resources/articulo.pdf",
+    "00-Resources/diapositivas.pptx",
+    "00-Resources/hoja.xlsx",
+    "00-Resources/informe.docx",
+    "00-Resources/informe.md",
+    "00-Resources/legado.xls",
+    "00-Resources/nota.md",
+    "00-Resources/pagina.md",
+    "00-Resources/prosa.txt"
+  ],
+  "cells": {
+    "md": {
+      "resultado": "PASS",
+      "doc_kind": "md",
+      "offsets_ref": "source",
+      "indexable": "sí",
+      "source_path": "00-Resources/nota.md"
+    },
+    "txt": {
+      "resultado": "PASS",
+      "doc_kind": "txt",
+      "offsets_ref": "source",
+      "indexable": "sí",
+      "source_path": "00-Resources/prosa.txt"
+    },
+    "pdf": {
+      "resultado": "PASS",
+      "doc_kind": "pdf",
+      "offsets_ref": "extract",
+      "indexable": "sí",
+      "source_path": "00-Resources/articulo.pdf"
+    },
+    "docx": {
+      "resultado": "PASS",
+      "doc_kind": "docx",
+      "offsets_ref": "extract",
+      "indexable": "sí",
+      "source_path": "00-Resources/informe.docx"
+    },
+    "pptx": {
+      "resultado": "PASS",
+      "doc_kind": "pptx",
+      "offsets_ref": "extract",
+      "indexable": "sí",
+      "source_path": "00-Resources/diapositivas.pptx"
+    },
+    "xlsx": {
+      "resultado": "PASS",
+      "doc_kind": "xlsx",
+      "offsets_ref": "extract",
+      "indexable": "sí",
+      "source_path": "00-Resources/hoja.xlsx"
+    },
+    "xls": {
+      "resultado": "PASS",
+      "doc_kind": "xls",
+      "offsets_ref": "extract",
+      "indexable": "sí",
+      "source_path": "00-Resources/legado.xls"
+    },
+    "html": {
+      "resultado": "PASS",
+      "doc_kind": "md",
+      "offsets_ref": "source",
+      "indexable": "sí, tras index_refresh",
+      "source_path": "00-Resources/pagina.md"
+    },
+    "url": {
+      "resultado": "GAP",
+      "doc_kind": "—",
+      "offsets_ref": "—",
+      "indexable": "no verificado",
+      "source_path": "—"
+    }
+  },
+  "gaps": {
+    ".doc": {
+      "code": "VALIDATION_ERROR",
+      "message": "formato no soportado: '.doc'"
+    },
+    ".ppt": {
+      "code": "VALIDATION_ERROR",
+      "message": "formato no soportado: '.ppt'"
+    },
+    "pdf escaneado": {
+      "code": "SOURCE_UNREACHABLE",
+      "message": "No se pudo convertir 00-Resources/escaneado.pdf a Markdown. Sin OCR: el documento no tiene capa de texto; guárdalo como `.md` a mano o pásalo por un OCR y reintenta la conversión."
+    }
+  },
+  "refresh_after_conversions": {
+    "scanned": 10,
+    "indexed": 2,
+    "skipped": 8,
+    "elapsed_ms": 3682,
+    "locked": false,
+    "roots": [
+      "00-Resources"
+    ]
+  },
+  "url_cell": {
+    "result": "GAP",
+    "executed": "VALIDATION_ERROR",
+    "reason": "sin egress (canario nonet) y el guard SSRF rechaza loopback por diseño"
+  },
+  "table_markdown": "| formato | entrada | resultado | doc_kind | offsets_ref | indexable | source_path | nota |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| md | índice | PASS | md | source | sí | 00-Resources/nota.md | — |\n| txt | índice | PASS | txt | source | sí | 00-Resources/prosa.txt | — |\n| pdf | índice | PASS | pdf | extract | sí | 00-Resources/articulo.pdf | heading nulo (D54) |\n| docx | índice | PASS | docx | extract | sí | 00-Resources/informe.docx | heading nulo pese al `#` del original (D54) |\n| pptx | índice | PASS | pptx | extract | sí | 00-Resources/diapositivas.pptx | heading nulo (D54) |\n| xlsx | índice | PASS | xlsx | extract | sí | 00-Resources/hoja.xlsx | heading nulo (D54) |\n| xls | índice | PASS | xls | extract | sí | 00-Resources/legado.xls | BIFF2 mínimo generado con `struct` (sin `xlwt`) |\n| html | conversor | PASS | md | source | sí, tras index_refresh | 00-Resources/pagina.md | el `.html` original no está en la whitelist: nunca es citable |\n| url | conversor | GAP | — | — | no verificado | — | sin egress (`nonet`) y el guard SSRF rechaza loopback; exige host con red o allowlist (ADR) |",
+  "gaps_markdown": "| formato | entrada | resultado | doc_kind | offsets_ref | indexable | source_path | nota |\n| --- | --- | --- | --- | --- | --- | --- | --- |\n| .doc | índice/conversor | GAP | — | — | no | — | sin convertidor legacy en markitdown 0.1.9: `VALIDATION_ERROR` + catálogo; guarda como `.docx` o pasa el texto a `.md` |\n| .ppt | índice/conversor | GAP | — | — | no | — | sin convertidor legacy en markitdown 0.1.9: `VALIDATION_ERROR` + catálogo; guarda como `.pptx` o pasa el texto a `.md` |\n| pdf escaneado | índice/conversor | GAP | — | — | no | — | sin capa de texto y sin OCR: `skipped` al indexar y `SOURCE_UNREACHABLE` + `GUIDE_OCR` al convertir (OCR manual y reintenta) |"
+}

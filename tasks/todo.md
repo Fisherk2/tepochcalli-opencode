@@ -175,17 +175,18 @@
 - Deps: T0, T3 · Verificación: test que **edita** el archivo post-indexación y espera **exit ≠ 0**
 - **Hecho (2026-11-13):** `verify.py --spot-check N` (`LanceDBChunkReader.sample_rows` → `table.head`) re-verifica la identidad F1 **reutilizando `citation.verify_slice_identity`**; `source` corta el original, `extract` re-extrae con markitdown (D50); severidades `OK`/`BROKEN`/`MISSING` y **exit 1** si hay roturas. **Medido** (golden md + txt + pdf indexado en subproceso): **6/6 (100 %), 0 rotas, exit 0**; **edición externa tras indexar ⇒ 3/6 (50 %), exit 1**; txt borrado ⇒ `MISSING`, exit 1; snapshot de `db/` sin cambios en las 3 corridas. Golden ampliado a md + txt + pdf en el e2e del wire (txt y pdf con `heading is None`; refresh `(3,0,3)`). **Tasa de citas rotas publicada: 0 %** (el caso que debe fallar falla ⇒ el 0 no es tautología). RED archivado (argparse `unrecognized arguments: --spot-check`). Evidencia: `docs/acceptance/citations.{md,json}` + TRD §6.2 + README de aceptación; TD-13 cerrada. `coverage` **no** ejecutado (T16).
 
-### [ ] T8 — Criterio 7: matriz de conversión multi-formato
+### [x] T8 — Criterio 7: matriz de conversión multi-formato
 
 - Subagente: `test-engineer` · Skills: `test-driven-development`, `api-and-interface-design`, `documentation-and-adrs` · Tools: `tepochcalli-rag` (payload, stdio)
-- [ ] Matriz de **9 entradas**: md, txt, pdf, docx, pptx, xlsx, xls (índice) + html, url (convertidor)
-- [ ] Por celda: resultado, `doc_kind`, `offsets_ref`, indexabilidad, `source_path` resultante
-- [ ] La matriz se ejecuta como **test**, no como tabla escrita a mano
-- [ ] Los formatos no soportados (`.doc`, `.ppt`, PDF escaneado) se declaran **GAP** con mensaje accionable — **no** se simulan
-- [ ] `html` y `url`: se afirma que el `.md` **convertido no es la fuente citable** y que el original indexado sí
-- [ ] Matriz publicada en `docs/TRD.md` §6, coincidente con la salida del test
-- [ ] Sin dependencias nuevas (R1)
+- [x] Matriz de **9 entradas**: md, txt, pdf, docx, pptx, xlsx, xls (índice) + html, url (convertidor)
+- [x] Por celda: resultado, `doc_kind`, `offsets_ref`, indexabilidad, `source_path` resultante
+- [x] La matriz se ejecuta como **test**, no como tabla escrita a mano
+- [x] Los formatos no soportados (`.doc`, `.ppt`, PDF escaneado) se declaran **GAP** con mensaje accionable — **no** se simulan
+- [x] `html` y `url`: se afirma que el `.md` **convertido no es la fuente citable** y que el original indexado sí
+- [x] Matriz publicada en `docs/TRD.md` §6, coincidente con la salida del test
+- [x] Sin dependencias nuevas (R1)
 - Deps: T0 · Verificación: test e2e verde
+- **Hecho (2026-11-13):** `tests/e2e/test_format_matrix.py` (16 tests, ~2 min, sin `slow`): vault temporal con los 7 formatos del índice + PDF escaneado + fuentes del conversor, medido en **un** servidor por stdio (wire real). **8/9 celdas PASS medidas** — `md/txt` `offsets_ref=source`; `pdf/docx/pptx/xlsx/xls` `extract` con `heading` nulo (D54) y `source_path` = **el original**; `html` entra por el conversor, su `.html` **nunca** es citable y el artefacto `00-Resources/pagina.md` lo es **solo tras `index_refresh`** (refresh medido: `scanned 10, indexed 2, skipped 8`). **Celda `url` = GAP declarado**, no PASS: la suite corre con `nonet` y el guard SSRF rechaza loopback por diseño (el positivo con servidor local se retiró en Phase 2); lo ejecutado es el rechazo `VALIDATION_ERROR` «red interna» sin escritura, y el método que haría falta (host con red o allowlist, ADR) queda escrito. **3 GAP ejecutados** con mensaje literal del wire: `.doc`/`.ppt` ⇒ `VALIDATION_ERROR` «formato no soportado» + catálogo (el borde corta antes de markitdown) y PDF escaneado ⇒ `SOURCE_UNREACHABLE` + `GUIDE_OCR`, sin fila vacía al indexar (OM-11). `.xls` se **ejecuta de verdad** con un BIFF2 mínimo escrito con `struct` (`xlwt` no está): sin dependencias nuevas (R1). La tabla se **imprime desde el test** y `test_published_matrix_matches_docs_trd` pone el gate rojo si `docs/TRD.md` §6.3 diverge (RED archivado: 15 passed / 1 failed antes de publicar). Evidencia: `docs/acceptance/format-matrix.{md,json}` + TRD §6.3 + README de aceptación. Contrato de las 3 tools y payload intactos; `coverage` no ejecutado (T16).
 
 ### [ ] T9 — Criterio 1: no-interferencia con Obsidian
 

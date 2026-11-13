@@ -21,6 +21,7 @@ método; lo estimado y lo declarado se etiquetan y nunca se presentan como medic
 | [scale-ratio.md](scale-ratio.md) | Brazos 10 % vs 100 %: Δ de indexación y `search` (ratio vs cota 2×), walk-only y límite fuseblk/NTFS-3G | 6 (+2 y 3) |
 | [token-budget.md](token-budget.md) | Tokens por consulta con tokenizador real: payload del server (estimador vs real) y total e2e con la respuesta citada | 4 |
 | [citations.md](citations.md) | Identidad F1 re-verificada contra el archivo vivo (`verify.py --spot-check`): tasa de citas reproducibles, par exit 0/≠0 y solo lectura de `db/` | 5 |
+| [format-matrix.md](format-matrix.md) | Matriz ejecutable de 9 formatos (índice vs conversor) con `doc_kind`/`offsets_ref`/indexabilidad/`source_path`, la distinción `written_to` vs cita, y los GAP con su mensaje real (`.doc`, `.ppt`, PDF escaneado, `url` sin egress) | 7 |
 
 Si llega otra fase de aceptación, este directorio se parte en subcarpetas `acceptance/phaseN/` para no mezclar evidencias.
 
