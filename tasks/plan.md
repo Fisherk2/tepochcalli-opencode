@@ -479,7 +479,7 @@ cierra con una **declaración honesta** de soporte, no con un "verde".
 **Criterios de aceptación:**
 
 - [ ] Estado **verificado / no verificado** enumerado: qué existe (target compilable, `install.ps1`, layout `Scripts/`, merge de `opencode.json` por plataforma, D20) y qué **nunca** se ejecutó (instalador, smoke, CI).
-- [ ] **Decisión de soporte para v1** escrita con su fecha: *Windows no soportado en v1* (recomendado) o *soportado con verificación pendiente* — con la **consecuencia para el usuario** (el camino `curl|sh` es POSIX; en Windows el camino documentado es manual) y qué habría que hacer para revertir la decisión.
+- [ ] **Decisión de soporte para v1** escrita con su fecha: **firmada 2026-11-13 — *soportado con verificación pendiente*** — con la **consecuencia para el usuario** (puede instalarlo sin verificación; si falla, sin soporte comprometido) y qué quita la coletilla (smoke path-5 en `windows-latest` sobre release real + layout `Scripts/` verificado + evidencia archivada + fila en la matriz CI).
 - [ ] Propagación a: `docs/TRD.md` §2 (matriz de plataformas soportadas), `specs/spec-installer-wizard.md` (nota de plataforma), `docs/APPFLOW.md` (journey de instalación si existe) y `CHANGELOG.md`. **No** se toca `README.md` ni `LICENSE` (lista de «nunca» del `AGENTS.md`).
 - [ ] `docs/TECH_DEBT.md` §D-b: **cerrada** con la decisión y su fecha.
 - [ ] `just md-lint` 0 tras la edición.

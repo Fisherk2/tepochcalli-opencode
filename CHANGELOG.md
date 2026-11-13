@@ -9,16 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed (soporte de Windows en v1, 2026-11-13)
 
-- **Windows se declara no soportado en v1** (decisión declarada, pendiente de firma del dueño).
-  El repo contiene un target `x86_64-pc-windows-msvc`, un `install.ps1` y el comando portable
-  `venv/Scripts/python.exe` (D20), pero **no tienen build ni ejecución en Windows registrados**:
-  no hay release publicada (M6), la matriz de `phase3.yml` es ubuntu+macos y no existe smoke path-5
-  en Windows. Consecuencia para el usuario: en Windows no hay instalación soportada; `install.ps1`
-  se usa bajo cuenta y riesgo, sin compromiso de soporte. Para revertir la decisión hace falta
-  un smoke path-5 (`--non-interactive --skip-model`) en un runner Windows sobre una release real,
-  con `install.ps1` y el layout `Scripts/` verificados, y su evidencia archivada. Propagado a
-  `docs/TRD.md` §2, `specs/spec-installer-wizard.md` (§Enmienda D-b), `docs/APPFLOW.md` §5 y
-  `docs/TECH_DEBT.md` §D-b (deuda cerrada, pendiente de firma). Sin cambio de código.
+- **Windows está soportado con verificación pendiente** (decisión firmada por el dueño el
+  2026-11-13, etiqueta `declarado`). En el repo existen el target `x86_64-pc-windows-msvc`
+  (`dist.toml` y `release.yml`), el `install.ps1`, el layout `Scripts/` con
+  `venv/Scripts/python.exe` (D20) y las ramas `cfg!(windows)` del wizard; **nada de ese camino se
+  ejecutó nunca en Windows**: ni el instalador, ni el smoke path-5, ni la matriz CI (ubuntu+macos;
+  `release.yml` jamás ha corrido — M6). Consecuencia para el usuario: puede instalar en Windows
+  por ese camino, pero nadie ha verificado que funcione; si falla, no hay soporte comprometido.
+  La coletilla «verificación pendiente» cae con un smoke path-5 (`--non-interactive --skip-model`)
+  en un runner `windows-latest` sobre una release real, el layout `Scripts/` verificado, la
+  evidencia archivada y una fila de Windows en la matriz CI. Propagado a `docs/TRD.md` §2,
+  `specs/spec-installer-wizard.md` (§Enmienda D-b y Testing Strategy), `docs/APPFLOW.md` §5 y
+  `docs/TECH_DEBT.md` §D-b (deuda cerrada y firmada). Sin cambio de código.
 
 ### Fixed (2026-11-13)
 

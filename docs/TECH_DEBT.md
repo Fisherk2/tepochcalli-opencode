@@ -35,7 +35,7 @@ coste si se ignora, y acción/oráculo para pagarla.
 | **TD-24** | **El import-check de F5 (`maintenance.rs:107-111`) es un segundo camino de spawn python fuera de `flow_cli.rs`**: `run_checked(proc, interpreter, &["-c", IMPORT_CHECK]…)` hereda el env con la allowlist del wizard (L3-7) pero no pasa por el trunk compartido con sandbox/sistema de timeout | Revisión 2026-10-29 (A3-S-6): el trunk `flow_cli` cubre gate/refresh/probe; el check de F5 quedó como spawn mínimo con env corto | Un solo camino de spawn deja de ser verdad — cualquier future fix de env/timeout debe recordar dos sites, y sin heredar fuente solo `run_flow_cli` resuelve de velar por el port | Decisión pendiente (candidato a falso positivo del Eje 3): adoptar `run_flow_cli` con `extra_env=&[]` (sandbox inofensiva) o documentar la excepción en el port; consultado al usuario en la revisión, sin veredicto este pase |
 | **TD-25** | **`swap.rs:422-431` swallow de `unwrap_or(("", ""))`**: si `provider=="litellm"` llega sin el empaquetado `model\0api_key` (productor nuevo omitiéndolo), se escribe `model=""` + `api_key=""` y falla al indexar — la clase documentada en AGENTS.md (toml sin `TEPOCHCALLI_EMBED_API_KEY` falla tarde) | Revisión 2026-10-29 (4c hallazgo #4): Suggestion fuera del lote aprobado | Config gitignored inválida en disco en vez de error tipado en la fase productora | Un `picked.model.and_then(split_once('\0')).ok_or(Internal)?` + test de unidad (`litellm sin NUL → Err(Internal)`), en el próximo toque de `swap.rs` |
 | **TD-26** | **D42 — resuelta por configuración (2026-11-03)**: el conjunto de raíces ya no viaja por llamada; lo declara el usuario en `INDEXER_DIR` (`opencode.json` → `environment`) y `index_refresh()` no acepta argumentos. `rag_status.index.last_refresh_roots` sigue viviendo **en memoria de la sesión**, pero el conjunto es persistente por config | Orden del dueño 2026-11-03 (ADR-010 §4.1 rev. 2) | Ya no hay agente que «indexe de menos en silencio» por no repetir raíces; el riesgo residual es editar `INDEXER_DIR` y no reiniciar el MCP | Cerrada por el cambio de contrato: la fuente de verdad del conjunto es la variable. Si se quiere recarga en caliente sin respawn, ADR nuevo (Phase 6) |
-| **TD-27** | **D54 — el PDF pierde la jerarquía de headings**: markitdown extrae texto plano, así que `heading` es `null` en toda cita de PDF (y de docx/pptx/xlsx/xls); no se inventa un heading con el título del fichero | ADR-011 §4.3 (coste explícito de D54), T3 | La cita de un PDF se apoya solo en `source_path` + `doc_kind` + offsets; el agente no puede citar «sección 2.3» de un PDF | Aceptada y **afirmada en test** (un PDF con títulos produce `heading is None`); el criterio 5 se cumple con offsets reproducibles + `text` persistido. Recuperar la jerarquía exige revertir ADR-011 (coste Docling: ≈225 MB y ≈2,0 GB RSS pico) → decisión de Phase 6 |
+| **TD-27** | **D54 — el PDF pierde la jerarquía de headings**: markitdown extrae texto plano, así que `heading` es `null` en toda cita de PDF (y de docx/pptx/xlsx/xls); no se inventa un heading con el título del fichero | ADR-011 §4.3 (coste explícito de D54), T3 | La cita de un PDF se apoya solo en `source_path` + `doc_kind` + offsets; el agente no puede citar «sección 2.3» de un PDF | Aceptada y **afirmada en test** (un PDF con títulos produce `heading is None`); el criterio 5 se cumple con offsets reproducibles + `text` persistido. Recuperar la jerarquía exige revertir ADR-011 (coste Docling: ≈225 MB y ≈2,0 GB RSS pico) → decisión de Phase 6. **CERRADA 2026-11-13 (Phase 6, T10, firmada por el dueño):** se **reafirma D54**. Medido sobre 8 PDF reales: **0/6 303 citas de PDF con `heading`** (100 %, por construcción), y aunque la política lo permitiera **7 de 8 PDF seguirían sin él** (0 líneas ATX) mientras el octavo (CLRS) ganaría **un** heading basura propagado al **79,0 %** de sus chunks ⇒ **el `heading` nulo lo causa markitdown, no D54**. Revertir exigiría ADR-013 + 4 specs y el beneficio no está medido. Evidencia: [acceptance/pdf-heading.md](acceptance/pdf-heading.md) |
 | **TD-28** | **`embedder_menu.rs` en 894 líneas** (tramo 701-1000 de CODE_STYLE: se permite **con advertencia** de refactorizar lo antes posible): mezcla el menú D7.1, el gate test-embed, la materialización del snapshot y helpers TOML/JSON | T6/D59 (Phase 3.5) | Cada cambio del menú o del gate toca un fichero muy por encima del objetivo de 500; el coste de lectura y el riesgo de regresión crecen | **CERRADA 2026-11-13 (Phase 6, T11-a):** 894 → **298** líneas, partido por responsabilidad en 4 módulos hermanos **planos** (`embedder_config` 218, `embedder_gate` 202, `embedder_estimate` 155, `embedder_options` 102) — planos a propósito: `int_architecture` escanea `application/*.rs` con `read_dir` y un `embedder_menu/` habría escapado del gate en silencio. Sin cambiar ni un mensaje: **178 literales** con multiset idéntico; `rust-test` 323 passed, clippy `-D warnings` limpio, superficie pública intacta |
 | **TD-29** | **`require_local_model` solo comprueba que el directorio no esté vacío**: el read path acepta `<models>/<slug>@<sha>/` si `is_materialized` ve **cualquier** entrada; no valida que el snapshot sea el del `revision` configurado ni que contenga los pesos | T6/D59 | Un snapshot a medias o de otro modelo pasa el chequeo y falla más tarde al cargar — `E_MODEL_INVALID` no se emite donde debería | **CERRADA 2026-11-13 (Phase 6, T11-b):** `model_store.snapshot_defect` valida el snapshot **real** sin cargar torch — `config.json` + pesos (`model.safetensors` **o** `pytorch_model.bin`) y, cuando el snapshot declara la revisión (`snapshots/<sha>` del cache hub), que sea la pineada. A medias o de otra revisión ⇒ `EmbedderModelError` → `E_MODEL_INVALID` con la guía `tepochcalli config embedder`. 4 tests en `tests/unit/test_model_store.py`, con el RED archivado antes del fix |
 | **TD-30** | **El fixture de merge está rebasado**: `tests/fixtures/opencode_payload_before_t9.json` se regeneró con el payload actual, así que el test «byte-idéntico» compara el payload **consigo mismo**; no hay un merge sintético que demuestre que el wizard preserva claves del usuario | T14 (D40/`MANAGED_KEYS`), T16 | El test verde **no** prueba el merge conservador que su nombre afirma; una regresión del merge pasaría | Crear un fixture **pre-merge sintético** (servers del usuario + `tepochcalli-rag` ausente) y correr el merge real de F8/`phase8` contra él; regenerar solo ese fixture, nunca el payload. **CERRADA 2026-11-09 (Phase 5):** D-P5-9 sustituyó el fixture rebasado por un **merge sintético** (servers del usuario + `tepochcalli-rag` ausente) en T9, y T12 demostró la idempotencia real de dos instalaciones: digest `ffa4db0e…eac0151` (**875 ficheros**) antes/después, 0 duplicados, 0 `.bak` |
@@ -335,18 +335,19 @@ verificación de T20: nada aquí es deuda inventada en T20.
 | ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
 | --- | --- | --- | --- | --- |
 | **M6** | **CI y release nunca ejecutados**: `.github/workflows/phase3.yml` y `release.yml` existen y están revisados a mano (acciones pineadas), pero **ningún workflow ha corrido nunca** — ni `phase3.yml` (matrix ubuntu+macos, smoke path-5), ni `release.yml` (`dist` genera `install.sh`/`install.ps1` oficiales); no hay release publicada ni asset `tepochcalli-workspace-<ver>.tar.gz` real; los installers de referencia viven en `crates/tepochcalli/installers/` | T18/T19 (D-a: entrega sin publicar) | Se declara "matrix verde" o "release lista" sin evidencia; el primer `dist build` real puede fallar (divergencias deliberadas vs `dist init`, `allow-dirty = ["ci"]`) | Ejecutar `phase3.yml` + publicar una release de prueba en Phase 6 (o antes si se necesita el oneliner); reconciliar con `cargo dist generate --check` cuando `dist` esté instalado |
-| **D-b** | **Windows fuera de la matriz CI y sin probar**: el target `x86_64-pc-windows-msvc` está declarado en `dist.toml` para que exista el instalador PowerShell, pero `phase3.yml` solo corre ubuntu+macos; el comando del MCP portable por SO (`venv/Scripts/python.exe`) y `install.ps1` **nunca se ejecutaron en Windows** | T18 (D-b) | Rutas, quoting y `Scripts/python.exe` pueden fallar solo en Windows sin que CI lo vea | **CERRADA (pendiente de firma del dueño) 2026-11-13 (Phase 6, T13):** Windows se documenta como **no soportado en v1** con etiqueta `declarado` (cero ejecuciones en Windows: ver §D-b). Revertir la decisión exige un smoke path-5 en un runner Windows con evidencia archivada |
+| **D-b** | **Windows fuera de la matriz CI y sin probar**: el target `x86_64-pc-windows-msvc` está declarado en `dist.toml` para que exista el instalador PowerShell, pero `phase3.yml` solo corre ubuntu+macos; el comando del MCP portable por SO (`venv/Scripts/python.exe`) y `install.ps1` **nunca se ejecutaron en Windows** | T18 (D-b) | Rutas, quoting y `Scripts/python.exe` pueden fallar solo en Windows sin que CI lo vea | **CERRADA 2026-11-13 — soportado con verificación pendiente (Phase 6, T13, firmada por el dueño):** Windows se documenta como **soportado con verificación pendiente** con etiqueta `declarado` (cero ejecuciones en Windows: ver §D-b). La coletilla cae con un smoke path-5 en un runner `windows-latest` sobre una release real, el layout `Scripts/` verificado, la evidencia archivada y una fila en la matriz CI |
 | **F-T20** | **Spec del wizard sin probar contra el gate de Phase 6**: `spec-installer-wizard.md` pasa a Approved con este FTR, pero sus afirmaciones de escala y UX (VM limpia en 3 plataformas, matriz de 5 caminos del menú, tiempos de instalación) no se han ejecutado contra el gate de aceptación (tabla §6.3 de WORKFLOW) | T20 (cierre documental) | La spec Approved se lee como "probada" cuando solo está "implementada + testeada en local" | Phase 6 ejecuta la tabla §6.3 contra el wizard real; divergencias ⇒ enmienda de spec (sin re-editar lo Accepted: ADR o nota de mapeo) |
 
 ### D-b — estado de soporte de Windows en v1 (2026-11-13)
 
-**Estado de la deuda:** `CERRADA (pendiente de firma del dueño)` — la decisión de producto
-la firma el dueño; el texto queda listo para firmar y **no** se da por aprobada aquí.
+**Estado de la deuda:** `CERRADA 2026-11-13 — soportado con verificación pendiente` (firmada
+por el dueño; el texto de abajo es la decisión registrada).
 
-**Decisión (2026-11-13, evidencia `declarado`):** **Windows no está soportado en v1.**
+**Decisión firmada (2026-11-13, evidencia `declarado`):** **Windows está soportado con
+verificación pendiente.**
 
-Ninguna ejecución en Windows respalda lo contrario. Lo que existe en el repo es **código
-declarado**, no capacidad probada:
+Lo que existe en el repo es **código declarado**, no capacidad probada: ninguna de las piezas de
+la tabla se ejecutó nunca en Windows.
 
 | Artefacto | Qué hay en el repo | Evidencia | Estado real |
 | --- | --- | --- | --- |
@@ -357,22 +358,21 @@ declarado**, no capacidad probada:
 | Matriz CI | `phase3.yml` corre `ubuntu-latest` y `macos-latest` | `.github/workflows/phase3.yml:50` | **fuera por diseño**; nunca se amplió a Windows |
 | Smoke path-5 (instalación real no interactiva) en Windows | No existe | `grep windows .github/workflows/phase3.yml` → 0 jobs | **no existe** |
 
-**Consecuencia para el usuario:** en Windows no hay camino de instalación soportado. El
-`install.ps1` del repo y el target de `dist.toml` no lo cambian: no hay release publicada (M6)
-y, cuando la haya, el script seguirá sin haberse ejecutado nunca. Usarlos es **bajo su cuenta y
-riesgo, sin compromiso de soporte**. El wizard además **no rechaza** Windows (`SUPPORTED_OS`
-incluye `"windows"`, `src/application/installer.rs:34`): la decisión es de **soporte**, no un
-gate de runtime, y por eso debe leerse como promesa retirada —no como imposibilidad técnica—.
+**Consecuencia para el usuario:** puede instalar en Windows por ese camino, pero **nadie ha
+verificado que funcione**: ni el `install.ps1` del repo ni el target de `dist.toml` cambian eso
+(no hay release publicada — M6 — y, cuando la haya, el script seguirá sin haberse ejecutado
+nunca). Si el camino falla, **no hay soporte comprometido**. El wizard además **no rechaza**
+Windows (`SUPPORTED_OS` incluye `"windows"`, `src/application/installer.rs:34`): la coletilla es
+de **soporte**, no un gate de runtime.
 
-**Qué haría falta para revertirla (pasar a “soportado”, evidencia `medido`):**
+**Qué quita la coletilla «verificación pendiente» (pasar a `medido`):**
 
 1. Un **smoke path-5** (`tepochcalli install --non-interactive --skip-model`) ejecutado en un
-   runner `windows-latest` o una VM Windows limpia **sobre una release real**, con
-   `install.ps1` invocado de verdad.
+   runner `windows-latest` **sobre una release real**, con `install.ps1` invocado de verdad.
 2. Verificar el layout `venv/Scripts/python.exe` (D20) y el `mcp.servers` resultante en ese
    vault instalado (el mismo criterio que el smoke de `phase3.yml`: `00-resources/` y una
    entrada `mcp.servers` válida).
 3. Archivar la evidencia (transcript + árbol del vault) y **entonces** añadir `windows-latest`
-   a la matriz de `phase3.yml`, de modo que la promesa quede gated por CI y no por prosa.
+   como fila de la matriz de `phase3.yml`, de modo que el soporte quede gated por CI y no por prosa.
 
-Sin esos tres pasos, Windows sigue siendo `declarado` y la decisión de v1 se mantiene.
+Sin esos tres pasos, Windows sigue siendo `declarado` y la coletilla se mantiene.

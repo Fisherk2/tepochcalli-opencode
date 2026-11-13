@@ -223,16 +223,17 @@
 
 ## Ola 2 — Deuda y decisiones
 
-### [~] T10 — TD-27: el fate de la cita PDF sin heading (D54)
+### [x] T10 — TD-27: el fate de la cita PDF sin heading (D54)
 
 - Subagente: `rag-pipeline-engineer` → `software-architect` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `performance-analysis`, `doubt-driven-development` · Tools: `tepochcalli-rag` (payload, stdio), `codebase-memory-mcp`
 - [x] **Medición del impacto**: fracción de citas de PDF en top-5 **sin** `heading` sobre el corpus de T1, y qué pasa con una query cuyo único material es un PDF
-- [~] **Decisión con dato**: (a) reafirmar D54 con la cifra y el coste de revertir documentados, o (b) revertir ADR-011 ⇒ **ADR-013** que reemplace §4.3 + re-sincronización de las 4 specs
-- [~] La decisión queda **escrita con fecha**; TD-27 **cerrada con evidencia** (con la firma, en T16)
+- [x] **Decisión con dato**: (a) reafirmar D54 con la cifra y el coste de revertir documentados, o (b) revertir ADR-011 ⇒ **ADR-013** que reemplace §4.3 + re-sincronización de las 4 specs
+- [x] La decisión queda **escrita con fecha**; TD-27 **cerrada con evidencia**
 - [x] **No reescribe el payload** (D-P6-1) ni toca el contrato MCP sin ADR
-- [~] La **firma es del dueño** (cambia una decisión `Accepted`): el subagente prepara la opción con el dato
+- [x] La **firma es del dueño** (cambia una decisión `Accepted`): firmada el 2026-11-13
 - Deps: T0, T1 · Verificación: cifra reproducible con su comando
-- **Hecho (2026-11-13) — medido; pendiente de firma.** `tests/benchmarks/bench_pdf_heading.py` + receta `just python-bench-pdf-heading` (fases `extract|corpus-sample|query|report`). El corpus de T1 **no permite medir**: sus PDF son stubs de 54 caracteres y 1 chunk (n=20, 0 líneas ATX) ⇒ el 100 % sería por diseño del fixture; se mide sobre **8 PDF reales** (1–1 313 págs, los 5 libros de T2 + 3 fixtures). **Citas de PDF sin `heading`: 0/6 303 (100 %) — por construcción**, y si la política no lo forzara **7 de 8 PDF seguirían sin él** (0 líneas ATX); en CLRS hay 2 artefactos que darían heading falso al **79,0 %** del documento. **El nulo es del extractor, no de D54.** Caso «solo un PDF»: vault de 1 fichero, query ES → **5/5 citas del mismo `source_path`, 0 con heading, F1 5/5**; campos reales `text`·`source_path`·`heading null`·`char_start`·`char_end`·`score`·`offsets_ref="extract"` (`doc_kind` no viaja) y **sin número de página**. Hallazgo separado: el `.docx` **sí** trae ATX (3/4 chunks ganarían heading sin Docling) ⇒ decisión aparte. Recomendación **(a) reafirmar D54**, **sin firmar**: «Pendiente de firma del dueño (2026-11-XX)». Cero payload, cero contrato MCP, cero ADR. Evidencia: `docs/acceptance/pdf-heading.{md,json}` + README. TD-27 **sigue abierta** hasta la firma.
+- **Hecho (2026-11-13) — medido.** `tests/benchmarks/bench_pdf_heading.py` + receta `just python-bench-pdf-heading` (fases `extract|corpus-sample|query|report`). El corpus de T1 **no permite medir**: sus PDF son stubs de 54 caracteres y 1 chunk (n=20, 0 líneas ATX) ⇒ el 100 % sería por diseño del fixture; se mide sobre **8 PDF reales** (1–1 313 págs, los 5 libros de T2 + 3 fixtures). **Citas de PDF sin `heading`: 0/6 303 (100 %) — por construcción**, y si la política no lo forzara **7 de 8 PDF seguirían sin él** (0 líneas ATX); en CLRS hay 2 artefactos que darían heading falso al **79,0 %** del documento. **El nulo es del extractor, no de D54.** Caso «solo un PDF»: vault de 1 fichero, query ES → **5/5 citas del mismo `source_path`, 0 con heading, F1 5/5**; campos reales `text`·`source_path`·`heading null`·`char_start`·`char_end`·`score`·`offsets_ref="extract"` (`doc_kind` no viaja) y **sin número de página**. Hallazgo separado: el `.docx` **sí** trae ATX (3/4 chunks ganarían heading sin Docling) ⇒ decisión aparte. Recomendación **(a) reafirmar D54**. Cero payload, cero contrato MCP, cero ADR. Evidencia: `docs/acceptance/pdf-heading.{md,json}` + README.
+- **Hecho (2026-11-13):** D54 **reafirmada** por el dueño con la cifra delante — **0/6 303 citas de PDF con `heading`** (100 %, por construcción), **7 de 8 PDF seguirían sin él** sin la política y el octavo ganaría **un** heading basura al **79,0 %** de sus chunks ⇒ el nulo es del extractor, no de D54; revertir exigiría ADR-013 + 4 specs sin beneficio medido. TD-27 **cerrada y firmada** en `docs/TECH_DEBT.md`; `docs/acceptance/pdf-heading.md` sustituye el hueco de firma por la decisión y su fecha. Cero payload, cero contrato MCP, cero ADR.
 
 ### [x] T11 — TD-28 + TD-29: hygiene del wizard y del modelo local
 
@@ -265,22 +266,24 @@
 
 - Subagente: `technical-writer` · Skills: `documentation-and-adrs`, `changelog-generate`, `technical-writer` · Tools: `gitmcp`
 - [x] Estado **verificado / no verificado** enumerado (target compilable, `install.ps1`, layout `Scripts/`, D20) y **nunca ejecutado** (instalador, smoke, CI) — tabla de 6 artefactos en `docs/TECH_DEBT.md` §D-b
-- [x] **Decisión de soporte v1** escrita con fecha: *no soportado en v1* (2026-11-13, `declarado`), con la **consecuencia para el usuario** y qué haría falta para revertirla
+- [x] **Decisión de soporte v1** escrita y firmada con fecha: *soportado con verificación pendiente* (2026-11-13, `declarado`), con la **consecuencia para el usuario** y qué quita la coletilla
 - [x] Propagación a `docs/TRD.md` §2, `specs/spec-installer-wizard.md` (§Enmienda D-b), `docs/APPFLOW.md` §5, `CHANGELOG.md`
 - [x] **No** se toca `README.md` ni `LICENSE` (lista de «nunca» del `AGENTS.md`)
-- [x] `docs/TECH_DEBT.md` §D-b **cerrada** con la decisión y su fecha — estado `CERRADA (pendiente de firma del dueño)`
+- [x] `docs/TECH_DEBT.md` §D-b **cerrada** con la decisión y su fecha — estado `CERRADA 2026-11-13 — soportado con verificación pendiente`
 - [x] `just md-lint` 0
 - Deps: T0 · Verificación: decisión citada en TRD §2 y APPFLOW · enlaces resuelven
 
-### [ ] Checkpoint CP-4 — Deuda y decisiones cerradas (tras T10, T11, T12, T13)
+### [x] Checkpoint CP-4 — Deuda y decisiones cerradas (tras T10, T11, T12, T13)
 
-- [ ] TD-27 decidido **con el dato** (ADR-013 o nota de cierre con la cifra)
-- [ ] `embedder_menu.rs` **<500** con el mismo número de tests; `require_local_model` valida el snapshot
-- [ ] TD-34: **0** skills huérfanas; `git diff --stat -- obsidian-workspace` vacío
-- [ ] D-b: decisión escrita y propagada; `just md-lint` 0
-- [ ] M6 y TD-32 **siguen abiertas** y declaradas
+- [x] TD-27 decidido **con el dato** (ADR-013 o nota de cierre con la cifra)
+- [x] `embedder_menu.rs` **<500** con el mismo número de tests; `require_local_model` valida el snapshot
+- [x] TD-34: **0** skills huérfanas; `git diff --stat -- obsidian-workspace` vacío
+- [x] D-b: decisión escrita y propagada; `just md-lint` 0
+- [x] M6 y TD-32 **siguen abiertas** y declaradas
 
 ---
+
+- **Hecho (2026-11-13):** las cuatro deudas de la ola cerradas con evidencia: **TD-27** reafirmada con el dato y firmada (6 303/6 303 sin heading; el nulo es de markitdown), **TD-28** `embedder_menu.rs` 894→298 con 323 tests idénticos, **TD-29** `snapshot_defect` con su RED (solo-config / solo-pesos / revisión distinta), **TD-34** 0 huérfanas sobre 111 refs/39 skills/170 agentes, **D-b** «soportado con verificación pendiente» firmada y propagada a 4 sitios. `md-lint` 0. **M6** (GitHub Actions nunca ha corrido) y **TD-32** siguen abiertas y declaradas, como manda el gate.
 
 ## Ola 3 — Gate del agente y cierre
 

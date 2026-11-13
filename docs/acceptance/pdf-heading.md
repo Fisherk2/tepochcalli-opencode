@@ -1,7 +1,7 @@
 # TD-27 — el impacto real de la cita de PDF sin `heading` (D54) · Phase 6 · T10
 
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T10
-> **Estado:** **medido**; recomendación preparada y **Pendiente de firma del dueño (2026-11-XX)**.
+> **Estado:** **medido** y **firmado por el dueño (2026-11-13): se reafirma D54**.
 > **Fuente de verdad:** [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) §4.3
 > (D54) · [spec-rag-engine](../specs/spec-rag-engine.md) §Ruta de documentos ·
 > [TECH_DEBT](../TECH_DEBT.md) TD-27 · [plan](../tasks/plan.md) §Task T10 (D-P6-5).
@@ -145,7 +145,7 @@ Se deja como **hallazgo para decisión separada** del dueño.
   en btrfs / **944 019 ms** en NTFS, [search-scale.md](search-scale.md) y
   [scale-ratio.md](scale-ratio.md)) y la re-validación de los benchmarks de la fase.
 * **Qué queda escrito:** nota de cierre de TD-27 con la cifra + la limitación en
-  `spec-mcp-server` §citas, en **T16** (con la firma). Sin cambios de código.
+  `spec-mcp-server` §citas. Sin cambios de código.
 
 ### (b) Revertir ADR-011 — recuperar la jerarquía de headings en PDF
 
@@ -156,7 +156,7 @@ Se deja como **hallazgo para decisión separada** del dueño.
 * **Qué compraría, según este dato:** nada demostrado. Lo medido es que **markitdown** no entrega
   la jerarquía; que Docling la entregue bien en estos 5 libros **no se ha medido** y no se afirma.
 
-### Recomendación (sin firma)
+### Recomendación (firmada 2026-11-13)
 
 **(a) reafirmar D54**, por una razón que el dato sostiene y no una opinión: la pérdida de `heading`
 en PDF es **del extractor, no de la política** — quitarla no gana ni un heading y sí puede meter
@@ -165,8 +165,9 @@ medición previa de que Docling la produzca mejor en estos libros, es un coste s
 medida. Y por separado, decidir el caso **`.docx`/`.pptx`** (§6), donde el extractor sí entrega
 estructura y no hace falta Docling.
 
-**Pendiente de firma del dueño (2026-11-XX).** Este documento **no** firma, **no** toca el
-payload (D-P6-1), **no** toca el contrato MCP y **no** escribe ADR-013: prepara la decisión.
+**Firmado por el dueño (2026-11-13): se reafirma D54.** Este documento **no** toca el payload
+(D-P6-1), **no** toca el contrato MCP y **no** escribe ADR-013: prepara la decisión, y el cierre
+de TD-27 queda registrado en [TECH_DEBT](../TECH_DEBT.md).
 
 ## 8. Cómo reproducirlo
 
@@ -197,8 +198,8 @@ pipeline, no una regex propia), percentiles no aplican (conteos exactos). Host: 
 
 ## 9. Lo que este calpulli NO hace
 
-* **No firma** la decisión (cambia una decisión `Accepted`: es del dueño) y **no** cierra TD-27 en
-  `docs/TECH_DEBT.md` — eso ocurre con la firma en T16.
+* **No firma** por sí mismo la decisión (cambia una decisión `Accepted`: es del dueño); la firma
+  (2026-11-13) y el cierre de TD-27 viven en `docs/TECH_DEBT.md`.
 * **No** escribe ADR-013 ni toca `specs/adr/`; **no** toca `specs/` (la re-sincronización de las 4
   specs es de la vía (b), y solo si se firma).
 * **No** mide Docling (no está instalado) ni afirma que Docling produzca buenos headings.
