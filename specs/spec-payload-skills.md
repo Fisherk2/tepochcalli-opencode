@@ -1,6 +1,6 @@
 # Spec: Skills del payload — inventario definitivo y tabla de invocación
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED) · **Enmendada 2026-11-12** (inventario real **40** tras retirar `database-lookup/` en `c815eb0`; tabla 9×4 y frase de subagentes **SUPERSEDED** por la §Enmienda 2026-11-12, generada desde los cuerpos)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED) · **Enmendada 2026-11-12** (inventario real **39** tras retirar `database-lookup/` en `c815eb0` y `writing-skills/` en `e785072`; tabla 9×4 y frase de subagentes **SUPERSEDED** por la §Enmienda 2026-11-12, generada desde los cuerpos)
 * **Fase:** Phase 4 (diseño) — Phase 5 verifica, no ejecuta cortes
 * **Date:** 2026-11-09 (congela inventario; rev. 2026-11-04 SUPERSEDED, ver §Histórico)
 * **Author:** Arquitecto (calpulli T2b, Phase 4)
@@ -194,18 +194,19 @@ de verdad de qué carga cada comando. Convenio de rutas: `commands/<x>.md:línea
 `obsidian-workspace/.opencode/commands/`, `agents/<x>.md:línea` =
 `obsidian-workspace/.opencode/agents/`.
 
-### E1 — Inventario real: **40** (`database-lookup/` retirada)
+### E1 — Inventario real: **39** (`database-lookup/` y `writing-skills/` retiradas)
 
 | Hecho | Valor medido | Cómo se midió |
 | --- | --- | --- |
-| Dirs de skill presentes | **40** | `ls obsidian-workspace/.opencode/skills \| wc -l` |
-| Con `SKILL.md` | 40/40 (0 huecos) | `for d in skills/*/; do [ -f "$d/SKILL.md" ] \|\| echo MISSING: $d; done` → sin salida |
-| Dir retirado | `database-lookup/` (no existe) | `ls …/skills/database-lookup` → *No such file or directory* |
-| Commit y fecha del retiro | `c815eb0`, 2026-11-12 — `chore(skill-database-lookup): retira skill superada por cadena EN` | `git log --oneline -1 c815eb0` |
-| Referencias al nombre retirado en el payload | **0** | `grep -rn database-lookup obsidian-workspace/.opencode` |
-| Objetivo <60 | cumplido: **40 < 60** | — |
+| Dirs de skill presentes | **39** | `ls obsidian-workspace/.opencode/skills \| wc -l` |
+| Con `SKILL.md` | 39/39 (0 huecos) | `for d in skills/*/; do [ -f "$d/SKILL.md" ] \|\| echo MISSING: $d; done` → sin salida |
+| Dirs retirados | `database-lookup/` y `writing-skills/` (ninguno existe) | `ls …/skills/database-lookup …/skills/writing-skills` → *No such file or directory* |
+| Commits y fecha de los retiros | `c815eb0` (2026-11-12, `chore(skill-database-lookup): retira skill superada por cadena EN`) y `e785072` (2026-11-12, `chore(skills): retira writing-skills del payload`, orden del dueño) | `git log --oneline -1 <sha>` |
+| Referencias a los nombres retirados en el payload | **0** | `grep -rn 'database-lookup\|writing-skills' obsidian-workspace/.opencode` y `python3 tests/e2e/verify_payload_refs.py` → `0 failure(s); 111 reference(s) checked against 39 skill(s)` |
+| Objetivo <60 | cumplido: **39 < 60** | — |
 
-Inventario vigente (los 4 bloques se leen **en columna**: 1–10, 11–20, 21–30, 31–40):
+Inventario vigente (los bloques se leen **en columna**: 1–10, 11–20, 21–30, 31–39; el cuarto
+bloque queda con 9):
 
 | # | Skill | # | Skill | # | Skill | # | Skill |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -218,7 +219,7 @@ Inventario vigente (los 4 bloques se leen **en columna**: 1–10, 11–20, 21–
 | 7 | `doc-coauthoring` | 17 | `obsidian-cli` | 27 | `research-search-protocol` | 37 | `toon` |
 | 8 | `experimental-design` | 18 | `obsidian-markdown` | 28 | `scholar-evaluation` | 38 | `websearch-engine` |
 | 9 | `hypothesis-generation` | 19 | `obsidian-vault` | 29 | `scientific-brainstorming` | 39 | `what-if-oracle` |
-| 10 | `idea-refine` | 20 | `osint-skills` | 30 | `scientific-critical-thinking` | 40 | `writing-skills` |
+| 10 | `idea-refine` | 20 | `osint-skills` | 30 | `scientific-critical-thinking` | — | — |
 
 **SUPERSEDED por E1:** el párrafo de la enmienda 2026-11-11 y el cierre de §Summary, el
 `# 41` del bloque de medición, la lista de 41 nombres (con `database-lookup`), la fila
