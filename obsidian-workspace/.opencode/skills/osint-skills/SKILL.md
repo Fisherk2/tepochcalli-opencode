@@ -1,5 +1,5 @@
 ---
-name: useosint
+name: osint-skills
 description: Entry point for open-source intelligence, investigation and verification work. Routes any
   identifier — a name, phone number, email address, username, domain, company, photo,
   crypto address, tail number or IMO — to the right investigation workflow, after setting an
@@ -9,11 +9,10 @@ description: Entry point for open-source intelligence, investigation and verific
   screening, AML, fraud, business email compromise, verifying a supplier before payment,
   recruitment or marketplace scams, insider threat, executive protection, attack-surface
   review, journalism or fact-checking; or when someone asks "who is this", "who owns this",
-  "is this real", "where did this come from" or "where do I start". Reference at
-  useosint.com/skills.
+  "is this real", "where did this come from" or "where do I start".
 ---
 
-# useOSINT — Investigation Router
+# OSINT — Investigation Router
 
 **Open-source intelligence, run by your agent.**
 
