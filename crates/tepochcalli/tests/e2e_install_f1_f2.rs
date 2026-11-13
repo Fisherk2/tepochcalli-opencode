@@ -259,7 +259,7 @@ fn install_non_interactive_vault_runs_f1_f2_for_real() {
     );
     assert!(target.is_dir(), "F2 must create the vault dir for real");
     assert!(
-        target.join("00-Resources").join("ejemplo.md").is_file(),
+        target.join("00-resources").join("ejemplo.md").is_file(),
         "F3 must leave the markdown placeholder"
     );
     assert!(

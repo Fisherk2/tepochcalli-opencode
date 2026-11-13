@@ -151,7 +151,7 @@ pub fn run_reindex(
 }
 
 /// Scope mínimo: solo `.tepochcalli/` (runtime: `venv/`, `bin/`, `db/`,
-/// `models/`, `config/`). Notas, payload, `opencode.json`, `00-Resources/` y
+/// `models/`, `config/`). Notas, payload, `opencode.json`, `00-resources/` y
 /// `.obsidian/` sobreviven por construcción: nunca se enumeran, nunca se
 /// tocan. Ausente ⇒ no-op `Ok` (idempotencia, T14).
 pub fn run_uninstall(vault: &Path) -> Result<UninstallReport, WizardError> {

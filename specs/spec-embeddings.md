@@ -47,7 +47,7 @@ El flow lee `[embedding]` de `tepochcalli.toml`: `provider = "local"` (default) 
 | Peso | ~470MB |
 | Inferencia | CPU (torch CPU wheel en venv) |
 | Idiomas objetivo | ES + EN (50+ soportados) |
-| Uso en sistema | chunks de `00-Resources/` + query de `search` |
+| Uso en sistema | chunks de `00-resources/` + query de `search` |
 
 ### Matriz local vs externo
 

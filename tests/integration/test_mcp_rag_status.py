@@ -119,17 +119,17 @@ def test_sane_install_reports_the_full_block_contract(
     last_refresh = index_block["last_refresh"]
     assert isinstance(last_refresh, str) and last_refresh, "derivado de indexed_at real"
     assert index_block["db_size_bytes"] > 0, "el walk de .tepochcalli/db/ encuentra la DB"
-    assert index_block["last_refresh_roots"] == ["00-Resources"], (
+    assert index_block["last_refresh_roots"] == ["00-resources"], (
         "el refresh de la tool anotó su raíz de sesión (D42)"
     )
-    assert index_block["available_roots"] == ["00-Resources"], (
+    assert index_block["available_roots"] == ["00-resources"], (
         "primer nivel indexable del vault (D67); los de punto quedan fuera"
     )
 
     config_block = payload["config"]
     assert config_block["path"] == TOML_RELPATH, "relativo y con / en todo SO (spec literal)"
     assert config_block["valid"] is True, "toml AUSENTE ⇒ true: es opcional (decisión T4)"
-    assert config_block["problems"] == [], "vault con 00-Resources: sin problemas de entorno"
+    assert config_block["problems"] == [], "vault con 00-resources: sin problemas de entorno"
     assert config_block["unknown_env"] == []
 
     _assert_tokens_under_200(payload)
@@ -176,7 +176,7 @@ def test_malformed_toml_reports_valid_false_without_degrading_health(tmp_path: P
         "last_refresh": None,
         "db_size_bytes": 0,
         "last_refresh_roots": [],
-        "available_roots": ["00-Resources"],
+        "available_roots": ["00-resources"],
     }
     _assert_tokens_under_200(payload)
 
@@ -226,7 +226,7 @@ def test_lookalike_indexer_env_is_listed_in_unknown_env(tmp_path: Path) -> None:
     desconocido es informativo, no degrada nada (D39).
     """
     (tmp_path / citation.RESOURCES_DIR).mkdir()
-    env = {**server_env(tmp_path), "INDEXER_DRI": "00-Resources"}
+    env = {**server_env(tmp_path), "INDEXER_DRI": "00-resources"}
 
     async def go() -> dict:
         async with running_server(env) as session:

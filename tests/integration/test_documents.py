@@ -128,14 +128,14 @@ def test_docx_and_xlsx_are_indexed_from_the_original_with_extract_offsets(
     by_source = {str(row["source_path"]): row for row in rows}
 
     assert set(by_source) == {
-        "00-Resources/nota.md",
-        "00-Resources/informe.docx",
-        "00-Resources/hoja.xlsx",
+        "00-resources/nota.md",
+        "00-resources/informe.docx",
+        "00-resources/hoja.xlsx",
     }
 
     for source_path, expected_kind in (
-        ("00-Resources/informe.docx", "docx"),
-        ("00-Resources/hoja.xlsx", "xlsx"),
+        ("00-resources/informe.docx", "docx"),
+        ("00-resources/hoja.xlsx", "xlsx"),
     ):
         rows_of = [row for row in rows if row["source_path"] == source_path]
         assert rows_of
@@ -153,9 +153,9 @@ def test_docx_and_xlsx_are_indexed_from_the_original_with_extract_offsets(
                 str(row["text"]),
             ), f"identidad F1 rota en {source_path}"
 
-    docx_text = parsers.extract_text(indexed_documents / "00-Resources/informe.docx")
+    docx_text = parsers.extract_text(indexed_documents / "00-resources/informe.docx")
     assert DOCX_TEXT in docx_text
-    xlsx_text = parsers.extract_text(indexed_documents / "00-Resources/hoja.xlsx")
+    xlsx_text = parsers.extract_text(indexed_documents / "00-resources/hoja.xlsx")
     assert all(cell in xlsx_text for cell in XLSX_CELLS)
 
 
@@ -178,7 +178,7 @@ def test_extraction_failures_are_skipped_without_rows_and_do_not_abort_the_pass(
     assert report["scanned"] == report["indexed"] + report["skipped"]
 
     rows = _read_rows(vault)
-    assert {str(row["source_path"]) for row in rows} == {"00-Resources/sana.md"}
+    assert {str(row["source_path"]) for row in rows} == {"00-resources/sana.md"}
     assert "extraction_failed" in proc.stderr
     assert "escaneado.pdf" in proc.stderr and "sin capa de texto" in proc.stderr
     assert "corrupto.pdf" in proc.stderr and "corrupto" in proc.stderr

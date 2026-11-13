@@ -23,7 +23,7 @@ from .citation import RESOURCES_DIR, normalize_source_path
 from .config import DEFAULT_INDEXER_ROOTS
 
 DEFAULT_ROOTS: Final[tuple[str, ...]] = DEFAULT_INDEXER_ROOTS
-"""Sin argumento, el índice declara `00-Resources/` (ADR-010 §4.1).
+"""Sin argumento, el índice declara `00-resources/` (ADR-010 §4.1).
 
 Es el MISMO default del producto que `Config.indexer_roots`
 (`config.DEFAULT_INDEXER_ROOTS`): una sola copia del dato (liquidación del

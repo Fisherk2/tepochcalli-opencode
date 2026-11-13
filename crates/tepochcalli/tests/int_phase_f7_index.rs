@@ -29,8 +29,8 @@ fn tmp() -> tempfile::TempDir {
 /// supposed to cover exactly these.
 fn vault_with_placeholders() -> tempfile::TempDir {
     let vault = tmp();
-    let dir = vault.path().join("00-Resources");
-    std::fs::create_dir_all(&dir).expect("00-Resources fixture");
+    let dir = vault.path().join("00-resources");
+    std::fs::create_dir_all(&dir).expect("00-resources fixture");
     std::fs::write(dir.join("ejemplo.md"), "# Ejemplo\n").expect("md placeholder fixture");
     std::fs::write(dir.join("ejemplo.pdf"), b"%PDF-1.4 placeholder\n").expect("pdf placeholder");
     vault
@@ -177,12 +177,12 @@ fn f7_post_path1_indexes_both_placeholders_and_persists_metadata() {
     // The placeholders survive the index pass untouched.
     assert!(vault
         .path()
-        .join("00-Resources")
+        .join("00-resources")
         .join("ejemplo.md")
         .is_file());
     assert!(vault
         .path()
-        .join("00-Resources")
+        .join("00-resources")
         .join("ejemplo.pdf")
         .is_file());
 }

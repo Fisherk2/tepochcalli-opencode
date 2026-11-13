@@ -53,9 +53,9 @@ from support.mcp_server import (
 GOLDEN_VAULT = Path(__file__).parents[1] / "fixtures" / "golden_vault"
 """Vault golden GRABADO (md + PDF) — se copia a tmp, jamás se regenera en la corrida."""
 
-GOLDEN_MD = "00-Resources/nota_dorada.md"
-GOLDEN_TXT = "00-Resources/transcripcion_dorada.txt"
-GOLDEN_PDF = "00-Resources/articulo_dorado.pdf"
+GOLDEN_MD = "00-resources/nota_dorada.md"
+GOLDEN_TXT = "00-resources/transcripcion_dorada.txt"
+GOLDEN_PDF = "00-resources/articulo_dorado.pdf"
 
 MD_QUERY = "espectrómetro de partículas y reducción de datos"
 """Pregunta sobre el md golden — vocabulario real de `nota_dorada.md`."""

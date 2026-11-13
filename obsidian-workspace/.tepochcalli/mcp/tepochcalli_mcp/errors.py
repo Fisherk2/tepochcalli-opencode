@@ -130,7 +130,7 @@ def internal() -> dict[str, object]:
 
 
 GUIDE_MANUAL_SAVE: Final = (
-    "Guárdalo manualmente en una raíz declarada en `INDEXER_DIR` (p. ej. 00-Resources/) "
+    "Guárdalo manualmente en una raíz declarada en `INDEXER_DIR` (p. ej. 00-resources/) "
     "y ejecuta `index_refresh`."
 )
 """Guía de `SOURCE_UNREACHABLE` paso 3 para el fallback (ADR-010: solo se indexa

@@ -38,8 +38,8 @@ nativas.
 
 | # | Feature | Descripción | Spec |
 | --- | --- | --- | --- |
-| F1 | Vault plantillado | Carpetas numeradas `00-Resources/` (indexable, anidamiento libre), `01-tasks/`, `02-drafts/`, `03-citations/`; `.opencode/` con agentes+comandos+skills; `AGENTS.md` con regla MCP-first; muestras md+PDF | spec-vault-structure, spec-agent-workflow |
-| F2 | Motor RAG incremental | CocoIndex flow: live-watch `00-Resources/**`, chunking RecursiveSplitter, embeddings locales MiniLM, LanceDB ANN+FTS; Δ-only | spec-rag-engine |
+| F1 | Vault plantillado | Carpetas numeradas `00-resources/` (indexable, anidamiento libre), `01-tasks/`, `02-drafts/`, `03-citations/`; `.opencode/` con agentes+comandos+skills; `AGENTS.md` con regla MCP-first; muestras md+PDF | spec-vault-structure, spec-agent-workflow |
+| F2 | Motor RAG incremental | CocoIndex flow: live-watch `00-resources/**`, chunking RecursiveSplitter, embeddings locales MiniLM, LanceDB ANN+FTS; Δ-only | spec-rag-engine |
 | F3 | Herramientas MCP | `tepochcalli-rag`: `search` (chunks citables), `index_refresh()` (delta del conjunto declarado en `INDEXER_DIR` + reporte), `add_source` (ingesta convertida), `rag_status` (diagnóstico) | spec-mcp-server |
 | F4 | Conversor Markdown | markitdown **como librería en proceso** en el venv: `convert_document`/`convert_base64`/`list_formats` escriben a disco y devuelven solo el resumen (summary-only); URL/DOCX/PPTX/XLSX/XLS/PDF/HTML → Markdown indexable; fallback `anydoc` deshabilitado (criterio 7) | spec-markitdown, ADR-009, ADR-011 |
 | F5 | Wizard atomico | TUI Rust, 8 fases con rollback, bootstrap uv→venv→modelo→índice→config MCP; flags `--offline`, `--skip-model` | spec-installer-wizard |

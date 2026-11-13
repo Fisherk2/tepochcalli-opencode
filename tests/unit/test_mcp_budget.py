@@ -25,7 +25,7 @@ def _chunk(score: float, text: str = "x" * 400, *, heading: str | None = None) -
     """Chunk sintético para el presupuesto: el text manda el coste, el score el orden."""
     return CitedChunk(
         text=text,
-        source_path="00-Resources/a.md",
+        source_path="00-resources/a.md",
         heading=heading,
         char_start=0,
         char_end=len(text),

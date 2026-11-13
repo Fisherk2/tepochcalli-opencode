@@ -211,14 +211,14 @@ este calpulli no mide tiempo).
 
 | formato | entrada | resultado | doc_kind | offsets_ref | indexable | source_path | nota |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| md | índice | PASS | md | source | sí | 00-Resources/nota.md | — |
-| txt | índice | PASS | txt | source | sí | 00-Resources/prosa.txt | — |
-| pdf | índice | PASS | pdf | extract | sí | 00-Resources/articulo.pdf | heading nulo (D54) |
-| docx | índice | PASS | docx | extract | sí | 00-Resources/informe.docx | heading nulo pese al `#` del original (D54) |
-| pptx | índice | PASS | pptx | extract | sí | 00-Resources/diapositivas.pptx | heading nulo (D54) |
-| xlsx | índice | PASS | xlsx | extract | sí | 00-Resources/hoja.xlsx | heading nulo (D54) |
-| xls | índice | PASS | xls | extract | sí | 00-Resources/legado.xls | BIFF2 mínimo generado con `struct` (sin `xlwt`) |
-| html | conversor | PASS | md | source | sí, tras index_refresh | 00-Resources/pagina.md | el `.html` original no está en la whitelist: nunca es citable |
+| md | índice | PASS | md | source | sí | 00-resources/nota.md | — |
+| txt | índice | PASS | txt | source | sí | 00-resources/prosa.txt | — |
+| pdf | índice | PASS | pdf | extract | sí | 00-resources/articulo.pdf | heading nulo (D54) |
+| docx | índice | PASS | docx | extract | sí | 00-resources/informe.docx | heading nulo pese al `#` del original (D54) |
+| pptx | índice | PASS | pptx | extract | sí | 00-resources/diapositivas.pptx | heading nulo (D54) |
+| xlsx | índice | PASS | xlsx | extract | sí | 00-resources/hoja.xlsx | heading nulo (D54) |
+| xls | índice | PASS | xls | extract | sí | 00-resources/legado.xls | BIFF2 mínimo generado con `struct` (sin `xlwt`) |
+| html | conversor | PASS | md | source | sí, tras index_refresh | 00-resources/pagina.md | el `.html` original no está en la whitelist: nunca es citable |
 | url | conversor | GAP | — | — | no verificado | — | sin egress (`nonet`) y el guard SSRF rechaza loopback; exige host con red o allowlist (ADR) |
 
 **GAP declarados (no soportados), ejecutados contra el wire — no simulados:**

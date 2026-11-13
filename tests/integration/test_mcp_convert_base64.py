@@ -67,9 +67,9 @@ def _docx_bytes() -> bytes:
 
 
 def _vault(tmp_path: Path) -> Path:
-    """Vault mínimo con `00-Resources/` y un `staging/` para el documento original."""
+    """Vault mínimo con `00-resources/` y un `staging/` para el documento original."""
     vault = tmp_path / "vault"
-    (vault / "00-Resources").mkdir(parents=True)
+    (vault / "00-resources").mkdir(parents=True)
     (vault / "staging").mkdir()
     return vault
 
@@ -91,18 +91,18 @@ def test_base64_bytes_produce_the_same_markdown_as_the_document_path(tmp_path: P
     from_path = asyncio.run(
         document_handler.convert_document(
             "staging/informe.docx",
-            "00-Resources/desde-ruta.md",
+            "00-resources/desde-ruta.md",
             vault_root=lambda: vault,
             convert=convert_local,
         )
     )
 
-    text = (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8")
-    assert text == (vault / "00-Resources" / "desde-ruta.md").read_text(encoding="utf-8")
+    text = (vault / "00-resources" / "informe.md").read_text(encoding="utf-8")
+    assert text == (vault / "00-resources" / "desde-ruta.md").read_text(encoding="utf-8")
     assert DOCX_TEXT in text, "markitdown en proceso sobre los bytes en contexto"
     assert not text.startswith("---"), "D36: el conversor NO añade frontmatter"
 
-    assert from_bytes["written_to"] == "00-Resources/informe.md"
+    assert from_bytes["written_to"] == "00-resources/informe.md"
     assert from_bytes["source_uri"] == "informe.docx"
     assert from_path["source_uri"] == "staging/informe.docx"
     ignorable = {"written_to", "source_uri"}
@@ -129,7 +129,7 @@ def test_without_filename_the_destination_and_source_uri_use_the_sha_prefix(
     )
 
     assert payload["source_uri"] == f"base64:{digest}"
-    assert payload["written_to"] == f"00-Resources/base64-{digest}.docx"
-    assert DOCX_TEXT in (vault / "00-Resources" / f"base64-{digest}.docx").read_text(
+    assert payload["written_to"] == f"00-resources/base64-{digest}.docx"
+    assert DOCX_TEXT in (vault / "00-resources" / f"base64-{digest}.docx").read_text(
         encoding="utf-8"
     )

@@ -375,29 +375,29 @@ def test_indexer_dir_env_is_split_on_commas(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     r"""`INDEXER_DIR` multi-valor: split por `,` (nunca `os.pathsep`: `:` rompe `C:\\`)."""
-    monkeypatch.setenv("INDEXER_DIR", "00-Resources,03-Citations")
+    monkeypatch.setenv("INDEXER_DIR", "00-resources,03-Citations")
 
     cfg = flow_config.load_config(tmp_path)
 
-    assert cfg.indexer_roots == ("00-Resources", "03-Citations")
+    assert cfg.indexer_roots == ("00-resources", "03-Citations")
 
 
 def test_indexer_dir_env_trims_spaces_and_drops_empty_values(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Espacios recortados y segmentos vacíos descartados."""
-    monkeypatch.setenv("INDEXER_DIR", " 00-Resources , , 03-Citations ")
+    monkeypatch.setenv("INDEXER_DIR", " 00-resources , , 03-Citations ")
 
-    assert flow_config.load_config(tmp_path).indexer_roots == ("00-Resources", "03-Citations")
+    assert flow_config.load_config(tmp_path).indexer_roots == ("00-resources", "03-Citations")
 
 
 def test_indexer_roots_default_when_env_is_absent(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sin `INDEXER_DIR`: el default del producto es `00-Resources`."""
+    """Sin `INDEXER_DIR`: el default del producto es `00-resources`."""
     monkeypatch.delenv("INDEXER_DIR", raising=False)
 
-    assert flow_config.load_config(tmp_path).indexer_roots == ("00-Resources",)
+    assert flow_config.load_config(tmp_path).indexer_roots == ("00-resources",)
 
 
 def test_indexer_roots_default_when_env_is_blank(
@@ -406,4 +406,4 @@ def test_indexer_roots_default_when_env_is_blank(
     """`INDEXER_DIR` vacío o solo espacios/separadores ⇒ default."""
     monkeypatch.setenv("INDEXER_DIR", " , ")
 
-    assert flow_config.load_config(tmp_path).indexer_roots == ("00-Resources",)
+    assert flow_config.load_config(tmp_path).indexer_roots == ("00-resources",)

@@ -394,8 +394,8 @@ def test_initial_refresh_indexes_every_indexable_file(journey: Journey) -> None:
     assert report["locked"] is False
     assert report["elapsed_ms"] > 0
     assert _sources(journey.steps["initial"].rows) == {
-        "00-Resources/alpha.md",
-        "00-Resources/beta.md",
+        "00-resources/alpha.md",
+        "00-resources/beta.md",
     }
 
 
@@ -404,11 +404,11 @@ def test_adding_a_file_indexes_only_the_new_file(journey: Journey) -> None:
     report = journey.steps["add"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (3, 1, 2)
     initial, added = journey.steps["initial"], journey.steps["add"]
-    for source_path in ("00-Resources/alpha.md", "00-Resources/beta.md"):
+    for source_path in ("00-resources/alpha.md", "00-resources/beta.md"):
         assert _rows_of(initial, source_path) == _rows_of(added, source_path), (
             f"{source_path} no debe reescribirse en el paso add"
         )
-    assert _rows_of(added, "00-Resources/gamma.md"), "gamma.md no indexó filas"
+    assert _rows_of(added, "00-resources/gamma.md"), "gamma.md no indexó filas"
 
 
 def test_modifying_a_file_rewrites_only_its_chunks(journey: Journey) -> None:
@@ -416,12 +416,12 @@ def test_modifying_a_file_rewrites_only_its_chunks(journey: Journey) -> None:
     report = journey.steps["modify"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (3, 1, 2)
     added, modified = journey.steps["add"], journey.steps["modify"]
-    for source_path in ("00-Resources/beta.md", "00-Resources/gamma.md"):
+    for source_path in ("00-resources/beta.md", "00-resources/gamma.md"):
         assert _rows_of(added, source_path) == _rows_of(modified, source_path), (
             f"{source_path} no debe reescribirse al modificar alpha"
         )
-    alpha_before = _rows_of(added, "00-Resources/alpha.md")
-    alpha_after = _rows_of(modified, "00-Resources/alpha.md")
+    alpha_before = _rows_of(added, "00-resources/alpha.md")
+    alpha_after = _rows_of(modified, "00-resources/alpha.md")
     assert alpha_before and alpha_after
     assert [row["text"] for row in alpha_before] != [row["text"] for row in alpha_after]
 
@@ -431,10 +431,10 @@ def test_deleting_a_file_purges_its_rows_and_keeps_the_rest(journey: Journey) ->
     report = journey.steps["delete"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (2, 0, 2)
     modified, deleted = journey.steps["modify"], journey.steps["delete"]
-    assert "00-Resources/beta.md" not in _sources(deleted.rows), (
+    assert "00-resources/beta.md" not in _sources(deleted.rows), (
         "las filas de beta.md deben quedar purgadas (F2)"
     )
-    for source_path in ("00-Resources/alpha.md", "00-Resources/gamma.md"):
+    for source_path in ("00-resources/alpha.md", "00-resources/gamma.md"):
         assert _rows_of(modified, source_path) == _rows_of(deleted, source_path)
 
 
@@ -531,8 +531,8 @@ def test_non_utf8_file_is_counted_isolated_and_never_indexed(
     report = journey.steps["nonutf8"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (4, 1, 3)
     rows = journey.steps["nonutf8"].rows
-    assert "00-Resources/latin1.md" not in _sources(rows), "latin1 no debe indexarse"
-    assert _rows_of(journey.steps["nonutf8"], "00-Resources/sano.md"), (
+    assert "00-resources/latin1.md" not in _sources(rows), "latin1 no debe indexarse"
+    assert _rows_of(journey.steps["nonutf8"], "00-resources/sano.md"), (
         "el fichero sano del MISMO refresh sí debe indexarse"
     )
     assert "component build failed" in journey.stderr, (
@@ -552,7 +552,7 @@ def test_unreadable_directory_and_broken_symlink_are_counted(
     report = journey.steps["unreadable"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (6, 0, 6)
     rows = journey.steps["unreadable"].rows
-    assert "00-Resources/carpeta_prohibida/interna.md" not in _sources(rows)
+    assert "00-resources/carpeta_prohibida/interna.md" not in _sources(rows)
     assert not any("roto" in source for source in _sources(rows))
     assert journey.steps["nonutf8"].rows == rows, "un refresh sin escrituras no debe tocar filas"
 
@@ -571,11 +571,11 @@ def test_file_vanishing_after_classification_does_not_abort_the_delta(
     report = journey.steps["vanish"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (7, 0, 7)
     efimero_add, vanish = journey.steps["efimero-add"], journey.steps["vanish"]
-    assert _rows_of(efimero_add, "00-Resources/efimero.md"), "el paso previo sí indexó efimero (v1)"
-    assert _rows_of(vanish, "00-Resources/efimero.md") == _rows_of(
-        efimero_add, "00-Resources/efimero.md"
+    assert _rows_of(efimero_add, "00-resources/efimero.md"), "el paso previo sí indexó efimero (v1)"
+    assert _rows_of(vanish, "00-resources/efimero.md") == _rows_of(
+        efimero_add, "00-resources/efimero.md"
     ), "el fallo de lectura no debe dejar escrituras parciales (dos fases)"
-    for source_path in ("00-Resources/alpha.md", "00-Resources/sano.md"):
+    for source_path in ("00-resources/alpha.md", "00-resources/sano.md"):
         assert _rows_of(efimero_add, source_path) == _rows_of(vanish, source_path)
     assert "efimero.md" in journey.stderr, "el desvanecimiento debe ser visible en el log del fallo"
 
@@ -588,10 +588,10 @@ def test_vanished_file_is_purged_on_the_next_refresh(journey: Journey) -> None:
     report = journey.steps["reconcile"].report
     assert (report["scanned"], report["indexed"], report["skipped"]) == (6, 0, 6)
     vanish, reconcile = journey.steps["vanish"], journey.steps["reconcile"]
-    assert "00-Resources/efimero.md" not in _sources(reconcile.rows), (
+    assert "00-resources/efimero.md" not in _sources(reconcile.rows), (
         "las filas de efimero.md deben purgarse en la reconciliación"
     )
-    for source_path in ("00-Resources/alpha.md", "00-Resources/gamma.md"):
+    for source_path in ("00-resources/alpha.md", "00-resources/gamma.md"):
         assert _rows_of(vanish, source_path) == _rows_of(reconcile, source_path)
 
 

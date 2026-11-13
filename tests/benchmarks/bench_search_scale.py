@@ -197,7 +197,7 @@ def _sample_queries(manifest: Manifest, n: int, seed: int, words: int) -> list[d
 
 
 def _phase_prepare() -> dict[str, Any]:
-    """Verifica el corpus de T1, copia su `00-Resources/` al vault y muestrea las 100 queries."""
+    """Verifica el corpus de T1, copia su `00-resources/` al vault y muestrea las 100 queries."""
     started = time.monotonic()
     manifest, reused = materialize_or_verify(
         CORPUS_ROOT,

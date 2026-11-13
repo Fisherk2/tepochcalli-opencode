@@ -3,7 +3,7 @@
 Sirve specs/spec-rag-engine.md §Fuentes (ADR-010):
 
 * **N raíces por llamada**, relativas al vault (`walk_sources(vault_root,
-  roots)`); `00-Resources/` es el valor por omisión. `roots.normalize_roots`
+  roots)`); `00-resources/` es el valor por omisión. `roots.normalize_roots`
   valida y deduplica antes de tocar el disco; una raíz puede ser un **fichero
   suelto** (se emite como entrada única, nunca se pasa a `walk_dir`).
 * Whitelist `.md/.markdown/.txt/.pdf` y exclusiones de segmentos-punto y
@@ -199,7 +199,7 @@ def walk_sources(
     verificador y engine no diverjan en qué archivos existen (P7, P26).
 
     `roots` es una secuencia de rutas **relativas al vault**; `None` indexa
-    `00-Resources/` (ADR-010 §4.1). Cada raíz se valida antes de tocar el disco
+    `00-resources/` (ADR-010 §4.1). Cada raíz se valida antes de tocar el disco
     (dentro del vault, sin `..`, existente) y una raíz puede ser un fichero
     suelto. Devuelve UNA lista con ambas caras del pase —entradas indexables y
     descartes con `SkipReason`— ordenada por `source_path` (pase determinista).

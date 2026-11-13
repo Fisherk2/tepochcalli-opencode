@@ -16,8 +16,8 @@ Regla de honestidad: **lo no ejecutado se marca `NO EJECUTADO`**, nunca `ok`.
    ```bash
    python3 tests/e2e/verify_payload_install.py /tmp/opencode/phase5-vault
    ```
-2. Crea el corpus de fotosíntesis en `00-Resources/`. Guarda este fichero como
-   `00-Resources/fotosintesis.md` (es material de prueba, no del repo):
+2. Crea el corpus de fotosíntesis en `00-resources/`. Guarda este fichero como
+   `00-resources/fotosintesis.md` (es material de prueba, no del repo):
 
    ```markdown
    # Fotosíntesis — notas de estudio
@@ -52,7 +52,7 @@ Regla de honestidad: **lo no ejecutado se marca `NO EJECUTADO`**, nunca `ok`.
 4. Abre el harness en el vault y comprueba el índice:
    - pide `rag_status()`; si el estado no es `ok`/`degraded` coherente, ejecuta `index_refresh()`;
    - confirma con `search("fase luminosa fotosistema II")` que aparecen chunks de
-     `00-Resources/fotosintesis.md`.
+     `00-resources/fotosintesis.md`.
 
 **Línea base para la evidencia:** copia la salida de `rag_status()` antes de empezar.
 
@@ -72,7 +72,7 @@ Para cada paso, pega el prompt en el harness, observa y rellena la tabla de §4.
 ### Paso 1 — `/rubric` (Nezahualcóyotl · `01-tasks/`)
 
 **Prompt:**
-> /rubric Define el alcance de una revisión breve sobre la fotosíntesis en `00-Resources/`:
+> /rubric Define el alcance de una revisión breve sobre la fotosíntesis en `00-resources/`:
 > compara la fase luminosa y el ciclo de Calvin, y fija 3 preguntas de investigación.
 
 **Frontmatter esperado:** `{command, agent, date}`.
@@ -180,7 +180,7 @@ Marca `S`/`N` en cada punto y anota la evidencia (ruta o fragmento del transcrip
 | 9 | `/update` | | `02-drafts/` | | | | | |
 
 **MCP-first** = hay un `search` de `tepochcalli-rag` antes de cualquier lectura cruda de
-`00-Resources/` en el transcript del comando. **Sin contaminación** = no aparece escritura en
+`00-resources/` en el transcript del comando. **Sin contaminación** = no aparece escritura en
 bandeja ajena ni edición de ficheros del usuario en 01-05.
 
 ## 5. Evidencia a archivar

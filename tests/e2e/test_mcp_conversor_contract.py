@@ -68,9 +68,9 @@ SUMMARY_FIELDS = ["written_to", "source_uri", "bytes", "chars", "preview"]
 
 
 def _vault(tmp_path: Path) -> Path:
-    """Vault mínimo con `00-Resources/`, `staging/` (fuentes) y `salida/` (destinos)."""
+    """Vault mínimo con `00-resources/`, `staging/` (fuentes) y `salida/` (destinos)."""
     vault = tmp_path / "vault"
-    (vault / "00-Resources").mkdir(parents=True)
+    (vault / "00-resources").mkdir(parents=True)
     (vault / "staging").mkdir()
     (vault / "salida").mkdir()
     (vault / "staging" / "corto.md").write_text(CORTO, encoding="utf-8")

@@ -34,7 +34,7 @@ inglés con patrón «Name - Role» (D-P4-8), `mode: primary` explícito y **sin
 
 Cada cuerpo (system prompt, inglés, ≤60 líneas) incluye: persona UH (1-2 líneas); propósito en el
 workflow con su bandeja exacta; MCP-first (`search` de `tepochcalli-rag` antes de lectura cruda de
-`00-Resources/`, `index_refresh()` con dudas de frescura, ante cualquier `E_*` → `rag_status()` +
+`00-resources/`, `index_refresh()` con dudas de frescura, ante cualquier `E_*` → `rag_status()` +
 reportar el `fix_hint`, no el error crudo); no-contaminación (WARN si hay archivos del usuario en
 bandejas 01-05); formato de cita `source_path » heading (chars x–y)`; cláusula "el AGENTS.md del
 vault manda y es editable".
@@ -298,7 +298,7 @@ permissions:
     resource: ".tepochcalli/**"
     effect: deny
   - action: edit
-    resource: "00-Resources/**"
+    resource: "00-resources/**"
     effect: deny
   - action: edit
     resource: "01-tasks/**"
@@ -432,7 +432,7 @@ cruza `/`, `?` = un carácter, sin coincidencia ⇒ `ask`). 42 probes, 42/42 esp
 | Pochteca | 9 | `edit 01-tasks/research/x.md` allow → allow · `edit 02-drafts/x.md` deny → deny |
 | Nezahualcóyotl | 6 | `edit 01-tasks/research/x.md` deny → deny · `edit 01-tasks/plan.md` allow → allow |
 | Chilam | 6 | `edit 03-citations/x.md` allow → allow · `edit 02-drafts/x.md` deny → deny |
-| Tlacuilo | 15 | `edit 05-outputs/x.csv` allow → allow · `edit 00-Resources/x.md` deny → deny · `edit AGENTS.md` deny → deny · `edit opencode.json` deny → deny · `edit .git/config` deny → deny |
+| Tlacuilo | 15 | `edit 05-outputs/x.csv` allow → allow · `edit 00-resources/x.md` deny → deny · `edit AGENTS.md` deny → deny · `edit opencode.json` deny → deny · `edit .git/config` deny → deny |
 | Itzamná | 6 | `edit` cualquiera deny → deny |
 
 Lectura de secretos en los 5: `.env`, `sub/.env`, `.env.local`, `config/.env`, `secrets.env` →

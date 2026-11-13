@@ -19,7 +19,7 @@ Nota: la UI del producto es Obsidian + OpenCode; no hay pantallas propias (out o
 ```mermaid
 flowchart TD
     A["Usuario abre vault y describe tema a Itzamná"] --> B["/rubric (Nezahualcóyotl)<br/>matriz: pregunta, alcance, criterios"]
-    B --> C["/research (Pochteca)<br/>index_refresh + search en 00-Resources + web<br/>escribe solo 01-tasks/research/ (frontmatter obligatorio)"]
+    B --> C["/research (Pochteca)<br/>index_refresh + search en 00-resources + web<br/>escribe solo 01-tasks/research/ (frontmatter obligatorio)"]
     C --> D["/validate (Chilam)<br/>informe de calidad en 04-review/, contradicciones"]
     D -->|No| C
     D -->|Sí| E["/synthesize (Nezahualcóyotl)<br/>ejes temáticos + outline"]
@@ -37,13 +37,13 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
 
 ## 3. Journey (b) — "añado un PDF y pregunto 30s después"
 
-1. Usuario arrastra `paper.pdf` a `00-Resources/lit/` en Obsidian (o por gestor de archivos).
+1. Usuario arrastra `paper.pdf` a `00-resources/lit/` en Obsidian (o por gestor de archivos).
 2. Pregunta en OpenCode: "¿qué dice paper.pdf sobre X?"
 3. El agente (regla AGENTS.md) invoca `tepochcalli-rag.index_refresh()` →
    respuesta `{scanned, indexed:1, skipped, elapsed_ms}` (Δ<30s para material típico;
    PDF grande puede tardar más — progreso visible).
-4. Agente invoca `search("X", path_filter="00-Resources/lit/**")` (<500ms).
-5. Respuesta generada con citas: `00-Resources/lit/paper.pdf » 2.3 Medidas de resultado (chars 4120-5088)`.
+4. Agente invoca `search("X", path_filter="00-resources/lit/**")` (<500ms).
+5. Respuesta generada con citas: `00-resources/lit/paper.pdf » 2.3 Medidas de resultado (chars 4120-5088)`.
 6. Usuario navega en Obsidian al PDF y ve el pasaje exacto — bucle completo sin salir del vault.
 
 ## 4. Journey (c) — "convierte esta URL a mis fuentes"
@@ -51,7 +51,7 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
 1. Usuario: "guarda https://…/informe como fuente en `lit-clima/`".
 2. Agente: `add_source(uri="https://…/informe", subdir="lit-clima/")`.
 3. Server `add_source`: markitdown **en proceso** convierte el URI a Markdown; escribe
-   `00-Resources/lit-clima/informe.md` con frontmatter `source_uri`/`converted_at`; ejecuta
+   `00-resources/lit-clima/informe.md` con frontmatter `source_uri`/`converted_at`; ejecuta
    `index_refresh` y devuelve `{ok, written_to, indexed}`.
 4. Agente confirma ruta citable; la fuente ya entra en futuras `search`.
 5. (Conversión sin indexar: `convert_document`/`convert_base64` escriben el `.md` dentro del
@@ -70,20 +70,20 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
 3. F3 extrae el payload versionado (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`,
    asset de la misma release — **regla one-version**: el binario v0.3.x instala siempre
    el payload v0.3.x, nunca un `latest` suelto) con merge sin sobreescribir
-   (lo existente queda intacto y se anota), sin tocar `.obsidian/`; crea `00-Resources/`
+   (lo existente queda intacto y se anota), sin tocar `.obsidian/`; crea `00-resources/`
    con 2 placeholders (1 `.md` + 1 `.pdf` válido) y escribe `.install-intent`.
 4. F4 bootstrap de `uv` en `.tepochcalli/bin/` (SHA-256 verificado, sin scripts remotos)
    → F5 `uv venv` + `uv sync --frozen` en `.tepochcalli/venv/` → F6 menú
    "Embedding provider" (5 salidas, default
    `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado; cada fila con
    💾/🧠/🎮 y etiqueta `medido`/`estimado`/`declarado` + badges; gate test-embed con
-   RSS pico medido) → F7 indexa `00-Resources/` vía `python -m tepochcalli_flow`
+   RSS pico medido) → F7 indexa `00-resources/` vía `python -m tepochcalli_flow`
    (chunks + `model`/`dims` en metadatos; 2.ª corrida ⇒ `indexed: 0`) → F8 merge
    conservador de `mcp.servers` (con `.bak`, comando portable por SO, sin registrar
    `markitdown`, verificación `rag_status`).
 5. Fin: "abre Obsidian en `<ruta>`, ejecuta `opencode`, prueba /rubric". El usuario NO
    instaló Python/Node ni tecleó comandos de dependencias.
-6. Smoke: usuario añade una nota a `00-Resources/` → journey (b) funciona.
+6. Smoke: usuario añade una nota a `00-resources/` → journey (b) funciona.
 
 Flags: `--offline` (re-instalación con cachés; sin red), `--skip-model` = salida
 "Configurar después" del menú de embedder (ADR-007 D7.1-5): el vault se instala completo, la
@@ -108,7 +108,7 @@ reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedde
    (instalación COMPLETA degradada), no a "instalación fallida".
 4. Usuario borra el runtime a mano o `tepochcalli uninstall --vault <ruta>` → `.tepochcalli/`
    eliminado (runtime: `venv/`, `bin/`, `db/`, `models/`, `config/`); notas, payload y
-   `opencode.json` intactos — `00-Resources/` nunca se borra.
+   `opencode.json` intactos — `00-resources/` nunca se borra.
 5. Índice corrupto o cambio de modelo: `tepochcalli reindex --confirm` borra y reconstruye
    con el modelo actual (sin `--confirm` no hace nada); `E_MODEL_MISMATCH` explica el
    desajuste dims del modelo vs índice.
@@ -150,14 +150,14 @@ tras varios swaps.
 Zonas de propiedad (D9.1, specs/spec-vault-structure.md): bandejas del agente = leer/extraer/borrar OK, **no depositar ni editar**; biblioteca personal = carpetas tuyas (no indexadas v1).
 
 ```text
-00-Resources/       → # ENTRADA del usuario — meter aquí todo lo consultable (única fuente indexable; libre subniveles)
+00-resources/       → # ENTRADA del usuario — meter aquí todo lo consultable (única fuente indexable; libre subniveles)
 01-tasks/           → # bandeja del agente (Nezahualcóyotl: /rubric, /synthesize) — no depositar/editar; leer/extraer/borrar OK
 01-tasks/research/  → # bandeja del agente (Pochteca: /research) — evidencia con frontmatter {agent, timestamp, fuentes, método}
 02-drafts/          → # bandeja del agente (Tlacuilo: /draft, /update) — no depositar/editar; leer/extraer/borrar OK
 03-citations/       → # bandeja del agente (Chilam: /cite) — no depositar/editar; leer/extraer/borrar OK
 04-review/          → # bandeja del agente (Chilam: /validate, /review) — informes de calidad y revisión por pares
 05-outputs/         → # bandeja del agente (Tlacuilo: /transform) — CSV/Excel, notebooks, presentaciones, mapas mentales
-10+ / 20+ / 30+     → # biblioteca personal del usuario — organiza resultados extraídos; NO indexada v1 (copia a 00-Resources/ para buscarla)
+10+ / 20+ / 30+     → # biblioteca personal del usuario — organiza resultados extraídos; NO indexada v1 (copia a 00-resources/ para buscarla)
 .opencode/          → # agentes/comandos/skills del harness (no tocar sin plan)
 .tepochcalli/       → # runtime RAG (borrable/desinstalable, ver SECURITY/TRD)
 opencode.json       → # config del harness (el wizard administra solo mcp.servers)

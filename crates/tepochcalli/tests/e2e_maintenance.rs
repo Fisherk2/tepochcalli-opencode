@@ -60,9 +60,9 @@ fn installed_vault_with(config_model: &str, meta_model: &str) -> tempfile::TempD
     std::fs::write(rt.join("venv").join("bin").join("python"), b"fake-python")
         .expect("venv python fixture");
     // Ficheros del usuario: fuera de `.tepochcalli/`, intocables.
-    std::fs::create_dir_all(vault.path().join("00-Resources")).expect("resources fixture");
+    std::fs::create_dir_all(vault.path().join("00-resources")).expect("resources fixture");
     std::fs::write(
-        vault.path().join("00-Resources").join("ejemplo.md"),
+        vault.path().join("00-resources").join("ejemplo.md"),
         "# Ejemplo\n",
     )
     .expect("md fixture");
@@ -308,7 +308,7 @@ fn reindex_rebuilds_index_and_rewrites_meta_atomically() {
     );
     assert!(vault
         .path()
-        .join("00-Resources")
+        .join("00-resources")
         .join("ejemplo.md")
         .is_file());
 }
@@ -588,11 +588,11 @@ fn uninstall_removes_only_the_runtime() {
     let after = tree_snapshot(vault.path());
     assert_eq!(
         after, before,
-        "notas, payload, opencode.json y 00-Resources intactos"
+        "notas, payload, opencode.json y 00-resources intactos"
     );
     // Cinturón y tirantes: los testigos individuales.
     for witness in [
-        "00-Resources/ejemplo.md",
+        "00-resources/ejemplo.md",
         "notes/diaria.md",
         "opencode.json",
         ".obsidian/app.json",
@@ -710,7 +710,7 @@ fn uninstall_vault_forms_remove_runtime_and_keep_user_files() {
             "args {args:?}: el runtime desaparece"
         );
         for witness in [
-            "00-Resources/ejemplo.md",
+            "00-resources/ejemplo.md",
             "notes/diaria.md",
             "opencode.json",
             ".obsidian/app.json",

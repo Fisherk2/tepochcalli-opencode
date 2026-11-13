@@ -31,8 +31,8 @@ REPORT = {"scanned": 1, "indexed": 1, "skipped": 0, "elapsed_ms": 5, "locked": F
 
 
 def _target(tmp_path: Path) -> Path:
-    """Destino dentro de un `00-Resources/` real (el temporal va al MISMO directorio)."""
-    directory = tmp_path / "00-Resources"
+    """Destino dentro de un `00-resources/` real (el temporal va al MISMO directorio)."""
+    directory = tmp_path / "00-resources"
     directory.mkdir(parents=True, exist_ok=True)
     return directory / "informe.md"
 
@@ -142,12 +142,12 @@ def test_add_source_uses_the_shared_writer(tmp_path: Path, monkeypatch: pytest.M
             convert=lambda _uri: CONTENT,
             refresh=lambda: dict(REPORT),
             embedder_available=lambda: True,
-            allowed_roots=lambda: ("00-Resources",),
+            allowed_roots=lambda: ("00-resources",),
         )
     )
 
     assert payload["ok"] is True
-    assert calls == [(tmp_path / "00-Resources" / "_inbox" / "notas.md").resolve()]
+    assert calls == [(tmp_path / "00-resources" / "_inbox" / "notas.md").resolve()]
     assert not hasattr(add_source, "_write_atomic"), "la implementación se movió, no se copió"
 
 

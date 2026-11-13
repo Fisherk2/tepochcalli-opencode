@@ -40,7 +40,7 @@ coseno vs BM25— y RRF existe precisamente para evitar compararlas).
 traduce a SQL con `path_filter_to_like_predicate` — `*` → `%`, `?` → `_`,
 comodines `*`/`?` que SÍ cruzan `/` (semántica `LIKE`, la misma que
 spec-mcp-server §search documenta como `*`→`%`; `**` ≡ `*`, como en el
-ejemplo `00-Resources/lit-pediatría/**/*.pdf` de la spec)— y se aplica como
+ejemplo `00-resources/lit-pediatría/**/*.pdf` de la spec)— y se aplica como
 PREFILTRO `.where(...)` sobre ambas piernas (por defecto en el API asíncrona
 de LanceDB; https://docs.lancedb.com/search/hybrid-search §prefilter).
 
@@ -284,7 +284,7 @@ def path_filter_to_like_predicate(path_filter: str) -> str:
 
     * `*` → `%` (cualquier secuencia, INCLUYENDO `/`: semántica LIKE, no de
       shell; por eso `**` ≡ `*`, como en el ejemplo de la spec
-      `00-Resources/lit-pediatría/**/*.pdf`);
+      `00-resources/lit-pediatría/**/*.pdf`);
     * `?` → `_` (un solo carácter, también cruza `/`);
     * los literales `%` y `_` del glob se escapan con `\` (un `_` de nombre
       propio —p. ej. `con_guion_bajo.md`— no debe casar cualquier carácter);
@@ -296,7 +296,7 @@ def path_filter_to_like_predicate(path_filter: str) -> str:
 
     El glob es RELATIVO a la raíz del vault —igual que el `source_path`
     almacenado, que es vault-relativo (D41) y por eso puede empezar por
-    `00-Resources/` o por `materiales/`—: un path absoluto o con `..` LANZA
+    `00-resources/` o por `materiales/`—: un path absoluto o con `..` LANZA
     `ValueError` (frontera de confianza; el calling Phase 2 no puede colar un
     filtro que escape del vault).
     """

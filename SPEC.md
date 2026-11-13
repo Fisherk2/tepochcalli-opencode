@@ -9,7 +9,7 @@
 
 Investigadores y estudiantes obtienen, con un solo comando de instalación, un vault de
 Obsidian donde OpenCode V2 responde preguntas con citas precisas a sus fuentes
-(`00-Resources/`), gracias al motor RAG CocoIndex + LanceDB expuesto por el servidor MCP
+(`00-resources/`), gracias al motor RAG CocoIndex + LanceDB expuesto por el servidor MCP
 local `tepochcalli-rag`. Cuatro capas: Vault (usuario) → RAG Engine (procesamiento) →
 MCP Server (comunicación) → OpenCode V2 (agente). Ver [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
@@ -87,7 +87,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 * **Unit por capa:** transformaciones del flow (puras, sin red); parsers de config; helpers de truncado/token-budget del MCP.
 * **Contract tests MCP:** vault fixture → shape exacto de `search/index_refresh/add_source`, códigos de error, globs de `path_filter`.
 * **Fixtures de performance (los 4 criterios numéricos):** delta <30s; `search` <500ms p95; payload ≤~1600 tokens/call (cota ≤2000 con overhead); stress sintético 10k notas + 1k PDFs (metodología en [docs/TRD.md](docs/TRD.md)).
-* **Golden-vault e2e:** vault de muestra del wizard (1 md + 1 PDF en `00-Resources/`) → consulta real → respuesta citada correcta.
+* **Golden-vault e2e:** vault de muestra del wizard (1 md + 1 PDF en `00-resources/`) → consulta real → respuesta citada correcta.
 * **Idempotencia del wizard:** `install` dos veces → sin duplicados en payload ni `opencode.json`.
 
 ## Boundaries

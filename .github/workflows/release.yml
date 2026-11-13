@@ -186,7 +186,7 @@ jobs:
       # El payload es el template COMPLETO (`obsidian-workspace/`) con la raíz
       # del tar = contenido del vault, para que extraerlo en un directorio de
       # vault reproduzca `<vault>/AGENTS.md`, `<vault>/opencode.json`, etc.
-      # F3 (`installer.rs`) funde este árbol en el vault y crea `00-Resources/`
+      # F3 (`installer.rs`) funde este árbol en el vault y crea `00-resources/`
       # + sus 2 placeholders por su cuenta (D22): esa carpeta NO viaja aquí.
       # Exclusiones = solo artefactos de runtime/desarrollo (spec-vault-
       # structure §gitignore): nunca se publican `venv/ db/ models/ bin/

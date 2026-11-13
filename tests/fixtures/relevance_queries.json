@@ -1,61 +1,61 @@
 [
   {
     "query": "conductividad eléctrica y recambio de agua en la solución nutritiva de lechuga",
-    "source_path": "00-Resources/hidroponia-solucion-nutritiva.md",
+    "source_path": "00-resources/hidroponia-solucion-nutritiva.md",
     "heading": null,
     "lang": "es"
   },
   {
     "query": "infrared thermography to find hot spots that stay in the same cell",
-    "source_path": "00-Resources/photovoltaic-hot-spots.md",
+    "source_path": "00-resources/photovoltaic-hot-spots.md",
     "heading": null,
     "lang": "en"
   },
   {
     "query": "isótopos estables y polvo volcánico en los testigos de hielo de Quelccaya",
-    "source_path": "00-Resources/glaciares-testigos-hielo.md",
+    "source_path": "00-resources/glaciares-testigos-hielo.md",
     "heading": null,
     "lang": "es"
   },
   {
     "query": "memoisation that turns backtracking in parser combinators into linear work",
-    "source_path": "00-Resources/compilers-parser-combinators.md",
+    "source_path": "00-resources/compilers-parser-combinators.md",
     "heading": null,
     "lang": "en"
   },
   {
     "query": "valor predictivo positivo y prevalencia en la sensibilidad de una prueba diagnóstica",
-    "source_path": "00-Resources/epidemiologia-pruebas-diagnosticas.md",
+    "source_path": "00-resources/epidemiologia-pruebas-diagnosticas.md",
     "heading": null,
     "lang": "es"
   },
   {
     "query": "alkalinity and acid dosing when the pH drifts upward in a recirculating reservoir",
-    "source_path": "00-Resources/hydroponic-ph-drift.md",
+    "source_path": "00-resources/hydroponic-ph-drift.md",
     "heading": null,
     "lang": "en"
   },
   {
     "query": "inclinación y acimut de los paneles fotovoltaicos según la latitud",
-    "source_path": "00-Resources/fotovoltaica-inclinacion-paneles.md",
+    "source_path": "00-resources/fotovoltaica-inclinacion-paneles.md",
     "heading": null,
     "lang": "es"
   },
   {
     "query": "beryllium-10 exposure ages from boulders on the moraine crest",
-    "source_path": "00-Resources/glacial-moraines-dating.md",
+    "source_path": "00-resources/glacial-moraines-dating.md",
     "heading": "Beryllium-10 exposure ages",
     "lang": "en"
   },
   {
     "query": "préstamos y tiempos de vida que el borrow checker rechaza por aliasing",
-    "source_path": "00-Resources/compiladores-prestamos-rust.md",
+    "source_path": "00-resources/compiladores-prestamos-rust.md",
     "heading": null,
     "lang": "es"
   },
   {
     "query": "depth of discharge and cycle life when sizing lithium battery storage",
-    "source_path": "00-Resources/photovoltaic-battery-storage.md",
+    "source_path": "00-resources/photovoltaic-battery-storage.md",
     "heading": "Depth of discharge and cycle life",
     "lang": "en"
   }

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed (2026-11-13)
+
+- **La carpeta de entrada del usuario pasa a `00-resources/` (minúsculas) en las tres capas** — el
+  wizard creaba `00-Resources/` (y anunciaba «Escribe tus notas en `00-Resources/`») mientras el
+  payload declaraba `INDEXER_DIR="00-resources"` y el flow usaba
+  `citation.RESOURCES_DIR = "00-Resources"`: en un FS sensible a mayúsculas el vault quedaba con
+  **dos** carpetas y el material que el usuario escribía en la carpeta anunciada **no se indexaba**
+  (hermano de TD-8, `01-Tasks/` → `01-tasks/`). Se alinea el literal en `citation.py`,
+  `installer.rs` y el payload, se renombran los directorios reales (fixtures) y se añade el gate
+  cross-capa `tests/unit/test_resources_dir_canonical.py`, que cae si una sola capa se separa.
+  Enmienda: `specs/spec-vault-structure.md` §Enmienda 2026-11-13. Sin cambio de contrato.
+
 ### Added (guardrails de esquema OpenCode V2, 2026-11-09)
 
 - **Tests de forma, no de contenido** — `tests/unit/test_frontmatter_schema.py` (170 agentes vs

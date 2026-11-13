@@ -77,12 +77,12 @@ def test_walk_sources_skips_extraction_failures_with_the_typed_reason(tmp_path: 
 
     items = source.walk_sources(vault)
 
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/sana.md"]
     skips = {skip.source_path: skip for skip in _skips(items)}
-    assert set(skips) == {"00-Resources/corrupto.pdf", "00-Resources/escaneado.pdf"}
+    assert set(skips) == {"00-resources/corrupto.pdf", "00-resources/escaneado.pdf"}
     assert all(skip.reason is source.SkipReason.EXTRACTION_FAILED for skip in skips.values())
-    assert "sin capa de texto" in skips["00-Resources/escaneado.pdf"].detail
-    assert "corrupto" in skips["00-Resources/corrupto.pdf"].detail
+    assert "sin capa de texto" in skips["00-resources/escaneado.pdf"].detail
+    assert "corrupto" in skips["00-resources/corrupto.pdf"].detail
 
 
 def test_scan_items_does_not_extract_unless_probing_is_requested(tmp_path: Path) -> None:
@@ -95,7 +95,7 @@ def test_scan_items_does_not_extract_unless_probing_is_requested(tmp_path: Path)
     items, scanned = asyncio.run(source.scan_items(vault))
 
     assert scanned == 1
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/corrupto.pdf"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/corrupto.pdf"]
 
 
 def test_classify_file_only_probes_extraction_when_asked(tmp_path: Path) -> None:

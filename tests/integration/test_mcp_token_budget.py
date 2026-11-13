@@ -85,8 +85,8 @@ CASES = [
     ("dorada_corta", GOLDEN_QUERY, 5, None),
     ("cjk_emoji", CJK_QUERY, 5, None),
     ("emoji_latin", EMOJI_LATIN_QUERY, 5, None),
-    ("denso_corte", DENSE_QUERY, 5, "00-Resources/denso.md"),
-    ("pdf_tablas", PDF_QUERY, 5, "00-Resources/tablas.pdf"),
+    ("denso_corte", DENSE_QUERY, 5, "00-resources/denso.md"),
+    ("pdf_tablas", PDF_QUERY, 5, "00-resources/tablas.pdf"),
     ("top_k_maximo", "métricas de cobertura", 20, None),
     ("error_query", "x" * 10_001, 5, None),
 ]
@@ -138,7 +138,7 @@ def test_every_adversarial_consultation_stays_under_2000_tokens(backend: object)
     probe = measure(
         "sensibilidad_2_frases",
         DENSE_QUERY,
-        _search(backend, DENSE_QUERY, 5, path_filter="00-Resources/denso.md"),
+        _search(backend, DENSE_QUERY, 5, path_filter="00-resources/denso.md"),
         claims_per_result=2,
     )
     _write_evidence(list(budgets), probe)

@@ -89,7 +89,7 @@ class _Backend:
         return [
             CitedChunk(
                 text=text,
-                source_path="00-Resources/a.md",
+                source_path="00-resources/a.md",
                 heading=None,
                 char_start=0,
                 char_end=len(text),
@@ -507,11 +507,11 @@ def _auth_refresh(_roots: tuple[str, ...] = ()) -> dict[str, object]:
 
 def test_index_refresh_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
     """`index_refresh` emite `E_API_AUTH` cuando el flow rechaza la clave faltante."""
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     payload = asyncio.run(
         refresh_handler.index_refresh(
             vault_root=lambda: tmp_path,
-            default_roots=lambda: ("00-Resources",),
+            default_roots=lambda: ("00-resources",),
             refresh=_auth_refresh,
             embedder_available=lambda: True,
             index_exists=lambda: True,
@@ -534,7 +534,7 @@ def test_add_source_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
             convert=lambda uri: "# convertido\n",
             refresh=_auth_refresh,
             embedder_available=lambda: True,
-            allowed_roots=lambda: ("00-Resources",),
+            allowed_roots=lambda: ("00-resources",),
         )
     )
 

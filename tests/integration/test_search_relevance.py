@@ -73,7 +73,7 @@ RECALL_TARGET = 1.0
 LABEL_COUNT = 10
 """n del umbral (§6.2)."""
 
-RESOURCES = "00-Resources"
+RESOURCES = "00-resources"
 
 
 @dataclass(frozen=True)
@@ -274,7 +274,7 @@ def test_metric_discriminates(results_by_query: dict[str, dict[str, object]]) ->
 def test_empty_vault_fails_the_gate(tmp_path: Path) -> None:
     """Un vault VACÍO responde `INDEX_EMPTY` y el gate cae: 0.0 < 1.0, nunca `skip`.
 
-    Si el fixture desapareciera (o alguien vaciara `00-Resources/`), el test tiene
+    Si el fixture desapareciera (o alguien vaciara `00-resources/`), el test tiene
     que ponerse rojo por la razón correcta: no hay nada que recuperar.
     """
     vault = tmp_path / "vault-t3-empty"

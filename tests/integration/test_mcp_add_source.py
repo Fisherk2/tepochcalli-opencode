@@ -3,7 +3,7 @@
 Fuentes de verdad:
 
 * tasks/plan.md §6 T5 AC + «Verificar» — positivos `file:` (Dentro del vault)
-  → archivo en `00-Resources/_inbox/` con frontmatter + chunk indexado con
+  → archivo en `00-resources/_inbox/` con frontmatter + chunk indexado con
   `source_path` correcto; negativos: traversal en `subdir`, `subdir`
   absoluto, formato no convertible ⇒ `SOURCE_UNREACHABLE`, `file:` fuera
   del vault ⇒ rechazado.
@@ -95,7 +95,7 @@ def _tree_snapshot(root: Path) -> dict[str, tuple[int, int | None]]:
 
 @pytest.fixture(scope="module")
 def source_vault(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]:
-    """Vault T5 con `00-Resources/`, staging fuera del recurso y modelo calentado, SIN indexar."""
+    """Vault T5 con `00-resources/`, staging fuera del recurso y modelo calentado, SIN indexar."""
     vault = tmp_path_factory.mktemp("vault-t5")
     (vault / citation.RESOURCES_DIR).mkdir()
     staging = vault / "staging"
@@ -130,7 +130,7 @@ def test_add_source_file_writes_frontmatter_and_indexes_the_chunk(
 
     assert list(added) == ["ok", "written_to", "indexed"]
     assert added["ok"] is True
-    assert added["written_to"] == "00-Resources/_inbox/notas.md"
+    assert added["written_to"] == "00-resources/_inbox/notas.md"
     assert list(added["indexed"]) == INDEXED_FIELDS
     assert added["indexed"]["indexed"] >= 1, "el refresh interno indexa el archivo escrito"
 
@@ -161,7 +161,7 @@ def test_ssrf_denylist_rejects_internal_hosts_by_stdio(
 
     El URI es rechazado en el borde ANTES de que markitdown vea nada: ni
     connect ni DNS — bajo el canario `nonet` (que bloquearía cualquier
-    connect) el rechazo nunca llega a red, y `00-Resources/` queda byte a
+    connect) el rechazo nunca llega a red, y `00-resources/` queda byte a
     byte. Sustituye al antiguo positivo `http://127.0.0.1` (test_add_source_http_
     from_local_server): con la denylist, TODA IP de loopback es rechazada por
     diseño, y el camino feliz de conversión real queda cubierto por `file:`
@@ -210,15 +210,15 @@ def test_add_source_twice_gets_the_numeric_suffix(source_vault: tuple[Path, Path
 
     first_to, second_to = asyncio.run(twice())
 
-    assert first_to == "00-Resources/_inbox/colision.md"
-    assert second_to == "00-Resources/_inbox/colision-2.md"
+    assert first_to == "00-resources/_inbox/colision.md"
+    assert second_to == "00-resources/_inbox/colision-2.md"
 
 
 # --- negativos ----------------------------------------------------------------------------
 
 
 def test_file_outside_the_vault_is_rejected_d16(source_vault: tuple[Path, Path]) -> None:
-    """D16: `file:` fuera del vault ⇒ `VALIDATION_ERROR`; `00-Resources/` queda byte a byte."""
+    """D16: `file:` fuera del vault ⇒ `VALIDATION_ERROR`; `00-resources/` queda byte a byte."""
     vault, models_link = source_vault
     env = server_env(vault, models_link)
     before = _tree_snapshot(vault / citation.RESOURCES_DIR)
@@ -277,7 +277,7 @@ def test_unconvertible_format_maps_to_source_unreachable(source_vault: tuple[Pat
     assert is_error
     error = payload["error"]
     assert error["code"] == "SOURCE_UNREACHABLE"
-    assert "00-Resources/" in error["message"] and "index_refresh" in error["message"]
+    assert "00-resources/" in error["message"] and "index_refresh" in error["message"]
     assert error["details"]["cause"], "el tipo de la causa viaja en details (sin traceback)"
     assert _tree_snapshot(vault / citation.RESOURCES_DIR) == before, (
         "una conversión fallida no puede escribir ni un byte"
@@ -287,12 +287,12 @@ def test_unconvertible_format_maps_to_source_unreachable(source_vault: tuple[Pat
 def test_missing_resources_root_in_indexer_dir_is_rejected_before_converting(
     tmp_path: Path,
 ) -> None:
-    """`INDEXER_DIR=documentos` sin `00-Resources` ⇒ `VALIDATION_ERROR` ANTES de convertir/escribir.
+    """`INDEXER_DIR=documentos` sin `00-resources` ⇒ `VALIDATION_ERROR` ANTES de convertir/escribir.
 
     Gate de raíz declarada ejercitado en el WIRE (server real por stdio, sin
-    seams): el MCP no añade raíces al índice, así que sin `00-Resources` en
+    seams): el MCP no añade raíces al índice, así que sin `00-resources` en
     `INDEXER_DIR` la tool responde `details.{requested,allowed,hint}` y NADA
-    aparece en `00-Resources/` — snapshot byte a byte del vault completo
+    aparece en `00-resources/` — snapshot byte a byte del vault completo
     demuestra que ni el conversor ni la escritura corrieron. Sin modelo: el
     gate precede a `E_NO_EMBEDDER`, así que el hijo corre con el canario
     `nonet` y sin cache de modelo (patrón del edge de `index_refresh`).
@@ -314,9 +314,9 @@ def test_missing_resources_root_in_indexer_dir_is_rejected_before_converting(
     assert is_error
     error = payload["error"]
     assert error["code"] == "VALIDATION_ERROR"
-    assert error["details"]["requested"] == "00-Resources"
+    assert error["details"]["requested"] == "00-resources"
     assert error["details"]["allowed"] == ["documentos"]
-    assert not (tmp_path / citation.RESOURCES_DIR).exists(), "nada escrito en 00-Resources/"
+    assert not (tmp_path / citation.RESOURCES_DIR).exists(), "nada escrito en 00-resources/"
     assert _tree_snapshot(tmp_path) == before, "el gate corre antes de convertir o escribir"
 
 
@@ -341,8 +341,8 @@ def test_locked_refresh_reports_engine_locked_and_keeps_the_file(
 
     assert is_error
     assert payload["error"]["code"] == "ENGINE_LOCKED"
-    assert payload["error"]["details"] == {"written_to": "00-Resources/bloqueado/notas.md"}
-    assert (vault / "00-Resources" / "bloqueado" / "notas.md").is_file()
+    assert payload["error"]["details"] == {"written_to": "00-resources/bloqueado/notas.md"}
+    assert (vault / "00-resources" / "bloqueado" / "notas.md").is_file()
 
 
 def test_payload_db_and_models_are_never_created_by_the_tool() -> None:

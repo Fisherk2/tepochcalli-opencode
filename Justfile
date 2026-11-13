@@ -189,8 +189,8 @@ rust-smoke:
         --non-interactive --skip-model \
         --vault "${vault}" \
         --payload "${work}/payload"
-    test -f "${vault}/00-Resources/ejemplo.md"
-    test -f "${vault}/00-Resources/ejemplo.pdf"
+    test -f "${vault}/00-resources/ejemplo.md"
+    test -f "${vault}/00-resources/ejemplo.pdf"
     grep -q '"tepochcalli-rag"' "${vault}/opencode.json"
     echo "wizard-smoke OK: path-5 instalado y verificado (vault efímero ya borrado)"
 

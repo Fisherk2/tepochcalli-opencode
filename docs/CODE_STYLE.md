@@ -141,7 +141,7 @@ umbral de su propio tramo**, no a <500:
 | Specs | `specs/spec-<kebab>.md` | `spec-rag-engine.md` |
 | ADRs | `specs/adr/adr-NNN-<kebab>.md` (3 dígitos, secuencial inmutable) | `adr-001-motor-rag-cocoindex.md` |
 | Docs núcleo | `docs/<MAYUSCULAS>.md` fijos del proyecto | `APPFLOW.md`, `TECH_DEBT.md` |
-| Términos canónicos | exactos, en todo documento (ver checklist AGENTS.md) | `tepochcalli-rag` · `.tepochcalli/` · `00-Resources/` · `paraphrase-multilingual-MiniLM-L12-v2` · `cocoindex` · `markitdown` |
+| Términos canónicos | exactos, en todo documento (ver checklist AGENTS.md) | `tepochcalli-rag` · `.tepochcalli/` · `00-resources/` · `paraphrase-multilingual-MiniLM-L12-v2` · `cocoindex` · `markitdown` |
 | Branches | `feature/…` `fix/…` `chore/…` (git-workflow skill) | `feature/wizard-phase5` |
 
 * Archivos de código fuente Python/Rust: inglés (los artefactos viajan con el payload).

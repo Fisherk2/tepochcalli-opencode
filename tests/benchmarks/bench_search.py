@@ -371,7 +371,7 @@ def _driver(vault: Path, smoke: bool) -> None:
         "la env local del bench divergió del contrato del flow"
     )
     runs = SMOKE_RUNS if smoke else N_RUNS
-    resources = vault / "00-Resources"
+    resources = vault / "00-resources"
     resources.mkdir(parents=True, exist_ok=True)
     rng = random.Random(SEED)
     for index in range(N_FILES):

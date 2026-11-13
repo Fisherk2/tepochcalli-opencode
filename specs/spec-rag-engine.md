@@ -8,11 +8,11 @@
 
 ## Summary
 
-Define el flujo de indexación declarativo de CocoIndex que vive en `.tepochcalli/flow/`: recibe el **conjunto de raíces que declara el usuario** (`INDEXER_DIR`) cada vez que el agente llama `index_refresh()`, extrae texto con markitdown de ocho formatos (texto plano y ofimáticos; Docling ya no participa), particiona con `RecursiveSplitter`, genera embeddings locales (`paraphrase-multilingual-MiniLM-L12-v2`) y materializa un índice LanceDB embebido en `.tepochcalli/db/` con índices vectorial (ANN) y full-text. `00-Resources/` es el valor de omisión de esa variable, no una imposición (D32, ADR-010). Es la Capa de Procesamiento del sistema y garantiza la semántica incremental "solo delta" exigida por UH.md.
+Define el flujo de indexación declarativo de CocoIndex que vive en `.tepochcalli/flow/`: recibe el **conjunto de raíces que declara el usuario** (`INDEXER_DIR`) cada vez que el agente llama `index_refresh()`, extrae texto con markitdown de ocho formatos (texto plano y ofimáticos; Docling ya no participa), particiona con `RecursiveSplitter`, genera embeddings locales (`paraphrase-multilingual-MiniLM-L12-v2`) y materializa un índice LanceDB embebido en `.tepochcalli/db/` con índices vectorial (ANN) y full-text. `00-resources/` es el valor de omisión de esa variable, no una imposición (D32, ADR-010). Es la Capa de Procesamiento del sistema y garantiza la semántica incremental "solo delta" exigida por UH.md.
 
 ## Problem / Motivation
 
-Un investigador deposita PDFs y notas con su propia organización arbitraria: por convención en `00-Resources/`, pero también en carpetas propias (`materiales/`, `documentos/`) que no quiere duplicar ni mover. El sistema debe indexar lo que se le pide, sin LLM por chunk (presupuesto de tokens) y sin demonios que interfieran con Obsidian.
+Un investigador deposita PDFs y notas con su propia organización arbitraria: por convención en `00-resources/`, pero también en carpetas propias (`materiales/`, `documentos/`) que no quiere duplicar ni mover. El sistema debe indexar lo que se le pide, sin LLM por chunk (presupuesto de tokens) y sin demonios que interfieran con Obsidian.
 
 > Como investigador, quiero que lo que ponga en mis carpetas quede indexado buscable en segundos, sin configurar nada y sin mover archivos, para poder preguntar a OpenCode y obtener respuestas citadas.
 
@@ -144,7 +144,7 @@ async def build_flow(roots: list[str]) -> _ScanTally:
 ### Fuentes (sources)
 
 * **N raíces, declaradas por el usuario:** `index_refresh()` no recibe argumentos; el conjunto sale
-  de `INDEXER_DIR` (env del harness, multi-valor por comas; fallback `00-Resources`). Las raíces
+  de `INDEXER_DIR` (env del harness, multi-valor por comas; fallback `00-resources`). Las raíces
   viven **solo** en el entorno del proceso: no hay `index.roots` en `tepochcalli.toml`, no tocan el
   wizard, no sobreviven al proceso y el MCP no puede añadirlas ni quitarlas — cambiarlas es editar
   la variable y reiniciar el MCP (ADR-010 §4.1, D32/D42). La recursión, la raíz-fichero y el dedup
@@ -261,9 +261,9 @@ del venv y del flow (ADR-011 §4.3). `parse_document` despacha por `doc_kind`:
 * Índice vectorial: ANN sobre 384 dims (IVF_PQ por default en LanceDB; para corpus <200k chunks el brute-force ya cumple <500ms — se configura ANN cuando el bench lo exija).
 * Índice FTS: sobre el campo `text` (tokenizador por defecto de LanceDB) para la parte léxica de la búsqueda híbrida; ideal para términos técnicos exactos.
 * **`source_path` es relativo al VAULT (D41):** `materiales/a.pdf`, `documentos/a.pdf`,
-  `00-Resources/nota.md`. Con N raíces, dos raíces distintas pueden contener el mismo relativo;
+  `00-resources/nota.md`. Con N raíces, dos raíces distintas pueden contener el mismo relativo;
   guardar el relativo a la raíz colapsaría ambas filas en `a.pdf` y la cita dejaría de localizar
-  nada. `normalize_source_path` deja de prefijar `00-Resources/`. Es un cambio **breaking** de
+  nada. `normalize_source_path` deja de prefijar `00-resources/`. Es un cambio **breaking** de
   `search` asumido por el dueño: `path_filter` pasa a interpretarse contra el vault.
 * **`doc_kind` gana `docx/pptx/xlsx/xls`** como columna de texto (aditivo, sin migración de
   esquema ni enum de base de datos); `DocKind` es el conjunto cerrado compartido con la whitelist.
@@ -357,7 +357,7 @@ flowchart LR
 ## Trade-offs
 
 * ✅ **Pros:** Incremental real sobre cualquier carpeta del vault, cero LLM, cero puertos, targets intercambiables, flujo declarativo versionado; los ofimáticos entran sin paso de conversión previo.
-* ⚠️ **Cons / Risks:** **El PDF pierde la jerarquía de headings** (D54): la cita se apoya en `source_path` + offsets, no en el heading. **Los documentos binarios quedan fuera del Δ de 30 s** (D51): un vault lleno de `.docx` tendrá refreshes lentos y visibles, medidos aparte. **El conjunto de raíces lo declara el usuario** en `INDEXER_DIR`: el agente no puede ampliarlo ni reducirlo por llamada, y cambiar de carpeta exige editar la variable y reiniciar el MCP (si el usuario no la declara, se indexa `00-Resources/`). `source_path` vault-relativo es un cambio breaking para `path_filter` y prompts. Dependencias de versiones tempranas de CocoIndex (pinea `pyproject.toml`).
+* ⚠️ **Cons / Risks:** **El PDF pierde la jerarquía de headings** (D54): la cita se apoya en `source_path` + offsets, no en el heading. **Los documentos binarios quedan fuera del Δ de 30 s** (D51): un vault lleno de `.docx` tendrá refreshes lentos y visibles, medidos aparte. **El conjunto de raíces lo declara el usuario** en `INDEXER_DIR`: el agente no puede ampliarlo ni reducirlo por llamada, y cambiar de carpeta exige editar la variable y reiniciar el MCP (si el usuario no la declara, se indexa `00-resources/`). `source_path` vault-relativo es un cambio breaking para `path_filter` y prompts. Dependencias de versiones tempranas de CocoIndex (pinea `pyproject.toml`).
 * ⚖️ **Neutral:** Modelo mental de "flujos" para quien mantenga el pipeline; la raíz pasa de constante del producto a dato de configuración del usuario.
 
 ## Testing Strategy
@@ -369,7 +369,7 @@ flowchart LR
   `source_path == "materiales/1-geografia/x.pdf"` y `"documentos/pdf/y.pdf"`.
 * Integración — **raíz-fichero**: con `INDEXER_DIR=notas/suelta.md` se indexa exactamente una
   entrada y el motor no la pasa por `walk_dir`.
-* Integración — **dedup de raíces solapadas**: `INDEXER_DIR="00-Resources,00-Resources/sub"` ⇒
+* Integración — **dedup de raíces solapadas**: `INDEXER_DIR="00-resources,00-resources/sub"` ⇒
   `scanned == indexed + skipped` y ninguna entrada duplicada; también `"x,x"`.
 * Integración — **identidad del reporte**: `scanned == indexed + skipped` en el 100 % de los
   refreshes de la suite (incluye oversized, symlink roto, directorio ilegible).

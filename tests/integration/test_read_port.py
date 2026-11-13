@@ -199,7 +199,7 @@ def test_cited_chunk_row_mapping_pins_offsets_ref_from_doc_kind() -> None:
     """`offsets_ref` se deriva de `doc_kind` persistido en la fila: pdf→extract, md→source."""
     base = dict(
         text="t",
-        source_path="00-Resources/a.md",
+        source_path="00-resources/a.md",
         heading=None,
         char_start=0,
         char_end=1,
@@ -207,7 +207,7 @@ def test_cited_chunk_row_mapping_pins_offsets_ref_from_doc_kind() -> None:
     )
     rows: list[dict[str, Any]] = [
         {**base, "doc_kind": "md"},
-        {**base, "doc_kind": "pdf", "source_path": "00-Resources/articulo.pdf"},
+        {**base, "doc_kind": "pdf", "source_path": "00-resources/articulo.pdf"},
     ]
 
     chunks = lancedb_reader._to_cited_chunks(rows)
@@ -238,7 +238,7 @@ def test_search_returns_the_frozen_shape_with_nullable_heading(
     assert any(isinstance(chunk.heading, str) for chunk in results), (
         "nota.md produce chunks con heading padre"
     )
-    assert "00-Resources/con_guion_bajo.md" in paths
+    assert "00-resources/con_guion_bajo.md" in paths
 
 
 def test_scores_are_normalised_to_unit_interval_and_descending(
@@ -261,27 +261,27 @@ def test_path_filter_glob_narrows_results_to_the_matching_subtree(
     """`sub/*` solo devuelve chunks de `sub/`; `*.md` excluye `.txt` (semántica LIKE).
 
     `*` se traduce a `%` de SQL LIKE (spec-mcp-server §search), que SÍ cruza
-    `/`: `00-Resources/*.md` incluye también los `.md` anidados —casación
+    `/`: `00-resources/*.md` incluye también los `.md` anidados —casación
     distinta a la del shell, y esa ES la equivalencia congelada con la que
     Phase 2 filtrará en SQL—.
     """
     general = _search(reader, "indexación del flujo", top_k=10)
     assert {chunk.source_path for chunk in general} >= {
-        "00-Resources/nota.md",
-        "00-Resources/sub/carpeta/anidada.md",
+        "00-resources/nota.md",
+        "00-resources/sub/carpeta/anidada.md",
     }
 
-    sub = _search(reader, "indexación del flujo", top_k=10, path_filter="00-Resources/sub/*")
-    assert sub, "el glob 00-Resources/sub/* devolvió cero chunks"
-    assert all(chunk.source_path.startswith("00-Resources/sub/") for chunk in sub)
+    sub = _search(reader, "indexación del flujo", top_k=10, path_filter="00-resources/sub/*")
+    assert sub, "el glob 00-resources/sub/* devolvió cero chunks"
+    assert all(chunk.source_path.startswith("00-resources/sub/") for chunk in sub)
 
-    md_only = _search(reader, "indexación del flujo", top_k=10, path_filter="00-Resources/*.md")
+    md_only = _search(reader, "indexación del flujo", top_k=10, path_filter="00-resources/*.md")
     assert md_only
     assert all(chunk.source_path.endswith(".md") for chunk in md_only)
-    assert "00-Resources/sub/carpeta/anidada.md" in {chunk.source_path for chunk in md_only}, (
+    assert "00-resources/sub/carpeta/anidada.md" in {chunk.source_path for chunk in md_only}, (
         "`*`≡`%` cruza `/`: los .md anidados también casan (semántica LIKE, §search)"
     )
-    assert all(chunk.source_path != "00-Resources/plano.txt" for chunk in md_only)
+    assert all(chunk.source_path != "00-resources/plano.txt" for chunk in md_only)
 
 
 def test_path_filter_exact_glob_with_literal_underscore_matches_only_it(
@@ -292,10 +292,10 @@ def test_path_filter_exact_glob_with_literal_underscore_matches_only_it(
         reader,
         "guion bajo en el nombre",
         top_k=5,
-        path_filter="00-Resources/con_guion_bajo.md",
+        path_filter="00-resources/con_guion_bajo.md",
     )
     assert exact
-    assert all(chunk.source_path == "00-Resources/con_guion_bajo.md" for chunk in exact)
+    assert all(chunk.source_path == "00-resources/con_guion_bajo.md" for chunk in exact)
 
     # `?` es el comodín de un solo carácter: casa `con_guion_bajo` con cualquier
     # carácter en la posición del `_` — la semántica de Phase 2, sin escapar.
@@ -303,38 +303,38 @@ def test_path_filter_exact_glob_with_literal_underscore_matches_only_it(
         reader,
         "guion bajo en el nombre",
         top_k=5,
-        path_filter="00-Resources/con?guion_bajo.md",
+        path_filter="00-resources/con?guion_bajo.md",
     )
     assert wildcarded
-    assert all(chunk.source_path == "00-Resources/con_guion_bajo.md" for chunk in wildcarded)
+    assert all(chunk.source_path == "00-resources/con_guion_bajo.md" for chunk in wildcarded)
 
 
 def test_path_filter_to_like_predicate_pins_the_phase2_equivalence() -> None:
     """La traducción glob→LIKE queda congelada: `*`→`%`, `?`→`_`, escape y comillas."""
-    assert path_filter_to_like_predicate("00-Resources/sub/*") == (
-        "source_path LIKE '00-Resources/sub/%' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/sub/*") == (
+        "source_path LIKE '00-resources/sub/%' ESCAPE '\\'"
     )
     # `**` se traduce como dos `%` y el `/` literal se conserva: `%%/%` ≡ `%`
     # en LIKE ( `%` cruza `/`), semánticamente idéntico al `*` simple.
-    assert path_filter_to_like_predicate("00-Resources/lit/**/*.pdf") == (
-        "source_path LIKE '00-Resources/lit/%%/%.pdf' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/lit/**/*.pdf") == (
+        "source_path LIKE '00-resources/lit/%%/%.pdf' ESCAPE '\\'"
     )
-    assert path_filter_to_like_predicate("00-Resources/?.md") == (
-        "source_path LIKE '00-Resources/_.md' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/?.md") == (
+        "source_path LIKE '00-resources/_.md' ESCAPE '\\'"
     )
     # `_` literal escapado; `%` literal escapado; comilla duplicada (SQL seguro).
-    assert path_filter_to_like_predicate("00-Resources/a_b.md") == (
-        "source_path LIKE '00-Resources/a\\_b.md' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/a_b.md") == (
+        "source_path LIKE '00-resources/a\\_b.md' ESCAPE '\\'"
     )
-    assert path_filter_to_like_predicate("00-Resources/100%.md") == (
-        "source_path LIKE '00-Resources/100\\%.md' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/100%.md") == (
+        "source_path LIKE '00-resources/100\\%.md' ESCAPE '\\'"
     )
-    assert path_filter_to_like_predicate("00-Resources/o'brien.md") == (
-        "source_path LIKE '00-Resources/o''brien.md' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/o'brien.md") == (
+        "source_path LIKE '00-resources/o''brien.md' ESCAPE '\\'"
     )
     # Multibyte del glob se conserva tal cual en el patrón (UTF-8 en LIKE).
-    assert path_filter_to_like_predicate("00-Resources/lit/ñ-日-o'brien.md") == (
-        "source_path LIKE '00-Resources/lit/ñ-日-o''brien.md' ESCAPE '\\'"
+    assert path_filter_to_like_predicate("00-resources/lit/ñ-日-o'brien.md") == (
+        "source_path LIKE '00-resources/lit/ñ-日-o''brien.md' ESCAPE '\\'"
     )
 
 
@@ -344,10 +344,10 @@ def test_path_filter_to_like_predicate_rejects_globs_beyond_the_cap() -> None:
     Defensa en profundidad SIN duplicar la traducción: el mismo literal de
     longitud, dos bordes (`mcp.paths` —aquí el adaptador—).
     """
-    ok = "00-Resources/" + "a" * (1024 - len("00-Resources/"))
+    ok = "00-resources/" + "a" * (1024 - len("00-resources/"))
     assert path_filter_to_like_predicate(ok).startswith("source_path LIKE ")
     with pytest.raises(ValueError, match="1024"):
-        path_filter_to_like_predicate("00-Resources/" + "a" * 1025)
+        path_filter_to_like_predicate("00-resources/" + "a" * 1025)
 
 
 def test_invalid_inputs_are_rejected_at_the_boundary(
@@ -361,9 +361,9 @@ def test_invalid_inputs_are_rejected_at_the_boundary(
     with pytest.raises(ValueError, match="relativo"):
         _search(reader, "markdown", path_filter="/absoluto/*.md")
     with pytest.raises(ValueError, match=r"\.\."):
-        _search(reader, "markdown", path_filter="00-Resources/../secreto/*.md")
+        _search(reader, "markdown", path_filter="00-resources/../secreto/*.md")
     with pytest.raises(ValueError, match=r"\.\."):  # backslash normalizado → escape igual
-        _search(reader, "markdown", path_filter="00-Resources\\..\\secreto\\*.md")
+        _search(reader, "markdown", path_filter="00-resources\\..\\secreto\\*.md")
     with pytest.raises(ValueError, match="presupuesto"):  # query cap (frontera 10k)
         _search(reader, "x" * 10_001)
 
@@ -397,11 +397,11 @@ def test_explain_plan_rejects_invalid_inputs_and_honours_the_path_filter(
     with pytest.raises(ValueError, match="top_k"):
         asyncio.run(reader.explain_plan("markdown", top_k=0))
 
-    plan = asyncio.run(reader.explain_plan("citas", top_k=3, path_filter="00-Resources/sub/*"))
+    plan = asyncio.run(reader.explain_plan("citas", top_k=3, path_filter="00-resources/sub/*"))
 
     assert "KNNVectorDistance" in plan
     assert "source_path LIKE" in plan, plan
-    assert "00-Resources/sub/%" in plan, plan
+    assert "00-resources/sub/%" in plan, plan
 
 
 def test_lexical_and_semantic_queries_both_return_cited_hits(
@@ -417,7 +417,7 @@ def test_lexical_and_semantic_queries_both_return_cited_hits(
     semantico = _search(reader, "¿qué formatos acepta el pipeline?", top_k=3)
     assert semantico
     for chunk in semantico:
-        assert chunk.source_path.startswith("00-Resources/")
+        assert chunk.source_path.startswith("00-resources/")
         assert 0.0 <= chunk.score <= 1.0
 
 
@@ -492,7 +492,7 @@ def test_verify_cli_counts_rows_and_prints_cited_chunks_read_only(
     )
     assert proc.returncode == 0, f"verificador falló:\n{proc.stdout}\n{proc.stderr}"
     assert "Filas" in proc.stdout and str(_expected_row_count(indexed_vault)) in proc.stdout
-    assert "00-Resources/" in proc.stdout  # source_path citado
+    assert "00-resources/" in proc.stdout  # source_path citado
     assert "score=" in proc.stdout
     assert "heading=" in proc.stdout
     assert "[char_start=" in proc.stdout

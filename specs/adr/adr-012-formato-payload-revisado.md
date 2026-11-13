@@ -68,9 +68,13 @@ contra ese global, no contra el vacío.
 
 `1dc350d` renombra `00-Resources/` → `00-resources/` y agrega `10-templates/.gitkeep`;
 `1ce44ca` cambia `INDEXER_DIR` a `00-resources`. El fallback del contrato (`["00-Resources"]`
-cuando la variable está ausente, ADR-010 §4.1) **no cambia**: es default de código, no del
+cuando la variable está ausente, ADR-010 §4.1) **no cambia en esta ola**: es default de código, no del
 payload. En Linux ambas rutas son directorios distintos (sensible a case); el instalador
 debe materializar el case exacto de `INDEXER_DIR` (vecino de TD-8).
+
+**Actualización 2026-11-13:** el fallback de código también pasa a `00-resources` (minúsculas) —
+ver [spec-vault-structure](../spec-vault-structure.md) §Enmienda 2026-11-13. Este apartado se
+conserva como registro de la revisión de 2026-11-11.
 
 ### Revisión (d) — skill 41 `math-typesetting-guide`
 

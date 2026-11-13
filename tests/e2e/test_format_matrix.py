@@ -121,8 +121,8 @@ class Cell:
 
 
 CELLS: Final[tuple[Cell, ...]] = (
-    Cell("md", "índice", "PASS", "md", "source", "sí", "00-Resources/nota.md", "—"),
-    Cell("txt", "índice", "PASS", "txt", "source", "sí", "00-Resources/prosa.txt", "—"),
+    Cell("md", "índice", "PASS", "md", "source", "sí", "00-resources/nota.md", "—"),
+    Cell("txt", "índice", "PASS", "txt", "source", "sí", "00-resources/prosa.txt", "—"),
     Cell(
         "pdf",
         "índice",
@@ -130,7 +130,7 @@ CELLS: Final[tuple[Cell, ...]] = (
         "pdf",
         "extract",
         "sí",
-        "00-Resources/articulo.pdf",
+        "00-resources/articulo.pdf",
         "heading nulo (D54)",
     ),
     Cell(
@@ -140,7 +140,7 @@ CELLS: Final[tuple[Cell, ...]] = (
         "docx",
         "extract",
         "sí",
-        "00-Resources/informe.docx",
+        "00-resources/informe.docx",
         "heading nulo pese al `#` del original (D54)",
     ),
     Cell(
@@ -150,7 +150,7 @@ CELLS: Final[tuple[Cell, ...]] = (
         "pptx",
         "extract",
         "sí",
-        "00-Resources/diapositivas.pptx",
+        "00-resources/diapositivas.pptx",
         "heading nulo (D54)",
     ),
     Cell(
@@ -160,7 +160,7 @@ CELLS: Final[tuple[Cell, ...]] = (
         "xlsx",
         "extract",
         "sí",
-        "00-Resources/hoja.xlsx",
+        "00-resources/hoja.xlsx",
         "heading nulo (D54)",
     ),
     Cell(
@@ -170,7 +170,7 @@ CELLS: Final[tuple[Cell, ...]] = (
         "xls",
         "extract",
         "sí",
-        "00-Resources/legado.xls",
+        "00-resources/legado.xls",
         "BIFF2 mínimo generado con `struct` (sin `xlwt`)",
     ),
     Cell(
@@ -180,7 +180,7 @@ CELLS: Final[tuple[Cell, ...]] = (
         "md",
         "source",
         "sí, tras index_refresh",
-        "00-Resources/pagina.md",
+        "00-resources/pagina.md",
         "el `.html` original no está en la whitelist: nunca es citable",
     ),
     Cell(
@@ -247,18 +247,18 @@ MARKERS: Final[dict[str, str]] = {
 """Texto único por fixture: la consulta con la que se comprueba qué es citable."""
 
 SOURCES: Final[dict[str, str]] = {
-    "md": "00-Resources/nota.md",
-    "txt": "00-Resources/prosa.txt",
-    "pdf": "00-Resources/articulo.pdf",
-    "docx": "00-Resources/informe.docx",
-    "pptx": "00-Resources/diapositivas.pptx",
-    "xlsx": "00-Resources/hoja.xlsx",
-    "xls": "00-Resources/legado.xls",
+    "md": "00-resources/nota.md",
+    "txt": "00-resources/prosa.txt",
+    "pdf": "00-resources/articulo.pdf",
+    "docx": "00-resources/informe.docx",
+    "pptx": "00-resources/diapositivas.pptx",
+    "xlsx": "00-resources/hoja.xlsx",
+    "xls": "00-resources/legado.xls",
 }
 """`source_path` esperado de cada celda del índice — el original, no un derivado."""
 
-HTML_ARTIFACT: Final = "00-Resources/pagina.md"
-"""Destino por omisión de `convert_document` (`00-Resources/<slug>.md`, D37)."""
+HTML_ARTIFACT: Final = "00-resources/pagina.md"
+"""Destino por omisión de `convert_document` (`00-resources/<slug>.md`, D37)."""
 
 
 def _write_docx(path: Path, marker: str) -> None:
@@ -441,7 +441,7 @@ def _measure(vault: Path, models: Path) -> Measurement:
             gaps = {
                 ".doc": await _convert(session, "staging/legado.doc"),
                 ".ppt": await _convert(session, "staging/anticuado.ppt"),
-                "pdf escaneado": await _convert(session, "00-Resources/escaneado.pdf"),
+                "pdf escaneado": await _convert(session, "00-resources/escaneado.pdf"),
                 "url": wire_payload(
                     await session.call_tool("add_source", {"uri": "http://127.0.0.1:9/pag.html"})
                 ),
@@ -529,9 +529,9 @@ def test_the_original_is_the_citation_and_the_converted_md_is_not(
     """D28/D49: `written_to` es un artefacto; la cita de un binario es el ORIGINAL."""
     payload = matrix.converted["docx"]
     assert "error" not in payload, payload
-    assert payload["written_to"] == "00-Resources/informe.md"
+    assert payload["written_to"] == "00-resources/informe.md"
     assert payload["source_uri"] == SOURCES["docx"]
-    assert "00-Resources/informe.md" not in _paths(matrix.docx_after_search), (
+    assert "00-resources/informe.md" not in _paths(matrix.docx_after_search), (
         "convert_document no indexa (D49): el artefacto no puede ser la cita del docx"
     )
     assert matrix.cited["docx"]["source_path"] == SOURCES["docx"]
@@ -563,7 +563,7 @@ def test_unsupported_inputs_are_declared_gaps_with_the_real_message(
     if cell.format == "pdf escaneado":
         assert error["code"] == "SOURCE_UNREACHABLE"
         assert "OCR" in str(error["message"]), error
-        assert not matrix.rows.get("00-Resources/escaneado.pdf"), (
+        assert not matrix.rows.get("00-resources/escaneado.pdf"), (
             "un escaneado nunca indexa una fila vacía (OM-11)"
         )
     else:

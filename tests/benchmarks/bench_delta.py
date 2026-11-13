@@ -1,14 +1,14 @@
 """Bench Δ indexación <30 s (métrica de fase M1, T10) — 20 corridas, nearest-rank p95.
 
 Fuente de verdad del protocolo: **docs/TRD.md §6 criterio 2** — «Corridas ×20:
-tocar/crear 1-50 archivos md en `00-Resources/`, luego `index_refresh()`;
+tocar/crear 1-50 archivos md en `00-resources/`, luego `index_refresh()`;
 registrar `elapsed_ms`»; pass = **p95 < 30 000 ms**; «PDFs grandes excluidos y
 reportados aparte».
 
 Qué mide y qué no
 -----------------
 * Mide el Δ **caliente** de un corpus de **50** ficheros pequeños md/txt bajo
-  `00-Resources/` de un **vault temporal** (`/tmp/opencode/...`, btrfs/NVMe):
+  `00-resources/` de un **vault temporal** (`/tmp/opencode/...`, btrfs/NVMe):
   la indexación inicial (fría, incluye la carga del modelo) se ejecuta y se
   reporta, pero **queda FUERA de las 20 muestras del presupuesto** — el
   presupuesto M1 es el Δ de refresco, no el arranque en frío.
@@ -178,7 +178,7 @@ def _driver(vault: Path, smoke: bool) -> None:
 
     runs = SMOKE_RUNS if smoke else N_RUNS
     rng = random.Random(SEED)
-    resources = vault / "00-Resources"
+    resources = vault / "00-resources"
     resources.mkdir(parents=True, exist_ok=True)
     names: list[str] = []
     for i in range(N_FILES):

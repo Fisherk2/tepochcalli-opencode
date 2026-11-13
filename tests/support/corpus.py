@@ -2,7 +2,7 @@
 
 Un solo generador determinista de **10 000 notas md** (10 subdirs × 1 000) y
 **1 000 PDF de 1 página** válidos (xref computado, texto extraíble por
-markitdown) bajo `root/00-Resources/`, más el manifiesto `corpus-manifest.json`
+markitdown) bajo `root/00-resources/`, más el manifiesto `corpus-manifest.json`
 en la raíz del corpus (fuera de la raíz indexable).
 
 Por qué existe
@@ -37,7 +37,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-RESOURCES_DIR = "00-Resources"
+RESOURCES_DIR = "00-resources"
 """Raíz indexable del vault: el manifiesto queda FUERA para no indexarse."""
 
 MANIFEST_NAME = "corpus-manifest.json"

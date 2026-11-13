@@ -36,9 +36,9 @@ from support.mcp_server import index_vault
 GOLDEN_VAULT = Path(__file__).parents[1] / "fixtures" / "golden_vault"
 """Vault golden GRABADO (md + txt + pdf) — se copia, jamás se regenera."""
 
-GOLDEN_MD = "00-Resources/nota_dorada.md"
-GOLDEN_TXT = "00-Resources/transcripcion_dorada.txt"
-GOLDEN_PDF = "00-Resources/articulo_dorado.pdf"
+GOLDEN_MD = "00-resources/nota_dorada.md"
+GOLDEN_TXT = "00-resources/transcripcion_dorada.txt"
+GOLDEN_PDF = "00-resources/articulo_dorado.pdf"
 
 SPOT_SAMPLE = 100
 """Pide más filas que las indexadas: el muestreo cubre TODOS los chunks del golden."""

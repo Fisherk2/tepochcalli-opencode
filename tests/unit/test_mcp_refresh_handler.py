@@ -25,7 +25,7 @@ Decisiones de capa, documentadas:
   PRECEDENCIA se demuestra con el fake, sin tocar `flow/`. El borde de raíces
   corre ANTES (AC g): un argumento mal escrito se responde como
   `VALIDATION_ERROR` aunque el embedder esté apagado.
-* Los tests usan un vault REAL de `tmp_path` (con `00-Resources/` y dos
+* Los tests usan un vault REAL de `tmp_path` (con `00-resources/` y dos
   carpetas) porque `validate_roots` exige existencia y tipo: validar con un
   fake de `paths` probaría el fake, no el borde.
 """
@@ -50,7 +50,7 @@ WELL_FORMED_REPORT: dict[str, object] = {
     "skipped": 1,
     "elapsed_ms": 42,
     "locked": False,
-    "roots": ["00-Resources"],
+    "roots": ["00-resources"],
 }
 
 LOCKED_REPORT: dict[str, object] = {
@@ -59,14 +59,14 @@ LOCKED_REPORT: dict[str, object] = {
     "skipped": 0,
     "elapsed_ms": 0,
     "locked": True,
-    "roots": ["00-Resources"],
+    "roots": ["00-resources"],
 }
 
 
 @pytest.fixture
 def vault(tmp_path: Path) -> Path:
-    """Vault real mínimo: el default `00-Resources/` existe (el borde lo exige)."""
-    (tmp_path / "00-Resources").mkdir()
+    """Vault real mínimo: el default `00-resources/` existe (el borde lo exige)."""
+    (tmp_path / "00-resources").mkdir()
     return tmp_path
 
 
@@ -76,7 +76,7 @@ def _call(
     refresh: Callable[[tuple[str, ...]], dict[str, object]],
     embedder_available: Callable[[], bool],
     index_exists: Callable[[], bool],
-    default_roots: Callable[[], tuple[str, ...]] = lambda: ("00-Resources",),
+    default_roots: Callable[[], tuple[str, ...]] = lambda: ("00-resources",),
 ) -> dict[str, object]:
     """Invoca el handler sin argumentos (el conjunto lo fija la costura)."""
     return asyncio.run(
@@ -124,7 +124,7 @@ def test_report_counts_are_never_recomputed_even_if_inconsistent(vault: Path) ->
         "skipped": 3,
         "elapsed_ms": 0,
         "locked": False,
-        "roots": ["00-Resources"],
+        "roots": ["00-resources"],
     }
 
     payload = _call(
@@ -167,7 +167,7 @@ def test_locked_report_short_circuits_without_consulting_the_index(vault: Path) 
 
 
 def test_default_roots_are_00_resources(vault: Path) -> None:
-    """AC (a): costura por omisión ⇒ `("00-Resources",)` — el default del producto."""
+    """AC (a): costura por omisión ⇒ `("00-resources",)` — el default del producto."""
     seen: list[tuple[str, ...]] = []
 
     def _refresh(roots: tuple[str, ...]) -> dict[str, object]:
@@ -181,8 +181,8 @@ def test_default_roots_are_00_resources(vault: Path) -> None:
         index_exists=_const(True),
     )
 
-    assert seen == [("00-Resources",)]
-    assert payload["roots"] == ["00-Resources"]
+    assert seen == [("00-resources",)]
+    assert payload["roots"] == ["00-resources"]
 
 
 def test_default_roots_come_from_the_seam_not_from_the_literal(
@@ -191,7 +191,7 @@ def test_default_roots_come_from_the_seam_not_from_the_literal(
     """El borde valida las raíces de la costura (`config.indexer_roots`), no un literal.
 
     `INDEXER_DIR` se declara en `opencode.json`; el handler no repite el literal
-    `("00-Resources",)` — lo recibe por costura, igual que `last_refresh_roots`.
+    `("00-resources",)` — lo recibe por costura, igual que `last_refresh_roots`.
     """
     (vault / "materiales").mkdir()
     validated: list[Sequence[str] | None] = []
@@ -255,10 +255,10 @@ def test_removed_directories_argument_is_ignored_by_the_sdk(
     (fallaría la validación). No se añade un guard que devuelva error: el fallo
     seguro —indexar el conjunto declarado— ya es el comportamiento correcto.
     """
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     (tmp_path / "documentos").mkdir()
     monkeypatch.setenv("TEPOCHCALLI_VAULT_ROOT", str(tmp_path))
-    monkeypatch.setenv("INDEXER_DIR", "00-Resources")
+    monkeypatch.setenv("INDEXER_DIR", "00-resources")
     seen: list[tuple[str, ...]] = []
 
     def _refresh(roots: tuple[str, ...]) -> dict[str, object]:
@@ -275,8 +275,8 @@ def test_removed_directories_argument_is_ignored_by_the_sdk(
     result = asyncio.run(meta.call_fn(server.index_refresh, True, kwargs))
     payload = json.loads(result.content[0].text)
 
-    assert seen == [("00-Resources",)], "indexa el conjunto configurado, no lo pedido"
-    assert payload["roots"] == ["00-Resources"]
+    assert seen == [("00-resources",)], "indexa el conjunto configurado, no lo pedido"
+    assert payload["roots"] == ["00-resources"]
 
 
 def test_configured_roots_are_normalized_and_forwarded_to_the_seam(vault: Path) -> None:
@@ -323,7 +323,7 @@ def test_missing_root_is_validation_error_before_the_seam(vault: Path) -> None:
         "requested": "Documentos",
         "exists": False,
         "suggestions": ["documentos"],
-        "vault_dirs": ["00-Resources", "documentos"],
+        "vault_dirs": ["00-resources", "documentos"],
     }
     assert calls == [], "una raíz mala no debe llegar al motor"
 

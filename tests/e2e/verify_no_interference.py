@@ -70,14 +70,14 @@ HIDDEN_ALLOWED_ROOT = {".git", ".gitignore", ".obsidian", ".opencode", ".tepochc
 HIDDEN_ALLOWED_FILES = {".gitkeep"}
 """`.gitkeep` es un placeholder del payload (bandejas vacías versionadas), no basura."""
 
-# Bandejas canónicas (D9.1); `00-Resources/` la crea el wizard (D22), las demás
+# Bandejas canónicas (D9.1); `00-resources/` la crea el wizard (D22), las demás
 # viajan en el payload del release.
-TRAYS = ["00-Resources", "01-tasks", "02-drafts", "03-citations", "04-review", "05-outputs"]
+TRAYS = ["00-resources", "01-tasks", "02-drafts", "03-citations", "04-review", "05-outputs"]
 
 INDEX_ROOT = "00-resources"
 """Raíz que reporta `index_refresh` por defecto (`INDEXER_DIR`, ADR-010).
 
-Ojo: el wizard crea `00-Resources/` (D22) y el payload trae `00-resources/`
+Ojo: el wizard crea `00-resources/` (D22) y el payload trae `00-resources/`
 (alias pendiente en `spec-vault-structure` §Open Questions). La medición deja la
 nota en la raíz REAL que indexa el motor —lo que se mide es no-interferencia,
 no el alias— y el alias se publica como observación, nunca se silencia.
@@ -391,9 +391,9 @@ def main() -> int:
         valid = validate_vault(vault)
         roots = list(tools["refresh"].get("roots") or [])
         observations = []
-        if (vault / "00-Resources").is_dir() and (vault / INDEX_ROOT).is_dir():
+        if (vault / "00-resources").is_dir() and (vault / INDEX_ROOT).is_dir():
             observations.append(
-                "alias de raíz: el wizard crea `00-Resources/` (D22) y el payload trae "
+                "alias de raíz: el wizard crea `00-resources/` (D22) y el payload trae "
                 f"`{INDEX_ROOT}/`; `index_refresh` indexa roots={roots} — la nota medida vive "
                 "en la raíz efectiva, no en la del scaffold (Open Question de spec-vault-structure)"
             )

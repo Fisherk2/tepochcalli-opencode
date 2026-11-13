@@ -23,7 +23,7 @@ SHORT = "# Informe\n\ncontenido breve\n"
 
 def _written(vault: Path, text: str = SHORT) -> Path:
     """Escribe el `.md` como lo haría `writer.write_atomic` y devuelve su ruta absoluta."""
-    target = vault / "00-Resources" / "informe.md"
+    target = vault / "00-resources" / "informe.md"
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(text, encoding="utf-8")
     return target
@@ -41,7 +41,7 @@ def test_summary_has_the_five_keys_in_the_frozen_order(tmp_path: Path) -> None:
 
     assert list(payload) == ["written_to", "source_uri", "bytes", "chars", "preview"]
     assert "ok" not in payload, "D36: el éxito es la ausencia de error"
-    assert payload["written_to"] == "00-Resources/informe.md"
+    assert payload["written_to"] == "00-resources/informe.md"
     assert payload["source_uri"] == "fuentes/informe.docx"
     assert payload["bytes"] == target.stat().st_size
     assert payload["chars"] == len(SHORT)
@@ -99,7 +99,7 @@ def test_big_preview_still_fits_under_the_ceiling(tmp_path: Path) -> None:
     """Un preview de 500 chars + las claves de cita caben en 1 400 (M3): sin recorte."""
     target = _written(tmp_path, "x" * 100_000)
     payload = summary.build_summary(
-        target, source_uri="00-Resources/fuentes/informe-anual-2026.docx", vault_root=tmp_path
+        target, source_uri="00-resources/fuentes/informe-anual-2026.docx", vault_root=tmp_path
     )
 
     text = summary.serialize_budget(payload)
@@ -115,8 +115,8 @@ def test_oversized_summary_trims_only_the_preview(tmp_path: Path) -> None:
     `chars` jamás se tocan. `truncated` marca el recorte.
     """
     payload: dict[str, object] = {
-        "written_to": "00-Resources/" + "carpeta/" * 100 + "informe.md",
-        "source_uri": "00-Resources/fuentes/informe.docx",
+        "written_to": "00-resources/" + "carpeta/" * 100 + "informe.md",
+        "source_uri": "00-resources/fuentes/informe.docx",
         "bytes": 100_000,
         "chars": 100_000,
         "preview": "renglón\n" * 62,

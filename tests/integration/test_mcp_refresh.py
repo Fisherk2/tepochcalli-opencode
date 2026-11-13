@@ -355,9 +355,9 @@ def test_indexer_dir_indexes_two_roots_recursively_and_reports_them(tmp_path: Pa
 
     _assert_contract(report)
     assert report["roots"] == ["materiales", "documentos"]
-    assert _counts(report) == (2, 2, 0), "solo las dos raíces declaradas (00-Resources queda fuera)"
+    assert _counts(report) == (2, 2, 0), "solo las dos raíces declaradas (00-resources queda fuera)"
     assert status["index"]["last_refresh_roots"] == ["materiales", "documentos"]
-    assert status["index"]["available_roots"] == ["00-Resources", "documentos", "materiales"]
+    assert status["index"]["available_roots"] == ["00-resources", "documentos", "materiales"]
 
 
 def test_indexer_dir_env_supplies_the_default_roots(tmp_path: Path) -> None:

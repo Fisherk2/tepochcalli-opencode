@@ -217,7 +217,7 @@ def pdf_markdown() -> str:
 @pytest.fixture(scope="module")
 def pdf_chunks(pdf_markdown: str) -> list[DocumentChunk]:
     """Chunks REALES del PDF tabular (`chunk_document` sobre su markdown, F1 intacta)."""
-    return parsers.chunk_document(pdf_markdown, "00-Resources/tablas.pdf")
+    return parsers.chunk_document(pdf_markdown, "00-resources/tablas.pdf")
 
 
 def _read_pdf_rows(vault: Path) -> list[dict[str, object]]:
@@ -231,7 +231,7 @@ def _read_pdf_rows(vault: Path) -> list[dict[str, object]]:
             arrow = await table.to_arrow()
         finally:
             db.close()
-        return [row for row in arrow.to_pylist() if row["source_path"] == "00-Resources/tablas.pdf"]
+        return [row for row in arrow.to_pylist() if row["source_path"] == "00-resources/tablas.pdf"]
 
     return asyncio.run(_go())
 
@@ -320,7 +320,7 @@ def test_dense_fixture_yields_near_cap_chunks_of_at_most_1536_bytes() -> None:
     CERCA del tope (no exactos en 1536); la premisa que importa para el corte
     es la última: 8 chunks así no caben en 1600, luego `top_k=8` SIEMPRE corta.
     """
-    chunks = parsers.chunk_document(_dense_content(), "00-Resources/denso.md")
+    chunks = parsers.chunk_document(_dense_content(), "00-resources/denso.md")
     sizes = [len(chunk.text.encode("utf-8")) for chunk in chunks]
 
     assert len(sizes) >= 8, f"el fixture denso necesita ≥8 chunks para forzar corte: {len(sizes)}"
@@ -335,7 +335,7 @@ def test_dense_fixture_yields_near_cap_chunks_of_at_most_1536_bytes() -> None:
 
 def test_cjk_fixture_yields_multibyte_chunks_where_bytes_far_outweigh_chars() -> None:
     """Chunk multibyte: bytes ≥ 2× chars en al menos un chunk del fixture CJK."""
-    chunks = parsers.chunk_document(_cjk_content(), "00-Resources/cjk.md")
+    chunks = parsers.chunk_document(_cjk_content(), "00-resources/cjk.md")
 
     multibyte = [
         chunk
@@ -370,7 +370,7 @@ def test_dense_cut_is_flagged_truncated_with_score_order_and_full_results(
     backend: SearchBackend,
 ) -> None:
     """El fixture denso con `top_k=8` excede 1600 ⇒ corte, `truncated` y orden intactos."""
-    payload = _search(backend, DENSE_QUERY, 8, path_filter="00-Resources/denso.md")
+    payload = _search(backend, DENSE_QUERY, 8, path_filter="00-resources/denso.md")
 
     results = payload["results"]
     assert payload["truncated"] is True, "8 chunks de ~400 tokens no caben en 1600"
@@ -383,7 +383,7 @@ def test_dense_cut_is_flagged_truncated_with_score_order_and_full_results(
 
 def test_multibyte_chunks_survive_retrieval_within_budget(backend: SearchBackend) -> None:
     """Retrieval anclado al fixture CJK: chunks multibyte reales dentro del techo."""
-    payload = _search(backend, CJK_QUERY, 8, path_filter="00-Resources/cjk.md")
+    payload = _search(backend, CJK_QUERY, 8, path_filter="00-resources/cjk.md")
 
     results = payload["results"]
     assert results, "path_filter cjk.md debe devolver chunks"
@@ -427,7 +427,7 @@ def test_pdf_table_chunks_flow_through_the_real_handler_within_budget(
 
     results = payload["results"]
     assert results, "el fixture PDF debe producir chunks"
-    assert all(str(result["source_path"]) == "00-Resources/tablas.pdf" for result in results)
+    assert all(str(result["source_path"]) == "00-resources/tablas.pdf" for result in results)
     assert any("|" in str(result["text"]) for result in results), (
         "ningún chunk entrega contenido de la tabla markdown"
     )
@@ -440,11 +440,11 @@ def test_search_over_the_indexed_pdf_returns_its_table_chunks(
     backend: SearchBackend,
 ) -> None:
     """AC end-to-end «PDF con tablas» vía SEARCH: F-T7-2 cerrado, el PDF SÍ se indexa."""
-    payload = _search(backend, PDF_QUERY, 8, path_filter="00-Resources/tablas.pdf")
+    payload = _search(backend, PDF_QUERY, 8, path_filter="00-resources/tablas.pdf")
 
     assert payload["results"], "path_filter tablas.pdf debe devolver chunks del PDF"
     assert all(
-        str(result["source_path"]) == "00-Resources/tablas.pdf" for result in payload["results"]
+        str(result["source_path"]) == "00-resources/tablas.pdf" for result in payload["results"]
     )
     assert all(
         result["offsets_ref"] == citation.OFFSETS_REF_EXTRACT for result in payload["results"]
@@ -455,7 +455,7 @@ def test_search_over_the_indexed_pdf_returns_its_table_chunks(
 def test_pdf_is_indexed_as_rows_whose_offsets_cite_the_extracted_markdown(
     adversarial_vault: IndexedVault,
 ) -> None:
-    """AC de aceptación (F-T7-2 cerrado): el PDF dentro de `00-Resources/` queda INDEXADO.
+    """AC de aceptación (F-T7-2 cerrado): el PDF dentro de `00-resources/` queda INDEXADO.
 
     Cada fila de `tablas.pdf` existe en la tabla con `doc_kind="pdf"` y su
     identidad F1 se cumple sobre el texto que markitdown extrajo — nunca sobre
@@ -494,8 +494,8 @@ def test_oversized_query_is_rejected_by_the_adapter_with_a_small_error_payload(
     [
         ("cjk_emoji", CJK_QUERY, 5, None),
         ("emoji_latin", EMOJI_LATIN_QUERY, 5, None),
-        ("denso_corte", DENSE_QUERY, 8, "00-Resources/denso.md"),
-        ("cjk_multibyte", CJK_QUERY, 8, "00-Resources/cjk.md"),
+        ("denso_corte", DENSE_QUERY, 8, "00-resources/denso.md"),
+        ("cjk_multibyte", CJK_QUERY, 8, "00-resources/cjk.md"),
         ("dorada", GOLDEN_QUERY, 5, None),
         ("top_k_maximo", "métricas de cobertura", 20, None),
     ],

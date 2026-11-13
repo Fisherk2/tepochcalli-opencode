@@ -15,7 +15,7 @@
 | Hecho | Valor | Origen |
 | --- | --- | --- |
 | Corpus | **11 000 ficheros** (10 000 `.md` + 1 000 PDF), 10 586 197 B, `tree_sha256` `27a20c05…3ecd2` | manifiesto de T1 verificado (`reused: true`), copiado a `/tmp/opencode/t4-scale/vault` y **re-verificado** byte a byte en el vault del bench |
-| Índice | **11 006 chunks** (6 notas partieron en 2), `scanned=11 000`, `indexed=11 000`, `skipped=0`, raíz `00-Resources/` | fase `index` (`refresh_blocking`) |
+| Índice | **11 006 chunks** (6 notas partieron en 2), `scanned=11 000`, `indexed=11 000`, `skipped=0`, raíz `00-resources/` | fase `index` (`refresh_blocking`) |
 | Coste de la indexación en frío | **543 645 ms** (9 m 03,6 s), `VmHWM` **3 963 392 KiB (3,78 GiB)** | fase `index` — cifra de referencia para T5, no criterio de T4 |
 | Consultas | **n = 100** muestreadas del corpus (86 `.md` + 14 PDF), 12 palabras (7 en los PDF), `top_k=5`, semilla **20261112** | `_sample_queries`; las 100 van publicadas en el JSON |
 | Percentil | **nearest-rank** `sorted[ceil(0.95·n)-1]`; con n=100 es el **95.º valor ordenado** | declarado en el JSON y en el bench |
@@ -132,7 +132,7 @@ mecanismo es el **rango en la pierna FTS**, no el recall del híbrido.
 ## 5. Reproducción (por fases, en primer plano)
 
 ```bash
-just python-bench-search-scale --phase prepare   # verifica el corpus y copia su 00-Resources/
+just python-bench-search-scale --phase prepare   # verifica el corpus y copia su 00-resources/
 just python-bench-search-scale --phase index     # UNA indexación en frío (~9 min)
 just python-bench-search-scale --phase queries   # n=100 por stdio real (client + took)
 just python-bench-search-scale --phase stages    # n=100 por etapa, en proceso

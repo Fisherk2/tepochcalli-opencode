@@ -72,7 +72,7 @@ DEFAULT_DIR = Path("/tmp/opencode/phase6-t2")
 DOCS_DIR = Path("/tmp/opencode/phase6-docs")
 """Copia de los libros en el FS de referencia (no se mide leyendo NTFS-3G)."""
 
-DEFAULT_CORPUS_SAMPLE = Path("/tmp/opencode/phase6-corpus/00-Resources/pdfs")
+DEFAULT_CORPUS_SAMPLE = Path("/tmp/opencode/phase6-corpus/00-resources/pdfs")
 """Corpus de 1 000 PDF de 1 página materializado por T1 (si existe)."""
 
 GENERATED_PAGES = 30
@@ -275,7 +275,7 @@ def _index_rows(pdfs: list[Path], n: int, base_dir: Path) -> dict[str, Any]:
 
     UN hijo para toda la corrida (el modelo se carga una vez); cada muestra
     escribe una copia con bytes ligeramente distintos (comentario PDF único) en
-    `00-Resources/`, de modo que el memo por contenido no pueda saltarse parse+embed.
+    `00-resources/`, de modo que el memo por contenido no pueda saltarse parse+embed.
     """
     vault = Path(tempfile.mkdtemp(prefix="bench-docs-", dir=base_dir))
     plan_path = base_dir / f"plan-{vault.name}.json"
@@ -290,7 +290,7 @@ def _index_rows(pdfs: list[Path], n: int, base_dir: Path) -> dict[str, Any]:
             **offline_env(cache),
         }
         env.pop("COCOINDEX_DB", None)
-        resources = vault / "00-Resources"
+        resources = vault / "00-resources"
         staging = vault / "staging"
         resources.mkdir(parents=True, exist_ok=True)
         staging.mkdir(parents=True, exist_ok=True)

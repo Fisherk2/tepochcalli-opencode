@@ -106,7 +106,7 @@ def _suffix(format: str | None, source: Path) -> str:
 
 
 def _destination(path: str, output_path: str | None, suffix: str) -> str:
-    """Destino pedido o `00-Resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
+    """Destino pedido o `00-resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
 
     El alternativo ante colisión solo se **propone** en el error de
     `writer.write_atomic`: renombrar solo rompería la idempotencia.

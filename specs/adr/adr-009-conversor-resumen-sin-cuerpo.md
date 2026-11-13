@@ -94,10 +94,10 @@ un `converted_at` con timestamp haría que dos conversiones idénticas difiriera
 ### D37 / D38 — Defaults del destino y de `source_uri`
 
 `output_path` omitido ⇒ el destino se deriva del nombre del documento dentro del vault
-(`00-Resources/<slug>.md`, reutilizando `paths.slugify_uri`). El destino canónico **no** se
+(`00-resources/<slug>.md`, reutilizando `paths.slugify_uri`). El destino canónico **no** se
 renombra solo ante colisión: `paths.available_name` se reutiliza para *proponer* el nombre
 alternativo que acompaña al error de D66, porque auto-renombrar (`x-1.md`) rompería la
-idempotencia y llenaría `00-Resources/` de duplicados. Razón: H3 fija `00-Resources/` como
+idempotencia y llenaría `00-resources/` de duplicados. Razón: H3 fija `00-resources/` como
 convenio default y el agente no debe inventar rutas.
 
 `source_uri` refleja la entrada **tal como llegó**: en `convert_document`, la ruta recibida; en

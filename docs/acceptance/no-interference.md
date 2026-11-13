@@ -47,7 +47,7 @@ re-entrada documentada es la que se ejecuta en el paso «Embedder».
 | (a) `.obsidian/` byte-idéntico | `sha256` de árbol antes `751186fc6685e6f3…` = después `751186fc6685e6f3…`; ficheros `app.json`, `workspace.json` | **PASS** |
 | (b) 0 puertos nuevos | `ss -ltnp` antes 12 listeners, después 12 listeners; diferencia de endpoints = `[]` | **PASS** |
 | (c) 0 basura oculta | raíz con solo `.gitignore`, `.opencode/`, `.tepochcalli/`, `.obsidian/` (+ ausentes `.git/`, `.trash/`); `.gitkeep` del payload en las bandejas; violaciones `[]` | **PASS** |
-| (d) vault válido | `opencode.json` parseable y con `mcp.servers.tepochcalli-rag`; `AGENTS.md` presente; bandejas `00-Resources`, `01-tasks`, `02-drafts`, `03-citations`, `04-review`, `05-outputs` presentes | **PASS** |
+| (d) vault válido | `opencode.json` parseable y con `mcp.servers.tepochcalli-rag`; `AGENTS.md` presente; bandejas `00-resources`, `01-tasks`, `02-drafts`, `03-citations`, `04-review`, `05-outputs` presentes | **PASS** |
 | — trabajo real del motor | `index_refresh` → `scanned=1, indexed=1, skipped=0, elapsed_ms=13281, roots=["00-resources"]`; `search` → 1 resultado, `source_path = 00-resources/nota-t9-no-interferencia.md` | **PASS** |
 
 El motor hizo trabajo de verdad dentro de la ventana medida (un fichero nuevo indexado y
@@ -141,6 +141,10 @@ vault y D9.1) **no se indexa**. Es la *Open Question* de `spec-vault-structure` 
 no una decisión de T9: se publica como observación en el JSON (`observations`) y queda para el
 orquestador como deuda candidata. El criterio 1 no se ve afectado (la nota medida se depositó
 en la raíz efectiva para que el motor trabajara de verdad).
+
+**Resuelto 2026-11-13:** el canónico pasó a `00-resources/` en las tres capas (flow, payload y
+wizard) — ver [spec-vault-structure](../../specs/spec-vault-structure.md) §Enmienda 2026-11-13.
+Este apartado se conserva como registro de la medición (JSON y cifras sin tocar).
 
 ## 8. Límites de esta medición (declarados)
 

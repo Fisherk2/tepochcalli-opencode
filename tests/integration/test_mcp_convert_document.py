@@ -65,9 +65,9 @@ def _write_docx(path: Path) -> None:
 
 
 def _vault(tmp_path: Path) -> Path:
-    """Vault mínimo con `00-Resources/` y un `staging/` para las fuentes."""
+    """Vault mínimo con `00-resources/` y un `staging/` para las fuentes."""
     vault = tmp_path / "vault"
-    (vault / "00-Resources").mkdir(parents=True)
+    (vault / "00-resources").mkdir(parents=True)
     (vault / "staging").mkdir()
     return vault
 
@@ -88,7 +88,7 @@ def test_a_real_docx_is_converted_without_frontmatter_and_returns_the_summary(
     )
 
     assert list(payload) == ["written_to", "source_uri", "bytes", "chars", "preview"]
-    written = vault / "00-Resources" / "informe.md"
+    written = vault / "00-resources" / "informe.md"
     text = written.read_text(encoding="utf-8")
     assert DOCX_TEXT in text, "markitdown en proceso sobre el documento original"
     assert not text.startswith("---"), "D36: el conversor NO añade frontmatter"
@@ -109,7 +109,7 @@ def test_the_body_never_crosses_the_wire_for_a_100k_document(tmp_path: Path) -> 
         async with running_server(server_env(vault)) as session:
             result = await session.call_tool(
                 "convert_document",
-                {"path": "staging/grande.md", "output_path": "00-Resources/grande.md"},
+                {"path": "staging/grande.md", "output_path": "00-resources/grande.md"},
             )
             return result, wire_payload(result)
 
@@ -120,6 +120,6 @@ def test_the_body_never_crosses_the_wire_for_a_100k_document(tmp_path: Path) -> 
     assert len(wire_text) <= summary.SUMMARY_CHAR_CEILING, "presupuesto del resumen (M3)"
     assert len(str(payload["preview"])) <= summary.PREVIEW_CHARS
     assert payload["truncated"] is True
-    written = vault / "00-Resources" / "grande.md"
+    written = vault / "00-resources" / "grande.md"
     assert SENTINEL in written.read_text(encoding="utf-8"), "el cuerpo íntegro está en disco"
     assert json.loads(wire_text)["chars"] >= 100_000

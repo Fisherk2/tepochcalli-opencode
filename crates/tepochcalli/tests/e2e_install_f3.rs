@@ -1,4 +1,4 @@
-//! F3 payload merge + `00-Resources/` + placeholders (T8).
+//! F3 payload merge + `00-resources/` + placeholders (T8).
 //!
 //! RED-first: every behavior here failed before `adapters::payload` and
 //! `installer::run_phase3` existed. Real `tempfile` vaults (D26: no FS
@@ -83,8 +83,8 @@ fn merge_copies_new_files_and_leaves_user_files_intact() {
     );
     // Intent lists exactly the written files (payload + placeholders).
     let mut expected = vec![
-        "00-Resources/ejemplo.md".to_string(),
-        "00-Resources/ejemplo.pdf".to_string(),
+        "00-resources/ejemplo.md".to_string(),
+        "00-resources/ejemplo.pdf".to_string(),
         "b.md".to_string(),
         "sub/c.md".to_string(),
     ];
@@ -171,16 +171,16 @@ fn placeholders_use_exact_resources_case_and_no_phase5_dirs() {
 
     run_phase3(&LocalPayload::new(payload.path()), vault.path()).expect("F3 must succeed");
 
-    // Exact case the flow indexes (`citation.py: RESOURCES_DIR = "00-Resources"`).
-    assert!(vault.path().join("00-Resources").is_dir());
+    // Exact case the flow indexes (`citation.py: RESOURCES_DIR = "00-resources"`).
+    assert!(vault.path().join("00-resources").is_dir());
     assert!(vault
         .path()
-        .join("00-Resources")
+        .join("00-resources")
         .join("ejemplo.md")
         .is_file());
     assert!(vault
         .path()
-        .join("00-Resources")
+        .join("00-resources")
         .join("ejemplo.pdf")
         .is_file());
     // Phase 5 owns the agent trays — F3 must not create them (TD-8).
@@ -198,7 +198,7 @@ fn existing_placeholders_are_not_overwritten() {
     payload_tree(payload.path());
     let vault = tmp();
     write(
-        &vault.path().join("00-Resources").join("ejemplo.md"),
+        &vault.path().join("00-resources").join("ejemplo.md"),
         "# mine\n",
     );
 
@@ -206,7 +206,7 @@ fn existing_placeholders_are_not_overwritten() {
         run_phase3(&LocalPayload::new(payload.path()), vault.path()).expect("F3 must succeed");
 
     assert_eq!(
-        std::fs::read_to_string(vault.path().join("00-Resources").join("ejemplo.md"))
+        std::fs::read_to_string(vault.path().join("00-resources").join("ejemplo.md"))
             .expect("read back"),
         "# mine\n",
         "user placeholder wins over the wizard default"
@@ -278,7 +278,7 @@ fn placeholder_pdf_is_structurally_valid() {
 
     run_phase3(&LocalPayload::new(payload.path()), vault.path()).expect("F3 must succeed");
 
-    let bytes = std::fs::read(vault.path().join("00-Resources").join("ejemplo.pdf"))
+    let bytes = std::fs::read(vault.path().join("00-resources").join("ejemplo.pdf"))
         .expect("placeholder PDF must exist");
     assert_pdf_structure(&bytes);
 }
@@ -435,7 +435,7 @@ fn release_payload_rejects_traversal_member() {
 }
 
 /// L3-2: un F3 que falla (payload ilegible) corre su compensador ANTES del
-/// panel — cero residuo: ni `.install-intent`, ni `00-Resources/`, ni
+/// panel — cero residuo: ni `.install-intent`, ni `00-resources/`, ni
 /// placeholders. El `.install-state` queda con F1/F2 (fases previas reales).
 #[test]
 fn install_f3_failure_compensates_before_the_panel() {
@@ -482,7 +482,7 @@ fn install_f3_failure_compensates_before_the_panel() {
         "la compensación de F3 no deja intent suelto"
     );
     assert!(
-        !vault.join("00-Resources").exists(),
+        !vault.join("00-resources").exists(),
         "cero residuo de placeholders tras el fallo compensado"
     );
     let state = std::fs::read_to_string(vault.join(".tepochcalli").join(".install-state"))

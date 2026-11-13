@@ -170,7 +170,7 @@ def _refresh_once(directories: tuple[str, ...] | None = None) -> dict[str, objec
     cual, sin recalcular.
 
     **Raíces (T8):** `None` ⇒ `Config.indexer_roots` (`INDEXER_DIR`, por omisión
-    `00-Resources/`, D42); una tupla indexa esas raíces y el reporte las
+    `00-resources/`, D42); una tupla indexa esas raíces y el reporte las
     declara. Solo un refresh que EFECTIVAMENTE indexó anota
     `_last_refresh_roots_state` — un candado retenido no es una indexación.
 
@@ -198,7 +198,7 @@ def _refresh_once(directories: tuple[str, ...] | None = None) -> dict[str, objec
 def _refresh_configured() -> dict[str, object]:
     """Seam de refresh de `add_source`: EXACTAMENTE las raíces configuradas.
 
-    Ya no se une `00-Resources/`: si no está declarada en `INDEXER_DIR`,
+    Ya no se une `00-resources/`: si no está declarada en `INDEXER_DIR`,
     `add_source` se rechaza en el borde ANTES de escribir, así que el conjunto
     configurado es el que el target del flow debe reconciliar.
     """
@@ -260,7 +260,7 @@ def _indexer_roots_seam() -> tuple[str, ...]:
     """Seam de raíces del índice: `Config.indexer_roots` (`INDEXER_DIR` de `opencode.json`).
 
     Las consume `index_refresh` (el conjunto a indexar) y `add_source` (las
-    únicas raíces admitidas: la escritura va a `00-Resources/`, que debe estar
+    únicas raíces admitidas: la escritura va a `00-resources/`, que debe estar
     declarada). Se lee del entorno en CADA llamada (mismo criterio que
     `_embedder_available`): cambiar `INDEXER_DIR` no exige reiniciar el server.
     `load_config` nunca lanza, y la validación de cada raíz sigue en el borde
@@ -357,7 +357,7 @@ async def index_refresh() -> CallToolResult:
     serializado TAL CUAL desde `RefreshReport` (Phase 1); idempotente: una
     segunda llamada sin cambios reporta `indexed: 0` (spec-mcp-server §Tool
     `index_refresh`). **No acepta raíces:** el conjunto lo declara el usuario en
-    `INDEXER_DIR` (por omisión `00-Resources`) y el MCP no lo modifica; `roots`
+    `INDEXER_DIR` (por omisión `00-resources`) y el MCP no lo modifica; `roots`
     repite el conjunto efectivamente indexado. Las raíces se validan ANTES de
     tocar el motor: una inexistente, de otro tipo o fuera del vault ⇒
     `VALIDATION_ERROR` con `details.suggestions` y no se indexa NINGUNA
@@ -380,9 +380,9 @@ async def add_source(uri: str, subdir: str | None = None) -> CallToolResult:
     Una sola llamada (Facade, plan §T5): validación en el borde (D16 —
     `file:` fuera del vault ⇒ `VALIDATION_ERROR`), conversión con markitdown
     EN PROCESO (D-b, costura `_convert_seam`), escritura atómica en
-    `00-Resources/<subdir|_inbox>/` con frontmatter de trazabilidad
+    `00-resources/<subdir|_inbox>/` con frontmatter de trazabilidad
     (`source_uri`, `converted_at`) y ciclo Δ interno sobre EXACTAMENTE las
-    raíces configuradas. `00-Resources/` debe estar declarada en `INDEXER_DIR`:
+    raíces configuradas. `00-resources/` debe estar declarada en `INDEXER_DIR`:
     si no, `VALIDATION_ERROR` ANTES de escribir nada (`details.allowed` lista
     las raíces válidas) — el MCP no añade raíces al índice.
     Fetch/convert fallido ⇒ `SOURCE_UNREACHABLE` con la guía de
@@ -415,7 +415,7 @@ async def convert_document(
     salida deben quedar dentro del vault (frontera B′): `..`, ruta absoluta
     externa o symlink que escapa ⇒ `VALIDATION_ERROR`; `path` inexistente o
     que es un directorio ⇒ `VALIDATION_ERROR`. `output_path` omitido ⇒
-    `00-Resources/<slug>.md`. `format` fuerza la extensión del destino y hace
+    `00-resources/<slug>.md`. `format` fuerza la extensión del destino y hace
     de pista de tipo; una extensión fuera del catálogo ⇒ `VALIDATION_ERROR`
     con la lista. Destino existente ⇒ idempotente: mismos bytes devuelven el
     mismo resumen, bytes distintos ⇒ `VALIDATION_ERROR` (nunca se sobrescribe).
@@ -447,7 +447,7 @@ async def convert_base64(
     camino de indexación: para indexar usa `index_refresh` o `add_source`.
     `output_path` debe quedar dentro del vault (frontera B′; `..` o ruta
     externa ⇒ `VALIDATION_ERROR`) y su padre debe existir; omitido ⇒
-    `00-Resources/<slug>.md`, donde el slug sale de `filename` o de
+    `00-resources/<slug>.md`, donde el slug sale de `filename` o de
     `base64-<sha256-8>`. `source_uri` es el `filename` si vino, y si no
     `base64:<sha256-8>`. Destino existente ⇒ idempotente: mismos bytes devuelven
     el mismo resumen, bytes distintos ⇒ `VALIDATION_ERROR` (nunca se

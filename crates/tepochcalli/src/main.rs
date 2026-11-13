@@ -1034,7 +1034,7 @@ fn run_reindex_cmd(
 }
 
 /// `uninstall` (T17): remove `.tepochcalli/` only. Notes, payload,
-/// `opencode.json`, `00-Resources/` and `.obsidian/` survive by construction
+/// `opencode.json`, `00-resources/` and `.obsidian/` survive by construction
 /// (the orchestrator never enumerates them). Idempotent: a missing runtime is
 /// a no-op `Ok`, never an error.
 fn run_uninstall_cmd(

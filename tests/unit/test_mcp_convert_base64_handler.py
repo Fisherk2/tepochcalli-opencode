@@ -40,9 +40,9 @@ DIGEST8 = hashlib.sha256(DATA).hexdigest()[:8]
 
 
 def _vault(tmp_path: Path) -> Path:
-    """Vault mínimo con `00-Resources/` (destino default)."""
+    """Vault mínimo con `00-resources/` (destino default)."""
     vault = tmp_path / "vault"
-    (vault / "00-Resources").mkdir(parents=True)
+    (vault / "00-resources").mkdir(parents=True)
     return vault
 
 
@@ -97,14 +97,14 @@ def _catalog(payload: dict[str, object]) -> dict[str, object]:
 
 
 def test_filename_gives_the_source_uri_and_the_default_destination(tmp_path: Path) -> None:
-    """`filename` ⇒ `source_uri` = filename (D38); destino `00-Resources/<slug>.md`."""
+    """`filename` ⇒ `source_uri` = filename (D38); destino `00-resources/<slug>.md`."""
     vault = _vault(tmp_path)
 
     payload, calls = _run(filename="informe.docx", vault=vault)
 
     assert list(payload) == ["written_to", "source_uri", "bytes", "chars", "preview"]
     assert "ok" not in payload, "D36: el éxito es la ausencia de error"
-    assert payload["written_to"] == "00-Resources/informe.md"
+    assert payload["written_to"] == "00-resources/informe.md"
     assert payload["source_uri"] == "informe.docx"
     assert calls == [
         {
@@ -114,7 +114,7 @@ def test_filename_gives_the_source_uri_and_the_default_destination(tmp_path: Pat
             "source_uri": "informe.docx",
         }
     ]
-    written = vault / "00-Resources" / "informe.md"
+    written = vault / "00-resources" / "informe.md"
     assert written.read_text(encoding="utf-8") == CONTENT
     assert payload == summary.build_summary(written, source_uri="informe.docx", vault_root=vault)
 
@@ -126,7 +126,7 @@ def test_without_filename_the_source_uri_is_the_base64_sha_prefix(tmp_path: Path
     payload, calls = _run(format="docx", vault=vault)
 
     assert payload["source_uri"] == f"base64:{DIGEST8}"
-    assert payload["written_to"] == f"00-Resources/base64-{DIGEST8}.docx"
+    assert payload["written_to"] == f"00-resources/base64-{DIGEST8}.docx"
     assert calls[0]["source_uri"] == f"base64:{DIGEST8}"
     assert calls[0]["extension"] == ".docx"
     assert calls[0]["filename"] is None
@@ -135,14 +135,14 @@ def test_without_filename_the_source_uri_is_the_base64_sha_prefix(tmp_path: Path
 def test_explicit_output_path_and_format_are_respected(tmp_path: Path) -> None:
     """`output_path` explícito + `format` que fuerza la extensión (D37)."""
     vault = _vault(tmp_path)
-    (vault / "00-Resources" / "fuentes").mkdir()
+    (vault / "00-resources" / "fuentes").mkdir()
 
     payload, _calls = _run(
-        output_path="00-Resources/fuentes/x.md", format="pdf", filename="informe.docx", vault=vault
+        output_path="00-resources/fuentes/x.md", format="pdf", filename="informe.docx", vault=vault
     )
 
-    assert payload["written_to"] == "00-Resources/fuentes/x.pdf"
-    assert (vault / "00-Resources" / "fuentes" / "x.pdf").is_file()
+    assert payload["written_to"] == "00-resources/fuentes/x.pdf"
+    assert (vault / "00-resources" / "fuentes" / "x.pdf").is_file()
 
 
 # --- pista de tipo obligatoria (D38) ----------------------------------------------
@@ -189,14 +189,14 @@ def test_invalid_base64_is_validation_error_and_never_reaches_the_seam(
     assert _error_code(payload) == "VALIDATION_ERROR"
     assert payload["error"]["details"] == {"field": "data"}
     assert calls == []
-    assert list((vault / "00-Resources").iterdir()) == []
+    assert list((vault / "00-resources").iterdir()) == []
 
 
 # --- frontera B′ del destino (D31) ------------------------------------------------
 
 
 @pytest.mark.parametrize(
-    "output_path", ["../fuera.md", "/etc/fuera.md", "00-Resources/../fuera.md"]
+    "output_path", ["../fuera.md", "/etc/fuera.md", "00-resources/../fuera.md"]
 )
 def test_output_path_outside_the_vault_is_rejected_and_nothing_is_written(
     tmp_path: Path, output_path: str
@@ -219,7 +219,7 @@ def test_missing_parent_of_the_output_path_is_validation_error(tmp_path: Path) -
     vault = _vault(tmp_path)
 
     payload, _calls = _run(
-        output_path="00-Resources/fuentes/x.md", filename="informe.docx", vault=vault
+        output_path="00-resources/fuentes/x.md", filename="informe.docx", vault=vault
     )
 
     assert _error_code(payload) == "VALIDATION_ERROR"
@@ -240,7 +240,7 @@ def test_empty_markdown_is_source_unreachable_with_the_ocr_guide(
 
     assert _error_code(payload) == "SOURCE_UNREACHABLE"
     assert "OCR" in payload["error"]["message"]
-    assert not (vault / "00-Resources" / "informe.md").exists(), "sin parciales"
+    assert not (vault / "00-resources" / "informe.md").exists(), "sin parciales"
 
 
 def test_unexpected_conversion_failure_is_source_unreachable(tmp_path: Path) -> None:
@@ -255,7 +255,7 @@ def test_unexpected_conversion_failure_is_source_unreachable(tmp_path: Path) -> 
 
     assert _error_code(payload) == "SOURCE_UNREACHABLE"
     assert payload["error"]["details"] == {"cause": "RuntimeError"}
-    assert not (vault / "00-Resources" / "informe.md").exists()
+    assert not (vault / "00-resources" / "informe.md").exists()
 
 
 # --- idempotencia (D66) -----------------------------------------------------------
@@ -265,7 +265,7 @@ def test_identical_conversions_are_idempotent_and_do_not_touch_the_file(tmp_path
     """Dos llamadas idénticas ⇒ misma respuesta de éxito y mtime intacto."""
     vault = _vault(tmp_path)
     first, _calls = _run(filename="informe.docx", vault=vault)
-    written = vault / "00-Resources" / "informe.md"
+    written = vault / "00-resources" / "informe.md"
     stamp = written.stat().st_mtime_ns
 
     second, _calls = _run(filename="informe.docx", vault=vault)
@@ -280,7 +280,7 @@ def test_different_content_on_an_existing_destination_is_validation_error(
     """D66: contenido distinto ⇒ `VALIDATION_ERROR` con alternativo; original intacto."""
     vault = _vault(tmp_path)
     _run(filename="informe.docx", vault=vault)
-    original = (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8")
+    original = (vault / "00-resources" / "informe.md").read_text(encoding="utf-8")
 
     payload, _calls = _run(
         filename="informe.docx",
@@ -291,7 +291,7 @@ def test_different_content_on_an_existing_destination_is_validation_error(
     assert _error_code(payload) == "VALIDATION_ERROR"
     assert "output_path" in payload["error"]["message"]
     assert payload["error"]["details"]["suggested"] == "informe-2.md"
-    assert (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8") == original
+    assert (vault / "00-resources" / "informe.md").read_text(encoding="utf-8") == original
 
 
 # --- W-08 (review 5-ejes): tope de tamaño de `data` --------------------------------------

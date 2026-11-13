@@ -42,7 +42,7 @@ blueprint). **No se escribe nada en `obsidian-workspace/` en esta fase.**
 ls obsidian-workspace/.opencode/skills | wc -l                    # 39
 find obsidian-workspace/.opencode/agents -name '*.md' | wc -l    # 170
 find obsidian-workspace/.opencode/commands -name '*.md' | wc -l  # 9
-ls obsidian-workspace/00-Resources | wc -l                        # 0 (muestras de instalación: ver abajo)
+ls obsidian-workspace/00-resources | wc -l                        # 0 (muestras de instalación: ver abajo)
 wc -c obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md # 13098 (cuerpo en inglés)
 ```
 
@@ -149,7 +149,7 @@ federicodeponte/opendraft, 2026-10-28.)
 
 ## Inventario de muestras del payload
 
-`00-Resources/` está **vacío** en el repo: las muestras del golden-vault las crea el
+`00-resources/` está **vacío** en el repo: las muestras del golden-vault las crea el
 instalador en tiempo de instalación. Todo lo de esta tabla vive en el crate `tepochcalli`,
 no en el payload.
 

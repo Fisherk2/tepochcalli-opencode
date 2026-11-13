@@ -24,6 +24,12 @@ método; lo estimado y lo declarado se etiquetan y nunca se presentan como medic
 | [format-matrix.md](format-matrix.md) | Matriz ejecutable de 9 formatos (índice vs conversor) con `doc_kind`/`offsets_ref`/indexabilidad/`source_path`, la distinción `written_to` vs cita, y los GAP con su mensaje real (`.doc`, `.ppt`, PDF escaneado, `url` sin egress) | 7 |
 | [no-interference.md](no-interference.md) | Criterio 1 sobre un vault **instalado por el wizard**: `.obsidian/` byte-idéntico, 0 puertos nuevos (las dos listas `ss -ltnp` publicadas), 0 basura oculta, vault válido — con el RED de la guarda (`--fault obsidian` y `--fault port`) y el hallazgo del alias `00-Resources` / `00-resources` | 1 |
 
+Las corridas de aceptación son **evidencia medida**: los `.json` y las tablas de estas páginas
+registran las rutas tal como estaban en disco al medir (el alias histórico `00-Resources/` en
+varias de ellas) y **no se reescriben**. El canónico desde el 2026-11-13 es `00-resources/`
+(mayúsculas y minúsculas eran carpetas distintas en el vault medido); ver
+[spec-vault-structure](../specs/spec-vault-structure.md) §Enmienda 2026-11-13.
+
 Si llega otra fase de aceptación, este directorio se parte en subcarpetas `acceptance/phaseN/` para no mezclar evidencias.
 
 El protocolo de método y umbrales vive también en [TRD.md](../TRD.md) §6.1-§6.2 y la metodología

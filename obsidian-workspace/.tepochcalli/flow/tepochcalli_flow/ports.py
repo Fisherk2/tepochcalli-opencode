@@ -46,7 +46,7 @@ class CitedChunk:
     """Contenido exacto del chunk — idéntico al rango que citan sus offsets (F1)."""
 
     source_path: str
-    """Cita POSIX relativa al vault (`00-Resources/nota.md`, `materiales/a.pdf`; D41)."""
+    """Cita POSIX relativa al vault (`00-resources/nota.md`, `materiales/a.pdf`; D41)."""
 
     heading: str | None
     """Último heading ATX previo; `None` sin padre — presente SIEMPRE (nullable, D13)."""
@@ -89,7 +89,7 @@ class ChunkReader(Protocol):
 
         `query` es texto libre (se vectoriza y se busca léxicamente: híbrido
         ANN+FTS). `path_filter` es un glob relativo a la raíz del vault
-        (`00-Resources/sub/**/*.md`, `materiales/**`); `None` busca en todo el
+        (`00-resources/sub/**/*.md`, `materiales/**`); `None` busca en todo el
         índice. Lanza `ValueError` en el borde (consulta vacía, `top_k < 1`,
         glob absoluto o con `..`) — nunca devuelve forma parcial: los seis
         campos de cada chunk están siempre presentes (ADR-005).

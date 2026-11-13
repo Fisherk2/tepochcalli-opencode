@@ -9,8 +9,8 @@
 
 ## 1. Context and Problem Statement
 
-El motor indexa hoy una sola raíz fija —`00-Resources/`— y solo cuatro extensiones
-(`.md/.markdown/.txt/.pdf`); `citation.normalize_source_path` **prefija** `00-Resources/` a toda
+El motor indexa hoy una sola raíz fija —`00-resources/`— y solo cuatro extensiones
+(`.md/.markdown/.txt/.pdf`); `citation.normalize_source_path` **prefija** `00-resources/` a toda
 cita. El dueño decidió que el RAG indexe **cualquier** directorio del vault, recursivamente, con
 las raíces declaradas por el usuario en `INDEXER_DIR` (rev. 2; originalmente se elegían en la
 llamada), y que indexe los documentos **en su forma original** sin convertirlos antes a Markdown.
@@ -48,12 +48,12 @@ motor) y la cita se ancla al vault, que es el único marco común a todas las ra
 
 * `index_refresh()` — **sin argumentos**. El conjunto de raíces lo declara **`INDEXER_DIR`**
   (variable de entorno del harness, `opencode.json` → `environment`; multi-valor separado por
-  comas, `strip`, vacíos descartados), con `00-Resources` como **fallback** cuando está ausente o
+  comas, `strip`, vacíos descartados), con `00-resources` como **fallback** cuando está ausente o
   vacía (D32). Las raíces viven **solo** en el entorno del proceso: no se escriben en
   `tepochcalli.toml`, no tocan el wizard y el MCP no puede añadirlas ni quitarlas. Cambiar de
   carpeta es editar la variable y reiniciar el MCP, no un reinstall.
 * **Enmienda 2026-11-03 — el default lo declara el harness, no lo persiste el motor.** El literal
-  `00-Resources` deja de ser el default del contrato y pasa a ser el fallback de `INDEXER_DIR`.
+  `00-resources` deja de ser el default del contrato y pasa a ser el fallback de `INDEXER_DIR`.
   Esa lista **no** se escribe en `tepochcalli.toml`, no la toca el wizard y el server la lee del
   entorno del proceso. Razón: el dueño quiere cambiar las raíces por defecto sin editar el toml ni
   re-ejecutar el wizard, y sin devolverle estado al motor (la opción B sigue descartada: el toml
@@ -81,8 +81,8 @@ motor) y la cita se ancla al vault, que es el único marco común a todas las ra
 
 ### 4.2 `source_path` relativo al VAULT (D41)
 
-`normalize_source_path` deja de prefijar `00-Resources/`: devuelve la ruta POSIX relativa a la
-raíz del vault (`materiales/a.pdf`, `documentos/a.pdf`, `00-Resources/nota.md`).
+`normalize_source_path` deja de prefijar `00-resources/`: devuelve la ruta POSIX relativa a la
+raíz del vault (`materiales/a.pdf`, `documentos/a.pdf`, `00-resources/nota.md`).
 
 * **Razón decisiva:** con N raíces, dos raíces distintas pueden contener el **mismo relativo**.
   `materiales/a.pdf` y `documentos/a.pdf` solo no colisionan si la cita guarda el relativo al
@@ -91,7 +91,7 @@ raíz del vault (`materiales/a.pdf`, `documentos/a.pdf`, `00-Resources/nota.md`)
 * Es isomorfo al modelo `FilePath = base_dir + relativo` de CocoIndex: el `base_dir` del walk es
   la raíz pedida, y la cita es ese mismo relativo re-anclado al vault. La diferencia es de
   **anclaje**, no de forma.
-* Cambia el contrato de `search`: los `source_path` dejan de empezar por `00-Resources/` salvo
+* Cambia el contrato de `search`: los `source_path` dejan de empezar por `00-resources/` salvo
   para el material que de verdad vive ahí. Es un cambio **breaking** del campo, asumido por el
   dueño; `path_filter` pasa a interpretarse contra el vault, no contra el recurso.
 
@@ -174,7 +174,7 @@ de symlink del vault, y la normalización de cita.
   reproduce `text`.
 * **Colisión imposible:** `materiales/a.md` y `documentos/a.md` en la misma pasada ⇒ dos filas,
   dos `source_path` distintos; ninguna se pierde.
-* **Compatibilidad:** `index_refresh()` con `INDEXER_DIR` ausente o vacía ⇒ `roots == ["00-Resources"]`
+* **Compatibilidad:** `index_refresh()` con `INDEXER_DIR` ausente o vacía ⇒ `roots == ["00-resources"]`
   y el mismo `scanned` que la versión anterior sobre el mismo vault.
 * **Atomicidad (D65):** `INDEXER_DIR="materiales,no-existe"` ⇒ `VALIDATION_ERROR` y el recuento de
   filas del índice **no cambia**.
@@ -189,7 +189,7 @@ de symlink del vault, y la normalización de cita.
 * **Poda:** indexar la raíz del vault no produce filas ni skips bajo `.tepochcalli/venv/`,
   `.obsidian/` ni `.trash/`, y el tiempo no escala con su tamaño.
 * **Symlink:** un directorio con un link a sí mismo termina el walk (sin visited-set propio).
-* **Dedup:** `INDEXER_DIR="00-Resources,00-Resources/sub"` ⇒ `scanned == indexed + skipped`
+* **Dedup:** `INDEXER_DIR="00-resources,00-resources/sub"` ⇒ `scanned == indexed + skipped`
   y ninguna entrada duplicada.
 * **`rag_status`:** expone `index.available_roots` con los directorios de primer nivel visibles y
   cabe en <200 tokens.
@@ -222,8 +222,8 @@ de symlink del vault, y la normalización de cita.
 
 ## 6. Consequences
 
-* ✅ **Positives:** El usuario investiga sobre su estructura real (no solo `00-Resources/`); los ofimáticos entran sin paso de conversión; el agente descubre carpetas con `rag_status`; la cita sigue siendo un único string localizable; el índice incremental no se invalida al mover el vault.
-* ⚠️ **Negatives / Risks:** El PDF pierde la jerarquía de headings (D54) — el criterio 5 depende de `source_path` + offsets, no del heading. Los documentos binarios no entran en el Δ de 30 s (D51) y un vault lleno de `.docx` tendrá refreshes lentos y visibles. **El conjunto de raíces lo declara el usuario**: el agente no puede ampliarlo ni reducirlo, y para indexar otra carpeta hay que editar `INDEXER_DIR` y reiniciar el MCP (rev. 2). El target declarativo de CocoIndex reconcilia por pasada, que es justo la razón de no aceptar subconjuntos: una llamada con menos raíces purgaría las demás. `source_path` breaking: los `path_filter` y prompts que asumían el prefijo `00-Resources/` hay que revisarlos.
+* ✅ **Positives:** El usuario investiga sobre su estructura real (no solo `00-resources/`); los ofimáticos entran sin paso de conversión; el agente descubre carpetas con `rag_status`; la cita sigue siendo un único string localizable; el índice incremental no se invalida al mover el vault.
+* ⚠️ **Negatives / Risks:** El PDF pierde la jerarquía de headings (D54) — el criterio 5 depende de `source_path` + offsets, no del heading. Los documentos binarios no entran en el Δ de 30 s (D51) y un vault lleno de `.docx` tendrá refreshes lentos y visibles. **El conjunto de raíces lo declara el usuario**: el agente no puede ampliarlo ni reducirlo, y para indexar otra carpeta hay que editar `INDEXER_DIR` y reiniciar el MCP (rev. 2). El target declarativo de CocoIndex reconcilia por pasada, que es justo la razón de no aceptar subconjuntos: una llamada con menos raíces purgaría las demás. `source_path` breaking: los `path_filter` y prompts que asumían el prefijo `00-resources/` hay que revisarlos.
 * ⚖️ **Neutral:** La raíz pasa de constante a configuración del usuario; el ledger de §4.9 se convierte en la referencia obligatoria antes de «optimizar» el walk; la whitelist y `DocKind` crecen juntos o no crecen.
 
 ## 7. Related Decisions
@@ -233,7 +233,7 @@ de symlink del vault, y la normalización de cita.
 * **ADR-005** — el puerto `ChunkReader`/`search` consume estas citas: `source_path` vault-relativo es el campo que cruza la frontera y por eso el cambio se congela aquí.
 * **ADR-009** — conversor documento→Markdown: sigue siendo el camino del **artefacto**; este ADR es el camino del **índice** (no se indexa el `.md` convertido, se indexa el original).
 * **ADR-011** — política de dependencias y embedder único: la ampliación de formatos no añade librerías (markitdown ya está); el ledger de §4.9 complementa su ledger de no-reinvención.
-* **D9.1** — convención de carpetas: con multi-raíz, `00-Resources/` deja de ser la única indexable pero sigue siendo el fallback de `INDEXER_DIR` (§4.1) y el destino de `add_source`.
+* **D9.1** — convención de carpetas: con multi-raíz, `00-resources/` deja de ser la única indexable pero sigue siendo el fallback de `INDEXER_DIR` (§4.1) y el destino de `add_source`.
 
 ## 8. Compliance and Review
 

@@ -36,7 +36,7 @@ def test_error_payload_travels_untouched_without_phantom_keys() -> None:
 def test_success_payload_keeps_the_budgetized_shape() -> None:
     """Éxito ⇒ EXACTAMENTE el resumen recortado de antes (cero cambio de forma)."""
     oversized = {
-        "written_to": "00-Resources/a.md",
+        "written_to": "00-resources/a.md",
         "source_uri": "documentos/a.docx",
         "bytes": 6,
         "chars": 6,

@@ -5,7 +5,7 @@ MCP»). Fuentes de verdad:
 
 * tasks/plan.md §5 — `path_filter` absoluto o con `..` → `VALIDATION_ERROR`;
   `subdir` normalizado, sin `..`, sin absolutos, destino siempre dentro de
-  `00-Resources/`, por omisión `_inbox`; nombre slug + `.md` con sufijo
+  `00-resources/`, por omisión `_inbox`; nombre slug + `.md` con sufijo
   numérico ante colisión (plan §T5).
 * specs/spec-mcp-server.md §Security — path traversal → `VALIDATION_ERROR`.
 * D16 (ratificado 2026-10-26, docs/WORKFLOW.md §8) — `file:` FUERA del vault
@@ -91,10 +91,10 @@ def validate_path_filter(path_filter: str | None) -> str | None:
 def validate_subdir(subdir: str | None) -> str:
     r"""Normaliza `subdir` (borde de `add_source`) a un path POSIX relativo al recurso.
 
-    `None`/vacío/`.`/`00-Resources` → `_inbox` (DEFAULT_SUBDIR); `\` → `/`;
-    un subdir que YA empieza por `00-Resources` pierde ese prefijo (el destino
+    `None`/vacío/`.`/`00-resources` → `_inbox` (DEFAULT_SUBDIR); `\` → `/`;
+    un subdir que YA empieza por `00-resources` pierde ese prefijo (el destino
     se compone con `resources_destination`). Absoluto o con `..` → `ValueError`:
-    jamás se escribe fuera de `00-Resources/` (D9.1, plan §T5).
+    jamás se escribe fuera de `00-resources/` (D9.1, plan §T5).
     """
     normalized = (subdir or "").strip().replace("\\", "/")
     if normalized.startswith("/"):
@@ -108,7 +108,7 @@ def validate_subdir(subdir: str | None) -> str:
 
 
 def resources_destination(subdir: str | None) -> Path:
-    """Destino canónico de `add_source`: `00-Resources/<subdir|_inbox>`, relativo al vault."""
+    """Destino canónico de `add_source`: `00-resources/<subdir|_inbox>`, relativo al vault."""
     return Path(RESOURCES_DIR) / validate_subdir(subdir)
 
 
@@ -481,7 +481,7 @@ def validate_vault_path(
 def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple[str, ...]:
     """Valida N raíces indexables y devuelve sus rutas RELATIVAS al vault (D32/D44/D65).
 
-    `None` o lista vacía ⇒ `("00-Resources",)` (el default del producto, D42 —
+    `None` o lista vacía ⇒ `("00-resources",)` (el default del producto, D42 —
     `config.DEFAULT_INDEXER_ROOTS`). Cada raíz pasa las mismas reglas que una
     entrada (`validate_vault_path`) y
     además debe existir: una raíz puede ser un **fichero suelto** (D46). El

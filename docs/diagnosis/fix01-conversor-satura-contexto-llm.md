@@ -73,7 +73,7 @@ Criterios UH tocados: **4** (tokens/consulta) degradado en conversiones grandes;
 
 > ⚠️ **WORKAROUND** (hasta Phase 3.5)
 > Para materiales destinados a indexación usar `add_source` del server `tepochcalli-rag` (conversión en proceso, escribe a disco, resumen en el wire).
-> Para conversiones cuyo destino no sea `00-Resources/`: evitar pasar documentos grandes por el standalone `markitdown` de testing; usar la skill `local-doc-to-markdown` fuera de la sesión del agente (conversión local, contenido nunca entra en contexto).
+> Para conversiones cuyo destino no sea `00-resources/`: evitar pasar documentos grandes por el standalone `markitdown` de testing; usar la skill `local-doc-to-markdown` fuera de la sesión del agente (conversión local, contenido nunca entra en contexto).
 
 ## Recurrences
 

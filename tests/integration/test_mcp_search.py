@@ -255,7 +255,7 @@ def _cited_chunk(index: int, *, chars: int = 20, score: float | None = None) -> 
     text = f"chunk-{index:02d}-" + "x" * max(0, chars - 11)
     return CitedChunk(
         text=text,
-        source_path=f"00-Resources/sintetico-{index}.md",
+        source_path=f"00-resources/sintetico-{index}.md",
         heading=None,
         char_start=0,
         char_end=len(text),
@@ -333,7 +333,7 @@ def test_search_shape_is_the_frozen_contract_with_ordered_keys(backend: SearchBa
         assert list(result) == CONTRACT_RESULT_FIELDS
         assert isinstance(result["text"], str) and result["text"]
         assert isinstance(result["source_path"], str)
-        assert result["source_path"].startswith("00-Resources/")
+        assert result["source_path"].startswith("00-resources/")
         assert result["heading"] is None or isinstance(result["heading"], str)  # D13
         assert isinstance(result["char_start"], int)
         assert isinstance(result["char_end"], int)
@@ -434,7 +434,7 @@ def test_invalid_path_filter_is_a_validation_error_before_touching_the_index() -
     backend = _FakeBackend()
 
     absolute = _search(backend, "métricas", path_filter="/absoluto/*.md")
-    traversal = _search(backend, "métricas", path_filter="00-Resources/../secreto/*")
+    traversal = _search(backend, "métricas", path_filter="00-resources/../secreto/*")
 
     assert absolute["error"]["code"] == "VALIDATION_ERROR"
     assert traversal["error"]["code"] == "VALIDATION_ERROR"
@@ -445,15 +445,15 @@ def test_valid_path_filter_restricts_results_to_the_subtree(backend: SearchBacke
     general = _search(backend, "indexación del flujo", 8)
     assert general["results"]
     assert any(
-        not str(result["source_path"]).startswith("00-Resources/sub/")
+        not str(result["source_path"]).startswith("00-resources/sub/")
         for result in general["results"]
     ), "sin filtro debe haber resultados fuera de sub/ (si no, el test es vacío)"
 
-    filtered = _search(backend, "indexación del flujo", 8, path_filter="00-Resources/sub/*")
+    filtered = _search(backend, "indexación del flujo", 8, path_filter="00-resources/sub/*")
 
     assert filtered["results"]
     assert all(
-        str(result["source_path"]).startswith("00-Resources/sub/") for result in filtered["results"]
+        str(result["source_path"]).startswith("00-resources/sub/") for result in filtered["results"]
     )
 
 
@@ -506,7 +506,7 @@ def test_hundred_chunk_vault_search_shape_and_budget(
     assert all(0.0 <= score <= 1.0 for score in scores)
 
     truncated_payload = _search(
-        big_backend, GRANDE_UNIQUE_TERM, 8, path_filter="00-Resources/grande.md"
+        big_backend, GRANDE_UNIQUE_TERM, 8, path_filter="00-resources/grande.md"
     )
     truncated_results = truncated_payload["results"]
     assert 2 <= len(truncated_results) < 8, "grande.md produce más chunks de los que caben"

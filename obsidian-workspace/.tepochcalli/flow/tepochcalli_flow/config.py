@@ -50,7 +50,7 @@ DEFAULT_API_KEY_ENV: Final = "TEPOCHCALLI_EMBED_API_KEY"
 DEFAULT_MAX_CHUNK_SIZE: Final = 1536
 DEFAULT_CHUNK_OVERLAP: Final = 192
 DEFAULT_TOP_K: Final = 5
-DEFAULT_INDEXER_ROOTS: Final[tuple[str, ...]] = ("00-Resources",)
+DEFAULT_INDEXER_ROOTS: Final[tuple[str, ...]] = ("00-resources",)
 """Raíces indexadas cuando `INDEXER_DIR` no declara ninguna (`citation.RESOURCES_DIR`).
 
 Literal propio porque `citation` importa este módulo (el dominio apunta hacia

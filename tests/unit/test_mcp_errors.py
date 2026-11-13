@@ -117,7 +117,7 @@ def test_source_unreachable_is_legacy_shape_with_the_literal_guide() -> None:
     """`SOURCE_UNREACHABLE` (T5) → legado; el mensaje lleva la guía LITERAL de la spec.
 
     spec-markitdown §Cadena de fallback paso 3: «guárdalo manualmente en
-    00-Resources/ y ejecuta index_refresh» — el agente debe poder reportar la
+    00-resources/ y ejecuta index_refresh» — el agente debe poder reportar la
     acción, no el error crudo.
     """
     payload = errors.source_unreachable("https://example.org/x.docx")
@@ -126,7 +126,7 @@ def test_source_unreachable_is_legacy_shape_with_the_literal_guide() -> None:
     assert list(error) == ["code", "message", "details"]
     assert error["code"] == "SOURCE_UNREACHABLE"
     assert "https://example.org/x.docx" in error["message"]
-    assert "00-Resources/" in error["message"]
+    assert "00-resources/" in error["message"]
     assert "index_refresh" in error["message"]
     assert error["details"] is None
 
@@ -151,14 +151,14 @@ def test_source_unreachable_redacts_credentialed_uri() -> None:
 
 def test_engine_locked_is_legacy_shape_with_retry_guide() -> None:
     """`ENGINE_LOCKED` (T5) → legado con `details` y la guía «reintentar en segundos»."""
-    payload = errors.engine_locked(details={"written_to": "00-Resources/_inbox/x.md"})
+    payload = errors.engine_locked(details={"written_to": "00-resources/_inbox/x.md"})
 
     error = payload["error"]
     assert list(error) == ["code", "message", "details"]
     assert error["code"] == "ENGINE_LOCKED"
     assert "segundos" in error["message"]
     assert "index_refresh" in error["message"]
-    assert error["details"] == {"written_to": "00-Resources/_inbox/x.md"}
+    assert error["details"] == {"written_to": "00-resources/_inbox/x.md"}
 
 
 # --- T6: los tres E_* restantes — el dialecto queda 5/5 -------------------------------
@@ -219,7 +219,7 @@ def test_source_unreachable_accepts_the_ocr_guide_without_changing_the_shape() -
     La usa el conversor cuando el documento existe y es del tipo pedido pero no
     tiene capa de texto (D39: `SOURCE_UNREACHABLE` sin inventar un código nuevo).
     """
-    payload = errors.source_unreachable("00-Resources/escaneado.pdf", guide=errors.GUIDE_OCR)
+    payload = errors.source_unreachable("00-resources/escaneado.pdf", guide=errors.GUIDE_OCR)
 
     error = payload["error"]
     assert list(error) == ["code", "message", "details"]

@@ -155,7 +155,7 @@ fn f3_compensation_removes_written_and_keeps_user_files() {
     );
     assert!(!vault
         .path()
-        .join("00-Resources")
+        .join("00-resources")
         .join("ejemplo.md")
         .exists());
     assert!(!vault
@@ -300,7 +300,7 @@ fn f7_failure_leaves_no_index_and_keeps_placeholders() {
     use tepochcalli::application::Phase6Report;
 
     let vault = tmp();
-    let dir = vault.path().join("00-Resources");
+    let dir = vault.path().join("00-resources");
     std::fs::create_dir_all(&dir).expect("resources fixture");
     write(&dir.join("ejemplo.md"), "# Ejemplo\n");
     venv_python(vault.path());

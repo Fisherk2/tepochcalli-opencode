@@ -82,7 +82,7 @@ EXPECTED_COMMANDS = {
 }
 
 EXPECTED_TOP_NAMES = {
-    "00-Resources",
+    "00-resources",
     "01-tasks",
     "02-drafts",
     "03-citations",
@@ -146,7 +146,7 @@ def payload_files(vault: Path) -> list[Path]:
         *[
             vault / name
             for name in (
-                "00-Resources",
+                "00-resources",
                 "01-tasks",
                 "02-drafts",
                 "03-citations",
@@ -190,7 +190,7 @@ def assert_vault(vault: Path) -> None:
     missing_top = EXPECTED_TOP_NAMES - top
     check(not missing_top, f"missing/wrong-case top-level entries: {sorted(missing_top)}")
     required_dirs = [
-        "00-Resources",
+        "00-resources",
         "01-tasks/research",
         "02-drafts",
         "03-citations",
@@ -282,13 +282,13 @@ def assert_vault(vault: Path) -> None:
                 f"tepochcalli-rag disabled={entry.get('disabled')!r}",
             )
 
-    # 6. The 2 wizard samples in 00-Resources/.
-    md = vault / "00-Resources" / "ejemplo.md"
-    pdf = vault / "00-Resources" / "ejemplo.pdf"
-    check(md.is_file() and md.stat().st_size > 0, "missing/empty 00-Resources/ejemplo.md")
-    check(pdf.is_file() and pdf.stat().st_size > 0, "missing/empty 00-Resources/ejemplo.pdf")
+    # 6. The 2 wizard samples in 00-resources/.
+    md = vault / "00-resources" / "ejemplo.md"
+    pdf = vault / "00-resources" / "ejemplo.pdf"
+    check(md.is_file() and md.stat().st_size > 0, "missing/empty 00-resources/ejemplo.md")
+    check(pdf.is_file() and pdf.stat().st_size > 0, "missing/empty 00-resources/ejemplo.pdf")
     if pdf.is_file():
-        check(pdf.read_bytes()[:5] == b"%PDF-", "00-Resources/ejemplo.pdf is not a PDF")
+        check(pdf.read_bytes()[:5] == b"%PDF-", "00-resources/ejemplo.pdf is not a PDF")
 
     # 7. .gitignore with the 5 runtime routes.
     gitignore = vault / ".gitignore"

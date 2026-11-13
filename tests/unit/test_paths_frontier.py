@@ -27,7 +27,7 @@ from tepochcalli_mcp import paths
 def _vault(tmp_path: Path) -> Path:
     """Vault mínimo con dos carpetas de primer nivel indexables y una de punto."""
     vault = tmp_path / "vault"
-    for name in ("00-Resources", "documentos", "materiales", ".tepochcalli"):
+    for name in ("00-resources", "documentos", "materiales", ".tepochcalli"):
         (vault / name).mkdir(parents=True)
     (vault / "documentos" / "informe.docx").write_text("x", encoding="utf-8")
     return vault
@@ -84,7 +84,7 @@ def test_absolute_path_outside_the_vault_is_rejected(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "raw",
     [
-        "00-Resources/../fuera.md",
+        "00-resources/../fuera.md",
         "../fuera.md",
         "documentos/../../fuera.md",
         "/etc/passwd",
@@ -134,7 +134,7 @@ def test_missing_path_reports_exists_false_with_suggestions_and_vault_dirs(
     assert details["requested"] == "Documentos/informe.docx"
     assert details["exists"] is False
     assert details["suggestions"] == ["documentos"], "sugerencia case-insensitive, nombre REAL"
-    assert details["vault_dirs"] == ["00-Resources", "documentos", "materiales"]
+    assert details["vault_dirs"] == ["00-resources", "documentos", "materiales"]
 
 
 def test_missing_parent_of_a_destination_is_a_validation_error(tmp_path: Path) -> None:
@@ -142,7 +142,7 @@ def test_missing_parent_of_a_destination_is_a_validation_error(tmp_path: Path) -
     vault = _vault(tmp_path)
 
     with pytest.raises(paths.VaultPathError) as excinfo:
-        paths.validate_vault_path("00-Resources/fuentes/x.md", vault, must_exist=False)
+        paths.validate_vault_path("00-resources/fuentes/x.md", vault, must_exist=False)
 
     details = excinfo.value.details
     assert details is not None
@@ -153,13 +153,13 @@ def test_missing_parent_of_a_destination_is_a_validation_error(tmp_path: Path) -
 def test_wrong_type_reports_expected_and_found(tmp_path: Path) -> None:
     """Tipo equivocado ⇒ `{requested, exists: true, expected, found}`."""
     vault = _vault(tmp_path)
-    (vault / "00-Resources" / "nota.md").write_text("x", encoding="utf-8")
+    (vault / "00-resources" / "nota.md").write_text("x", encoding="utf-8")
 
     with pytest.raises(paths.VaultPathError) as excinfo:
-        paths.validate_vault_path("00-Resources/nota.md/sub.md", vault, must_exist=False)
+        paths.validate_vault_path("00-resources/nota.md/sub.md", vault, must_exist=False)
 
     assert excinfo.value.details == {
-        "requested": "00-Resources/nota.md/sub.md",
+        "requested": "00-resources/nota.md/sub.md",
         "exists": True,
         "expected": "directory",
         "found": "file",
@@ -188,7 +188,7 @@ def test_vault_dirs_lists_non_dotted_top_level_directories(tmp_path: Path) -> No
     """Primer nivel, ordenado, sin los de punto (`.tepochcalli/`, `.obsidian/`…)."""
     vault = _vault(tmp_path)
 
-    assert paths.vault_dirs(vault) == ("00-Resources", "documentos", "materiales")
+    assert paths.vault_dirs(vault) == ("00-resources", "documentos", "materiales")
 
 
 def test_vault_dirs_of_a_missing_vault_is_empty(tmp_path: Path) -> None:
@@ -200,11 +200,11 @@ def test_vault_dirs_of_a_missing_vault_is_empty(tmp_path: Path) -> None:
 
 
 def test_missing_directories_defaults_to_resources(tmp_path: Path) -> None:
-    """`None` y lista vacía ⇒ `("00-Resources",)` (D42: el default del producto)."""
+    """`None` y lista vacía ⇒ `("00-resources",)` (D42: el default del producto)."""
     vault = _vault(tmp_path)
 
-    assert paths.validate_roots(None, vault) == ("00-Resources",)
-    assert paths.validate_roots([], vault) == ("00-Resources",)
+    assert paths.validate_roots(None, vault) == ("00-resources",)
+    assert paths.validate_roots([], vault) == ("00-resources",)
 
 
 def test_existing_roots_are_returned_normalized_in_order(tmp_path: Path) -> None:
@@ -221,7 +221,7 @@ def test_one_bad_root_among_three_is_fail_fast_atomic(tmp_path: Path) -> None:
     vault = _vault(tmp_path)
 
     with pytest.raises(paths.VaultPathError) as excinfo:
-        paths.validate_roots(["00-Resources", "Documentos", "materiales"], vault)
+        paths.validate_roots(["00-resources", "Documentos", "materiales"], vault)
 
     details = excinfo.value.details
     assert "Documentos" in str(excinfo.value)
@@ -229,7 +229,7 @@ def test_one_bad_root_among_three_is_fail_fast_atomic(tmp_path: Path) -> None:
     assert details["requested"] == "Documentos"
     assert details["exists"] is False
     assert details["suggestions"] == ["documentos"]
-    assert details["vault_dirs"] == ["00-Resources", "documentos", "materiales"]
+    assert details["vault_dirs"] == ["00-resources", "documentos", "materiales"]
 
 
 def test_a_root_outside_the_vault_is_rejected(tmp_path: Path) -> None:

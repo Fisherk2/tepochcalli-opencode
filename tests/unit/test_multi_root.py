@@ -83,10 +83,10 @@ def test_walk_sources_recurses_to_any_depth_across_several_roots(tmp_path: Path)
     vault = tmp_path / "vault"
     (vault / "materiales" / "1-geografia").mkdir(parents=True)
     (vault / "documentos" / "pdf").mkdir(parents=True)
-    (vault / "00-Resources").mkdir()
+    (vault / "00-resources").mkdir()
     (vault / "materiales" / "1-geografia" / "x.pdf").write_bytes(b"%PDF fake")
     (vault / "documentos" / "pdf" / "y.pdf").write_bytes(b"%PDF fake")
-    (vault / "00-Resources" / "nota.md").write_text("# Nota\n\nfuera del pase.\n", encoding="utf-8")
+    (vault / "00-resources" / "nota.md").write_text("# Nota\n\nfuera del pase.\n", encoding="utf-8")
 
     items = source.walk_sources(vault, ["materiales", "documentos"])
 
@@ -127,9 +127,9 @@ def test_walk_sources_emits_a_file_root_without_passing_it_to_walk_dir(
 @pytest.mark.parametrize(
     "roots",
     [
-        ["00-Resources", "00-Resources/sub"],
-        ["00-Resources/sub", "00-Resources"],
-        ["00-Resources"] * 2,
+        ["00-resources", "00-resources/sub"],
+        ["00-resources/sub", "00-resources"],
+        ["00-resources"] * 2,
     ],
 )
 def test_walk_sources_deduplicates_overlapping_roots_and_keeps_the_count_identity(
@@ -147,8 +147,8 @@ def test_walk_sources_deduplicates_overlapping_roots_and_keeps_the_count_identit
     entries = _entries(items)
     assert scanned == len(items) == 2
     assert sorted(entry.source_path for entry in entries) == [
-        "00-Resources/a.md",
-        "00-Resources/sub/b.md",
+        "00-resources/a.md",
+        "00-resources/sub/b.md",
     ]
 
 
@@ -240,4 +240,4 @@ def test_a_symlink_directory_loop_terminates_without_a_visited_set(tmp_path: Pat
 
     items = source.walk_sources(vault)
 
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/nota.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/nota.md"]

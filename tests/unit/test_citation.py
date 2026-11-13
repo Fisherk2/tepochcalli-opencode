@@ -6,7 +6,7 @@ Fuentes de verdad:
   `text[char_start:char_end] == chunk.text` sobre offsets de carácter.
 * specs/spec-mcp-server.md §search — forma congelada del resultado
   `{text, source_path, heading, char_start, char_end, score}`.
-* tasks/todo.md → T4 (AC): `source_path` POSIX con prefijo `00-Resources/`,
+* tasks/todo.md → T4 (AC): `source_path` POSIX con prefijo `00-resources/`,
   `heading` = último heading padre, offsets verificables, `doc_kind` ∈
   {md, markdown, txt, pdf}, `model` = embedder configurado, 100% cobertura.
 """
@@ -33,8 +33,8 @@ def test_source_path_is_vault_relative_and_preserves_free_nesting() -> None:
 def test_source_path_keeps_existing_prefix_unchanged() -> None:
     """Un path ya relativo al vault se devuelve tal cual (spec-mcp-server §search)."""
     assert (
-        citation.normalize_source_path("00-Resources/lit-pediatría/ruiz2024.pdf")
-        == "00-Resources/lit-pediatría/ruiz2024.pdf"
+        citation.normalize_source_path("00-resources/lit-pediatría/ruiz2024.pdf")
+        == "00-resources/lit-pediatría/ruiz2024.pdf"
     )
 
 
@@ -42,7 +42,7 @@ def test_source_path_drops_dot_segments_and_resolves_internal_parents() -> None:
     """`./` se elimina y `..` se resuelve dentro del vault, sin prefijar nada."""
     assert citation.normalize_source_path("./lit/a.md") == "lit/a.md"
     assert citation.normalize_source_path("lit/tema/../a.md") == "lit/a.md"
-    assert citation.normalize_source_path("00-Resources/../a.md") == "a.md"
+    assert citation.normalize_source_path("00-resources/../a.md") == "a.md"
 
 
 def test_source_path_rejects_a_parent_segment_that_escapes_the_vault() -> None:
@@ -55,12 +55,12 @@ def test_source_path_rejects_a_parent_segment_that_escapes_the_vault() -> None:
 def test_source_path_converts_backslashes_to_posix() -> None:
     r"""Entrada con `\` (Windows) → separadores POSIX hacia delante."""
     assert citation.normalize_source_path("lit\\a.md") == "lit/a.md"
-    assert citation.normalize_source_path("00-Resources\\lit\\a.md") == "00-Resources/lit/a.md"
+    assert citation.normalize_source_path("00-resources\\lit\\a.md") == "00-resources/lit/a.md"
 
 
 def test_source_path_collapses_duplicate_separators() -> None:
     """Separadores repetidos no producen segmentos vacíos en la salida."""
-    assert citation.normalize_source_path("00-Resources//lit///a.md") == "00-Resources/lit/a.md"
+    assert citation.normalize_source_path("00-resources//lit///a.md") == "00-resources/lit/a.md"
 
 
 def test_source_path_rejects_an_empty_citation() -> None:
@@ -341,7 +341,7 @@ def test_cited_chunk_heading_is_truncated_to_two_hundred_chars() -> None:
     rows: list[dict[str, object]] = [
         {
             "text": "cuerpo",
-            "source_path": "00-Resources/a.md",
+            "source_path": "00-resources/a.md",
             "heading": "H" * 300,
             "char_start": 0,
             "char_end": 6,

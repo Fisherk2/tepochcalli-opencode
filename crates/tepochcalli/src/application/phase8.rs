@@ -122,7 +122,7 @@ fn expected_rag_entry(
 /// Values that look like literal secrets in the managed entry's environment
 /// (I11a): a known provider marker anywhere in the value, or a value of ≥32
 /// chars that is pure base64url/hex (`[A-Za-z0-9+/=_-]`) — a real token has
-/// no punctuation like `,:/`; a path like `00-Resources` is too short.
+/// no punctuation like `,:/`; a path like `00-resources` is too short.
 ///
 /// Pure heuristic over key NAMES only returning which keys matched — values
 /// never travel to any log or panel.
@@ -432,8 +432,8 @@ mod tests {
         let clean: &[&str] = &[
             ".",
             "9",
-            "00-Resources,03-Citations",
-            "00-Resources",
+            "00-resources,03-Citations",
+            "00-resources",
             "http://localhost:8888",
             "ocalh",
         ];

@@ -4,7 +4,7 @@ Fuentes de verdad:
 
 * tasks/todo.md T9 AC (a)-(l) — `path` inexistente o directorio ⇒
   `VALIDATION_ERROR` (nunca `INTERNAL`/`SOURCE_UNREACHABLE`); `output_path`
-  omitido ⇒ `00-Resources/<slug>.md`; `format` fuerza la extensión; fuera del
+  omitido ⇒ `00-resources/<slug>.md`; `format` fuerza la extensión; fuera del
   catálogo ⇒ `VALIDATION_ERROR` con la lista; markdown vacío ⇒
   `SOURCE_UNREACHABLE` con la guía de OCR y **sin** parciales; idempotencia
   D66; la respuesta es EXACTAMENTE el resumen de 5 claves.
@@ -32,9 +32,9 @@ CONTENT = "# Informe\n\ncuerpo convertido\n"
 
 
 def _vault(tmp_path: Path) -> Path:
-    """Vault mínimo: `00-Resources/` (destino default) y un documento de entrada."""
+    """Vault mínimo: `00-resources/` (destino default) y un documento de entrada."""
     vault = tmp_path / "vault"
-    (vault / "00-Resources").mkdir(parents=True)
+    (vault / "00-resources").mkdir(parents=True)
     (vault / "documentos").mkdir()
     (vault / "documentos" / "informe.docx").write_bytes(b"docx sintetico")
     (vault / "documentos" / "datos.bin").write_bytes(b"binario sin converter")
@@ -81,17 +81,17 @@ def _error_code(payload: dict[str, object]) -> object:
 def test_success_writes_the_file_and_returns_exactly_the_five_key_summary(
     tmp_path: Path,
 ) -> None:
-    """`output_path` omitido ⇒ `00-Resources/<slug>.md`; respuesta = `build_summary`."""
+    """`output_path` omitido ⇒ `00-resources/<slug>.md`; respuesta = `build_summary`."""
     vault = _vault(tmp_path)
 
     payload, calls = _run("documentos/informe.docx", vault=vault)
 
     assert list(payload) == ["written_to", "source_uri", "bytes", "chars", "preview"]
     assert "ok" not in payload, "D36: el éxito es la ausencia de error"
-    assert payload["written_to"] == "00-Resources/informe.md"
+    assert payload["written_to"] == "00-resources/informe.md"
     assert payload["source_uri"] == "documentos/informe.docx"
     assert calls == [(vault / "documentos" / "informe.docx", "documentos/informe.docx")]
-    written = vault / "00-Resources" / "informe.md"
+    written = vault / "00-resources" / "informe.md"
     assert written.read_text(encoding="utf-8") == CONTENT
     assert payload == summary.build_summary(
         written, source_uri="documentos/informe.docx", vault_root=vault
@@ -104,7 +104,7 @@ def test_the_written_markdown_has_no_frontmatter_or_converted_at(tmp_path: Path)
 
     _run("documentos/informe.docx", vault=vault)
 
-    text = (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8")
+    text = (vault / "00-resources" / "informe.md").read_text(encoding="utf-8")
     assert text == CONTENT
     assert not text.startswith("---")
     assert "converted_at" not in text
@@ -113,14 +113,14 @@ def test_the_written_markdown_has_no_frontmatter_or_converted_at(tmp_path: Path)
 def test_explicit_output_path_is_respected(tmp_path: Path) -> None:
     """`output_path` explícito dentro del vault (subcarpeta existente) se usa tal cual."""
     vault = _vault(tmp_path)
-    (vault / "00-Resources" / "fuentes").mkdir()
+    (vault / "00-resources" / "fuentes").mkdir()
 
     payload, _calls = _run(
-        "documentos/informe.docx", "00-Resources/fuentes/informe.md", vault=vault
+        "documentos/informe.docx", "00-resources/fuentes/informe.md", vault=vault
     )
 
-    assert payload["written_to"] == "00-Resources/fuentes/informe.md"
-    assert (vault / "00-Resources" / "fuentes" / "informe.md").is_file()
+    assert payload["written_to"] == "00-resources/fuentes/informe.md"
+    assert (vault / "00-resources" / "fuentes" / "informe.md").is_file()
 
 
 def test_format_forces_the_destination_extension(tmp_path: Path) -> None:
@@ -128,10 +128,10 @@ def test_format_forces_the_destination_extension(tmp_path: Path) -> None:
     vault = _vault(tmp_path)
 
     defaulted, _calls = _run("documentos/datos.bin", format="docx", vault=vault)
-    explicit, _calls = _run("documentos/datos.bin", "00-Resources/x.md", "pdf", vault=vault)
+    explicit, _calls = _run("documentos/datos.bin", "00-resources/x.md", "pdf", vault=vault)
 
-    assert defaulted["written_to"] == "00-Resources/datos.docx"
-    assert explicit["written_to"] == "00-Resources/x.pdf"
+    assert defaulted["written_to"] == "00-resources/datos.docx"
+    assert explicit["written_to"] == "00-resources/x.pdf"
 
 
 def test_format_is_also_the_conversion_hint_for_a_suffixless_file(tmp_path: Path) -> None:
@@ -155,8 +155,8 @@ def test_format_is_also_the_conversion_hint_for_a_suffixless_file(tmp_path: Path
 
     assert "error" not in payload
     assert hints == [".txt"], "la pista de conversión llega por la costura"
-    assert payload["written_to"] == "00-Resources/informe.txt"
-    assert (vault / "00-Resources" / "informe.txt").read_text(encoding="utf-8") == CONTENT
+    assert payload["written_to"] == "00-resources/informe.txt"
+    assert (vault / "00-resources" / "informe.txt").read_text(encoding="utf-8") == CONTENT
 
 
 # --- frontera B′ y existencia/tipo (D31/D64) --------------------------------------
@@ -192,7 +192,7 @@ def test_a_directory_as_path_is_validation_error_not_internal(tmp_path: Path) ->
 
 
 @pytest.mark.parametrize(
-    "output_path", ["../fuera.md", "/etc/fuera.md", "00-Resources/../fuera.md"]
+    "output_path", ["../fuera.md", "/etc/fuera.md", "00-resources/../fuera.md"]
 )
 def test_output_path_outside_the_vault_is_rejected_and_nothing_is_written(
     tmp_path: Path, output_path: str
@@ -214,7 +214,7 @@ def test_missing_parent_of_the_output_path_is_validation_error(tmp_path: Path) -
     """El padre del destino debe existir como directorio dentro del vault (D64)."""
     vault = _vault(tmp_path)
 
-    payload, _calls = _run("documentos/informe.docx", "00-Resources/fuentes/x.md", vault=vault)
+    payload, _calls = _run("documentos/informe.docx", "00-resources/fuentes/x.md", vault=vault)
 
     assert _error_code(payload) == "VALIDATION_ERROR"
     assert payload["error"]["details"]["exists"] is False
@@ -266,7 +266,7 @@ def test_empty_markdown_is_source_unreachable_with_the_ocr_guide(
 
     assert _error_code(payload) == "SOURCE_UNREACHABLE"
     assert "OCR" in payload["error"]["message"]
-    assert not (vault / "00-Resources" / "informe.md").exists(), "sin parciales"
+    assert not (vault / "00-resources" / "informe.md").exists(), "sin parciales"
 
 
 # --- idempotencia (D66) -----------------------------------------------------------
@@ -278,7 +278,7 @@ def test_identical_conversions_are_idempotent_and_do_not_touch_the_file(
     """Dos llamadas idénticas ⇒ misma respuesta de éxito y mtime intacto."""
     vault = _vault(tmp_path)
     first, _calls = _run("documentos/informe.docx", vault=vault)
-    written = vault / "00-Resources" / "informe.md"
+    written = vault / "00-resources" / "informe.md"
     stamp = written.stat().st_mtime_ns
 
     second, _calls = _run("documentos/informe.docx", vault=vault)
@@ -293,7 +293,7 @@ def test_different_content_on_an_existing_destination_is_validation_error(
     """D66: contenido distinto ⇒ `VALIDATION_ERROR` con alternativo; original intacto."""
     vault = _vault(tmp_path)
     _run("documentos/informe.docx", vault=vault)
-    original = (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8")
+    original = (vault / "00-resources" / "informe.md").read_text(encoding="utf-8")
 
     payload, _calls = _run(
         "documentos/informe.docx",
@@ -304,7 +304,7 @@ def test_different_content_on_an_existing_destination_is_validation_error(
     assert _error_code(payload) == "VALIDATION_ERROR"
     assert "output_path" in payload["error"]["message"]
     assert payload["error"]["details"]["suggested"] == "informe-2.md"
-    assert (vault / "00-Resources" / "informe.md").read_text(encoding="utf-8") == original
+    assert (vault / "00-resources" / "informe.md").read_text(encoding="utf-8") == original
 
 
 def test_unexpected_conversion_failure_is_source_unreachable(tmp_path: Path) -> None:
@@ -319,7 +319,7 @@ def test_unexpected_conversion_failure_is_source_unreachable(tmp_path: Path) -> 
 
     assert _error_code(payload) == "SOURCE_UNREACHABLE"
     assert payload["error"]["details"] == {"cause": "RuntimeError"}
-    assert not (vault / "00-Resources" / "informe.md").exists()
+    assert not (vault / "00-resources" / "informe.md").exists()
 
 
 # --- W-05 (review 5-ejes): el log de `_convert_tail` no filtra el URI -------------------

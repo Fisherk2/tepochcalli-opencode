@@ -16,7 +16,7 @@
 #
 # El smoke usa `--payload` LOCAL (árbol del repo: `pyproject.toml` +
 # `uv.lock` + `flow/` + `mcp/`): la red solo se usa para `uv` y `uv sync`,
-# nunca para modelos. Verifica `00-Resources/` + `mcp.servers` válido.
+# nunca para modelos. Verifica `00-resources/` + `mcp.servers` válido.
 #
 # M6 (sin cambio): este workflow NUNCA se ha ejecutado en GitHub Actions —
 # no se declara «CI verde» en ninguna parte.
@@ -99,7 +99,7 @@ jobs:
         run: cargo test --locked -- --ignored
 
   # Path 5 de punta a punta: VM limpia (sin Python ni Node) → install con
-  # payload local → vault con `00-Resources/` + `mcp.servers` válido.
+  # payload local → vault con `00-resources/` + `mcp.servers` válido.
   smoke:
     needs: rust
     runs-on: ubuntu-latest
@@ -158,6 +158,6 @@ jobs:
         run: |
           set -euo pipefail
           vault="${RUNNER_TEMP}/smoke/vault"
-          test -f "${vault}/00-Resources/ejemplo.md"
-          test -f "${vault}/00-Resources/ejemplo.pdf"
+          test -f "${vault}/00-resources/ejemplo.md"
+          test -f "${vault}/00-resources/ejemplo.pdf"
           grep -q '"tepochcalli-rag"' "${vault}/opencode.json"

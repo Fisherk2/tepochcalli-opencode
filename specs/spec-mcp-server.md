@@ -24,7 +24,7 @@ Sin una frontera tipada, el agente leería archivos crudos del vault (tokens por
 * `search` end-to-end (tool-call→respuesta) **<500ms** p95 en CPU (criterio 3); punto de medición definido.
 * Presupuesto de tokens por respuesta: diseño determinista ≤~1600 tokens de payload (criterio 4, con margen).
 * `index_refresh` delta-only sobre el conjunto de raíces declarado en **`INDEXER_DIR`**, con reporte `{scanned, indexed, skipped, elapsed_ms, locked, roots}` y validación atómica `fail-fast` (criterio 2; ADR-010).
-* `add_source` = conversión markitdown + escritura en `00-Resources/<subdir>/` + refresh (criterio 7).
+* `add_source` = conversión markitdown + escritura en `00-resources/<subdir>/` + refresh (criterio 7).
 * `rag_status` = diagnóstico del provider/embedder e índice (estado `ok`/`degraded`, motivos `E_*` con `fix_hint` accionable, raíces disponibles e indexadas), coste <200 tokens por forma (D7.3/ADR-007, D67).
 * Las 3 tools del conversor devuelven **solo** el resumen de 5 claves; el cuerpo nunca cruza el wire (H1/H2, D36).
 
@@ -49,33 +49,33 @@ Contrato: `search(query: str, top_k: int = TEPOCHCALLI_TOP_K (5), path_filter: s
 ```jsonc
 // request (arguments del tool call)
 { "query": "¿qué métricas usa el modelo X en pacientes pediátricos?",
-  "top_k": 5, "path_filter": "00-Resources/lit-pediatría/**/*.pdf" }
+  "top_k": 5, "path_filter": "00-resources/lit-pediatría/**/*.pdf" }
 
 // response (content[0].text = JSON canónico)
 { "query": "…", "took_ms": 142, "truncated": false,
   "results": [
     { "text": "…fragmento…",
-      "source_path": "00-Resources/lit-pediatría/ruiz2024.pdf",
+      "source_path": "00-resources/lit-pediatría/ruiz2024.pdf",
       "heading": "2.3 Medidas de resultado",
       "char_start": 4120, "char_end": 5088, "score": 0.87 } ] }
 ```
 
 * `path_filter`: glob relativo a la raíz del vault; se aplica como pre-filtro en la query LanceDB (`WHERE source_path LIKE …` traducido de `*`→`%`).
 * `top_k`: por omisión el valor de **`TEPOCHCALLI_TOP_K`** (5) — es el `default` del schema, fijado **al arrancar** el proceso MCP. El agente puede sobreescribirlo por llamada; `budget.effective_top_k` acepta 1–20 y recorta el efectivo a **8** (fuera de rango ⇒ `VALIDATION_ERROR`). Un `TEPOCHCALLI_TOP_K` no entero o fuera de `[1,20]` cae a 5.
-* `source_path`: ruta POSIX **relativa al vault** (D41/ADR-010 §4.2). Con N raíces, `materiales/a.pdf` y `documentos/a.pdf` son citas distintas; el prefijo `00-Resources/` solo aparece cuando el material vive ahí. Es un cambio *breaking* del campo, asumido por el dueño.
+* `source_path`: ruta POSIX **relativa al vault** (D41/ADR-010 §4.2). Con N raíces, `materiales/a.pdf` y `documentos/a.pdf` son citas distintas; el prefijo `00-resources/` solo aparece cuando el material vive ahí. Es un cambio *breaking* del campo, asumido por el dueño.
 * `score`: similitud normalizada [0,1] del híbrido ANN+FTS; orden descendente garantizado.
 * Campo aditivo (T7, 2026-10-23): `offsets_ref: "source" | "extract"` — `source` si el slice del archivo original reproduce `text` (`md/markdown/txt`), `extract` si los offsets citan el markdown extraído por **markitdown** (`pdf/docx/pptx/xlsx/xls`; el binario jamás es el espacio de cita). No hay Docling (ADR-011/D53).
 * Campos congelados por contrato (Hyrum, ADR-005): extensiones futuras solo aditivas/opcionales.
 
 ### Tool `index_refresh`
 
-Contrato: `index_refresh()` — **sin argumentos**. Ejecuta un ciclo de actualización delta del flow (con lock de un solo proceso) sobre el conjunto de raíces que declara el usuario en **`INDEXER_DIR`** (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`; multi-valor por **comas**, `strip`, vacíos descartados; ausente o vacía ⇒ `["00-Resources"]`, D32/D42). El MCP **no puede añadir ni quitar raíces**: el conjunto vive solo en esa variable —no en la llamada y no en `tepochcalli.toml`—, y cambiarlo es editar la variable y reiniciar el MCP, nunca un argumento. El resto del contrato multi-raíz (recursión, raíz-fichero, dedup de solapadas) se aplica a ese conjunto.
+Contrato: `index_refresh()` — **sin argumentos**. Ejecuta un ciclo de actualización delta del flow (con lock de un solo proceso) sobre el conjunto de raíces que declara el usuario en **`INDEXER_DIR`** (`opencode.json` → `mcp.servers.tepochcalli-rag.environment`; multi-valor por **comas**, `strip`, vacíos descartados; ausente o vacía ⇒ `["00-resources"]`, D32/D42). El MCP **no puede añadir ni quitar raíces**: el conjunto vive solo en esa variable —no en la llamada y no en `tepochcalli.toml`—, y cambiarlo es editar la variable y reiniciar el MCP, nunca un argumento. El resto del contrato multi-raíz (recursión, raíz-fichero, dedup de solapadas) se aplica a ese conjunto.
 
 > **El argumento `directories` se retiró el 2026-11-03 (orden del dueño).** El argumento retirado **no tiene efecto**: el SDK valida por firma y descarta las claves desconocidas, así que la tool se ejecuta con el conjunto de `INDEXER_DIR`. No es un error — es la garantía de que el wire no puede cambiar el conjunto. Razón: con el target de CocoIndex una pasada **declara el estado completo del índice**, así que aceptar un subconjunto («indexa solo `documentos/`») **purgaría** las filas de las demás raíces — permitirlo contradecía la regla de que solo el usuario cambia el conjunto. El delta ya es memoizado, así que re-escanear el conjunto completo cuesta solo lo que cambió: no se pierde rendimiento.
 
 ```jsonc
 { "scanned": 214, "indexed": 3, "skipped": 211, "elapsed_ms": 8200, "locked": false,
-  "roots": ["00-Resources", "03-Citations"] }
+  "roots": ["00-resources", "03-Citations"] }
 ```
 
 * `scanned`: archivos visitados en la pasada; `indexed`: (re)escritos al índice; `skipped`: memoizados/inalterados/excluidos; `elapsed_ms`: duración de la pasada. La identidad `scanned == indexed + skipped` se mantiene en toda pasada (incluido `locked` y directorio vacío).
@@ -89,15 +89,15 @@ Contrato: `index_refresh()` — **sin argumentos**. Ejecuta un ciclo de actualiz
 
 ### Tool `add_source`
 
-Contrato: `add_source(uri: str, subdir: str | None = None)` — convierte URL/archivo a Markdown (capacidad markitdown, spec-markitdown), escribe bajo `00-Resources/<subdir|_inbox>/`, luego invoca el ciclo de `index_refresh` internamente.
+Contrato: `add_source(uri: str, subdir: str | None = None)` — convierte URL/archivo a Markdown (capacidad markitdown, spec-markitdown), escribe bajo `00-resources/<subdir|_inbox>/`, luego invoca el ciclo de `index_refresh` internamente.
 
 ```jsonc
-{ "ok": true, "written_to": "00-Resources/_inbox/paper-2026-03.md",
+{ "ok": true, "written_to": "00-resources/_inbox/paper-2026-03.md",
   "indexed": { "scanned": 215, "indexed": 1, "skipped": 214, "elapsed_ms": 2600 } }
 ```
 
-* **`00-Resources` debe estar declarada en `INDEXER_DIR`:** si no lo está, `add_source` rechaza con `VALIDATION_ERROR` **antes de escribir**, con `details: {requested, allowed, hint}` — `requested` = `00-Resources`, `allowed` = el conjunto declarado, `hint` = añadirla a la variable o usar `convert_document` con un `output_path` dentro de una raíz indexada. Escribir un fichero que el índice no va a ver es una promesa falsa; antes la tool lo añadía a la unión del refresh de esa llamada, y con el conjunto fijado en la variable eso ya no es posible sin que el MCP modifique raíces.
-* Validación en el borde: `subdir` normalizado, sin `..`, queda dentro de `00-Resources/`; `uri` acepta `http(s):`, `file:` (ver advertencia de seguridad). Un `file:` **inexistente** ⇒ `VALIDATION_ERROR`: la ruta mal escrita es un argumento corregible, no un documento ilegible que merezca `SOURCE_UNREACHABLE` (D64). El shape de respuesta **no cambia**.
+* **`00-resources` debe estar declarada en `INDEXER_DIR`:** si no lo está, `add_source` rechaza con `VALIDATION_ERROR` **antes de escribir**, con `details: {requested, allowed, hint}` — `requested` = `00-resources`, `allowed` = el conjunto declarado, `hint` = añadirla a la variable o usar `convert_document` con un `output_path` dentro de una raíz indexada. Escribir un fichero que el índice no va a ver es una promesa falsa; antes la tool lo añadía a la unión del refresh de esa llamada, y con el conjunto fijado en la variable eso ya no es posible sin que el MCP modifique raíces.
+* Validación en el borde: `subdir` normalizado, sin `..`, queda dentro de `00-resources/`; `uri` acepta `http(s):`, `file:` (ver advertencia de seguridad). Un `file:` **inexistente** ⇒ `VALIDATION_ERROR`: la ruta mal escrita es un argumento corregible, no un documento ilegible que merezca `SOURCE_UNREACHABLE` (D64). El shape de respuesta **no cambia**.
 
 ### Tool `rag_status` (D7.3/ADR-007)
 
@@ -113,8 +113,8 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
                 "dims": 384, "provider": null },
   "index":    { "rows": 1240, "model_matches_config": true,
                 "last_refresh": "2026-10-21T14:32:10Z", "db_size_bytes": 18400000,
-                "last_refresh_roots": ["00-Resources"],
-                "available_roots": ["00-Resources", "documentos", "materiales"] },
+                "last_refresh_roots": ["00-resources"],
+                "available_roots": ["00-resources", "documentos", "materiales"] },
   "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true,
                 "problems": [], "unknown_env": [] },
   "health":   { "state": "ok", "reason": null, "fix_hint": null } }
@@ -123,7 +123,7 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
 { "embedder": { "mode": "none", "model": null, "dims": null, "provider": null },
   "index":    { "rows": 0, "model_matches_config": true,
                 "last_refresh": null, "db_size_bytes": 0,
-                "last_refresh_roots": [], "available_roots": ["00-Resources"] },
+                "last_refresh_roots": [], "available_roots": ["00-resources"] },
   "config":   { "path": ".tepochcalli/config/tepochcalli.toml", "valid": true,
                 "problems": [], "unknown_env": [] },
   "health":   { "state": "degraded", "reason": "E_NO_EMBEDDER",
@@ -148,8 +148,8 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
 
 ```jsonc
 // convert_document(path, output_path?, format?)  → y convert_base64(data, output_path?, format?, filename?)
-{ "written_to": "00-Resources/informe-anual.md",
-  "source_uri": "00-Resources/fuentes/informe-anual.docx",
+{ "written_to": "00-resources/informe-anual.md",
+  "source_uri": "00-resources/fuentes/informe-anual.docx",
   "bytes": 48213, "chars": 47120,
   "preview": "# Informe anual 2026\n\n…", "truncated": true }
 
@@ -163,7 +163,7 @@ Contrato: `rag_status()` — sin argumentos. Devuelve el diagnóstico mínimo de
 * **B′ (D31):** entrada y `output_path` deben resolver dentro del vault; `..`, ruta absoluta externa o symlink que escapa ⇒ `VALIDATION_ERROR`. La validación corre **antes** de convertir.
 * **Existencia y tipo en el borde (D64):** `path` inexistente o que es un directorio ⇒ `VALIDATION_ERROR` con `details.suggestions`, sin invocar markitdown. El padre del `output_path` debe existir como directorio dentro del vault.
 * **Idempotencia (D66):** destino con los mismos bytes ⇒ misma respuesta de éxito; con bytes distintos ⇒ `VALIDATION_ERROR` («elige otro `output_path`») y nombre alternativo propuesto. Nunca se sobrescribe.
-* `convert_base64` exige `format` **o** `filename`; sin pista de tipo ⇒ `VALIDATION_ERROR`. `output_path` omitido ⇒ `00-Resources/<slug>.md` (`paths.slugify_uri`).
+* `convert_base64` exige `format` **o** `filename`; sin pista de tipo ⇒ `VALIDATION_ERROR`. `output_path` omitido ⇒ `00-resources/<slug>.md` (`paths.slugify_uri`).
 * El `.md` escrito **no** lleva frontmatter ni `converted_at`: un timestamp rompería la idempotencia (D66).
 
 ### Manejo de errores (formato único)
@@ -178,7 +178,7 @@ Toda falla → tool result con `isError` y payload JSON canónico (nunca texto l
 
 | Code | Significado | Acción sugerida del agente |
 | --- | --- | --- |
-| `VALIDATION_ERROR` | argumentos inválidos: `top_k` fuera de rango, glob malformado, `subdir` fuera de `00-Resources`, **ruta inexistente, tipo equivocado, raíz fuera del vault o con `..`, formato no soportado, base64 sin pista de tipo**, destino ocupado con contenido distinto | reintentar corrigiendo args (los `details.suggestions` bastan) |
+| `VALIDATION_ERROR` | argumentos inválidos: `top_k` fuera de rango, glob malformado, `subdir` fuera de `00-resources`, **ruta inexistente, tipo equivocado, raíz fuera del vault o con `..`, formato no soportado, base64 sin pista de tipo**, destino ocupado con contenido distinto | reintentar corrigiendo args (los `details.suggestions` bastan) |
 | `INDEX_EMPTY` | tabla `chunks` inexistente **con embedder configurado** (sin embedder el estado es `E_NO_EMBEDDER`, que tiene precedencia) | invocar `index_refresh()`; si devuelve `E_NO_EMBEDDER` → `rag_status()` y reportar fix_hint |
 | `INDEX_STALE_MODEL` | dims/modelo del índice ≠ config actual | avisar usuario: requiere `tepochcalli reindex --confirm` (spec-embeddings; alias D7.3: `E_MODEL_MISMATCH`) |
 | `ENGINE_LOCKED` | `add_source`: su refresh interno quedó bloqueado por otro proceso (`index_refresh` **no** emite este error: devuelve `{scanned:0, indexed:0, skipped:0, locked:true}`) | reintentar en segundos |
@@ -192,7 +192,7 @@ Forma de `details` cuando el error es corregible (rutas, raíces, formato):
              "message": "La raíz no existe: 'Documentos'",
              "details": { "requested": "Documentos", "exists": false,
                           "suggestions": ["documentos"],
-                          "vault_dirs": ["00-Resources", "documentos", "materiales"] } } }
+                          "vault_dirs": ["00-resources", "documentos", "materiales"] } } }
 ```
 
 * Las `suggestions` se calculan por similitud **sin distinguir mayúsculas** (`Documentos` → `documentos`); `vault_dirs` lista lo que sí existe para que el agente corrija en un reintento.
@@ -252,7 +252,7 @@ Diseño determinista en el server (no depende del modelo):
   | Variable | Obligatoria | Default | Validación y efecto |
   | --- | --- | --- | --- |
   | `TEPOCHCALLI_ROOT` | sí | — | raíz del vault; toda ruta del contrato se valida contra ella (B′) |
-  | `INDEXER_DIR` | no | `00-Resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-Resources`. Es el **único** conjunto de raíces del índice: `index_refresh()` no lo recibe y el MCP no lo modifica; el proceso lo recibe al arrancar, así que editarlo exige reiniciar el MCP |
+  | `INDEXER_DIR` | no | `00-resources` | split por **comas** + `strip`, vacíos descartados (nunca `os.pathsep`: `:` colisiona con `C:\`); cada raíz relativa al vault —una absoluta solo si resuelve **dentro**—, existente, sin `..`; si no, `VALIDATION_ERROR` en el borde. Ausente o vacía ⇒ `00-resources`. Es el **único** conjunto de raíces del índice: `index_refresh()` no lo recibe y el MCP no lo modifica; el proceso lo recibe al arrancar, así que editarlo exige reiniciar el MCP |
   | `TEPOCHCALLI_TOP_K` | no | `5` | entero en [1,20]; no entero o fuera de rango ⇒ `5` + `problems`. Se lee **al arrancar** el proceso: es el `default` del schema de `search` (rango efectivo 1–8) y cambiarla exige reiniciar el MCP |
 
 * Una variable **mal escrita** no se ignora en silencio: su nombre aparece en `rag_status().config.unknown_env` (el filtro es estrecho — `TEPOCH*` o cualquier nombre con `INDEXER`—, así que no escupe el entorno del harness). Un **valor** inválido aparece en `config.problems` y deja `config.valid: false`. Ambas señales llegan en la primera llamada, sin indexar nada.
@@ -277,19 +277,19 @@ Diseño determinista en el server (no depende del modelo):
 
 * Contract tests contra vault fixture: shape exacto de request/response, codes de error, globs de `path_filter`.
 * Contract tests multi-raíz: `INDEXER_DIR` con dos raíces, dedup de solapadas, raíz-fichero; `roots` en el reporte y `scanned == indexed + skipped` en todos los casos. `index_refresh` llamado con el retirado `directories` ⇒ se indexa el conjunto de `INDEXER_DIR`, **sin error**: el SDK descarta la clave desconocida.
-* Contract tests de entorno: `INDEXER_DIR` multi-valor (coma, `strip`, vacíos), fallback `00-Resources` con la env vacía, y `TEPOCHCALLI_TOP_K` inválido (no entero, ≤0 o >20) ⇒ `5` con el `default` del schema de `search` igual al valor de arranque.
+* Contract tests de entorno: `INDEXER_DIR` multi-valor (coma, `strip`, vacíos), fallback `00-resources` con la env vacía, y `TEPOCHCALLI_TOP_K` inválido (no entero, ≤0 o >20) ⇒ `5` con el `default` del schema de `search` igual al valor de arranque.
 * Raíz inexistente en `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details.suggestions` no vacías y **nunca** `INTERNAL`; atomicidad: el recuento de filas del índice no cambia (D65).
-* `add_source` con `00-Resources` fuera de `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details: {requested, allowed, hint}` y **ningún fichero escrito** (se comprueba el árbol antes/después).
+* `add_source` con `00-resources` fuera de `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con `details: {requested, allowed, hint}` y **ningún fichero escrito** (se comprueba el árbol antes/después).
 * Directorio vacío ⇒ tres ceros, **no** error. `rag_status` expone `available_roots`/`last_refresh_roots` y cabe en <200 tokens; `file:` inexistente ⇒ `VALIDATION_ERROR`.
 * Contract tests de las 3 tools del conversor (mismo shape que spec-markitdown): 5 claves y orden, `preview` ≤500, cuerpo ausente de `content[0].text` con un documento ≥100 000 caracteres, idempotencia y frontera B′.
 * Contract tests D7.3: `rag_status` con shape exacto de los 4 bloques y <200 tokens; los cinco códigos `E_*` (`E_NO_EMBEDDER`, `E_API_AUTH`, `E_MODEL_MISMATCH`, `E_MODEL_INVALID`, `E_OFFLINE_NO_CACHE`) con payload `{error:{code,message,fix_hint}}`; instalación degraded (salida 5) → `search` = `E_NO_EMBEDDER` + `rag_status` = `degraded` con `fix_hint`.
 * Fixtures de presupuesto: asserts de tokens por la fórmula de §Presupuesto de tokens (Σ sobre resultados ≤1600, con cota de la envoltura aparte) y de `rag_status` <200, en la suite de corrección. La latencia se **mide** en `tests/benchmarks/bench_search.py`: p95 <500 ms **en local**, publicando n y método de percentil (metodología TRD) — **sin aserciones de latencia en CI**, que son la regla anti-flake de la casa: un rojo que depende de la máquina no es un rojo.
-* Golden answers: queries ES/EN sobre la muestra de `00-Resources/` (md+PDF) verificando que cada resultado cite `source_path` real y offsets reproducibles.
+* Golden answers: queries ES/EN sobre la muestra de `00-resources/` (md+PDF) verificando que cada resultado cite `source_path` real y offsets reproducibles.
 
 ## Security Considerations
 
 * Solo stdio local; sin binding de red (docs/SECURITY.md).
-* `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera del **vault** (`00-Resources/` es el destino por omisión de `add_source`, no el único: el conversor escribe el `output_path` que se le pide, siempre dentro del vault — B′). **`file:` en `add_source` se RECHAZA si queda fuera del vault** (D16, ratificado 2026-10-26): markitdown con `file:` leería cualquier archivo accesible al proceso (riesgo documentado del canal markitdown, docs/SECURITY.md), y la validación corre **antes** de que el conversor toque el disco (`tepochcalli_mcp.paths.validate_source_uri` / `resolve_file_uri`).
+* `path_filter`/`subdir`: validación de ruta (path traversal → `VALIDATION_ERROR`); el server jamás escribe fuera del **vault** (`00-resources/` es el destino por omisión de `add_source`, no el único: el conversor escribe el `output_path` que se le pide, siempre dentro del vault — B′). **`file:` en `add_source` se RECHAZA si queda fuera del vault** (D16, ratificado 2026-10-26): markitdown con `file:` leería cualquier archivo accesible al proceso (riesgo documentado del canal markitdown, docs/SECURITY.md), y la validación corre **antes** de que el conversor toque el disco (`tepochcalli_mcp.paths.validate_source_uri` / `resolve_file_uri`).
 * **B′ (D31/ADR-009):** el conversor valida también el **destino**: `output_path` dentro del vault, sin `..` ni symlink que escape, evitando *arbitrary file write*. `paths.ensure_within` es la defensa en profundidad antes de `os.replace`.
 * La validación de existencia y tipo (raíces, `path`, padre de `output_path`) es **pura** (`paths.py`) y corre **antes** de tocar el disco; si el motor recibiera una ruta mal escrita, el `internal_guard` la convertiría en `INTERNAL`. Por eso el borde decide `VALIDATION_ERROR` (D64).
 * Errores `INTERNAL` nunca exponen stack traces al harness.

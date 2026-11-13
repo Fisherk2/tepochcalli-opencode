@@ -28,7 +28,7 @@
 | `.tepochcalli/config/` (incl. `tepochcalli.toml`) | puede contener claves y prefs del usuario |
 | `.tepochcalli/db/` | contenido indexado del investigador = dato sensible |
 | `.tepochcalli/models/`, `venv/`, `bin/` | artefactos regenerables (no secreto, pero gigabytes) |
-| PDFs/notas bajo `00-Resources/` que el usuario no quiera versionar | decisión del usuario; el template no fuerza git del contenido |
+| PDFs/notas bajo `00-resources/` que el usuario no quiera versionar | decisión del usuario; el template no fuerza git del contenido |
 
 Los `.gitignore` del repo y del payload aplican estas reglas; la política manda aunque un
 `.gitignore` local esté modificado: **no commitear aunque el ignore falte**.
@@ -44,13 +44,13 @@ permiso el usuario del proceso**. Reglas:
 1. **Frontera B′ (entrada y salida dentro del vault, D31/D32):** `paths.validate_vault_path` /
    `paths.validate_roots` resuelven la ruta y rechazan absolutos fuera, `..` que escape y
    symlinks cuyo target resuelto salga del vault ⇒ `VALIDATION_ERROR` **antes** de que
-   markitdown toque el disco. Sin `output_path`, el destino es `00-Resources/<slug>.md` (D37);
+   markitdown toque el disco. Sin `output_path`, el destino es `00-resources/<slug>.md` (D37);
    nunca se escribe fuera del vault.
 2. **`arbitrary file write`:** el riesgo propio del conversor no es solo leer, es **escribir**.
    `writer.write_atomic` escribe con temp + rename e **idempotencia D66**: destino existente
    con contenido idéntico ⇒ la misma respuesta de éxito sin reescribir; con contenido distinto
    ⇒ `VALIDATION_ERROR` («elige otro output_path»). **Nunca** se sobrescribe material del
-   usuario; `add_source` restringe además la escritura a `00-Resources/`.
+   usuario; `add_source` restringe además la escritura a `00-resources/`.
 3. **Raíces de indexación (ADR-010/D64/D65):** `index_refresh()` camina el conjunto declarado en
    `INDEXER_DIR` y lo valida en el borde — **existencia y tipo** (directorio, o fichero con
    extensión de la whitelist) y **fail-fast atómico**: una raíz mala ⇒ no se indexa ninguna y el
@@ -140,7 +140,7 @@ todo egress y exige caché previa.
 | Filtro de claves al commitear el vault | media | alto | gitignore config/ + checklist AGENTS.md + `{env:VAR}` |
 | Inyección de prompt vía material ingerido | media | medio | regla de datos-como-citas + `/validate`/`/cite` |
 | Lectura de archivos sensibles por markitdown | media | medio-alto | §MarkItDown arriba; **B′** — entrada y salida validadas dentro del vault (`paths`), `file:` fuera ⇒ `VALIDATION_ERROR`; uso guiado por petición explícita |
-| `arbitrary file write` vía el conversor | baja | alto | `writer.write_atomic` (temp + rename) + idempotencia D66: nunca sobrescribe material del usuario; destino por defecto `00-Resources/` (ADR-009) |
+| `arbitrary file write` vía el conversor | baja | alto | `writer.write_atomic` (temp + rename) + idempotencia D66: nunca sobrescribe material del usuario; destino por defecto `00-resources/` (ADR-009) |
 | Fuga de clave de API vía logs o payloads MCP | baja | alto | `api_key_env` guarda solo el nombre; redacción `***` en excepciones; test de no-fuga en logs/`repr`/payload (T6) |
 | Índice expuesto al sincronizar el vault | media | medio | `db/` fuera de git; advertir en APPFLOW/README futuro: nubes personales (OneDrive/Dropbox) copiarían `.tepochcalli/db/` — recomendar excluir el vault o la ruta de sync |
 | Supply-chain (deps Rust/Python) | baja | alto | pins (uv.lock, cargo-dist), releases solo por tag con CI |

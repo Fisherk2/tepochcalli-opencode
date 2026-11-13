@@ -56,7 +56,7 @@ WARM_SCRIPT = (
 """Calienta el cache del modelo UNA vez (en frío: la única descarga permitida)."""
 
 UPDATE_SCRIPT = "from tepochcalli_flow.app import app; app.update_blocking()"
-"""Indexa `00-Resources/` del vault en `TEPOCHCALLI_VAULT_ROOT` — el MISMO de T2/T7."""
+"""Indexa `00-resources/` del vault en `TEPOCHCALLI_VAULT_ROOT` — el MISMO de T2/T7."""
 
 REFRESH_FIELDS = ["scanned", "indexed", "skipped", "elapsed_ms", "locked", "roots"]
 """Orden exacto de `asdict(RefreshReport)` — plan §5 «Contrato de datos»."""

@@ -10,11 +10,11 @@
 
 | Hecho | Valor |
 | --- | --- |
-| Notas markdown | **10 000** en **10 subdirs** `00-Resources/notas-00…09` (1 000 cada uno) |
-| PDFs | **1 000** de 1 página, PDF-1.4 válido (xref computado, texto extraíble), en `00-Resources/pdfs/` |
+| Notas markdown | **10 000** en **10 subdirs** `00-resources/notas-00…09` (1 000 cada uno) |
+| PDFs | **1 000** de 1 página, PDF-1.4 válido (xref computado, texto extraíble), en `00-resources/pdfs/` |
 | Semilla | **20261103** (la misma del bench `bench_delta_scale.py`; ahora es `DEFAULT_SEED` del generador) |
 | `generator_version` | **"1"** |
-| Manifiesto | `corpus-manifest.json` en la **raíz** del corpus (fuera de `00-Resources/`, no indexable) |
+| Manifiesto | `corpus-manifest.json` en la **raíz** del corpus (fuera de `00-resources/`, no indexable) |
 | Raíz materializada | `/tmp/opencode/phase6-corpus` (btrfs: `df -T /tmp/opencode` → `/dev/nvme0n1p3 btrfs`) |
 | Ficheros en disco | **11 001** (`find -type f` + `wc -l`: 11 000 del corpus + el manifiesto) |
 
@@ -75,7 +75,7 @@ Contrato defensivo (probado en el test y a mano sobre el corpus real):
 ## 5. Forma del manifiesto
 
 ```json
-{"files":[{"bytes":907,"kind":"md","path":"00-Resources/notas-00/nota-00000.md","sha256":"…"}],
+{"files":[{"bytes":907,"kind":"md","path":"00-resources/notas-00/nota-00000.md","sha256":"…"}],
  "generator_version":"1","seed":20261103,
  "totals":{"bytes":10586197,"files":11000,"md":10000,"pdf":1000},
  "tree_sha256":"27a20c…3ecd2"}

@@ -1,7 +1,7 @@
 //! F1 (prereqs) + F2 (vault dir). No compensation: neither phase touches
 //! user data, so there is nothing to roll back (todo T7).
 //!
-//! F3 (T8): merge the payload without overwrite, create `00-Resources/`
+//! F3 (T8): merge the payload without overwrite, create `00-resources/`
 //! with 2 placeholders, write `.install-intent` (basis of F3 compensation
 //! in T14). Depends on `domain` + `ports` only — never on `adapters/`.
 //!
@@ -35,8 +35,8 @@ pub const SUPPORTED_OS: &[&str] = &["linux", "macos", "windows"];
 /// F2 default when `--vault` is absent, resolved under the caller cwd.
 pub const DEFAULT_VAULT_DIR: &str = "./tepochcalli-vault";
 /// Canonical resources dir (exact case the flow indexes:
-/// `citation.py: RESOURCES_DIR = "00-Resources"`).
-pub const RESOURCES_DIR: &str = "00-Resources";
+/// `citation.py: RESOURCES_DIR = "00-resources"`).
+pub const RESOURCES_DIR: &str = "00-resources";
 /// F3 compensation basis (T14): exactly the files F3 wrote, one vault-
 /// relative path per line. The intent file itself is NOT listed (its path
 /// is this constant, so compensation removes it alongside the listing).
@@ -49,7 +49,7 @@ pub const PLACEHOLDER_PDF_NAME: &str = "ejemplo.pdf";
 const PLACEHOLDER_MD_BODY: &str = "# Ejemplo\n\
 \n\
 Este archivo es un marcador de posición creado por `tepochcalli install`.\n\
-Escribe tus notas de investigación en `00-Resources/`; el índice RAG las\n\
+Escribe tus notas de investigación en `00-resources/`; el índice RAG las\n\
 recogerá en la próxima indexación.\n";
 /// Placeholder PDF bytes, embedded in the crate (AC-e: NOT in the payload
 /// repo). Hand-written minimal PDF (catalog/pages/page/contents/helvetica);
@@ -173,7 +173,7 @@ pub struct Phase3Report {
     pub skipped: Vec<PathBuf>,
 }
 
-/// Ensure `00-Resources/` + the 2 placeholders (D22): pre-existing files
+/// Ensure `00-resources/` + the 2 placeholders (D22): pre-existing files
 /// are never overwritten, only recorded as skipped.
 fn ensure_placeholders(vault: &Path) -> Result<MergeReport, WizardError> {
     // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
@@ -239,7 +239,7 @@ fn write_intent(vault: &Path, written: &[PathBuf]) -> Result<(), WizardError> {
     std::fs::write(vault.join(INSTALL_INTENT_PATH), body).map_err(|_| WizardError::PermissionDenied)
 }
 
-/// F3: merge the payload without overwrite, create `00-Resources/` with
+/// F3: merge the payload without overwrite, create `00-resources/` with
 /// its 2 placeholders, write `.install-intent` listing exactly the files
 /// written. Pre-existing user files stay byte-intact.
 pub fn run_phase3(payload: &dyn PayloadSource, vault: &Path) -> Result<Phase3Report, WizardError> {

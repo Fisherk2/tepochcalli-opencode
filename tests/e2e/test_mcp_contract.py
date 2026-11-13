@@ -93,12 +93,12 @@ FILTER_QUERY = "indexación del flujo"
 """Consulta del test de `path_filter` — misma ancla que T2 sobre este vault."""
 
 STAGING_SOURCE = "# Staging T8\n\nFichero de staging para el contract test de add_source.\n"
-"""Fuente `file:` DENTRO del vault pero fuera de `00-Resources/` (patrón T5)."""
+"""Fuente `file:` DENTRO del vault pero fuera de `00-resources/` (patrón T5)."""
 
 INVALID_SEARCH_ARGUMENTS = {
     "top_k_fuera_de_rango": {"query": GOLDEN_QUERY, "top_k": 99},
     "glob_absoluto": {"query": GOLDEN_QUERY, "path_filter": "/absoluto/*.md"},
-    "glob_con_escape": {"query": GOLDEN_QUERY, "path_filter": "00-Resources/../secreto/*"},
+    "glob_con_escape": {"query": GOLDEN_QUERY, "path_filter": "00-resources/../secreto/*"},
     "glob_vacio": {"query": GOLDEN_QUERY, "path_filter": ""},
 }
 """Args inválidos del AC: `top_k` fuera de [1,20] y los 3 globs malos (.., absoluto, vacío)."""
@@ -211,7 +211,7 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
             for item in results:
                 assert list(item) == SEARCH_RESULT_FIELDS
                 assert isinstance(item["text"], str) and item["text"]
-                assert str(item["source_path"]).startswith("00-Resources/")
+                assert str(item["source_path"]).startswith("00-resources/")
                 assert (vault / str(item["source_path"])).is_file(), "source_path real"
                 assert item["heading"] is None or isinstance(item["heading"], str)  # D13
                 assert isinstance(item["char_start"], int) and isinstance(item["char_end"], int)
@@ -247,7 +247,7 @@ def test_each_tool_answers_the_frozen_contract_shape_over_the_wire(
             assert not result.is_error, added
             shapes["add_source"] = list(added)
             assert added["ok"] is True
-            assert added["written_to"] == "00-Resources/_inbox/contrato.md"
+            assert added["written_to"] == "00-resources/_inbox/contrato.md"
             assert list(added["indexed"]) == ADD_SOURCE_INDEXED_FIELDS
         return shapes
 
@@ -295,7 +295,7 @@ def test_invalid_search_arguments_return_json_validation_error_on_the_wire(
 
 def test_missing_index_answers_index_empty_as_json_error(tmp_path: Path) -> None:
     """Vault SIN índice con embedder local por omisión → `INDEX_EMPTY` legado en el wire."""
-    (tmp_path / "00-Resources").mkdir(parents=True)
+    (tmp_path / "00-resources").mkdir(parents=True)
     env = server_env(tmp_path)  # sin env de modelo: INDEX_EMPTY no debe cargar pesos
 
     async def call() -> tuple[CallToolResult, dict[str, object]]:
@@ -325,7 +325,7 @@ def test_degraded_install_returns_e_no_embedder_and_degraded_rag_status(tmp_path
     regla del vault obliga al agente a reportar la guía, no el error crudo.
     """
     _write_toml(tmp_path, '[embedding]\nprovider = "none"\n')
-    (tmp_path / "00-Resources").mkdir()  # el default `index_refresh()` exige la raíz (T8)
+    (tmp_path / "00-resources").mkdir()  # el default `index_refresh()` exige la raíz (T8)
     env = server_env(tmp_path)  # la degradación jamás debe cargar pesos
 
     async def journey() -> tuple[
@@ -359,7 +359,7 @@ def test_degraded_install_returns_e_no_embedder_and_degraded_rag_status(tmp_path
         "last_refresh": None,
         "db_size_bytes": 0,
         "last_refresh_roots": [],
-        "available_roots": ["00-Resources"],
+        "available_roots": ["00-resources"],
     }
     assert status["health"] == {
         "state": "degraded",
@@ -382,8 +382,8 @@ def test_degraded_install_returns_e_no_embedder_and_degraded_rag_status(tmp_path
 
 
 def _resources_paths(vault: Path) -> set[str]:
-    """Snapshot de rutas bajo `00-Resources/` (relativas al vault) — prueba de NO escritura."""
-    resources = vault / "00-Resources"
+    """Snapshot de rutas bajo `00-resources/` (relativas al vault) — prueba de NO escritura."""
+    resources = vault / "00-resources"
     if not resources.is_dir():
         return set()
     return {path.relative_to(vault).as_posix() for path in resources.rglob("*")}
@@ -419,8 +419,8 @@ def test_degraded_install_add_source_returns_e_no_embedder_and_writes_nothing(
 
     assert result.is_error
     assert payload == errors.no_embedder(), "payload byte a byte igual al constructor del dominio"
-    assert _resources_paths(tmp_path) == before, "sin embedder no se escribe NADA en 00-Resources/"
-    assert not (tmp_path / "00-Resources" / "_inbox").exists(), "ni siquiera se crea el destino"
+    assert _resources_paths(tmp_path) == before, "sin embedder no se escribe NADA en 00-resources/"
+    assert not (tmp_path / "00-resources" / "_inbox").exists(), "ni siquiera se crea el destino"
 
 
 # --- los E_* RECORRIENDO el proceso: escenario real por código y por stdio -----------------
@@ -567,13 +567,13 @@ def test_model_that_cannot_be_materialized_travels_the_wire_as_e_model_invalid(
     assert error["fix_hint"] == errors.FIX_MODEL_INVALID
 
 
-# --- path_filter: globs VÁLIDOS con prefijo 00-Resources/ ---------------------------------
+# --- path_filter: globs VÁLIDOS con prefijo 00-resources/ ---------------------------------
 
 
 def test_valid_path_filter_globs_prefilter_results_on_the_wire(
     contract_vault: tuple[Path, Path],
 ) -> None:
-    """Glob válido bajo `00-Resources/` prefiltra de verdad; sin match ⇒ vacío SIN error."""
+    """Glob válido bajo `00-resources/` prefiltra de verdad; sin match ⇒ vacío SIN error."""
     vault, models_link = contract_vault
     env = server_env(vault, models_link)
 
@@ -584,12 +584,12 @@ def test_valid_path_filter_globs_prefilter_results_on_the_wire(
             out["general"] = wire_payload(unfiltered)
             filtered = await session.call_tool(
                 "search",
-                {"query": FILTER_QUERY, "top_k": 8, "path_filter": "00-Resources/sub/*"},
+                {"query": FILTER_QUERY, "top_k": 8, "path_filter": "00-resources/sub/*"},
             )
             out["filtered"] = wire_payload(filtered)
             no_match = await session.call_tool(
                 "search",
-                {"query": FILTER_QUERY, "path_filter": "00-Resources/no-existe/*.md"},
+                {"query": FILTER_QUERY, "path_filter": "00-resources/no-existe/*.md"},
             )
             out["no_match"] = wire_payload(no_match)
         return out
@@ -598,13 +598,13 @@ def test_valid_path_filter_globs_prefilter_results_on_the_wire(
 
     general = payloads["general"]["results"]
     assert general, "sin filtro, el vault indexado responde"
-    assert any(not str(item["source_path"]).startswith("00-Resources/sub/") for item in general), (
+    assert any(not str(item["source_path"]).startswith("00-resources/sub/") for item in general), (
         "sin filtro debe haber resultados fuera de sub/ (si no, el prefiltra sería vacío)"
     )
 
     filtered = payloads["filtered"]["results"]
-    assert filtered, "00-Resources/sub/* debe devolver la nota anidada"
-    assert all(str(item["source_path"]).startswith("00-Resources/sub/") for item in filtered)
+    assert filtered, "00-resources/sub/* debe devolver la nota anidada"
+    assert all(str(item["source_path"]).startswith("00-resources/sub/") for item in filtered)
 
     assert payloads["no_match"]["results"] == [], "glob válido sin match: vacío, no error"
     assert "error" not in payloads["no_match"]

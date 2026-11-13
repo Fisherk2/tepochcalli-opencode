@@ -61,7 +61,7 @@ def test_every_bad_root_is_reported_and_capped_at_three(tmp_path: Path) -> None:
 
 def test_missing_contract_root_is_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """`TEPOCHCALLI_ROOT` apuntando a algo inexistente ⇒ problema nombrado."""
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     monkeypatch.setenv("TEPOCHCALLI_ROOT", "no-existe-xyz")
 
     problems = diagnostics.config_problems(_config(), tmp_path)
@@ -73,7 +73,7 @@ def test_contract_root_that_is_a_file_is_reported(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`TEPOCHCALLI_ROOT` que existe pero no es directorio ⇒ problema."""
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     file_root = tmp_path / "vault.md"
     file_root.write_text("no soy un directorio\n", encoding="utf-8")
     monkeypatch.setenv("TEPOCHCALLI_ROOT", str(file_root))
@@ -88,7 +88,7 @@ def test_invalid_top_k_is_reported(
     raw: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """`TEPOCHCALLI_TOP_K` no entero o ≤0 ⇒ mensaje con el default usado (5)."""
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     monkeypatch.setenv("TEPOCHCALLI_TOP_K", raw)
 
     problems = diagnostics.config_problems(_config(), tmp_path)
@@ -98,7 +98,7 @@ def test_invalid_top_k_is_reported(
 
 def test_valid_top_k_is_not_reported(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """Un `TEPOCHCALLI_TOP_K` válido no genera problema."""
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     monkeypatch.setenv("TEPOCHCALLI_TOP_K", "8")
 
     assert diagnostics.config_problems(_config(), tmp_path) == ()
@@ -113,7 +113,7 @@ def test_top_k_above_the_contract_range_is_reported(
     (default 21 ⇒ `VALIDATION_ERROR`) sin ninguna pista en
     `rag_status.config.problems`.
     """
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     monkeypatch.setenv("TEPOCHCALLI_TOP_K", "21")
 
     problems = diagnostics.config_problems(_config(), tmp_path)
@@ -124,7 +124,7 @@ def test_top_k_above_the_contract_range_is_reported(
 def test_unknown_env_catches_lookalikes_and_spares_known_names() -> None:
     """Caza typos del namespace; no toca PATH/HOME ni las variables del contrato."""
     environ = {
-        "INDEXER_DRI": "00-Resources",
+        "INDEXER_DRI": "00-resources",
         "TEPOCHALLI_ROOT": "/vault",
         "TEPOCHALLI_TOPX": "5",
         "PATH": "/usr/bin",
@@ -132,7 +132,7 @@ def test_unknown_env_catches_lookalikes_and_spares_known_names() -> None:
         "TEPOCHCALLI_EMBED_API_KEY": "k",
         "TEPOCHCALLI_VAULT_ROOT": "/vault",
         "TEPOCHCALLI_ROOT": "/vault",
-        "INDEXER_DIR": "00-Resources",
+        "INDEXER_DIR": "00-resources",
         "TEPOCHCALLI_TOP_K": "5",
     }
 

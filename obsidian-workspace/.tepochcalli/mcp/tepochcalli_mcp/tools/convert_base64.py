@@ -18,7 +18,7 @@ Contrato y precedencia, en orden:
    `base64:<sha256-8>` de los bytes decodificados. La entrada tal como llegó,
    nunca inventada.
 4. **Frontera B′** (D31) — `output_path` con `validate_vault_path(...,
-   must_exist=False)`; omitido ⇒ `00-Resources/<slug>.md`.
+   must_exist=False)`; omitido ⇒ `00-resources/<slug>.md`.
 5. **Conversión** — costura inyectada por el composition root (`tools/` no
    importa markitdown). Markdown vacío ⇒ `SOURCE_UNREACHABLE` con `GUIDE_OCR` y
    **sin** escribir parciales.
@@ -140,7 +140,7 @@ def _decode(data: str) -> bytes:
 
 
 def _destination(output_path: str | None, filename: str | None, digest: str, suffix: str) -> str:
-    """Destino pedido o `00-Resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
+    """Destino pedido o `00-resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
 
     Sin `filename`, el slug sale de la MISMA identidad que `source_uri`
     (`base64-<sha256-8>`): reintentar escribe en el mismo destino y la

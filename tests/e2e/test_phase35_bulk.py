@@ -16,7 +16,7 @@ Qué se mide aquí y con qué método
   respuesta (`SUMMARY_CHAR_CEILING`=1 400 chars, `PAYLOAD_TOKEN_CEILING`) y
   **por suma** de las 21 respuestas.
 * **Δ de texto (AC e):** n=20 ciclos como `bench_delta`, **raíces múltiples**
-  (`["00-Resources", "documentos"]`), rampa 1→50, cronómetro
+  (`["00-resources", "documentos"]`), rampa 1→50, cronómetro
   `RefreshReport.elapsed_ms`; p95 **nearest-rank** `sorted[ceil(0.95·n)−1]`
   (con n=20 = 19.º valor ordenado; helper REUTILIZADO de `bench_delta`).
   Metadatos de cita al **100 %** leídos de la tabla `chunks`: `source_path`
@@ -100,7 +100,7 @@ BULK_PAGES = 1_000
 BULK_MIN_BYTES = 1_000_000
 """AC (a): el fixture bulk pesa ≥1 MB realmente (se afirma al construirlo)."""
 
-TEXT_ROOT = "00-Resources"
+TEXT_ROOT = "00-resources"
 DOC_ROOT = "documentos"
 STAGING = "entrada"
 OUTPUT = "salida"

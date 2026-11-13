@@ -9,7 +9,7 @@
 
 ## 1. Context and Problem Statement
 
-Tepochcalli necesita un motor RAG que monitoree `00-Resources/` de un vault de Obsidian, extraiga texto de Markdown y PDFs, genere embeddings locales y los almacene en una base vectorial embebida, cumpliendo: indexación incremental del delta en <30s, búsquedas <500ms, y **cero consumo de tokens LLM durante la indexación** (criterio de presupuesto de tokens del usuario). El requerimiento explícito de UH.md es incorporar un motor ya construido por la comunidad, fácil de instalar y bien documentado — no implementar un RAG desde cero.
+Tepochcalli necesita un motor RAG que monitoree `00-resources/` de un vault de Obsidian, extraiga texto de Markdown y PDFs, genere embeddings locales y los almacene en una base vectorial embebida, cumpliendo: indexación incremental del delta en <30s, búsquedas <500ms, y **cero consumo de tokens LLM durante la indexación** (criterio de presupuesto de tokens del usuario). El requerimiento explícito de UH.md es incorporar un motor ya construido por la comunidad, fácil de instalar y bien documentado — no implementar un RAG desde cero.
 
 ## 2. Decision Drivers
 

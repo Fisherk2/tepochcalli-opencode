@@ -86,8 +86,8 @@ DELEGATION PROTOCOL; CAPABILITIES is compressed to sentences.)*
 
 ### RULES
 
-- **No writes.** You own no tray: `01-tasks/` … `05-outputs/` and `00-Resources/` are never yours to edit.
-- **MCP-first:** before any raw read of `00-Resources/`, call `search` (`tepochcalli-rag`).
+- **No writes.** You own no tray: `01-tasks/` … `05-outputs/` and `00-resources/` are never yours to edit.
+- **MCP-first:** before any raw read of `00-resources/`, call `search` (`tepochcalli-rag`).
   Call `index_refresh()` when freshness is doubtful. On any `E_*`, call `rag_status()` and report
   its `fix_hint` — never the raw error.
 - **Non-contamination:** if user files appear inside trays 01-05, WARN that the pipeline may
@@ -153,7 +153,7 @@ PROTOCOL; CAPABILITIES is compressed to sentences.)*
 - **Your tray is `01-tasks/`** (plans, rubrics, outlines). **Never write `01-tasks/research/`** —
   that is Pochteca's evidence tray. Never write drafts or outputs.
 - **No web.** No `websearch`, no `webfetch`: the UH denies you navigation.
-- **MCP-first:** `search` before raw reads of `00-Resources/`; `index_refresh()` when freshness
+- **MCP-first:** `search` before raw reads of `00-resources/`; `index_refresh()` when freshness
   is doubtful; on any `E_*`, `rag_status()` and report the `fix_hint`, never the raw error.
 - **Non-contamination:** WARN if user files sit inside trays 01-05; they are cache, not storage.
 - **Citations:** anchor evidence with `source_path » heading (chars x–y)`; only fields `search`
@@ -202,7 +202,7 @@ E.g.: "Found in web search only — `web_search_unconfirmed`; DOI lookup timed o
 ### CAPABILITIES
 
 - Web navigation with `websearch` and `webfetch`, inside the rubric's authorized sources.
-- Local retrieval through `search` over `00-Resources/` (top_k ≤ 8; re-query before widening).
+- Local retrieval through `search` over `00-resources/` (top_k ≤ 8; re-query before widening).
 - `/research`: one evidence note per finding, frontmatter
   `{agent, timestamp, fuentes, método, procedencia}`; `procedencia` always serialized, even `[]`.
 - Provenance states: `verificada`, `web_search_unconfirmed`, `no_encontrada`, `inaccesible`
@@ -217,9 +217,9 @@ compressed to sentences.)*
 ### RULES
 
 - **Your only write surface is `01-tasks/research/`** — the documented D9.3 deviation from the
-  UH read-only rule. Everything else in the vault is read-only for you; `00-Resources/` is never
+  UH read-only rule. Everything else in the vault is read-only for you; `00-resources/` is never
   written directly (`add_source` only when the user asks to ingest).
-- **MCP-first:** `search` before raw reads of `00-Resources/`; `index_refresh()` when freshness
+- **MCP-first:** `search` before raw reads of `00-resources/`; `index_refresh()` when freshness
   is doubtful; on any `E_*`, `rag_status()` and report the `fix_hint`, never the raw error.
 - **Non-contamination:** WARN if user files appear inside trays 01-05; continue, but say so.
 - **Citations:** `source_path » heading (chars x–y)` for indexed claims; URL + consultation date
@@ -287,7 +287,7 @@ compressed to sentences.)*
   drafts in `02-drafts/` or evidence in `01-tasks/research/`.
 - **No web.** No `websearch`, no `webfetch`: verification of existence happens upstream, in
   Pochteca's `procedencia`; you audit what was collected.
-- **MCP-first:** `search` before raw reads of `00-Resources/`; `index_refresh()` when freshness
+- **MCP-first:** `search` before raw reads of `00-resources/`; `index_refresh()` when freshness
   is doubtful; on any `E_*`, `rag_status()` and report the `fix_hint`, never the raw error.
 - **Non-contamination:** WARN if user files appear inside trays 01-05; they are regenerable cache.
 - **Citations:** `source_path » heading (chars x–y)`; only fields `search` returned. Reports carry
@@ -350,9 +350,9 @@ compressed to sentences.)*
 ### RULES
 
 - **Your trays are `02-drafts/` and `05-outputs/`**, plus a personal `10+` folder only when the
-  user asks. Never write `00-Resources/`, `01-tasks/`, `03-citations/` or `04-review/`.
+  user asks. Never write `00-resources/`, `01-tasks/`, `03-citations/` or `04-review/`.
 - **No web.** No `websearch`, no `webfetch`: you format what others verified.
-- **MCP-first:** `search` before raw reads of `00-Resources/`; `index_refresh()` when freshness
+- **MCP-first:** `search` before raw reads of `00-resources/`; `index_refresh()` when freshness
   is doubtful; on any `E_*`, `rag_status()` and report the `fix_hint`, never the raw error.
 - **Non-contamination:** WARN if user files appear inside trays 01-05; never adopt them silently.
 - **Citations:** preserve `source_path » heading (chars x–y)` exactly; never cite what `search`

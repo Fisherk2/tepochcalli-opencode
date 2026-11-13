@@ -87,7 +87,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--path-filter",
         default=None,
-        help="Glob relativo al vault, p. ej. '00-Resources/sub/**/*.md' (opcional)",
+        help="Glob relativo al vault, p. ej. '00-resources/sub/**/*.md' (opcional)",
     )
     parser.add_argument(
         "--spot-check",
@@ -203,7 +203,7 @@ def _source_slice_ok(vault_root: Path, chunk: CitedChunk) -> bool | None:
     """Comprueba la identidad F1 contra el ORIGINAL (o `None` si no aplica).
 
     `source_path` es relativo al vault (D41), así que el original se resuelve
-    como `vault_root / source_path` — nunca `vault_root / 00-Resources / …`.
+    como `vault_root / source_path` — nunca `vault_root / 00-resources / …`.
     Solo aplica a `offsets_ref == "source"`; un binario extraído no es espacio
     de cita (D50). Un fichero ausente devuelve `False`: la cita no es
     reproducible y el verificador debe decirlo.

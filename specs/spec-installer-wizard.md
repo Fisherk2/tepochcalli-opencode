@@ -8,7 +8,7 @@
 
 ## Summary
 
-`tepochcalli` es una TUI en Rust, distribuida vía cargo-dist + GitHub Releases (ADR-003), que materializa un vault de Obsidian listo-para-usar: instala el payload del workspace (espejo del modelo `template/` de Fisherk2/codice-opencode, aquí `obsidian-workspace/`), bootea `uv`, crea el venv del proyecto, presenta el paso **"Embedding provider"** (menú de cinco salidas de ADR-007/D7.1 con `paraphrase-multilingual-MiniLM-L12-v2` pre-seleccionado), ejecuta la indexación inicial de `00-Resources/` y valida/fusiona las entradas `mcp.servers` de `opencode.json`. Cada corrida es atómica con rollback en fallo; la salida 5 del menú ("Configurar después") degrada RAG honestamente sin abortar la instalación.
+`tepochcalli` es una TUI en Rust, distribuida vía cargo-dist + GitHub Releases (ADR-003), que materializa un vault de Obsidian listo-para-usar: instala el payload del workspace (espejo del modelo `template/` de Fisherk2/codice-opencode, aquí `obsidian-workspace/`), bootea `uv`, crea el venv del proyecto, presenta el paso **"Embedding provider"** (menú de cinco salidas de ADR-007/D7.1 con `paraphrase-multilingual-MiniLM-L12-v2` pre-seleccionado), ejecuta la indexación inicial de `00-resources/` y valida/fusiona las entradas `mcp.servers` de `opencode.json`. Cada corrida es atómica con rollback en fallo; la salida 5 del menú ("Configurar después") degrada RAG honestamente sin abortar la instalación.
 
 ## Problem / Motivation
 
@@ -49,7 +49,7 @@ flowchart TD
     F3 --> F4["4 Bootstrap uv en .tepochcalli/bin/ (uv instala CPython gestionado)"]
     F4 --> F5["5 uv venv + uv sync en .tepochcalli/venv/ (deps pineadas)"]
     F5 --> F6["6 Paso Embedding provider — menú D7.1 (preselección, presets, test-embed, API LiteLLM, Configurar después)"]
-    F6 -->|"salidas 1-4"| F7["7 Indexación inicial de 00-Resources/ (muestra incluida)"]
+    F6 -->|"salidas 1-4"| F7["7 Indexación inicial de 00-resources/ (muestra incluida)"]
     F6 -.->|"salida 5 o fallback por fallo de descarga/validación"| F8
     F7 --> F8["8 Merge/validar mcp.servers en opencode.json + verificación end-to-end"]
     F8 --> OK["Listo: abrir el vault y usar OpenCode"]
@@ -71,16 +71,16 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 | --- | --- | --- |
 | 1 | Detectar prereqs (Obsidian en rutas estándar por SO; `opencode` en PATH; memoria/disco) | sin cambios; guía de qué instalar |
 | 2 | Seleccionar destino del vault (ruta nueva o vault existente) | sin cambios |
-| 3 | Copiar payload (carpetas numeradas, `.opencode/` con agents/commands/skills, `AGENTS.md` del vault, `opencode.json` base, `00-Resources/` con muestras md+PDF) | borrar lo copiado en esta corrida (marca `.tepochcalli/.install-intent`) |
+| 3 | Copiar payload (carpetas numeradas, `.opencode/` con agents/commands/skills, `AGENTS.md` del vault, `opencode.json` base, `00-resources/` con muestras md+PDF) | borrar lo copiado en esta corrida (marca `.tepochcalli/.install-intent`) |
 | 4 | Descargar binario `uv` → `.tepochcalli/bin/`; uv asegura CPython gestionado (el usuario NO necesita Python) | eliminar `bin/` |
 | 5 | `uv venv .tepochcalli/venv` + `uv sync` desde `pyproject.toml` (`cocoindex[lancedb,sentence-transformers,litellm]`, `markitdown[docx,pptx,xlsx,xls,pdf]` — ADR-011) | `rm -rf venv/` |
 | 6 | Paso **"Embedding provider"** (menú D7.1/ADR-007) con filas de transparencia de hardware (D8.1) y badges de detección del host (D8.2): salida 1 `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado (~470MB a `models/`), salida 2 presets `BAAI/bge-m3` / `all-MiniLM-L6-v2` de `presets.toml` con peso estimado y detección de GPU (advertencia, no bloqueo), salida 3 ID libre de HuggingFace tras el gate **test-embed** (`HF_TOKEN` opcional para gated), salida 4 API LiteLLM con clave en `config/tepochcalli.toml` (gitignored), salida 5 "Configurar después" | un fallo de descarga/validación **no aborta**: `rm -rf models/` parcial + fallback a salida 5 (instalación completa en estado `degraded`) |
-| 7 | Correr flow: index inicial de `00-Resources/` (incluye parse Docling de PDF de muestra; **omitida en salida 5**) | `rm -rf db/ flow state` |
+| 7 | Correr flow: index inicial de `00-resources/` (incluye parse Docling de PDF de muestra; **omitida en salida 5**) | `rm -rf db/ flow state` |
 | 8 | Fusionar entradas MCP en `opencode.json` (ver abajo) y smoke-test `search` sobre la muestra | revertir `opencode.json` desde backup `.bak` |
 
 * La fase 1 no puede "deshacerse"; las fases 3-8 crean solo artefactos propios → la compensación es puramente de archivos bajo rutas del runtime/payload de esta corrida. Nunca se tocan `.obsidian/` ni archivos previos del usuario (la merge del payload omite existentes salvo plantillas gestionadas).
 * Si la fase 8 detecta una entrada `tepochcalli-rag` previa, la valida (comando apunta al venv actual) y solo la reescribe si difiere, conservando las demás servers del usuario **y las claves de `environment` que no gestiona**: solo impone `TEPOCHCALLI_ROOT`, así que `INDEXER_DIR` y `TEPOCHCALLI_TOP_K` (declaradas en el payload) sobreviven a reinstalar.
-* **Contenido inicial de `00-Resources/` (D22):** la fase 3 crea `00-Resources/` con el case exacto que indexa el flow y deja 2 placeholders — 1 `.md` y 1 `.pdf` válido y parseable por markitdown — para que la fase 7 siempre tenga qué indexar.
+* **Contenido inicial de `00-resources/` (D22):** la fase 3 crea `00-resources/` con el case exacto que indexa el flow y deja 2 placeholders — 1 `.md` y 1 `.pdf` válido y parseable por markitdown — para que la fase 7 siempre tenga qué indexar.
 * **Materialización del modelo (T6/D59, ADR-011):** F6 no descarga desde Rust (D25). Invoca el CLI del flow `python -m tepochcalli_flow embed-check --model <id> --revision <sha>`: ese comando descarga con la revisión pineada (de `presets.toml`, o el `sha` que devuelve la API de HF para un id libre) y materializa el directorio estable `<models>/<slug>@<sha>/` (`slug` = id con `/`→`__`). Tras el gate, el wizard **verifica** que el directorio existe y no está vacío **antes** de escribir `[embedding]` (`provider`, `model`, `revision`, `device`); si no, F6 falla y compensa a la salida 5. `rag_status.embedder.model` sigue reportando el **id**. Sin SHA conocido (API caída) la verificación acepta cualquier `<slug>@*` no vacío — `shortcut:` con falso positivo posible si coexiste un snapshot viejo del mismo modelo.
 * **Semántica de rollback del provider (D7.1):** si la descarga o el gate test-embed de la fase 6 fallan tras el reintento, el wizard **cae a la salida 5 en vez de abortar**: el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config.
 
@@ -197,7 +197,7 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 ## Testing Strategy
 
 * Matrix: VM limpia por plataforma (Ubuntu latest, macOS arm64, Windows) — acceptance: "clean VM → installed vault with one command incl. deps" (Phase 3 exit, docs/WORKFLOW.md).
-* Idempotencia: `install` dos veces → mismo estado, cero duplicados en `opencode.json` ni en `00-Resources/` (SPEC.md §Testing).
+* Idempotencia: `install` dos veces → mismo estado, cero duplicados en `opencode.json` ni en `00-resources/` (SPEC.md §Testing).
 * Fallo inducido: matar la red en fase 5/6 → assert del rollback correspondiente y `.bak` intacto.
 * `--offline` segunda corrida (con cachés) → éxito sin red (fixture en CI con cache uv/`models/` pre-cargados).
 * Salida 5 del menú embedder (y `--skip-model`): assert de instalación COMPLETA sin fase 7 + checklist degraded impreso + `search` → `E_NO_EMBEDDER` + `rag_status` → `degraded` con `fix_hint` (ADR-007 §8).

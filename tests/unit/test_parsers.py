@@ -49,8 +49,8 @@ def test_walk_sources_returns_two_indexable_files_with_canonical_source_paths() 
     items = source.walk_sources(FIXTURE_VAULT)
 
     assert {entry.source_path for entry in _entries(items)} == {
-        "00-Resources/nota.md",
-        "00-Resources/sub/carpeta/anidada.md",
+        "00-resources/nota.md",
+        "00-resources/sub/carpeta/anidada.md",
     }
     assert _skips(items) == []
 
@@ -85,7 +85,7 @@ def test_include_patterns_alone_would_index_dot_paths_proving_excludes_are_manda
         not entry.source_path.endswith(".oculto/ignorar.md") for entry in _entries(with_excludes)
     )
     assert any(
-        entry.source_path == "00-Resources/.oculto/ignorar.md"
+        entry.source_path == "00-resources/.oculto/ignorar.md"
         for entry in _entries(without_excludes)
     )
 
@@ -107,8 +107,8 @@ def test_default_matcher_rejects_dot_paths_at_file_and_dir_level() -> None:
 
 
 def test_walk_sources_raises_when_resource_root_is_missing() -> None:
-    """Un vault sin `00-Resources/` es una instalación rota: fallo ruidoso, no vacío silencioso."""
-    with pytest.raises(FileNotFoundError, match="00-Resources"):
+    """Un vault sin `00-resources/` es una instalación rota: fallo ruidoso, no vacío silencioso."""
+    with pytest.raises(FileNotFoundError, match="00-resources"):
         source.walk_sources(Path("/definitely/not/a/vault"))
 
 
@@ -131,9 +131,9 @@ def test_walk_sources_skips_oversized_files_without_aborting_the_pass_f5(
     items = source.walk_sources(tmp_path, max_file_bytes=32)
 
     assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
-        ("00-Resources/grande.md", source.SkipReason.OVERSIZED),
+        ("00-resources/grande.md", source.SkipReason.OVERSIZED),
     ]
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/chica.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/chica.md"]
     assert _skips(items)[0].detail  # el motivo lleva explicación, no solo el enum
 
 
@@ -152,9 +152,9 @@ def test_walk_sources_reports_broken_symlinks_with_reason_without_aborting_f5(
     items = source.walk_sources(tmp_path)
 
     assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
-        ("00-Resources/roto.md", source.SkipReason.BROKEN_SYMLINK),
+        ("00-resources/roto.md", source.SkipReason.BROKEN_SYMLINK),
     ]
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/sana.md"]
 
 
 def test_walk_sources_rejects_symlinks_whose_target_escapes_the_vault(
@@ -192,7 +192,7 @@ def test_walk_sources_rejects_symlinks_whose_target_escapes_the_vault(
         (fuera.as_posix(), source.SkipReason.SYMLINK_ESCAPE),
         ((directorio_fuera / "oculta.md").as_posix(), source.SkipReason.SYMLINK_ESCAPE),
     ]
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/sana.md"]
 
 
 def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
@@ -217,7 +217,7 @@ def test_classify_file_rejects_a_link_path_with_a_localizable_citation(
 
     assert isinstance(item, source.SkippedSource)
     assert item.reason == source.SkipReason.SYMLINK_ESCAPE
-    assert item.source_path == "00-Resources/secreto.md"  # la cita del LINK, localizable
+    assert item.source_path == "00-resources/secreto.md"  # la cita del LINK, localizable
     assert item.detail  # el motivo lleva explicación, no solo el enum
 
 
@@ -243,7 +243,7 @@ def test_walk_sources_still_indexes_symlinks_that_stay_inside_the_resource(
     items = source.walk_sources(tmp_path)
 
     assert _skips(items) == []
-    assert {entry.source_path for entry in _entries(items)} == {"00-Resources/real/original.md"}
+    assert {entry.source_path for entry in _entries(items)} == {"00-resources/real/original.md"}
 
 
 def test_walk_sources_skips_unreadable_files_without_aborting_f5(
@@ -267,9 +267,9 @@ def test_walk_sources_skips_unreadable_files_without_aborting_f5(
         os.chmod(prohibido, 0o644)
 
     assert [(skip.source_path, skip.reason) for skip in _skips(items)] == [
-        ("00-Resources/prohibido.md", source.SkipReason.UNREADABLE),
+        ("00-resources/prohibido.md", source.SkipReason.UNREADABLE),
     ]
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/legible.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/legible.md"]
 
 
 def test_default_max_file_bytes_is_the_spec_threshold_of_100_mb() -> None:
@@ -418,11 +418,11 @@ def test_every_chunk_carries_complete_non_null_citation_metadata() -> None:
     """`source_path`, `char_start`, `char_end`, `doc_kind` y `model` no nulos en todo chunk (AC)."""
     text = (FIXTURE_VAULT / citation.RESOURCES_DIR / "nota.md").read_text(encoding="utf-8")
 
-    chunks = parsers.chunk_document(text, "00-Resources/nota.md")
+    chunks = parsers.chunk_document(text, "00-resources/nota.md")
 
     assert chunks
     for chunk in chunks:
-        assert chunk.source_path == "00-Resources/nota.md"  # POSIX relativo al vault
+        assert chunk.source_path == "00-resources/nota.md"  # POSIX relativo al vault
         assert chunk.doc_kind == "md"
         assert isinstance(chunk.char_start, int)
         assert isinstance(chunk.char_end, int)
@@ -505,8 +505,8 @@ def test_end_to_end_walk_extract_chunk_preserves_nesting_and_slices() -> None:
 
     assert total_chunks >= 4  # la nota raíz da varios chunks y la anidada al menos uno
     assert {entry.source_path for entry in entries} == {
-        "00-Resources/nota.md",
-        "00-Resources/sub/carpeta/anidada.md",  # anidamiento libre preservado (D9.1)
+        "00-resources/nota.md",
+        "00-resources/sub/carpeta/anidada.md",  # anidamiento libre preservado (D9.1)
     }
 
 

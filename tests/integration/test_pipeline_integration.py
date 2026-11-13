@@ -10,7 +10,7 @@ Fuentes de verdad:
   `"cpu"`), F6 (`normalize_embeddings` vive en `embed()`), ADR-006 (384 dims y
   `model` por fila para detectar índices mixtos).
 * tasks/todo.md → T6 AC — **M2** (100% de las filas escritas con cita no nula,
-  `source_path` POSIX `00-Resources/`-prefijado con anidamiento intacto,
+  `source_path` POSIX `00-resources/`-prefijado con anidamiento intacto,
   identidad F1 `text[char_start:char_end] == text`) y **M3** (indexación con
   cero llamadas LLM: ni módulos LLM importados ni salidas de red).
 
@@ -68,11 +68,11 @@ BOM = "\ufeff"
 # byte de `anidada.md` (unicidad de ids entre archivos, T8) — los últimos dos creados
 # por este módulo, como `plano.txt`.
 EXPECTED_SOURCE_PATHS = {
-    "00-Resources/nota.md",
-    "00-Resources/sub/carpeta/anidada.md",
-    "00-Resources/plano.txt",
-    "00-Resources/con_bom.md",
-    "00-Resources/duplicada.md",
+    "00-resources/nota.md",
+    "00-resources/sub/carpeta/anidada.md",
+    "00-resources/plano.txt",
+    "00-resources/con_bom.md",
+    "00-resources/duplicada.md",
 }
 
 PLAIN_TXT_CONTENT = (
@@ -214,10 +214,10 @@ def test_duplicate_chunk_text_across_files_gets_unique_ids_t8(
     originales = [
         row
         for row in indexed_run.rows
-        if row["source_path"] == "00-Resources/sub/carpeta/anidada.md"
+        if row["source_path"] == "00-resources/sub/carpeta/anidada.md"
     ]
     duplicadas = [
-        row for row in indexed_run.rows if row["source_path"] == "00-Resources/duplicada.md"
+        row for row in indexed_run.rows if row["source_path"] == "00-resources/duplicada.md"
     ]
     assert originales and duplicadas, "la fixture duplicada debe indexarse junto a su original"
 
@@ -258,16 +258,16 @@ def test_every_row_carries_complete_non_null_citation_metadata_m2(
 def test_source_paths_are_posix_vault_relative_and_preserve_nesting_m2(
     indexed_run: IndexedRun,
 ) -> None:
-    """M2: `source_path` POSIX, relativo al vault con prefijo `00-Resources/` y anidado."""
+    """M2: `source_path` POSIX, relativo al vault con prefijo `00-resources/` y anidado."""
     for row in indexed_run.rows:
         source_path = row["source_path"]
         assert isinstance(source_path, str)
         assert "\\" not in source_path  # POSIX, nunca separador Windows
-        assert source_path.startswith("00-Resources/")
+        assert source_path.startswith("00-resources/")
         pure = PurePosixPath(source_path)
         assert not pure.is_absolute()
         assert ".." not in pure.parts
-    assert "00-Resources/sub/carpeta/anidada.md" in {
+    assert "00-resources/sub/carpeta/anidada.md" in {
         row["source_path"] for row in indexed_run.rows
     }  # anidamiento de tres niveles intacto (D9.1)
 
@@ -311,7 +311,7 @@ def test_bom_file_offsets_reproduce_extract_text_exactly_m2(
     documento = flow_parsers.extract_text(ruta)
     assert documento.startswith(BOM)  # contrato: el BOM viaja dentro del string
 
-    filas = [row for row in indexed_run.rows if row["source_path"] == "00-Resources/con_bom.md"]
+    filas = [row for row in indexed_run.rows if row["source_path"] == "00-resources/con_bom.md"]
     assert len(filas) >= 2  # >1536 bytes: varios chunks, al menos uno con char_start > 0
     for row in filas:
         char_start = row["char_start"]
@@ -332,7 +332,7 @@ def test_heading_is_stored_as_null_for_files_without_hierarchy_d13(
     indexed_run: IndexedRun,
 ) -> None:
     """D13: `plano.txt` (sin headings) escribe `heading=null`; `nota.md` escribe texto."""
-    plain_rows = [row for row in indexed_run.rows if row["source_path"] == "00-Resources/plano.txt"]
+    plain_rows = [row for row in indexed_run.rows if row["source_path"] == "00-resources/plano.txt"]
     assert plain_rows
     assert all(row["heading"] is None for row in plain_rows)
     assert any(isinstance(row["heading"], str) and row["heading"] for row in indexed_run.rows), (

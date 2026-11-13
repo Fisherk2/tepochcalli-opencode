@@ -3,7 +3,7 @@
 El camino de ENTRADA de material nuevo (tasks/plan.md §6 T5, criterio 7 de
 UH.md): el usuario da un `uri` http(s)/`file:`, el server lo convierte a
 Markdown con markitdown **en proceso** (D-b: misma librería, sin subproceso
-ni cliente MCP), lo deja citado en `00-Resources/<subdir|_inbox>/` con
+ni cliente MCP), lo deja citado en `00-resources/<subdir|_inbox>/` con
 frontmatter de trazabilidad (spec-markitdown §Contrato) y reindexa con el
 MISMO ciclo Δ de T3 — una sola tool call, patrón Facade (plan §8).
 
@@ -23,10 +23,10 @@ Contrato y precedencia, en orden:
 1. **Borde de validación** — esquema (`http(s):`/`file:`; D16: `file:` fuera
    del vault ⇒ `VALIDATION_ERROR`, decidido ANTES de que el conversor vea
    la ruta) y `subdir` (`paths.validate_subdir`, anti-traversal);
-2. **raíz declarada** — `add_source` escribe SIEMPRE en `00-Resources/`
+2. **raíz declarada** — `add_source` escribe SIEMPRE en `00-resources/`
    (D9.1): si esa raíz no está en `INDEXER_DIR` ⇒ `VALIDATION_ERROR` con
    `details.{requested,allowed,hint}` ANTES de convertir o escribir. La
-   comparación normaliza ambos lados (`./00-Resources/` ≡ `00-Resources`);
+   comparación normaliza ambos lados (`./00-resources/` ≡ `00-resources`);
    `details.allowed` muestra lo declarado tal cual. El MCP no añade raíces al
    índice (el conjunto lo posee el usuario);
 3. **corte `E_NO_EMBEDDER`** — sin embedder no hay indexación, y escribir sin
@@ -79,7 +79,7 @@ def _normalized_root(entry: str) -> str:
 
     `..` NO se normaliza aquí: el borde (`paths.validate_roots`) lo rechaza
     antes de indexar; este helper solo iguala formas equivalentes de la misma
-    raíz (`./00-Resources/` ≡ `00-Resources`).
+    raíz (`./00-resources/` ≡ `00-resources`).
     """
     return PurePosixPath(entry.strip().replace("\\", "/")).as_posix()
 
@@ -102,8 +102,8 @@ async def add_source(
     impone la costura); `refresh` es el MISMO seam de T3 — el handler no
     importa `tepochcalli_flow.app` (test de arquitectura). `allowed_roots` son
     las raíces declaradas por el usuario (`INDEXER_DIR`), comparadas
-    NORMALIZADAS (`./00-Resources/` ≡ `00-Resources`): `add_source` escribe
-    SIEMPRE en `00-Resources/`, así que si esa raíz no está declarada se
+    NORMALIZADAS (`./00-resources/` ≡ `00-resources`): `add_source` escribe
+    SIEMPRE en `00-resources/`, así que si esa raíz no está declarada se
     rechaza ANTES de escribir nada — el MCP no añade raíces al índice.
     """
     root = vault_root().resolve()
@@ -150,7 +150,7 @@ async def add_source(
         # cola (`normalize_roots` ⇒ FileNotFoundError ⇒ INTERNAL) con el fichero
         # ya escrito — huérfano. El borde la juzga igual que `index_refresh`
         # (VALIDATION_ERROR con `details.vault_dirs` + `suggestions`) antes de
-        # la escritura: `00-Resources/_inbox` ya existe (el mkdir la creó), así
+        # la escritura: `00-resources/_inbox` ya existe (el mkdir la creó), así
         # que una raíz mala es la ÚNICA cosa que puede disparar aquí.
         paths.validate_roots(allowed, root)
     except paths.VaultPathError as exc:

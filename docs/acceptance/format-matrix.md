@@ -24,7 +24,7 @@ y lo mide en un solo servidor `tepochcalli-rag` por stdio:
 
 | Paso | Qué hace | Qué prueba |
 | --- | --- | --- |
-| Índice | `00-Resources/` con `nota.md`, `prosa.txt`, `articulo.pdf`, `informe.docx`, `diapositivas.pptx`, `hoja.xlsx`, `legado.xls` + `escaneado.pdf` (1 pasada de indexación en subproceso) | las 7 celdas de índice: `doc_kind` de la fila y `source_path`/`offsets_ref`/`heading` del wire |
+| Índice | `00-resources/` con `nota.md`, `prosa.txt`, `articulo.pdf`, `informe.docx`, `diapositivas.pptx`, `hoja.xlsx`, `legado.xls` + `escaneado.pdf` (1 pasada de indexación en subproceso) | las 7 celdas de índice: `doc_kind` de la fila y `source_path`/`offsets_ref`/`heading` del wire |
 | Conversión | `convert_document` sobre el `.docx` indexado y sobre `staging/pagina.html` | el resumen de 5 claves (ADR-009): el cuerpo no viaja |
 | D49 | `search` tras convertir, **antes** de refrescar | el `.md` recién escrito no es cita: la cita del `.docx` sigue siendo el original |
 | Refresh | `index_refresh()` por el wire (10 escaneados → 2 indexados, 8 memoizados) | el artefacto `.md` de `html` pasa a ser citable |
@@ -42,14 +42,14 @@ en vez de declararse best-effort (lo que hacía `test_mcp_list_formats`).
 
 | formato | entrada | resultado | doc_kind | offsets_ref | indexable | source_path | nota |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| md | índice | PASS | md | source | sí | 00-Resources/nota.md | — |
-| txt | índice | PASS | txt | source | sí | 00-Resources/prosa.txt | — |
-| pdf | índice | PASS | pdf | extract | sí | 00-Resources/articulo.pdf | heading nulo (D54) |
-| docx | índice | PASS | docx | extract | sí | 00-Resources/informe.docx | heading nulo pese al `#` del original (D54) |
-| pptx | índice | PASS | pptx | extract | sí | 00-Resources/diapositivas.pptx | heading nulo (D54) |
-| xlsx | índice | PASS | xlsx | extract | sí | 00-Resources/hoja.xlsx | heading nulo (D54) |
-| xls | índice | PASS | xls | extract | sí | 00-Resources/legado.xls | BIFF2 mínimo generado con `struct` (sin `xlwt`) |
-| html | conversor | PASS | md | source | sí, tras index_refresh | 00-Resources/pagina.md | el `.html` original no está en la whitelist: nunca es citable |
+| md | índice | PASS | md | source | sí | 00-resources/nota.md | — |
+| txt | índice | PASS | txt | source | sí | 00-resources/prosa.txt | — |
+| pdf | índice | PASS | pdf | extract | sí | 00-resources/articulo.pdf | heading nulo (D54) |
+| docx | índice | PASS | docx | extract | sí | 00-resources/informe.docx | heading nulo pese al `#` del original (D54) |
+| pptx | índice | PASS | pptx | extract | sí | 00-resources/diapositivas.pptx | heading nulo (D54) |
+| xlsx | índice | PASS | xlsx | extract | sí | 00-resources/hoja.xlsx | heading nulo (D54) |
+| xls | índice | PASS | xls | extract | sí | 00-resources/legado.xls | BIFF2 mínimo generado con `struct` (sin `xlwt`) |
+| html | conversor | PASS | md | source | sí, tras index_refresh | 00-resources/pagina.md | el `.html` original no está en la whitelist: nunca es citable |
 | url | conversor | GAP | — | — | no verificado | — | sin egress (`nonet`) y el guard SSRF rechaza loopback; exige host con red o allowlist (ADR) |
 
 **Lectura de las columnas.** `entrada` = borde por el que el formato llega: la whitelist del índice
@@ -64,8 +64,8 @@ pero **no lo indexa** (D49, `spec-markitdown` §Non-Goals). Lo citable es lo que
 
 | Caso | `written_to` | `source_path` citable | Cuándo |
 | --- | --- | --- | --- |
-| `docx` (formato del índice) | `00-Resources/informe.md` | **`00-Resources/informe.docx`** (`offsets_ref="extract"`) | siempre: se indexan los originales |
-| `html` (fuera de la whitelist) | `00-Resources/pagina.md` | **`00-Resources/pagina.md`** (`offsets_ref="source"`) | **solo tras `index_refresh`** |
+| `docx` (formato del índice) | `00-resources/informe.md` | **`00-resources/informe.docx`** (`offsets_ref="extract"`) | siempre: se indexan los originales |
+| `html` (fuera de la whitelist) | `00-resources/pagina.md` | **`00-resources/pagina.md`** (`offsets_ref="source"`) | **solo tras `index_refresh`** |
 | `url` (GAP) | — | — (no ejecutado) | exige red: ver §5 |
 
 Ejecutado y afirmado en el test: antes del refresh el artefacto **no aparece** en el top-5 de su

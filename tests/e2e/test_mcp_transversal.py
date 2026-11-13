@@ -12,7 +12,7 @@ Diseño:
   porque el preview lo mostrara legítimamente).
 * Se convierte con `convert_document` y con `convert_base64` a `salida/`, una
   carpeta que NO es raíz del índice (`index_refresh` solo indexa
-  `00-Resources/`). Así la marca vive en disco y jamás es material indexable:
+  `00-resources/`). Así la marca vive en disco y jamás es material indexable:
   `search` no puede devolverla por diseño.
 * Después se invocan las 7 tools (las dos conversiones, `index_refresh`,
   `search`, `add_source`, `rag_status`, `list_formats`) y se afirma que la marca
@@ -45,10 +45,10 @@ def _big_body() -> str:
 def test_no_tool_returns_the_converted_body_across_the_seven_tools(tmp_path: Path) -> None:
     """Recorre las 7 tools: la marca está en disco y en NINGUNA respuesta del wire."""
     vault = tmp_path / "vault"
-    (vault / "00-Resources").mkdir(parents=True)
+    (vault / "00-resources").mkdir(parents=True)
     (vault / "staging").mkdir()
     (vault / "salida").mkdir()
-    (vault / "00-Resources" / "nota.md").write_text(NOTA, encoding="utf-8")
+    (vault / "00-resources" / "nota.md").write_text(NOTA, encoding="utf-8")
     (vault / "staging" / "pequeno.md").write_text(PEQUENO, encoding="utf-8")
     body = _big_body()
     assert len(body) >= 100_000

@@ -50,7 +50,7 @@ El RAG se configura en dos sitios que no se solapan: el **entorno del harness**
 | Variable | Default | Efecto |
 | --- | --- | --- |
 | `TEPOCHCALLI_ROOT` | `.` (si falta, el `cwd` del proceso) | Raíz del vault. Toda ruta del contrato se valida contra ella. |
-| `INDEXER_DIR` | `00-Resources` | **Conjunto completo** de raíces del índice: es lo único que decide qué se indexa. `index_refresh()` no acepta argumentos y el MCP nunca modifica la variable. Multi-valor separado por **comas**; cambiarla exige reiniciar el MCP. |
+| `INDEXER_DIR` | `00-resources` | **Conjunto completo** de raíces del índice: es lo único que decide qué se indexa. `index_refresh()` no acepta argumentos y el MCP nunca modifica la variable. Multi-valor separado por **comas**; cambiarla exige reiniciar el MCP. |
 | `TEPOCHCALLI_TOP_K` | `5` | Default de `top_k` en `search`; el agente puede sobreescribirlo por llamada. |
 
 Snippet exacto del payload:
@@ -62,13 +62,13 @@ Snippet exacto del payload:
   "cwd": ".",
   "environment": {
     "TEPOCHCALLI_ROOT": ".",
-    "INDEXER_DIR": "00-Resources",
+    "INDEXER_DIR": "00-resources",
     "TEPOCHCALLI_TOP_K": "5"
   }
 }
 ```
 
-`INDEXER_DIR` admite varias raíces: `"INDEXER_DIR": "00-Resources,03-Citations"` (split por coma,
+`INDEXER_DIR` admite varias raíces: `"INDEXER_DIR": "00-resources,03-Citations"` (split por coma,
 `strip`, los vacíos se descartan — no es `os.pathsep`: `:` colisiona con `C:\`). Las rutas son
 **relativas al vault**; una absoluta solo se acepta si cae **dentro** del vault. Una raíz puede ser
 un **fichero suelto**, y las solapadas se deduplican. Fuera del vault, con `..` o inexistente ⇒
@@ -76,14 +76,14 @@ un **fichero suelto**, y las solapadas se deduplican. Fuera del vault, con `..` 
 el MCP** (el proceso recibe su `environment` al arrancar).
 
 * **`INDEXER_DIR` es el conjunto completo del índice, no una suma al default.** Si declaras
-  `"03-Citations"`, `00-Resources/` deja de indexarse salvo que la incluyas:
-  `"00-Resources,03-Citations"`. El agente **no puede** añadir ni quitar raíces por llamada —
+  `"03-Citations"`, `00-resources/` deja de indexarse salvo que la incluyas:
+  `"00-resources,03-Citations"`. El agente **no puede** añadir ni quitar raíces por llamada —
   `index_refresh()` no tiene argumentos y el MCP nunca toca la variable.
-* **`add_source` exige `00-Resources` declarada.** Escribe ahí, así que si no está en
+* **`add_source` exige `00-resources` declarada.** Escribe ahí, así que si no está en
   `INDEXER_DIR` rechaza con `VALIDATION_ERROR` **antes de escribir** (`details: {requested,
   allowed, hint}`): añádela a la variable, o usa `convert_document` con un `output_path` dentro de
   una raíz indexada.
-* **`INDEXER_DIR` vacío** (`""` o solo comas) ⇒ se usa `00-Resources`.
+* **`INDEXER_DIR` vacío** (`""` o solo comas) ⇒ se usa `00-resources`.
 * **`TEPOCHCALLI_TOP_K` se lee al arrancar el proceso MCP**: cambiarla exige **reiniciar el
   server** (el `default` del schema de `search` refleja el valor de arranque). Rango útil 1–8 —el
   tope efectivo recorta a 8—; un valor no entero o ≤0 cae a 5.

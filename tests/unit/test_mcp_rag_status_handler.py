@@ -73,7 +73,7 @@ def _call(
     config_valid: bool = True,
     meta_error: Exception | None = None,
     last_refresh_roots: tuple[str, ...] = (),
-    available_roots: tuple[str, ...] = ("00-Resources",),
+    available_roots: tuple[str, ...] = ("00-resources",),
     problems: tuple[str, ...] = (),
     unknown_env: tuple[str, ...] = (),
 ) -> dict[str, object]:
@@ -142,12 +142,12 @@ def test_index_reports_the_session_roots_and_the_available_roots() -> None:
     """AC (e)/(j): `last_refresh_roots` de la sesión y `available_roots` del vault (D67)."""
     payload = _call(
         last_refresh_roots=("materiales", "documentos"),
-        available_roots=("00-Resources", "documentos", "materiales"),
+        available_roots=("00-resources", "documentos", "materiales"),
     )
 
     index = payload["index"]
     assert index["last_refresh_roots"] == ["materiales", "documentos"]  # type: ignore[index]
-    assert index["available_roots"] == ["00-Resources", "documentos", "materiales"]  # type: ignore[index]
+    assert index["available_roots"] == ["00-resources", "documentos", "materiales"]  # type: ignore[index]
 
 
 def test_index_roots_are_empty_before_any_refresh() -> None:
@@ -299,8 +299,8 @@ def test_payload_stays_under_200_tokens_in_every_state() -> None:
         ),
         # T8: tres raíces en ambos arrays siguen bajo el techo (sin recorte).
         _call(
-            last_refresh_roots=("00-Resources", "documentos", "materiales"),
-            available_roots=("00-Resources", "documentos", "materiales"),
+            last_refresh_roots=("00-resources", "documentos", "materiales"),
+            available_roots=("00-resources", "documentos", "materiales"),
         ),
         # Diagnóstico: 3 problemas (el tope) + 3 variables desconocidas siguen bajo el techo.
         _call(

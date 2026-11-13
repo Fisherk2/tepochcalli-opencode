@@ -411,7 +411,7 @@ def _roots_for(directories: Sequence[str] | None) -> tuple[str, ...]:
     """Raíces de la pasada: `None` ⇒ `Config.indexer_roots` (ADR-010 §4.1, D32).
 
     El default sale de `INDEXER_DIR` (`opencode.json` → entorno del proceso),
-    por omisión `("00-Resources",)`. Se relee en cada pasada: cambiar la
+    por omisión `("00-resources",)`. Se relee en cada pasada: cambiar la
     variable no exige reiniciar el proceso.
     """
     if directories is None:
@@ -427,7 +427,7 @@ def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
     TAL CUAL (spec-mcp-server §Tool `index_refresh`).
 
     * **Raíces (ADR-010 §4.1):** `directories=None` indexa `Config.indexer_roots`
-      (`INDEXER_DIR`, por omisión `00-Resources/`); una
+      (`INDEXER_DIR`, por omisión `00-resources/`); una
       secuencia indexa esas raíces **recursivamente** y el reporte las declara
       en `roots`. Viven solo en la llamada (D32): no se escriben en
       `tepochcalli.toml` ni sobreviven al proceso. La validación de borde

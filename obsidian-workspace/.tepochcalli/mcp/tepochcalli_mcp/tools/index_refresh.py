@@ -30,7 +30,7 @@ raíz mala ⇒ no se indexa ninguna. `VALIDATION_ERROR` precede a `E_NO_EMBEDDER
 la configuración se juzga antes de mirar el provider.
 
 **La validación corre SIEMPRE**, también cuando el conjunto es el fallback
-`00-Resources`: el handler no repite el literal, lo recibe de la costura
+`00-resources`: el handler no repite el literal, lo recibe de la costura
 `default_roots` y lo pasa por el mismo borde.
 
 La guarda compartida `@errors.internal_guard` (G1) envuelve el handler

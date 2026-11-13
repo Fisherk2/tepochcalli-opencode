@@ -1,7 +1,7 @@
 """Verificador CLI: resolución del `source_path` vault-relativo y identidad F1 (T2).
 
 El verificador solo LEE: `_source_slice_ok` resuelve `vault_root / source_path`
-(nunca asume `00-Resources/`) y distingue «no aplica» (extracto de un binario)
+(nunca asume `00-resources/`) y distingue «no aplica» (extracto de un binario)
 de «no reproducible» (original ausente o slice roto).
 """
 
@@ -15,7 +15,7 @@ from tepochcalli_flow.parsers import extract_text
 from tepochcalli_flow.ports import CitedChunk
 
 GOLDEN_VAULT = Path(__file__).parents[1] / "fixtures" / "golden_vault"
-GOLDEN_PDF = "00-Resources/articulo_dorado.pdf"
+GOLDEN_PDF = "00-resources/articulo_dorado.pdf"
 
 
 def _chunk(source_path: str, text: str, document: str) -> CitedChunk:
@@ -67,5 +67,5 @@ def test_live_identity_distinguishes_source_from_extract() -> None:
     assert verify._live_identity(GOLDEN_VAULT, replace(chunk, offsets_ref="source")) == "BROKEN"
     # Archivo ausente ⇒ severidad propia, nunca excepción.
     assert verify._live_identity(
-        GOLDEN_VAULT, replace(chunk, source_path="00-Resources/x.pdf")
+        GOLDEN_VAULT, replace(chunk, source_path="00-resources/x.pdf")
     ) == ("MISSING")

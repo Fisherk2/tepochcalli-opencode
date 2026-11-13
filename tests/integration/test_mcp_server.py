@@ -171,7 +171,7 @@ def test_top_k_out_of_range_env_does_not_break_the_search_default(tmp_path: Path
     `VALIDATION_ERROR`. Vault vacío sin modelo: el camino termina en
     `INDEX_EMPTY` (o éxito), jamás en validación.
     """
-    (tmp_path / "00-Resources").mkdir()
+    (tmp_path / "00-resources").mkdir()
     env = {**os.environ, "TEPOCHCALLI_TOP_K": "21", "TEPOCHCALLI_VAULT_ROOT": str(tmp_path)}
 
     async def go() -> tuple[object, str | None]:
@@ -262,7 +262,7 @@ def test_each_tool_returns_placeholder_with_exact_contract_shape(
     `search` (T2) e `index_refresh` (T3) se invocan contra un vault temporal
     REAL pero vacío: `search` responde `INDEX_EMPTY` canónico (`is_error=true`,
     JSON en `content[0].text`) y `index_refresh` ejecuta el ciclo Δ de Phase 1
-    —con `00-Resources/` presente y el modelo en cache (symlink + offline,
+    —con `00-resources/` presente y el modelo en cache (symlink + offline,
     patrón de fixtures)— y devuelve el reporte honesto `(0,0,0)`. El refresh
     materializa el embedder por CONSTRUCCIÓN (dims del esquema, aun sin
     ficheros), por eso el test fija el cache antes de arrancar el server.

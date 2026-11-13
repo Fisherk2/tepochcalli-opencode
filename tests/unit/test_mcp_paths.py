@@ -5,7 +5,7 @@ Fuentes de verdad:
 * SPEC.md §Boundaries — «validar entradas en el borde MCP (`add_source` rutas)».
 * tasks/plan.md §5 — `path_filter` absoluto o con `..` → `VALIDATION_ERROR`;
   `subdir` normalizado, sin `..`, sin absolutos, destino siempre dentro de
-  `00-Resources/`, por omisión `_inbox` (T5).
+  `00-resources/`, por omisión `_inbox` (T5).
 * specs/spec-mcp-server.md §Security — path traversal → `VALIDATION_ERROR`.
 
 Decisión documentada: ESTE módulo valida la forma del glob (relativo, sin `..`)
@@ -35,12 +35,12 @@ def test_none_is_a_valid_path_filter() -> None:
 @pytest.mark.parametrize(
     "glob",
     [
-        "00-Resources/*.md",
-        "00-Resources/sub/*",
-        "00-Resources/lit-pediatría/**/*.pdf",
-        "00-Resources/con_guion_bajo.md",
-        "00-Resources/?.md",
-        "00-Resources/ñ-日.md",
+        "00-resources/*.md",
+        "00-resources/sub/*",
+        "00-resources/lit-pediatría/**/*.pdf",
+        "00-resources/con_guion_bajo.md",
+        "00-resources/?.md",
+        "00-resources/ñ-日.md",
     ],
 )
 def test_relative_globs_under_resources_are_accepted(glob: str) -> None:
@@ -52,8 +52,8 @@ def test_relative_globs_under_resources_are_accepted(glob: str) -> None:
     "glob",
     [
         "/absoluto/*.md",
-        "00-Resources/../secreto/*.md",
-        "00-Resources\\..\\secreto\\*.md",  # backslash normalizado: mismo rechazo
+        "00-resources/../secreto/*.md",
+        "00-resources\\..\\secreto\\*.md",  # backslash normalizado: mismo rechazo
         "../fuera-del-vault.md",
         "sub/../../etc/passwd",
     ],
@@ -106,21 +106,21 @@ def test_subdir_is_normalized_to_a_relative_posix_path(given: str, normalized: s
     ],
 )
 def test_subdir_that_escapes_resources_is_rejected(subdir: str) -> None:
-    """Absoluto o `..` → `ValueError`: jamás se escribe fuera de `00-Resources/` (D9.1)."""
+    """Absoluto o `..` → `ValueError`: jamás se escribe fuera de `00-resources/` (D9.1)."""
     with pytest.raises(ValueError):
         paths.validate_subdir(subdir)
 
 
 def test_subdir_root_is_canonicalized_to_the_default() -> None:
-    """`00-Resources` o `.` caen al default: no son un subdirectorio del recurso."""
+    """`00-resources` o `.` caen al default: no son un subdirectorio del recurso."""
     assert paths.validate_subdir(".") == paths.DEFAULT_SUBDIR
-    assert paths.validate_subdir("00-Resources/") == paths.DEFAULT_SUBDIR
+    assert paths.validate_subdir("00-resources/") == paths.DEFAULT_SUBDIR
 
 
 def test_validated_subdir_joins_resources_dir() -> None:
-    """La helper de destino compone `00-Resources/<subdir>` sin duplicar prefijo."""
-    assert str(paths.resources_destination("lit")) == "00-Resources/lit"
-    assert str(paths.resources_destination(None)) == "00-Resources/_inbox"
+    """La helper de destino compone `00-resources/<subdir>` sin duplicar prefijo."""
+    assert str(paths.resources_destination("lit")) == "00-resources/lit"
+    assert str(paths.resources_destination(None)) == "00-resources/_inbox"
 
 
 # --- slug y colisión del nombre de archivo (T5) -----------------------------------
@@ -250,7 +250,7 @@ def test_resolve_file_uri_rejects_remote_hosts_and_relative_paths(
 
 def test_ensure_within_keeps_the_target_inside_base(tmp_path: Path) -> None:
     """Defensa en profundidad: destino dentro de base ⇒ pasa; fuera ⇒ ValueError."""
-    base = tmp_path / "00-Resources"
+    base = tmp_path / "00-resources"
     base.mkdir()
     assert (
         paths.ensure_within(base, base / "_inbox" / "x.md") == (base / "_inbox" / "x.md").resolve()
@@ -427,8 +427,8 @@ def test_redact_uri_without_query_still_redacts_the_fragment() -> None:
 
 def test_path_filter_length_cap_at_the_exact_boundary() -> None:
     """W-08: `path_filter` de exactamente 1024 chars pasa; 1025 ⇒ `ValueError`."""
-    ok = "00-Resources/" + "a" * (1024 - len("00-Resources/"))
+    ok = "00-resources/" + "a" * (1024 - len("00-resources/"))
     assert len(ok) == 1024
     assert paths.validate_path_filter(ok) == ok
     with pytest.raises(ValueError, match="1024"):
-        paths.validate_path_filter("00-Resources/" + "a" * 1025)
+        paths.validate_path_filter("00-resources/" + "a" * 1025)

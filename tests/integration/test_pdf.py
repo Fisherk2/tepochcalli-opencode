@@ -81,12 +81,12 @@ def test_chunk_document_yields_pdf_chunks_with_null_heading_and_f1_identity() ->
     """`doc_kind="pdf"`, `heading is None` (D54) e identidad F1 sobre el extracto."""
     markdown = parsers.extract_text(FIXTURE_PDF)
 
-    chunks = parsers.chunk_document(markdown, "00-Resources/articulo.pdf")
+    chunks = parsers.chunk_document(markdown, "00-resources/articulo.pdf")
 
     assert len(chunks) >= 2  # el fixture supera el presupuesto de 1536 bytes
     for chunk in chunks:
         assert chunk.doc_kind == "pdf"
-        assert chunk.source_path == "00-Resources/articulo.pdf"
+        assert chunk.source_path == "00-resources/articulo.pdf"
         assert chunk.heading is None, "D54: el PDF pierde la jerarquía de headings"
         assert citation.verify_slice_identity(
             markdown, chunk.char_start, chunk.char_end, chunk.text
@@ -108,8 +108,8 @@ def test_walk_sources_indexes_a_real_pdf(tmp_path: Path) -> None:
 
     assert _skips(items) == []
     assert [(entry.source_path, entry.doc_kind) for entry in _entries(items)] == [
-        ("00-Resources/articulo.pdf", "pdf"),
-        ("00-Resources/notas.md", "md"),
+        ("00-resources/articulo.pdf", "pdf"),
+        ("00-resources/notas.md", "md"),
     ]
 
 
@@ -122,7 +122,7 @@ def test_walk_extract_chunk_end_to_end_over_a_real_pdf(tmp_path: Path) -> None:
 
     entries = _entries(source.walk_sources(tmp_path))
     assert [entry.source_path for entry in entries] == [
-        "00-Resources/sub/papers/articulo.pdf"
+        "00-resources/sub/papers/articulo.pdf"
     ]  # anidamiento libre preservado (D9.1)
 
     markdown = parsers.extract_text(entries[0].path)
@@ -150,10 +150,10 @@ def test_oversized_pdf_is_skipped_with_reason_and_the_pass_completes(
 
     skips = _skips(items)
     assert [(skip.source_path, skip.reason) for skip in skips] == [
-        ("00-Resources/grande.pdf", source.SkipReason.OVERSIZED),
+        ("00-resources/grande.pdf", source.SkipReason.OVERSIZED),
     ]
     assert skips[0].detail  # el motivo lleva explicación, no solo el enum
-    assert [entry.source_path for entry in _entries(items)] == ["00-Resources/sana.md"]
+    assert [entry.source_path for entry in _entries(items)] == ["00-resources/sana.md"]
 
 
 def test_corrupt_document_is_reported_as_extraction_failed_and_never_raw_binary(

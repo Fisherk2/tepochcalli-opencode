@@ -46,7 +46,7 @@ def _run(
     vault: Path,
     convert: Callable[[str], str] | None = None,
     report: dict[str, object] | None = None,
-    allowed_roots: Callable[[], tuple[str, ...]] = lambda: ("00-Resources",),
+    allowed_roots: Callable[[], tuple[str, ...]] = lambda: ("00-resources",),
 ) -> tuple[dict[str, object], list[str]]:
     """Ejecuta el handler con seams falsos; devuelve `(payload, llamadas a seams)`."""
     calls: list[str] = []
@@ -74,44 +74,44 @@ def _run(
 
 
 def test_success_returns_the_exact_contract_shape_and_writes_the_file(tmp_path: Path) -> None:
-    """Camino feliz: shape exacto de §5 y el archivo queda en `00-Resources/_inbox/`."""
+    """Camino feliz: shape exacto de §5 y el archivo queda en `00-resources/_inbox/`."""
     payload, calls = _run(_notas_uri(tmp_path), vault=tmp_path)
 
     assert list(payload) == ["ok", "written_to", "indexed"]
     assert payload["ok"] is True
-    assert payload["written_to"] == "00-Resources/_inbox/notas.md"
+    assert payload["written_to"] == "00-resources/_inbox/notas.md"
     assert list(payload["indexed"]) == ["scanned", "indexed", "skipped", "elapsed_ms"]
     expected = {key: REPORT[key] for key in ("scanned", "indexed", "skipped", "elapsed_ms")}
     assert payload["indexed"] == expected
-    written = tmp_path / "00-Resources" / "_inbox" / "notas.md"
+    written = tmp_path / "00-resources" / "_inbox" / "notas.md"
     assert written.read_text(encoding="utf-8").startswith("# Nota convertida")
     assert calls == [_notas_uri(tmp_path), "refresh"], "convierte y DESPUÉS reindexa, en ese orden"
 
 
 def test_custom_subdir_nests_inside_resources(tmp_path: Path) -> None:
-    """`subdir` con anidamiento queda dentro de `00-Resources/` (D9.1)."""
+    """`subdir` con anidamiento queda dentro de `00-resources/` (D9.1)."""
     payload, _calls = _run(_notas_uri(tmp_path), "lit-pediatría/ruiz", vault=tmp_path)
 
-    assert payload["written_to"] == "00-Resources/lit-pediatría/ruiz/notas.md"
+    assert payload["written_to"] == "00-resources/lit-pediatría/ruiz/notas.md"
     assert (tmp_path / payload["written_to"]).is_file()
 
 
 def test_collision_gets_the_numeric_suffix(tmp_path: Path) -> None:
     """Segunda conversión del mismo nombre ⇒ `<slug>-2.md` (plan §T5)."""
-    inbox = tmp_path / "00-Resources" / "_inbox"
+    inbox = tmp_path / "00-resources" / "_inbox"
     inbox.mkdir(parents=True)
     (inbox / "notas.md").write_text("previa", encoding="utf-8")
 
     payload, _calls = _run(_notas_uri(tmp_path), vault=tmp_path)
 
-    assert payload["written_to"] == "00-Resources/_inbox/notas-2.md"
+    assert payload["written_to"] == "00-resources/_inbox/notas-2.md"
 
 
 def test_atomic_write_leaves_no_temporary_behind(tmp_path: Path) -> None:
     """El temporal vive en el directorio de destino y desaparece tras el rename."""
     _run(_notas_uri(tmp_path), vault=tmp_path)
 
-    inbox = tmp_path / "00-Resources" / "_inbox"
+    inbox = tmp_path / "00-resources" / "_inbox"
     assert sorted(p.name for p in inbox.iterdir()) == ["notas.md"]
 
 
@@ -122,7 +122,7 @@ def test_traversal_subdir_is_validation_error_and_writes_nothing(tmp_path: Path)
     assert payload["error"]["code"] == "VALIDATION_ERROR"
     assert calls == [], "la validación falla ANTES de convertir ni escribir"
     assert not (tmp_path / "escape").exists()
-    assert not (tmp_path / "00-Resources").exists()
+    assert not (tmp_path / "00-resources").exists()
 
 
 def test_absolute_subdir_is_validation_error(tmp_path: Path) -> None:
@@ -174,10 +174,10 @@ def test_convert_failure_maps_to_source_unreachable_with_the_literal_guide(
 
     error = payload["error"]
     assert error["code"] == "SOURCE_UNREACHABLE"
-    assert "00-Resources/" in error["message"] and "index_refresh" in error["message"]
+    assert "00-resources/" in error["message"] and "index_refresh" in error["message"]
     assert error["details"] == {"cause": "RuntimeError"}
     assert "refresh" not in calls, "sin conversión no hay archivo que reindexar"
-    assert not (tmp_path / "00-Resources").exists()
+    assert not (tmp_path / "00-resources").exists()
 
 
 def test_locked_refresh_reports_engine_locked_but_keeps_the_written_file(tmp_path: Path) -> None:
@@ -186,9 +186,9 @@ def test_locked_refresh_reports_engine_locked_but_keeps_the_written_file(tmp_pat
     payload, calls = _run(_notas_uri(tmp_path), vault=tmp_path, report=locked)
 
     assert payload["error"]["code"] == "ENGINE_LOCKED"
-    assert payload["error"]["details"] == {"written_to": "00-Resources/_inbox/notas.md"}
+    assert payload["error"]["details"] == {"written_to": "00-resources/_inbox/notas.md"}
     assert "refresh" in calls
-    assert (tmp_path / "00-Resources" / "_inbox" / "notas.md").is_file()
+    assert (tmp_path / "00-resources" / "_inbox" / "notas.md").is_file()
 
 
 def test_written_to_is_json_serializable_unicode_safe(tmp_path: Path) -> None:
@@ -213,7 +213,7 @@ def test_slug_and_subdir_are_reused_from_paths_domain(
     uri = "https://example.org/papers/ruiz-2024.pdf"
     payload, _calls = _run(uri, vault=tmp_path)
 
-    assert payload["written_to"] == f"00-Resources/_inbox/{paths.slugify_uri(uri)}.md"
+    assert payload["written_to"] == f"00-resources/_inbox/{paths.slugify_uri(uri)}.md"
 
 
 # --- wiring de reindexación: el refresh declara EXACTAMENTE el conjunto configurado ------
@@ -244,7 +244,7 @@ def test_add_source_refresh_declares_exactly_the_configured_roots(
 ) -> None:
     """`INDEXER_DIR="materiales"` ⇒ el refresh declara SOLO `("materiales",)`.
 
-    Ya no se une `00-Resources/`: si no está declarada, `add_source` se rechaza
+    Ya no se une `00-resources/`: si no está declarada, `add_source` se rechaza
     en el borde antes de escribir, así que el conjunto configurado es el que el
     target del flow debe reconciliar.
     """
@@ -254,11 +254,11 @@ def test_add_source_refresh_declares_exactly_the_configured_roots(
 def test_add_source_refresh_uses_the_default_root_without_duplicating_it(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Sin `INDEXER_DIR`, una sola raíz: `("00-Resources",)` — sin duplicar."""
-    assert _seam_calls(monkeypatch, tmp_path, None) == [("00-Resources",)]
+    """Sin `INDEXER_DIR`, una sola raíz: `("00-resources",)` — sin duplicar."""
+    assert _seam_calls(monkeypatch, tmp_path, None) == [("00-resources",)]
 
 
-# --- borde: add_source exige que `00-Resources/` esté declarada en INDEXER_DIR ------------
+# --- borde: add_source exige que `00-resources/` esté declarada en INDEXER_DIR ------------
 
 
 def test_add_source_rejects_when_resources_is_not_indexed(tmp_path: Path) -> None:
@@ -269,30 +269,30 @@ def test_add_source_rejects_when_resources_is_not_indexed(tmp_path: Path) -> Non
 
     error = payload["error"]
     assert error["code"] == "VALIDATION_ERROR"
-    assert error["details"]["requested"] == "00-Resources"
+    assert error["details"]["requested"] == "00-resources"
     assert error["details"]["allowed"] == ["documentos"]
     assert isinstance(error["details"]["hint"], str) and error["details"]["hint"]
     assert calls == [], "sin raíz declarada no se convierte ni se reindexa"
-    assert not (tmp_path / "00-Resources").exists(), "no se escribe nada en 00-Resources/"
+    assert not (tmp_path / "00-resources").exists(), "no se escribe nada en 00-resources/"
 
 
 def test_add_source_accepts_resources_declared_with_dot_slash(tmp_path: Path) -> None:
-    """`INDEXER_DIR="./00-Resources/"` declara la raíz: se normaliza antes de comparar."""
+    """`INDEXER_DIR="./00-resources/"` declara la raíz: se normaliza antes de comparar."""
     payload, calls = _run(
-        _notas_uri(tmp_path), vault=tmp_path, allowed_roots=lambda: ("./00-Resources/",)
+        _notas_uri(tmp_path), vault=tmp_path, allowed_roots=lambda: ("./00-resources/",)
     )
 
     assert payload["ok"] is True
-    assert payload["written_to"] == "00-Resources/_inbox/notas.md"
+    assert payload["written_to"] == "00-resources/_inbox/notas.md"
     assert calls[-1] == "refresh", "con la raíz declarada el ciclo Δ sí corre"
-    assert (tmp_path / "00-Resources" / "_inbox" / "notas.md").is_file()
+    assert (tmp_path / "00-resources" / "_inbox" / "notas.md").is_file()
 
 
 def test_refresh_receives_resources_declared_with_dot_slash(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """El refresh recibe el conjunto declarado TAL CUAL (la normalización es solo del gate)."""
-    assert _seam_calls(monkeypatch, tmp_path, "./00-Resources/") == [("./00-Resources/",)]
+    assert _seam_calls(monkeypatch, tmp_path, "./00-resources/") == [("./00-resources/",)]
 
 
 # --- W-01 (review 5-ejes): las raíces declaradas se validan ANTES de escribir ------------
@@ -309,7 +309,7 @@ def test_a_bad_indexer_root_is_validation_error_before_writing(tmp_path: Path) -
     payload, calls = _run(
         _notas_uri(tmp_path),
         vault=tmp_path,
-        allowed_roots=lambda: ("00-Resources", "notaMala/"),
+        allowed_roots=lambda: ("00-resources", "notaMala/"),
     )
 
     error = payload["error"]
@@ -319,5 +319,5 @@ def test_a_bad_indexer_root_is_validation_error_before_writing(tmp_path: Path) -
     assert details["requested"] == "notaMala/", "nombra la raíz mal escrita"
     assert "vault_dirs" in details and "suggestions" in details
     assert calls == [_notas_uri(tmp_path)], "convierte, pero el fichero NO se escribe"
-    assert not list((tmp_path / "00-Resources").rglob("*.md")), "cero .md huérfanos"
+    assert not list((tmp_path / "00-resources").rglob("*.md")), "cero .md huérfanos"
     assert not (tmp_path / "notaMala").exists()

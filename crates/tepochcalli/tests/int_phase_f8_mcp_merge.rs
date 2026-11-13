@@ -340,7 +340,7 @@ fn f8_keeps_user_environment_keys() {
     let vault = tmp();
     let original = managed_entry(serde_json::json!({
         "TEPOCHCALLI_ROOT": ".",
-        "INDEXER_DIR": "00-Resources,03-Citations",
+        "INDEXER_DIR": "00-resources,03-Citations",
         "TEPOCHCALLI_TOP_K": "9"
     }));
     write_config(vault.path(), &original);
@@ -359,7 +359,7 @@ fn f8_keeps_user_environment_keys() {
         .expect("environment object");
     assert_eq!(env.len(), 3, "same three keys survive, got: {env:?}");
     assert_eq!(env["TEPOCHCALLI_ROOT"], ".");
-    assert_eq!(env["INDEXER_DIR"], "00-Resources,03-Citations");
+    assert_eq!(env["INDEXER_DIR"], "00-resources,03-Citations");
     assert_eq!(env["TEPOCHCALLI_TOP_K"], "9");
 }
 
@@ -367,7 +367,7 @@ fn f8_keeps_user_environment_keys() {
 fn f8_environment_preservation_is_idempotent() {
     let vault = tmp();
     let original = managed_entry(serde_json::json!({
-        "INDEXER_DIR": "00-Resources,03-Citations",
+        "INDEXER_DIR": "00-resources,03-Citations",
         "TEPOCHCALLI_ROOT": "."
     }));
     write_config(vault.path(), &original);

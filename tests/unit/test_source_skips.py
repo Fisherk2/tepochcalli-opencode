@@ -61,7 +61,7 @@ def test_classify_file_reports_a_vanished_regular_file_as_unreadable_not_a_broke
     assert item.reason is source.SkipReason.UNREADABLE
     assert "desapareci" in item.detail
     assert item.detail != ""
-    assert item.source_path == "00-Resources/nota.md"
+    assert item.source_path == "00-resources/nota.md"
     assert item.path == desaparecido
 
 
@@ -101,7 +101,7 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
     PermissionError: continue`), así que el `onerror` del walk único de
     `unvisited_skips` debe ignorar (a) excepciones que no son
     `PermissionError`, (b) un `PermissionError` sin `filename` y (c) uno cuyo
-    path cae fuera de `00-Resources/`. Se incluye el caso POSITIVO en el mismo
+    path cae fuera de `00-resources/`. Se incluye el caso POSITIVO en el mismo
     test para que el doble de `os.walk` no pueda pasar vacíamente: la
     identidad que el contador preserva es «1 entrada `unreadable_dir` por cada
     `PermissionError` del conector con path dentro del recurso, y 0 por todo
@@ -140,7 +140,7 @@ def test_unvisited_skips_ignores_io_errors_that_are_not_permission_denied(
 
     aceptado = [PermissionError(13, "permiso denegado", str(recursos / "sub"))]
     assert [(skip.source_path, skip.reason) for skip in drive(aceptado)] == [
-        ("00-Resources/sub", source.SkipReason.UNREADABLE_DIR)
+        ("00-resources/sub", source.SkipReason.UNREADABLE_DIR)
     ]
 
 
@@ -183,7 +183,7 @@ def test_classify_file_with_resolved_parent_agrees_whether_or_not_the_file_is_a_
     )
 
     assert isinstance(regular, source.SourceEntry)
-    assert regular.source_path == "00-Resources/a.md"
+    assert regular.source_path == "00-resources/a.md"
     assert isinstance(enlazado, source.SkippedSource)
     assert enlazado.reason is source.SkipReason.SYMLINK_ESCAPE
 
@@ -210,5 +210,5 @@ def test_broken_symlink_outside_the_whitelist_is_not_reported_as_a_skip(tmp_path
     skips = source.unvisited_skips(tmp_path, recursos)
 
     assert [(skip.source_path, skip.reason) for skip in skips] == [
-        ("00-Resources/roto.md", source.SkipReason.BROKEN_SYMLINK)
+        ("00-resources/roto.md", source.SkipReason.BROKEN_SYMLINK)
     ]

@@ -14,7 +14,7 @@ Contratos que se pinan:
   vaults reales— quedaría sin cubrir.
 * **Frontera de confianza** (decisión 2026-10-22, docs/SECURITY.md): el
   walk que alimenta `mount_each` no puede indexar un symlink cuyo target viva
-  fuera de `00-Resources/`. Aquí se pina el WIRING (`_indexable_items`), no la
+  fuera de `00-resources/`. Aquí se pina el WIRING (`_indexable_items`), no la
   regla aislada de `classify_file` (ya cubierta en `test_parsers.py`): es la
   regresión que indexaría `~/.ssh/id_rsa` en silencio.
 """
@@ -81,7 +81,7 @@ def test_indexable_items_skips_a_symlink_that_escapes_the_vault_and_keeps_the_re
     items, scanned = asyncio.run(app._indexable_items(vault, (citation.RESOURCES_DIR,)))
 
     keys = {key for key, _file in items}
-    assert "00-Resources/ok.md" in keys
+    assert "00-resources/ok.md" in keys
     assert not any(key.endswith("escape.md") for key in keys)
     assert scanned == 2  # ok.md + el symlink que escapa, ambos visitados
     for _key, file in items:
@@ -93,6 +93,6 @@ def test_indexable_items_skips_a_symlink_that_escapes_the_vault_and_keeps_the_re
 
 
 def test_roots_for_defaults_to_resources_and_preserves_explicit_roots() -> None:
-    """`refresh_blocking(None)` indexa `00-Resources/`; las raíces dadas viajan tal cual (h)."""
+    """`refresh_blocking(None)` indexa `00-resources/`; las raíces dadas viajan tal cual (h)."""
     assert app._roots_for(None) == (citation.RESOURCES_DIR,)
     assert app._roots_for(["materiales", "documentos"]) == ("materiales", "documentos")

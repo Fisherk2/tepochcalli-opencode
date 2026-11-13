@@ -139,7 +139,7 @@ class RefreshReport:
     * `locked`: `True` ⇔ otro proceso retenía el candado: NO se ejecutó
       `update` y el reporte es cero en las tres cuentas (sin escrituras).
     * `roots`: las raíces de la pasada, tal como se pidieron (aditivo, ADR-010
-      §4.1). Sin argumento es `("00-Resources",)`; las raíces viven solo en la
+      §4.1). Sin argumento es `("00-resources",)`; las raíces viven solo en la
       invocación y no sobreviven al proceso (D32).
     """
 

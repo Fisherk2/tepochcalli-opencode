@@ -32,7 +32,7 @@ type DocKind = Literal["md", "markdown", "txt", "pdf", "docx", "pptx", "xlsx", "
 SOURCE_OFFSETS_DOC_KINDS: Final[frozenset[DocKind]] = frozenset({"md", "markdown", "txt"})
 """Formats read verbatim: their offsets cite the ORIGINAL (`offsets_ref="source"`)."""
 
-RESOURCES_DIR: Final = "00-Resources"
+RESOURCES_DIR: Final = "00-resources"
 """Raíz por omisión del índice y destino por omisión de `add_source` (ADR-010)."""
 
 MAX_HEADING_LENGTH: Final = 200
@@ -96,7 +96,7 @@ class UnsupportedDocKindError(CitationError):
 def normalize_source_path(path: str | Path) -> str:
     """Normaliza `path` a POSIX **relativo al vault** (ADR-010 §4.2, D41).
 
-    Devuelve la ruta tal cual se le pasa —sin prefijar `00-Resources/` ni
+    Devuelve la ruta tal cual se le pasa —sin prefijar `00-resources/` ni
     quitarlo— porque con N raíces el relativo a la raíz colisionaría entre
     raíces homónimas. Los llamadores entregan `file_path.relative_to(vault_root)`.
     Garantiza la forma canónica: sin `./`, sin segmentos `..` internos (se

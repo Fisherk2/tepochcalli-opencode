@@ -52,7 +52,7 @@ agent: nezahualcoyotl
 
 ## Pre-Flight
 Tool catalog: skill `tepochcalli-mcp` (the 7 `tepochcalli-rag` tools — `search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`, `list_formats`, `rag_status`; call only the ones this phase uses).
-If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) before reading raw `00-Resources/`.
+If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) before reading raw `00-resources/`.
 
 ## Phase: Definition
 1. State the central question from `$ARGUMENTS`; if the scope is ambiguous ask with `question` — never invent it.
@@ -81,7 +81,7 @@ agent: pochteca
 
 ## Pre-Flight
 Tool catalog: skill `tepochcalli-mcp` (the 7 `tepochcalli-rag` tools — `search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`, `list_formats`, `rag_status`; call only the ones this phase uses).
-If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) on `00-Resources/`; re-query with other terms before widening context.
+If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) on `00-resources/`; re-query with other terms before widening context.
 
 ## Phase: Collection
 1. The local corpus rules: whatever `search` does not return is not cited; cite as `source_path » heading (chars x–y)`.
@@ -147,7 +147,7 @@ agent: nezahualcoyotl
 
 ## Pre-Flight
 Tool catalog: skill `tepochcalli-mcp` (the 7 `tepochcalli-rag` tools — `search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`, `list_formats`, `rag_status`; call only the ones this phase uses).
-If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) before reading raw `00-Resources/` or the research notes.
+If freshness is doubtful call `index_refresh()`; then `search` (top_k ≤ 8) before reading raw `00-resources/` or the research notes.
 
 ## Phase: Analysis
 1. Read validated evidence only: notes in `01-tasks/research/` and reports in `04-review/` with `verdict` ok/ok_con_avisos. Material without a verdict is NOT input — list it as pending `/validate`.
@@ -293,7 +293,7 @@ agent: tlacuilo
 
 ## Pre-Flight
 Tool catalog: skill `tepochcalli-mcp` (the 7 `tepochcalli-rag` tools — `search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`, `list_formats`, `rag_status`; call only the ones this phase uses).
-If the update comes from new material call `index_refresh()` first; `add_source` only when the user explicitly asks to ingest it; `search` (top_k ≤ 8) before reading raw `00-Resources/`.
+If the update comes from new material call `index_refresh()` first; `add_source` only when the user explicitly asks to ingest it; `search` (top_k ≤ 8) before reading raw `00-resources/`.
 
 ## Phase: Maintenance
 1. Locate `$1` in `02-drafts/`; if it does not resolve to exactly one draft, ask with `question`.
@@ -358,7 +358,7 @@ Fase metodológica: RECOLECCIÓN (UH). Argumentos: `$ARGUMENTS` = pregunta o tem
 
 1. Si la frescura del índice es dudosa: `index_refresh()`. Después, `search` de
    `tepochcalli-rag` (top_k ≤ 8; re-querya con otros términos antes de ensanchar contexto)
-   sobre `00-Resources/`. El corpus local MANDA: lo que el índice no devuelve no se cita.
+   sobre `00-resources/`. El corpus local MANDA: lo que el índice no devuelve no se cita.
 2. Si la rúbrica pide fuentes externas: `websearch`/`webfetch` en fuentes autorizadas.
    Para cada referencia externa candidata registra su ESTADO de procedencia — nunca lo
    infieras, nunca lo dejes vacío:
