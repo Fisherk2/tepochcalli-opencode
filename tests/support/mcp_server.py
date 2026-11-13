@@ -34,6 +34,7 @@ import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TextIO
 
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
@@ -137,14 +138,19 @@ def server_env(
 
 
 @asynccontextmanager
-async def running_server(env: dict[str, str] | None = None) -> AsyncIterator[ClientSession]:
+async def running_server(
+    env: dict[str, str] | None = None, *, errlog: TextIO = sys.stderr
+) -> AsyncIterator[ClientSession]:
     """Levanta `python -m tepochcalli_mcp` por stdio y devuelve la sesión cliente.
 
     `env=None` hereda el entorno del padre (la variante `vault_root=None` de
     `test_mcp_server`); con env completo el hijo corre aislado con su vault.
+    `errlog` recibe el stderr del hijo (un fichero con `fileno()`, no
+    `StringIO`): la traza de progreso del refresh se lee de ahí, nunca de
+    stdout (canal del JSON-RPC).
     """
     params = StdioServerParameters(command=sys.executable, args=["-m", "tepochcalli_mcp"], env=env)
-    async with stdio_client(params) as (read, write):
+    async with stdio_client(params, errlog=errlog) as (read, write):
         async with ClientSession(read, write) as session:
             await session.initialize()
             yield session

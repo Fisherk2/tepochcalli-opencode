@@ -5,6 +5,40 @@
 > Requisitos: [docs/UH.md](docs/UH.md) · Especificación: [SPEC.md](SPEC.md) ·
 > Arquitectura: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## Rendimiento de ingesta (medido)
+
+Lo que cuesta meter material al índice, por tamaño. **Primera ingesta** = extracción a Markdown
+(markitdown) + chunking + embeddings + upsert en LanceDB. Después, el refresco es incremental: solo
+se reprocesa lo que cambió.
+
+| PDF | Páginas | Texto extraído | Extracción (p50) | Indexación (p50) | Primera ingesta | ms/página |
+| --- | --- | --- | --- | --- | --- | --- |
+| libro pequeño | 16 | 53 568 chars | 3,5 s | 6,4 s | **9,9 s** | 221 |
+| documento | 30 | 51 761 chars | **3,1 s** | ≈5,4 s (derivado) | **≈8,5 s** | 105 |
+| libro | 335 | 1 000 523 chars | 50,6 s | 108,5 s | **≈159 s** | 151 |
+| libro | 444 | 527 068 chars | 95,1 s | — | — | 214 |
+| libro | 952 | 2 278 941 chars | 121,5 s | — | — | 128 |
+| libro | 1 313 | 3 344 734 chars | 128,0 s | — | — | 98 |
+
+Notas `.md`/`.txt` no se miden por página: el benchmark de Δ toca/crea 50 notas y refresca en
+**4,3 s p95**, con embeddings incluidos.
+
+* **Método:** n=3 por fila, percentil nearest-rank, reloj monotónico, `VmHWM` pico del proceso hijo
+  (markitdown 190-255 MiB; indexación ≈1,5-1,8 GiB porque carga el modelo). Host de desarrollo
+  (i7-8750H, 12 vCPU, btrfs/NVMe, CPython 3.12.14), no la VM de 8 GB de [docs/TRD.md](docs/TRD.md) §6.1:
+  en hardware menor, más lento. Detalle y JSON crudos en
+  [docs/diagnosis/phase6-documents.md](docs/diagnosis/phase6-documents.md).
+* **No extrapoles por página.** El coste por página cae de 221 ms a 98 ms al crecer el documento
+  (se amortiza el arranque) y **no es monótono**: un PDF de 444 páginas con 527 k chars tarda más
+  que uno de 335 con 1 M, porque manda la composición del PDF, no el número de páginas. La cifra
+  que sirve es la medida, no la multiplicación.
+* **Documentos grandes:** por encima de ~300 páginas la primera ingesta pasa de 30 s, y v1 **no
+  limita páginas** (D51: los documentos binarios van aparte del presupuesto de Δ de 30 s de
+  texto). `index_refresh` informa del progreso por documento en `stderr`; el refresco de un libro
+  así tarda minutos, no segundos.
+* **Contraste con la era Docling:** 49-51 s para 30 páginas. markitdown hace el mismo documento en
+  3,1 s (≈16× menos) con 190 MiB de RSS en vez de ≈2 GiB.
+
 ## Configuración (provisional)
 
 El RAG se configura en dos sitios que no se solapan: el **entorno del harness**

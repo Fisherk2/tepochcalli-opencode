@@ -78,7 +78,19 @@
 - [x] **Condición de TD-2 resuelva con dato**: si rompe la percepción del Δ ⇒ se abre tarea de remediación (límite de tamaño / caché de parseo) con su ADR; si no ⇒ TD-2 se cierra con la cifra
 - [x] El fixture de 30 págs no entra en `just ci`
 - Deps: T0 · Verificación: JSON del bench archivado + cifra en `docs/TRD.md` §6
-- **Hecho (2026-11-12):** `bench_documents.py` + `gen_fixture_pdf.py --pages`; PDF de 30 págs **3 144 ms** p50 (n=3), 335 págs **50 557 ms**, 1313 págs **128 015 ms**; RSS pico 191-255 MiB; ms/página **no** monótono (221 → 97,5) ⇒ extrapolar es inválido. Propuesta de remediación A-D redactada; **firma del dueño pendiente**. Informe: `docs/diagnosis/phase6-documents.md`.
+- **Hecho (2026-11-12):** `bench_documents.py` + `gen_fixture_pdf.py --pages`; PDF de 30 págs **3 144 ms** p50 (n=3), 335 págs **50 557 ms**, 1313 págs **128 015 ms**; RSS pico 191-255 MiB; ms/página **no** monótono (221 → 97,5) ⇒ extrapolar es inválido. Propuesta de remediación A-D redactada; **decisión del dueño 2026-11-12: opción A+B** (ver T2-bis; C y D no se abren). Informe: `docs/diagnosis/phase6-documents.md`.
+
+### [x] T2-bis — Traza de progreso en `index_refresh` (TD-2 opción **A+B**, firmada 2026-11-12)
+
+- Subagente: `rag-pipeline-engineer` · Skills: `test-driven-development`, `observability-and-instrumentation`, `clean-code`, `source-driven-development` · Tools: `read`/`grep`, `codebase-memory-mcp`
+- [x] **A**: D51 se queda — los documentos binarios siguen **fuera** del Δ de 30 s y se publican aparte
+- [x] **B**: `progress.py` traza por **documento binario** (inicio, `extraído en N ms` real), inicio del ciclo con las raíces, `candado retenido` honesto y cierre con las cuentas del reporte
+- [x] Contrato MCP **intacto**: el JSON conserva exactamente `{scanned, indexed, skipped, elapsed_ms, locked, roots}`
+- [x] Progreso **solo por `stderr`** (`logging`); `stdout` sigue siendo el canal JSON-RPC — test que lo afirma
+- [x] `.md`/`.txt` **no** se trazan uno a uno (10 000 notas serían 10 000 líneas de ruido)
+- [x] Tests: `tests/unit/test_progress.py` (3) + `tests/integration/test_mcp_refresh_progress.py` (3) — **6 passed**
+- [x] **C y D no se abren** (ni límite de páginas ni caché de parseo); se reabre con ADR nuevo si hay quejas reales de latencia
+- Deps: T2 · Verificación: `just python-test` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
 
 ### [ ] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
 

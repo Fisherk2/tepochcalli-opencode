@@ -66,7 +66,7 @@ from cocoindex.ops.sentence_transformers import SentenceTransformerEmbedder
 from cocoindex.resources.id import IdGenerator
 
 from . import config as flow_config
-from . import source
+from . import progress, source
 from .citation import normalize_source_path
 from .layout import DB_RELPATH, ENGINE_STATE_RELPATH, LOCK_RELPATH, TABLE_NAME  # noqa: F401  # re-export: tests y wiring del flow consumen los nombres vía app
 from .model_store import ensure_local_model
@@ -287,12 +287,12 @@ async def index_file(
     # `extract_text` está decorado con @coco.fn (D58): `as_async` lo ejecuta en
     # un hilo (SyncFunction.as_async, cocoindex/_internal/function.py:952-954)
     # sin bloquear el loop del environment y SIN salto a hilo manual (D60).
+    relative = file.file_path.path.as_posix()
+    progress.extraction_started(relative)
+    extraction_start = time.monotonic()
     text = await extract_text.as_async(file_path)
-    chunks = chunk_document(
-        text,
-        normalize_source_path(file.file_path.path.as_posix()),
-        config=config,
-    )
+    progress.extraction_finished(relative, int((time.monotonic() - extraction_start) * 1000))
+    chunks = chunk_document(text, normalize_source_path(relative), config=config)
     id_gen = IdGenerator()
     await coco.map(write_chunk, chunks, id_gen, table)
 
@@ -450,8 +450,10 @@ def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
     """
     roots = _roots_for(directories)
     start = time.monotonic()
+    progress.refresh_started(roots)
     lock_fd = _acquire_refresh_lock(resolve_vault_root())
     if lock_fd is None:
+        progress.refresh_locked()
         return RefreshReport(
             scanned=0,
             indexed=0,
@@ -470,7 +472,7 @@ def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
         _release_refresh_lock(lock_fd)
     file_stats = stats.by_component.get(FILE_PROCESSOR)
     indexed = 0 if file_stats is None else file_stats.num_adds + file_stats.num_reprocesses
-    return RefreshReport(
+    report = RefreshReport(
         scanned=tally.scanned,
         indexed=indexed,
         skipped=tally.scanned - indexed,
@@ -478,3 +480,5 @@ def refresh_blocking(directories: Sequence[str] | None = None) -> RefreshReport:
         locked=False,
         roots=roots,
     )
+    progress.refresh_finished(report)
+    return report
