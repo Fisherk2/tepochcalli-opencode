@@ -150,16 +150,17 @@
 - Deps: T0, T1, T4 · Verificación: JSON con ambos FS y los dos brazos
 - **Hecho (2026-11-13):** `tests/benchmarks/bench_scale_ratio.py` (por fases y por tramos: `prepare|index10|search|walk|delta|ntfs|report`). Brazo 10 % **derivado del manifiesto de T1** (1 de cada 10 por tipo ⇒ 1 000 md + 100 PDF, `tree_sha256 66a194d5…701d65a`, índice propio en frío **60 716 ms**, 1 101 chunks). **Δ p95 btrfs: 15 695 ms (100 %, 11k) vs 2 543 ms (10 %, 1,1k) ⇒ ratio 6,17× = FAIL** de la cota 2× (el 100 % sí cabe en 30 s al 52 %; **−41,8 % frente a P-02 26 967 ms**); **`search` p95 cliente 87 ms vs 51 ms ⇒ ratio 1,71× = PASS** (n=100, las 100 consultas de T4, 500 ms); **walk-only 6 115 ms vs 555 ms ⇒ 11,0×** (n=5) = mecanismo: walk lineal sin watcher (ADR-002) ⇒ **TD-36**. **fuseblk/NTFS-3G: Δ p95 52 996 ms = FAIL** (1,77× el presupuesto; walk 22 945 ms; índice en frío 944 019 ms), publicado como **límite conocido** D-P6-3 con causa y recomendación; **descartado** copiar el índice de btrfs al FS (el memo no cruza la ruta ⇒ re-embed completo, 96-204 s por ciclo). JSON: `docs/acceptance/scale-ratio.json`; informe: `docs/acceptance/scale-ratio.md`; bench: `just python-bench-scale-ratio --phase …`.
 
-### [ ] T6 — Criterio 4: tokens por consulta (<2000 con contexto)
+### [x] T6 — Criterio 4: tokens por consulta (<2000 con contexto)
 
 - Subagente: `llm-architect` → `test-engineer` (secuencial) · Skills: `source-driven-development`, `test-driven-development`, `error-handling-patterns` · Tools: `tepochcalli-rag` (payload, stdio), `context7`
-- [ ] Medición e2e: `search` real (`top_k=5`) + query + esqueleto de respuesta con citas, con **tokenizador real** nombrado con versión y fuente
-- [ ] Fixture **adverso** (unicode, CJK, emoji, tablas, listas largas) reusando `tests/integration/test_mcp_budget_adversarial.py`
-- [ ] **Dos cifras** con desglose: (a) payload del server ≤1600 (invariante del contrato) y (b) **total e2e < 2000** (criterio UH)
-- [ ] Publicadas con n, tokenizador y método en `docs/TRD.md` §6
-- [ ] Si el total excede 2000 ⇒ el contrato MCP **no se toca** (ADR-005): el ajuste es del techo del server, con decisión explícita del dueño
-- [ ] Test e2e que **falla** si el total supera 2000 (guarda viva)
+- [x] Medición e2e: `search` real (`top_k=5`) + query + esqueleto de respuesta con citas, con **tokenizador real** nombrado con versión y fuente
+- [x] Fixture **adverso** (unicode, CJK, emoji, tablas, listas largas) reusando `tests/integration/test_mcp_budget_adversarial.py`
+- [x] **Dos cifras** con desglose: (a) payload del server ≤1600 (invariante del contrato) y (b) **total e2e < 2000** (criterio UH)
+- [x] Publicadas con n, tokenizador y método en `docs/TRD.md` §6
+- [x] Si el total excede 2000 ⇒ el contrato MCP **no se toca** (ADR-005): el ajuste es del techo del server, con decisión explícita del dueño
+- [x] Test e2e que **falla** si el total supera 2000 (guarda viva)
 - Deps: T0 · Verificación: `just python-test` verde
+- **Hecho (2026-11-13):** medidor `tests/support/token_budget.py` (tokenizador **`cl100k_base` de `tiktoken 0.14.0`**, ya en el venv; `o200k_base` publicado al lado; fuente `github.com/openai/tiktoken`) + guarda viva `tests/integration/test_mcp_token_budget.py` (3 tests, fixture adverso **reusado** de T7, sin marcadores `slow`). **Cifras (n=7 caras, `top_k=5` y `top_k=20`):** (a) payload **1 600 por el estimador** del contrato y **1 789 reales**; (b) **total e2e 1 995 < 2 000** en el peor caso (query 7 + payload 1 789 + respuesta citada 199) y 1 675 en la dorada ⇒ **PASS**, con **5 tokens de margen** (`o200k`: 1 785). La respuesta se modela con el formato que prescribe el payload (`source_path » heading (chars x–y)`, una afirmación por resultado, `(sin heading)` en PDF). Sonda de sensibilidad: 2 frases/resultado ⇒ **2 023** (el guard no es vacío); RED archivado (ModuleNotFoundError primero, luego la aserción disparada). Hallazgo **F-T6-1**: el 1 600 es del estimador (envoltura JSON ≈190 tokens fuera de la fórmula + `chars/4` optimista en ES) — si el payload crece, la decisión (bajar el techo a ~1 500) es **del dueño**; contrato MCP intacto y sin dependencias nuevas. Evidencia: `docs/acceptance/token-budget.{md,json}` + TRD §6.2 + WORKFLOW §6.3
 
 ### [ ] T7 — Criterio 5: citas precisas y re-verificación contra el archivo vivo (TD-13)
 

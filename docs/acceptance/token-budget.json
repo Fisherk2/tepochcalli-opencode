@@ -1,0 +1,144 @@
+{
+  "command": "TEPOCHCALLI_TOKEN_EVIDENCE=\"/mnt/HDDFish/Documents/Programacion/PROYECTOS/14-tepochcalli-opencode/docs/acceptance/token-budget.json\" just python-test-file token_budget",
+  "ceiling": 2000,
+  "tokenizer": "cl100k_base",
+  "tiktoken_version": "0.14.0",
+  "cases": [
+    {
+      "case": "dorada_corta",
+      "results": 4,
+      "truncated": true,
+      "error": null,
+      "query_tokens": 7,
+      "payload_tokens": 1461,
+      "answer_tokens": 207,
+      "total_tokens": 1675,
+      "headroom_tokens": 325,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 1675,
+        "o200k_base": 1536
+      }
+    },
+    {
+      "case": "cjk_emoji",
+      "results": 3,
+      "truncated": true,
+      "error": null,
+      "query_tokens": 20,
+      "payload_tokens": 1649,
+      "answer_tokens": 151,
+      "total_tokens": 1820,
+      "headroom_tokens": 180,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 1820,
+        "o200k_base": 1464
+      }
+    },
+    {
+      "case": "emoji_latin",
+      "results": 4,
+      "truncated": true,
+      "error": null,
+      "query_tokens": 17,
+      "payload_tokens": 1716,
+      "answer_tokens": 197,
+      "total_tokens": 1930,
+      "headroom_tokens": 70,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 1930,
+        "o200k_base": 1789
+      }
+    },
+    {
+      "case": "denso_corte",
+      "results": 4,
+      "truncated": true,
+      "error": null,
+      "query_tokens": 9,
+      "payload_tokens": 1730,
+      "answer_tokens": 208,
+      "total_tokens": 1947,
+      "headroom_tokens": 53,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 1947,
+        "o200k_base": 1801
+      }
+    },
+    {
+      "case": "pdf_tablas",
+      "results": 1,
+      "truncated": false,
+      "error": null,
+      "query_tokens": 12,
+      "payload_tokens": 429,
+      "answer_tokens": 54,
+      "total_tokens": 495,
+      "headroom_tokens": 1505,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 495,
+        "o200k_base": 476
+      }
+    },
+    {
+      "case": "top_k_maximo",
+      "results": 4,
+      "truncated": true,
+      "error": null,
+      "query_tokens": 7,
+      "payload_tokens": 1789,
+      "answer_tokens": 199,
+      "total_tokens": 1995,
+      "headroom_tokens": 5,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 1995,
+        "o200k_base": 1785
+      }
+    },
+    {
+      "case": "error_query",
+      "results": 0,
+      "truncated": false,
+      "error": "VALIDATION_ERROR",
+      "query_tokens": 1251,
+      "payload_tokens": 51,
+      "answer_tokens": 9,
+      "total_tokens": 1311,
+      "headroom_tokens": 689,
+      "tokenizer": "cl100k_base",
+      "tiktoken_version": "0.14.0",
+      "totals_by_encoding": {
+        "cl100k_base": 1311,
+        "o200k_base": 1306
+      }
+    }
+  ],
+  "sensitivity_probe": {
+    "case": "sensibilidad_2_frases",
+    "results": 4,
+    "truncated": true,
+    "error": null,
+    "query_tokens": 9,
+    "payload_tokens": 1730,
+    "answer_tokens": 284,
+    "total_tokens": 2023,
+    "headroom_tokens": -23,
+    "tokenizer": "cl100k_base",
+    "tiktoken_version": "0.14.0",
+    "totals_by_encoding": {
+      "cl100k_base": 2023,
+      "o200k_base": 1873
+    }
+  }
+}

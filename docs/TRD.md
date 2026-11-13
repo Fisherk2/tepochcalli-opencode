@@ -89,7 +89,7 @@ serializada; definición en spec-mcp-server §latencia).
 | --- | --- | --- |
 | 2. Δ indexación <30s | Corridas ×20: tocar/crear 1-50 archivos md en las raíces indexadas (`INDEXER_DIR`), luego `index_refresh()`; registrar `elapsed_ms` | p95 < 30000ms; documentos binarios (`pdf/docx/pptx/xlsx/xls`) medidos y publicados **aparte** (D51) |
 | 3. Búsqueda <500ms | 100 queries muestreadas del corpus 10k/1k, `search(top_k=5)`, tras índice estable | p95 < 500ms en HW mínimo |
-| 4. ≤2000 tokens/consulta | Fixture adversa (unicode, tablas, listas largas): estimador chars/4 sobre payload `search` + overhead cita + query del usuario; validar contra tokenizador real del harness en e2e | payload ≤1600 tokens garantizado por server + e2e total <2000 |
+| 4. ≤2000 tokens/consulta | Fixture adversa (unicode, tablas, listas largas): estimador chars/4 sobre payload `search` + overhead cita + query del usuario; validar contra tokenizador real del harness en e2e | payload ≤1600 tokens garantizado por server **por el estimador** + e2e total <2000 con **tokenizador real** (`cl100k_base`; `o200k_base` publicado al lado) |
 | 6. Escala 10k/1k sin degradación | Bench delta tras stress: latencia búsqueda y refresh en corpus lleno vs 10% | sin regresión >2× entre tamaños; índices ANN/FTS rebuild < presupuesto |
 
 Relevancia de criterios no numéricos: 1 (no-interferencia) → checklist e2e de
@@ -148,6 +148,31 @@ walk (ADR nuevo; **TD-36**). La cota **no se renegocia**: el resultado se public
 En fuseblk/NTFS-3G el Δ es **52 996 ms (FAIL, 1,77× el presupuesto)** con walk de 22 945 ms: va a
 límites, no decide (D-P6-3: un vault en NTFS/red/sync degrada el Δ; mantenerlo en disco local).
 Cifras, método, muestras y comandos: [docs/acceptance/scale-ratio.md](acceptance/scale-ratio.md).
+
+**Medición del criterio 4 (T6, 2026-11-13).** Con **tokenizador real** — `tiktoken 0.14.0`,
+`cl100k_base` (el más caro de los dos BPE públicos en ES/CJK medido; `o200k_base` publicado al lado)
+— sobre el fixture adverso de T7 (unicode, CJK, emoji, tablas, listas largas) y el handler `search`
+real (n = 7 caras, `top_k=5` y `top_k=20`):
+
+* **(a) payload del server: 1 600 por el estimador** `chars/4 + 25` — invariante del contrato
+  (`apply_budget`, gate de T7) — y hasta **1 789 con tokenizador real** (`o200k`: 1 801). El 1 600
+  **no** es una cota de tokens reales: la envoltura JSON (query echo, claves, `source_path`, `score`)
+  no entra en la fórmula y `chars/4` es optimista para ES en `cl100k` (0,27 tok/char real).
+* **(b) total e2e: 1 995 < 2 000** en el peor caso (`top_k=20`, 4 resultados; `o200k`: 1 785) y
+  1 675 en la consulta dorada. Desglose: query + `content[0].text` (serializado con el empaquetador
+  de producción, `json_result`) + **esqueleto mínimo de respuesta citada** en el formato del payload
+  (`source_path » heading (chars x–y)`, una afirmación por resultado).
+* **Margen del peor caso: 5 tokens** ⇒ hallazgo **F-T6-1** (ver abajo). **El criterio se cumple**; el
+  contrato MCP y el techo del server **no** se tocan.
+* La guarda es viva: `tests/integration/test_mcp_token_budget.py` corre en `just python-test` y se
+  pone roja si el total llega a 2 000 — con 2 frases por resultado da **2 023** (sonda de
+  sensibilidad). Las consultas con error se cuentan (query incluida), nunca se descartan.
+
+Cifras, desglose por caso, estabilidad de la medición y comando:
+[docs/acceptance/token-budget.md](acceptance/token-budget.md) · JSON
+[docs/acceptance/token-budget.json](acceptance/token-budget.json).
+Hallazgo F-T6-1: si el payload crece, el ajuste es del **techo del server** (p. ej. bajarlo a 1 500)
+o de la fórmula de §5 del plan — **decisión del dueño**; ADR-005 (contrato MCP) no se toca por esto.
 
 **Regla de origen de cifra (D-P6-7).** Cada cifra publicada en la tabla §6.3 de
 `docs/WORKFLOW.md` lleva **bench + n + método + filesystem**; la jerarquía de evidencia es
