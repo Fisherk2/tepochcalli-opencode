@@ -43,7 +43,7 @@ Fases (una llamada de primer plano por fase; nada en segundo plano)::
     just python-bench-search-scale --phase all       # las siete en orden (30+ min)
 
 Cada fase escribe `<WORK_DIR>/<fase>.json`; `report` archiva el JSON unificado
-en `docs/diagnosis/phase6-search-scale.json`. El vault es **estable entre
+en `docs/acceptance/search-scale.json`. El vault es **estable entre
 fases**: los dos brazos de recall se miden sobre el MISMO índice, sin reindexar.
 
 No corre en CI ni en `just ci` (no es `test_*`), no re-materializa el corpus si
@@ -111,7 +111,7 @@ FTS_DEPTH = 50
 CORPUS_ROOT = Path("/tmp/opencode/phase6-corpus")
 """Corpus de T1 (btrfs/NVMe): se VERIFICA y se copia; no se escribe ni se borra."""
 
-WORK_DIR = Path("/tmp/opencode/phase6-search-scale")
+WORK_DIR = Path("/tmp/opencode/t4-scale")
 VAULT = WORK_DIR / "vault"
 """Vault del bench con `.tepochcalli/db/` — estable entre fases."""
 
@@ -119,7 +119,8 @@ PROBE_VAULT = WORK_DIR / "probe-vault"
 """Vault diminuto de la sonda morfológica (se reconstruye, no se mide dos veces)."""
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DIAGNOSIS_JSON = REPO_ROOT / "docs" / "diagnosis" / "phase6-search-scale.json"
+DIAGNOSIS_JSON = REPO_ROOT / "docs" / "acceptance" / "search-scale.json"
+"""Evidencia de aceptación (no diagnóstico): `docs/acceptance/README.md` fija el reparto."""
 
 PAYLOAD_DB = REPO_ROOT / "obsidian-workspace" / ".tepochcalli" / "db"
 PAYLOAD_MODELS = REPO_ROOT / "obsidian-workspace" / ".tepochcalli" / "models"

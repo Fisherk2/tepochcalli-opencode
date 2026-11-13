@@ -278,10 +278,10 @@
 | --- | --- | --- |
 | 1. Sin interferencias | checklist Vault-OK post-instalación (0 puertos, `.obsidian/` intacto, UI limpia) | ☐ |
 | 2. Δ <30s | bench `index_refresh` 20 corridas típicas | ☐ |
-| 3. Búsqueda <500ms | bench `search` p95 sobre corpus 10k/1k | ☑ **p95 cliente 97 ms** / 94 ms server (n=100, nearest-rank 95.º, btrfs/NVMe, 11 006 chunks). Origen: `just python-bench-search-scale --phase …` + [phase6-search-scale.json](diagnosis/phase6-search-scale.json) (T4) |
+| 3. Búsqueda <500ms | bench `search` p95 sobre corpus 10k/1k | ☑ **p95 cliente 97 ms** / 94 ms server (n=100, nearest-rank 95.º, btrfs/NVMe, 11 006 chunks). Origen: `just python-bench-search-scale --phase …` + [search-scale.json](acceptance/search-scale.json) (T4) |
 | 4. ≤2000 tokens/consulta | fixture adverso + medidor e2e del harness | ☐ |
 | 5. Citas precisas | golden answers: 100% con `source_path`+`heading`+offsets reproducibles | ☐ |
-| 6. 10k notas + 1k PDFs | stress corpus + regresión de latencia vs 10% | ☐ |
+| 6. 10k notas + 1k PDFs | stress corpus + regresión de latencia vs 10% | ☑ **Δ p95 15 695 ms al 100 % vs 2 543 ms al 10 % ⇒ ratio 6,17× = FAIL de la cota 2×** (el 100 % sí cabe en 30 s al 52 %); **`search` p95 87 ms vs 51 ms ⇒ ratio 1,71× = PASS**; walk-only 6 115 ms (11 000) vs 555 ms (1 100). Límite: fuseblk/NTFS-3G **Δ p95 52 996 ms = FAIL** (walk 22 945 ms), no decide el criterio (D-P6-3). Origen: `just python-bench-scale-ratio --phase …` (n=20 Δ nearest-rank, n=100 search, btrfs/NVMe + fuseblk) + [scale-ratio.json](acceptance/scale-ratio.json) (T5); hallazgo en TD-36 |
 | 7. Multi-formato | matriz conversión (docx/xlsx/html/url) → indexable | ☐ |
 
 **Gate adicional (no criterio UH)** — no forma parte de la tabla de 7 criterios de UH.md (no se renumeran ni se añade un "criterio 8"):

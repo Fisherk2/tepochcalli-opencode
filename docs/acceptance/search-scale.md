@@ -7,14 +7,14 @@
 > **Jerarquía de evidencia (D8):** todas las cifras de este documento son **`medido`** en el host
 > de referencia (`/tmp/opencode`, btrfs/NVMe, CPython 3.12.14 del venv del payload) con el
 > bench `tests/benchmarks/bench_search_scale.py`; cada tabla lleva su comando.
-> **Evidencia archivada:** [phase6-search-scale.json](phase6-search-scale.json) (39 KB, incluye
+> **Evidencia archivada:** [search-scale.json](search-scale.json) (39 KB, incluye
 > **las 100 consultas publicadas** con su `source_path`, la semilla y las muestras crudas).
 
 ## 1. Corpus, índice y método (una sola materialización, un solo índice)
 
 | Hecho | Valor | Origen |
 | --- | --- | --- |
-| Corpus | **11 000 ficheros** (10 000 `.md` + 1 000 PDF), 10 586 197 B, `tree_sha256` `27a20c05…3ecd2` | manifiesto de T1 verificado (`reused: true`), copiado a `/tmp/opencode/phase6-search-scale/vault` y **re-verificado** byte a byte en el vault del bench |
+| Corpus | **11 000 ficheros** (10 000 `.md` + 1 000 PDF), 10 586 197 B, `tree_sha256` `27a20c05…3ecd2` | manifiesto de T1 verificado (`reused: true`), copiado a `/tmp/opencode/t4-scale/vault` y **re-verificado** byte a byte en el vault del bench |
 | Índice | **11 006 chunks** (6 notas partieron en 2), `scanned=11 000`, `indexed=11 000`, `skipped=0`, raíz `00-Resources/` | fase `index` (`refresh_blocking`) |
 | Coste de la indexación en frío | **543 645 ms** (9 m 03,6 s), `VmHWM` **3 963 392 KiB (3,78 GiB)** | fase `index` — cifra de referencia para T5, no criterio de T4 |
 | Consultas | **n = 100** muestreadas del corpus (86 `.md` + 14 PDF), 12 palabras (7 en los PDF), `top_k=5`, semilla **20261112** | `_sample_queries`; las 100 van publicadas en el JSON |
@@ -138,11 +138,11 @@ just python-bench-search-scale --phase queries   # n=100 por stdio real (client 
 just python-bench-search-scale --phase stages    # n=100 por etapa, en proceso
 just python-bench-search-scale --phase legs      # híbrido vs solo ANN vs FTS sola
 just python-bench-search-scale --phase probe     # sonda morfológica ES/EN
-just python-bench-search-scale --phase report    # une todo → docs/diagnosis/phase6-search-scale.json
+just python-bench-search-scale --phase report    # une todo → docs/acceptance/search-scale.json
 # o las siete de golpe: just python-bench-search-scale --phase all   (30+ min)
 ```
 
-Artefactos intermedios por fase en `/tmp/opencode/phase6-search-scale/<fase>.json`; el vault del
-bench (`.tepochcalli/db/` incluido) queda en `/tmp/opencode/phase6-search-scale/vault` para que
+Artefactos intermedios por fase en `/tmp/opencode/t4-scale/<fase>.json`; el vault del
+bench (`.tepochcalli/db/` incluido) queda en `/tmp/opencode/t4-scale/vault` para que
 T5 lo reutilice sin una segunda indexación en frío. El payload
 (`obsidian-workspace/.tepochcalli/{db,models}`) no se creó: la fase `report` aborta si aparece.

@@ -155,19 +155,19 @@ existe hoy, qué falta, qué calpulli lo cierra) y **fija los umbrales** de reca
 
 **Criterios de aceptación:**
 
-- [ ] `docs/diagnosis/phase6-protocol.md` declara el **host de referencia**: btrfs/NVMe en `/tmp/opencode`, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14, y declara `/mnt/HDDFish` (fuseblk/NTFS-3G) como **filesystem de contraste** (D-P6-3).
+- [ ] `docs/acceptance/protocol.md` declara el **host de referencia**: btrfs/NVMe en `/tmp/opencode`, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14, y declara `/mnt/HDDFish` (fuseblk/NTFS-3G) como **filesystem de contraste** (D-P6-3).
 - [ ] Los **7 criterios** de `docs/UH.md` copiados literalmente con su cota exacta, más el **gate adicional D9** marcado como *no criterio 8*.
 - [ ] Por cada criterio: el bench o test que lo mide hoy (o `no existe`), la **cifra actual** si existe con su método, y el calpulli que lo cierra. La tabla §6.3 de `docs/WORKFLOW.md` aparece copiada con la columna `Result` vacía y una columna nueva **`origen de la cifra`** (convención de T16).
 - [ ] **Umbrales fijados ANTES de medir** y escritos en `docs/TRD.md` §6.2: umbral de recall (propuesta: recall@5 = 1.0 sobre el golden vault) y umbral de deriva FTS (propuesta: caída de recall ES > 10 % relativo al detectar la pierna FTS).
 - [ ] **Conflicto de numeración detectado y declarado**: `docs/TRD.md` §6 no tiene subsecciones; la casa cita «TRD §6.2» (TD-15) ⇒ se crean §6.1 «método» y §6.2 «umbrales» con este plan.
 - [ ] **Deuda re-declarada** con su estado real: TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34 y D-b **en alcance**; M6 y TD-32 **fuera** con su motivo (D-P6-4).
-- [ ] `git status --short` muestra **solo** `docs/diagnosis/phase6-protocol.md`, `docs/TRD.md` y `tasks/`.
+- [ ] `git status --short` muestra **solo** `docs/acceptance/protocol.md`, `docs/TRD.md` y `tasks/`.
 
 **Verificación:** cada afirmación del protocolo lleva el comando que la produce; el FTR lo revisa (CP-0). **Ningún bench se ejecuta aquí**: el protocolo se escribe antes de medir, o el criterio se ajusta al resultado.
 
 **Dependencias:** — · **Scope:** S (1 documento nuevo + 1 enmienda de TRD)
 
-**Ficheros probables:** `docs/diagnosis/phase6-protocol.md` · `docs/TRD.md` (§6.1/§6.2 nuevas)
+**Ficheros probables:** `docs/acceptance/protocol.md` · `docs/TRD.md` (§6.1/§6.2 nuevas)
 
 ---
 
@@ -465,7 +465,7 @@ corrida del QA por un fallo de referencia.
 
 **Dependencias:** T0 · **Scope:** S (script de barrido + informe)
 
-**Ficheros probables:** `tests/e2e/verify_payload_refs.py` (nuevo) · `docs/diagnosis/phase6-payload-refs.md` (nuevo)
+**Ficheros probables:** `tests/e2e/verify_payload_refs.py` (nuevo) · `docs/acceptance/payload-refs.md` (nuevo)
 
 ---
 
@@ -648,7 +648,7 @@ del repo padre.
 
 ### CP-0 — Protocolo y umbrales aprobados (tras T0)
 
-- [ ] `docs/diagnosis/phase6-protocol.md` publicado con host, filesystem de referencia, n y método por criterio.
+- [ ] `docs/acceptance/protocol.md` publicado con host, filesystem de referencia, n y método por criterio.
 - [ ] **umbrales de recall y de deriva FTS escritos en `docs/TRD.md` §6.2** y **aprobados por el dueño** (D-P6-8: se fijan antes de medir).
 - [ ] Tabla de huecos completa: cada criterio tiene su calpulli.
 - [ ] Tabla §6.3 copiada con la columna `origen de la cifra` (convención fijada para T16).
@@ -716,7 +716,7 @@ del repo padre.
 
 | # | Métrica | Cómo se mide | Gate |
 | --- | --- | --- | --- |
-| **M1** | Protocolo publicado: host, FS de referencia, n y método por criterio, **umbrales fijados** | `docs/diagnosis/phase6-protocol.md` + `docs/TRD.md` §6.2 | CP-0 |
+| **M1** | Protocolo publicado: host, FS de referencia, n y método por criterio, **umbrales fijados** | `docs/acceptance/protocol.md` + `docs/TRD.md` §6.2 | CP-0 |
 | **M2** | Corpus de 11 000 entradas **reproducible byte a byte** (manifiesto verificado 2×) | `sha256sum` del árbol vs `corpus-manifest.json` | CP-1 |
 | **M3** | Coste del PDF de 30 págs **medido** (n ≥ 3, RSS pico, etiqueta `medido`) | bench de documentos | CP-1 |
 | **M4** | **recall@5 = 1.0** sobre 10 consultas etiquetadas (n = 10) | test de integración en subproceso | CP-1 |

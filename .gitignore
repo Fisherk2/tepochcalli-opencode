@@ -199,6 +199,13 @@ local.gradle
 
 # To add a new rule: identify a specific category, avoid overly broad patterns
 
+# Benchmarks — artefactos de medición LOCALES (vaults y corpus copiados, 45M+):
+# no se versionan. El código de los benches vive en `tests/benchmarks/` y la
+# evidencia de cada medición en `docs/acceptance/`; aquí solo caen los datos de
+# trabajo que un bench materializa en disco.
+/benchmarks/*
+!/benchmarks/README.md
+
 # Tepochcalli runtime (specs/spec-vault-structure.md §Estrategia gitignore)
 # `venv/` (regla Python de arriba) ya cubre el entorno; estas reglas ancladas
 # cubren db/models/bin/config (que no estaban cubiertos a esa profundidad).

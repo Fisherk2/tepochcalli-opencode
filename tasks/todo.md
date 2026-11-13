@@ -45,16 +45,16 @@
 ### [x] T0 — Protocolo de aceptación, umbrales y auditoría de huecos
 
 - Subagente: `codebase-archaeologist` → `performance-benchmarker` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `planning-and-task-breakdown`, `context-engineering` · Tools: `codebase-memory-mcp`, `vercel-grep`
-- [x] `docs/diagnosis/phase6-protocol.md`: host de referencia (btrfs/NVMe, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14) y `/mnt/HDDFish` como filesystem de contraste
+- [x] `docs/acceptance/protocol.md`: host de referencia (btrfs/NVMe, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14) y `/mnt/HDDFish` como filesystem de contraste
 - [x] Los 7 criterios de `docs/UH.md` copiados literalmente + el gate D9 marcado como *no criterio 8*
 - [x] Por criterio: bench/test que lo mide hoy (o `no existe`), cifra actual con su método, calpulli que lo cierra
 - [x] Tabla §6.3 copiada con columna `Result` vacía y columna nueva **`origen de la cifra`**
 - [x] **Umbrales fijados ANTES de medir** en `docs/TRD.md` §6.2: recall (propuesta recall@5 = 1.0) y deriva FTS (propuesta: caída de recall ES > 10 % relativo)
 - [x] `docs/TRD.md` §6 gana las subsecciones §6.1 (método) y §6.2 (umbrales) — la casa ya cita «TRD §6.2»
 - [x] Deuda re-declarada: en alcance TD-2/13/15/27/28/29/34 + D-b · fuera M6 y TD-32, con su motivo
-- [x] `git status --short` solo muestra `docs/diagnosis/phase6-protocol.md`, `docs/TRD.md`, `tasks/`
+- [x] `git status --short` solo muestra `docs/acceptance/protocol.md`, `docs/TRD.md`, `tasks/`
 - Deps: — · Verificación: cada afirmación lleva su comando · **revisión del dueño (CP-0)**
-- **Hecho (2026-11-12):** `docs/diagnosis/phase6-protocol.md` (193 líneas, §1-§8) + `docs/TRD.md` §6.1/§6.2 (umbrales recall@5 = 1.0 y deriva FTS > 10 % relativo, `md-lint` 0). Cero mediciones.
+- **Hecho (2026-11-12):** `docs/acceptance/protocol.md` (193 líneas, §1-§8) + `docs/TRD.md` §6.1/§6.2 (umbrales recall@5 = 1.0 y deriva FTS > 10 % relativo, `md-lint` 0). Cero mediciones.
 
 ### [x] T1 — Corpus de escala reutilizable con manifiesto
 
@@ -67,7 +67,7 @@
 - [x] Tamaño en disco y **tiempo de materialización** publicados
 - [x] Sigue fuera del gate de `just ci` (no es `test_*`)
 - Deps: T0 · Verificación: `sha256sum` del árbol == manifiesto · `just ci` verde
-- **Hecho (2026-11-12):** `tests/support/corpus.py` + manifiesto canónico; 3 materializaciones con `tree_sha256 27a20c05…3ecd2` idéntico y 11 000 hashes iguales al generador de `HEAD`; **2 677 ms** / **45 M** / 11 001 ficheros en `/tmp/opencode/phase6-corpus` (btrfs); reutilización verificada (`reused: true`, `mtime_ns` intactos). Informe: `docs/diagnosis/phase6-corpus.md`.
+- **Hecho (2026-11-12):** `tests/support/corpus.py` + manifiesto canónico; 3 materializaciones con `tree_sha256 27a20c05…3ecd2` idéntico y 11 000 hashes iguales al generador de `HEAD`; **2 677 ms** / **45 M** / 11 001 ficheros en `/tmp/opencode/phase6-corpus` (btrfs); reutilización verificada (`reused: true`, `mtime_ns` intactos). Informe: `docs/acceptance/corpus.md`.
 
 ### [x] T2 — Coste real de un PDF de 30 páginas con markitdown (TD-2)
 
@@ -80,7 +80,7 @@
 - [x] **Condición de TD-2 resuelva con dato**: si rompe la percepción del Δ ⇒ se abre tarea de remediación (límite de tamaño / caché de parseo) con su ADR; si no ⇒ TD-2 se cierra con la cifra
 - [x] El fixture de 30 págs no entra en `just ci`
 - Deps: T0 · Verificación: JSON del bench archivado + cifra en `docs/TRD.md` §6
-- **Hecho (2026-11-12):** `bench_documents.py` + `gen_fixture_pdf.py --pages`; PDF de 30 págs **3 144 ms** p50 (n=3), 335 págs **50 557 ms**, 1313 págs **128 015 ms**; RSS pico 191-255 MiB; ms/página **no** monótono (221 → 97,5) ⇒ extrapolar es inválido. Propuesta de remediación A-D redactada; **decisión del dueño 2026-11-12: opción A+B** (ver T2-bis; C y D no se abren). Informe: `docs/diagnosis/phase6-documents.md`.
+- **Hecho (2026-11-12):** `bench_documents.py` + `gen_fixture_pdf.py --pages`; PDF de 30 págs **3 144 ms** p50 (n=3), 335 págs **50 557 ms**, 1313 págs **128 015 ms**; RSS pico 191-255 MiB; ms/página **no** monótono (221 → 97,5) ⇒ extrapolar es inválido. Propuesta de remediación A-D redactada; **decisión del dueño 2026-11-12: opción A+B** (ver T2-bis; C y D no se abren). Informe: `docs/acceptance/documents.md`.
 
 ### [x] T2-bis — Traza de progreso en `index_refresh` (TD-2 opción **A+B**, firmada 2026-11-12)
 
@@ -135,19 +135,20 @@
 - [x] Si supera el umbral de T0 ⇒ config bilingüe del FTS evaluada contra la **doc de la versión pineada** (R3) e implementada **o** límite documentado con su cifra
 - [x] Decisión escrita en `docs/TRD.md` §6.2 y `docs/TECH_DEBT.md`
 - Deps: T0, T1, T3 · Verificación: JSON del bench archivado como evidencia
-- **Hecho (2026-11-12):** corpus de T1 verificado + copiado (`tree_sha256 27a20c05…`), índice **11 006 chunks** en **543 645 ms** (`VmHWM` 3,78 GiB), **p95 cliente 97 ms / server 94 ms** (n=100, nearest-rank 95.º, 500 ms ⇒ **PASS**); etapas p95 embed 27,0 · ANN+FTS 24,5 · ensamblado 4,6 · IPC 3,0 (+ `index_state` 36,5, fuera de la tabla de la spec) → suma 95,6 ≈ 97 ms. Deriva: recall@5 híbrido **0,19** vs solo ANN **0,15** ⇒ **−26,7 %** (umbral >10 %, **no se dispara**; pierna FTS sola: 19/100 en top-5, 75/100 fuera del top-50); PDF 14/14 vs md 5/86 (corpus de vocabulario fijo: mide el signo, no la calidad). Sonda ES/EN medida: índice inglés **4/7** pares flexivos ES vs español **6/7** y controles EN **2/2 → 0/2** ⇒ v1 mantiene `language="English"` y el límite queda como **TD-35** (ADR nuevo para cualquier cambio). JSON: `docs/diagnosis/phase6-search-scale.json`; informe: `docs/diagnosis/phase6-search-scale.md`; bench por fases: `just python-bench-search-scale --phase prepare|index|queries|stages|legs|probe|report`.
+- **Hecho (2026-11-12):** corpus de T1 verificado + copiado (`tree_sha256 27a20c05…`), índice **11 006 chunks** en **543 645 ms** (`VmHWM` 3,78 GiB), **p95 cliente 97 ms / server 94 ms** (n=100, nearest-rank 95.º, 500 ms ⇒ **PASS**); etapas p95 embed 27,0 · ANN+FTS 24,5 · ensamblado 4,6 · IPC 3,0 (+ `index_state` 36,5, fuera de la tabla de la spec) → suma 95,6 ≈ 97 ms. Deriva: recall@5 híbrido **0,19** vs solo ANN **0,15** ⇒ **−26,7 %** (umbral >10 %, **no se dispara**; pierna FTS sola: 19/100 en top-5, 75/100 fuera del top-50); PDF 14/14 vs md 5/86 (corpus de vocabulario fijo: mide el signo, no la calidad). Sonda ES/EN medida: índice inglés **4/7** pares flexivos ES vs español **6/7** y controles EN **2/2 → 0/2** ⇒ v1 mantiene `language="English"` y el límite queda como **TD-35** (ADR nuevo para cualquier cambio). JSON: `docs/acceptance/search-scale.json`; informe: `docs/acceptance/search-scale.md`; bench por fases: `just python-bench-search-scale --phase prepare|index|queries|stages|legs|probe|report`.
 
-### [ ] T5 — Criterio 6: escala 10k/1k y comparación 10 % vs 100 %
+### [x] T5 — Criterio 6: escala 10k/1k y comparación 10 % vs 100 %
 
 - Subagente: `performance-benchmarker` · Skills: `performance-analysis`, `observability-and-instrumentation`, `documentation-and-adrs` · Tools: `tepochcalli-rag` (payload, stdio)
-- [ ] **Δ p95** (n=20, nearest-rank) sobre 11 000 entradas en **btrfs (referencia)** + diferencia declarada frente a la baseline P-02 (26 967 ms)
-- [ ] **Comparación 10 % vs 100 %**: Δ **y** latencia de `search` en ambos brazos; regresión publicada como **ratio**; PASS = ratio ≤ 2×
-- [ ] **Walk-only** medido aparte (sin embed, sin Δ)
-- [ ] **fuseblk/NTFS-3G**: medición repetida y publicada como **límite conocido**, con la causa (walk de 11k entradas: 17,6 s) y la recomendación al usuario
-- [ ] La cifra que decide el criterio es la de **btrfs**; NTFS va a la columna de límites — **no** se maquilla el FAIL
-- [ ] Costes de documentos (D51) aparte (T2 aporta la cifra)
-- [ ] El bench sigue **fuera** del gate de pytest
+- [x] **Δ p95** (n=20, nearest-rank) sobre 11 000 entradas en **btrfs (referencia)** + diferencia declarada frente a la baseline P-02 (26 967 ms)
+- [x] **Comparación 10 % vs 100 %**: Δ **y** latencia de `search` en ambos brazos; regresión publicada como **ratio**; PASS = ratio ≤ 2×
+- [x] **Walk-only** medido aparte (sin embed, sin Δ)
+- [x] **fuseblk/NTFS-3G**: medición repetida y publicada como **límite conocido**, con la causa (walk de 11k entradas) y la recomendación al usuario
+- [x] La cifra que decide el criterio es la de **btrfs**; NTFS va a la columna de límites — **no** se maquilla el FAIL
+- [x] Costes de documentos (D51) aparte (T2 aporta la cifra)
+- [x] El bench sigue **fuera** del gate de pytest
 - Deps: T0, T1, T4 · Verificación: JSON con ambos FS y los dos brazos
+- **Hecho (2026-11-13):** `tests/benchmarks/bench_scale_ratio.py` (por fases y por tramos: `prepare|index10|search|walk|delta|ntfs|report`). Brazo 10 % **derivado del manifiesto de T1** (1 de cada 10 por tipo ⇒ 1 000 md + 100 PDF, `tree_sha256 66a194d5…701d65a`, índice propio en frío **60 716 ms**, 1 101 chunks). **Δ p95 btrfs: 15 695 ms (100 %, 11k) vs 2 543 ms (10 %, 1,1k) ⇒ ratio 6,17× = FAIL** de la cota 2× (el 100 % sí cabe en 30 s al 52 %; **−41,8 % frente a P-02 26 967 ms**); **`search` p95 cliente 87 ms vs 51 ms ⇒ ratio 1,71× = PASS** (n=100, las 100 consultas de T4, 500 ms); **walk-only 6 115 ms vs 555 ms ⇒ 11,0×** (n=5) = mecanismo: walk lineal sin watcher (ADR-002) ⇒ **TD-36**. **fuseblk/NTFS-3G: Δ p95 52 996 ms = FAIL** (1,77× el presupuesto; walk 22 945 ms; índice en frío 944 019 ms), publicado como **límite conocido** D-P6-3 con causa y recomendación; **descartado** copiar el índice de btrfs al FS (el memo no cruza la ruta ⇒ re-embed completo, 96-204 s por ciclo). JSON: `docs/acceptance/scale-ratio.json`; informe: `docs/acceptance/scale-ratio.md`; bench: `just python-bench-scale-ratio --phase …`.
 
 ### [ ] T6 — Criterio 4: tokens por consulta (<2000 con contexto)
 

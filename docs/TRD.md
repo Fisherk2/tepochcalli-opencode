@@ -101,14 +101,14 @@ btrfs/NVMe, CPython 3.12.14: PDF de **30 páginas** = **3 144 ms p50 / 4 172 ms 
 `VmHWM` 191,6 MiB); libro real de **1 313 páginas** = **128 015 ms p50** (n=3); coste por página
 **no constante** (97,5-221 ms/página según composición del documento ⇒ no se extrapola). Comando:
 `just python-bench-documents --doc-pages 30 --n 3 --json …`; detalle, n por fila y JSON en
-[docs/diagnosis/phase6-documents.md](diagnosis/phase6-documents.md).
+[docs/acceptance/documents.md](acceptance/documents.md).
 
 ### 6.2 Umbrales
 
 > **Vigencia:** fijados en T0 (2026-11-12) **antes de medir** (D-P6-8) y **aprobados en CP-0 el
 > 2026-11-12** por el dueño, sin cambios sobre la propuesta. No se ajustan después de ver el
 > resultado; si se cambiaran, la corrección sería aquí y en
-> `docs/diagnosis/phase6-protocol.md` §6 **antes** de la primera medición. El protocolo que estos
+> `docs/acceptance/protocol.md` §6 **antes** de la primera medición. El protocolo que estos
 > umbrales interpretan es §6.1.
 
 | Umbral | Valor | Método | Calpulli que lo aplica | Fuente |
@@ -135,7 +135,19 @@ columna `text` (`lancedb==0.40.0`; dos índices en la misma columna son ambiguos
 los distingue), así que la configuración bilingüe exigiría una segunda columna de texto +
 re-index + ADR nuevo. **Decisión: v1 mantiene `language="English"`** (el híbrido no pierde
 recall medible) y el límite queda registrado como **TD-35**. Cifras, tablas, método y JSON:
-[docs/diagnosis/phase6-search-scale.md](diagnosis/phase6-search-scale.md).
+[docs/acceptance/search-scale.md](acceptance/search-scale.md).
+
+**Medición del criterio 6 a escala (T5, 2026-11-13).** Sobre el corpus de T1, con el brazo del
+100 % en el índice de T4 (11 006 chunks) y el del 10 % en un subconjunto derivado del manifiesto
+(1 100 entradas, índice propio en frío), mismo host y mismas 100 consultas: **Δ p95 = 15 695 ms
+(100 %) vs 2 543 ms (10 %) ⇒ ratio 6,17× = FAIL** de la cota de 2× (el 100 % sí cabe en el
+presupuesto absoluto: 52 % de 30 s); **`search` p95 = 87 ms vs 51 ms ⇒ ratio 1,71× = PASS**; y
+**walk-only 6 115 ms vs 555 ms (11,0×)** como mecanismo: el walk es lineal y no hay watcher
+(ADR-002), así que la cota entre tamaños no es alcanzable en el refresco sin cambiar el diseño del
+walk (ADR nuevo; **TD-36**). La cota **no se renegocia**: el resultado se publica como FAIL medido.
+En fuseblk/NTFS-3G el Δ es **52 996 ms (FAIL, 1,77× el presupuesto)** con walk de 22 945 ms: va a
+límites, no decide (D-P6-3: un vault en NTFS/red/sync degrada el Δ; mantenerlo en disco local).
+Cifras, método, muestras y comandos: [docs/acceptance/scale-ratio.md](acceptance/scale-ratio.md).
 
 **Regla de origen de cifra (D-P6-7).** Cada cifra publicada en la tabla §6.3 de
 `docs/WORKFLOW.md` lleva **bench + n + método + filesystem**; la jerarquía de evidencia es

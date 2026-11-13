@@ -27,7 +27,7 @@ Notas `.md`/`.txt` no se miden por página: el benchmark de Δ toca/crea 50 nota
   (markitdown 190-255 MiB; indexación ≈1,5-1,8 GiB porque carga el modelo). Host de desarrollo
   (i7-8750H, 12 vCPU, btrfs/NVMe, CPython 3.12.14), no la VM de 8 GB de [docs/TRD.md](docs/TRD.md) §6.1:
   en hardware menor, más lento. Detalle y JSON crudos en
-  [docs/diagnosis/phase6-documents.md](docs/diagnosis/phase6-documents.md).
+  [docs/acceptance/documents.md](docs/acceptance/documents.md).
 * **No extrapoles por página.** El coste por página cae de 221 ms a 98 ms al crecer el documento
   (se amortiza el arranque) y **no es monótono**: un PDF de 444 páginas con 527 k chars tarda más
   que uno de 335 con 1 M, porque manda la composición del PDF, no el número de páginas. La cifra

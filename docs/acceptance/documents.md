@@ -3,7 +3,7 @@
 > **Fecha:** 2026-11-12 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T2
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
 > **Fuente de verdad:** `tasks/plan.md` §5 T2 · `tasks/todo.md` T2 · `docs/TECH_DEBT.md` TD-2 ·
-> `docs/TRD.md` §6.1 · `docs/diagnosis/phase6-protocol.md` §1 (host).
+> `docs/TRD.md` §6.1 · `docs/acceptance/protocol.md` §1 (host).
 > **Jerarquía de evidencia (D8):** toda cifra de este documento es **`medido`** en el host de
 > referencia (btrfs/NVMe, `/tmp/opencode`) con el intérprete pineado del venv; cada fila lleva
 > su JSON y su comando. Las dos únicas cifras **derivadas** (no medidas) van marcadas.

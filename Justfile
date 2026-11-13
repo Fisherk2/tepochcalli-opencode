@@ -124,6 +124,13 @@ python-bench-search-scale *args:
 python-bench-documents *args:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_documents.py {{args}}
 
+# Bench del criterio 6 a escala (Phase 6 T5): brazos 10 % vs 100 % (Δ p95 n=20 +
+# search p95 n=100) y contraste btrfs vs fuseblk/NTFS-3G. Medición LOCAL, POR
+# TRAMOS en primer plano: `--phase prepare|index10|search|walk|delta|ntfs|report`
+# con `--arm b100|b10|ntfs --start N --cycles 5`; ver bench_scale_ratio.py.
+python-bench-scale-ratio *args:
+    cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_scale_ratio.py {{args}}
+
 # --- Rust wizard (Phase 3, T18): nada de `cargo` crudo fuera de estas recipes ---
 # `crate_dir` + `cd ... &&`: mismo patrón que `flow_dir` arriba (una línea
 # por receta, porque `just` no conserva `cd` entre líneas).
@@ -229,6 +236,9 @@ bench-search args="": (python-bench-search args)
 
 # Bench de escala del criterio 3 (10k/1k, n=100) + deriva FTS ES/EN — por fases.
 bench-search-scale args="": (python-bench-search-scale args)
+
+# Destino del bench del criterio 6 (brazos 10 % vs 100 % + fuseblk) desde la raíz.
+bench-scale-ratio args="": (python-bench-scale-ratio args)
 
 # Markdown lint de docs/specs/AGENTS.md/SPEC.md (markdownlint-cli2 vía npx).
 md-lint:

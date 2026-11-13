@@ -1,6 +1,6 @@
 """TD-2 opción B (2026-11-12): traza de progreso del refresh — en stderr, no en el contrato.
 
-Fuente de verdad: `docs/diagnosis/phase6-documents.md` §6 — un libro de 335
+Fuente de verdad: `docs/acceptance/documents.md` §6 — un libro de 335
 páginas tarda **50,6 s solo en extraerse** (108,5 s con indexación) y el
 usuario veía silencio; el PDF de 30 páginas (3,14 s) sí cabe en el Δ de 30 s
 (D51). La decisión del dueño es **D51 + traza por documento binario**, sin

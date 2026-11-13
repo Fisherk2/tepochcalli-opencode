@@ -187,7 +187,7 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 
 ## Enmienda 2026-11-12 — inventario real 39 y delegaciones reales
 
-**Origen.** Auditoría `T12` ([docs/diagnosis/phase6-payload-refs.md](../docs/diagnosis/phase6-payload-refs.md),
+**Origen.** Auditoría `T12` ([docs/acceptance/payload-refs.md](../docs/acceptance/payload-refs.md),
 commit `bdb2da8`): **0 referencias huérfanas** en el payload y **3 defectos documentales**
 en esta spec. Orden del dueño (2026-11-12): **la spec se alinea al payload**, no al revés.
 **El payload no se toca** (D-P6-1, `obsidian-workspace/` congelado).

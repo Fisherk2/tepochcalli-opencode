@@ -1,37 +1,38 @@
-# Technical Diagnoses
+# Diagnósticos técnicos
 
-This directory documents technical diagnoses for issues identified in the project. Each diagnosis follows a structured format for consistency and traceability.
+Este directorio contiene **solo diagnósticos de issues** del proyecto: análisis de causa raíz
+de bugs, incidentes y problemas técnicos, con un formato común para que sean trazables.
 
-## Purpose
+La **evidencia de aceptación** (mediciones E2E de los 7 criterios de [UH.md](../UH.md)) **no vive
+aquí**: se publica en [`docs/acceptance/`](../acceptance/README.md).
 
-- Capture root cause analysis for bugs, incidents, and technical issues
-- Provide a searchable record of past diagnoses for future reference
-- Track recurring patterns that may need automation or systemic fixes
+## Propósito
 
-## Index
+- Capturar el análisis de causa raíz de bugs, incidentes y problemas técnicos
+- Dejar un registro buscable de diagnósticos pasados para consulta futura
+- Detectar patrones recurrentes que merezcan automatización o una corrección sistémica
 
-| File | Issue | Date | Severity |
+## Índice
+
+| Fichero | Issue | Fecha | Severidad |
 | --- | --- | --- | --- |
-| [phase6-protocol.md](phase6-protocol.md) | Protocolo de aceptación Phase 6 (protocolo, no diagnóstico) | 2026-11-12 | — |
-| [phase6-corpus.md](phase6-corpus.md) | Corpus de escala 10k/1k con manifiesto (T1) | 2026-11-12 | — |
-| [phase6-documents.md](phase6-documents.md) | Coste de extracción de documentos binarios (T2) | 2026-11-12 | — |
-| [phase6-payload-refs.md](phase6-payload-refs.md) | Refs del payload a skills/subagentes (T13/TQA) | 2026-11-12 | — |
-| [phase6-search-scale.md](phase6-search-scale.md) | Criterio 3 a escala + deriva FTS ES/EN (T4) | 2026-11-12 | — |
+| [fix01-conversor-satura-contexto-llm.md](fix01-conversor-satura-contexto-llm.md) | El conversor satura el contexto del LLM | 2026-10-30 | — |
 
-<!-- Add entries here as diagnoses are created -->
+<!-- Añadir aquí las entradas según se creen diagnósticos. La evidencia de aceptación
+     (Phase 6: criterios 1-7) no vive aquí: se publica en `docs/acceptance/`. -->
 
-## Workflow
+## Flujo de trabajo
 
-1. An issue is identified (user report, automated alert, code review)
-2. Run `/diagnosis` to analyze and document the root cause
-3. Run `/plan` to create an execution plan for the fix
-4. Update the diagnosis if the fix reveals additional insights
+1. Se identifica un issue (reporte de usuario, alerta automatizada, revisión de código)
+2. Se ejecuta `/diagnosis` para analizar y documentar la causa raíz
+3. Se ejecuta `/plan` para crear el plan de ejecución de la corrección
+4. Se actualiza el diagnóstico si la corrección revela información adicional
 
-## Template
+## Plantilla
 
-Use `diagnosis-template.md` as a starting point for new diagnoses.
+Usa `diagnosis-template.md` como punto de partida para nuevos diagnósticos.
 
-## Naming Convention
+## Convención de nombres
 
 <!-- markdownlint-disable MD040 -->
 ```
@@ -39,4 +40,5 @@ fix<NNN>-<short-description>.md
 ```
 <!-- markdownlint-enable MD040 -->
 
-Where `<NNN>` is a sequential number (01, 02, ...) and `<short-description>` is a kebab-case summary of the issue.
+Donde `<NNN>` es un número secuencial (01, 02, ...) y `<short-description>` es un resumen
+kebab-case del issue.
