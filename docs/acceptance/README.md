@@ -21,6 +21,7 @@ método; lo estimado y lo declarado se etiquetan y nunca se presentan como medic
 | [scale-ratio.md](scale-ratio.md) | Brazos 10 % vs 100 %: Δ de indexación y `search` (ratio vs cota 2×), walk-only y límite fuseblk/NTFS-3G | 6 (+2 y 3) |
 | [token-budget.md](token-budget.md) | Tokens por consulta con tokenizador real: payload del server (estimador vs real) y total e2e con la respuesta citada | 4 |
 | [citations.md](citations.md) | Identidad F1 re-verificada contra el archivo vivo (`verify.py --spot-check`): tasa de citas reproducibles, par exit 0/≠0 y solo lectura de `db/` | 5 |
+| [pdf-heading.md](pdf-heading.md) | Impacto de D54 (TD-27): qué parte de la cita de PDF sin `heading` es de la política y qué parte del extractor — 8 PDF reales, 6 303 chunks, el caso «query cuyo único material es un PDF» y la recomendación **sin firmar** | 5 (diagnóstico del anchor de cita) |
 | [format-matrix.md](format-matrix.md) | Matriz ejecutable de 9 formatos (índice vs conversor) con `doc_kind`/`offsets_ref`/indexabilidad/`source_path`, la distinción `written_to` vs cita, y los GAP con su mensaje real (`.doc`, `.ppt`, PDF escaneado, `url` sin egress) | 7 |
 | [no-interference.md](no-interference.md) | Criterio 1 sobre un vault **instalado por el wizard**: `.obsidian/` byte-idéntico, 0 puertos nuevos (las dos listas `ss -ltnp` publicadas), 0 basura oculta, vault válido — con el RED de la guarda (`--fault obsidian` y `--fault port`) y el hallazgo del alias `00-Resources` / `00-resources` | 1 |
 

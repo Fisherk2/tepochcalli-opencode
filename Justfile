@@ -124,6 +124,13 @@ python-bench-search-scale *args:
 python-bench-documents *args:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_documents.py {{args}}
 
+# Impacto de D54 (Phase 6 T10, TD-27): headings que markitdown SÍ entrega en PDFs
+# reales vs los que la política descarta, y campos de cita de una query cuyo único
+# material es un PDF. Medición LOCAL, por fases: `--phase extract|corpus-sample|
+# query|report`; ver bench_pdf_heading.py.
+python-bench-pdf-heading *args:
+    cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_pdf_heading.py {{args}}
+
 # Criterio 1 (Phase 6 T9): no-interferencia sobre un vault INSTALADO por el
 # wizard — `.obsidian/` byte-idéntico, 0 puertos nuevos, 0 basura oculta y
 # vault válido tras `index_refresh`+`search`. Medición LOCAL.

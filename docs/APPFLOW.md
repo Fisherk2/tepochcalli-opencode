@@ -85,6 +85,16 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
    instaló Python/Node ni tecleó comandos de dependencias.
 6. Smoke: usuario añade una nota a `00-resources/` → journey (b) funciona.
 
+**Windows no está soportado en v1 (decisión declarada, 2026-11-13).** El journey anterior
+asume Linux o macOS. En Windows existen un `install.ps1` y un target `x86_64-pc-windows-msvc`,
+pero **no tienen build ni ejecución registrados** (`release.yml` no ha corrido — M6 —, la matriz
+CI es ubuntu+macos, no hay smoke path-5 en Windows): usarlos es bajo cuenta y riesgo y sin
+compromiso de soporte.
+Revertir la decisión exige un smoke path-5 (`--non-interactive --skip-model`) ejecutado en un
+runner Windows con `install.ps1` y el layout `venv/Scripts/python.exe` (D20) verificados y su
+evidencia archivada. Detalle: [docs/TRD.md](TRD.md) §2 y
+[docs/TECH_DEBT.md](TECH_DEBT.md) §D-b.
+
 Flags: `--offline` (re-instalación con cachés; sin red), `--skip-model` = salida
 "Configurar después" del menú de embedder (ADR-007 D7.1-5): el vault se instala completo, la
 indexación inicial se omite y el RAG queda en estado `degraded`;

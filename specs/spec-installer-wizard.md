@@ -1,6 +1,6 @@
 # Spec: Wizard de instalación (TUI Rust atomico y versionado)
 
-* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`)
+* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -196,7 +196,7 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 
 ## Testing Strategy
 
-* Matrix: VM limpia por plataforma (Ubuntu latest, macOS arm64, Windows) — acceptance: "clean VM → installed vault with one command incl. deps" (Phase 3 exit, docs/WORKFLOW.md).
+* Matrix: VM limpia por plataforma (Ubuntu latest, macOS arm64, Windows) — acceptance: "clean VM → installed vault with one command incl. deps" (Phase 3 exit, docs/WORKFLOW.md). **Windows: objetivo nunca ejecutado** — ver §Enmienda D-b.
 * Idempotencia: `install` dos veces → mismo estado, cero duplicados en `opencode.json` ni en `00-resources/` (SPEC.md §Testing).
 * Fallo inducido: matar la red en fase 5/6 → assert del rollback correspondiente y `.bak` intacto.
 * `--offline` segunda corrida (con cachés) → éxito sin red (fixture en CI con cache uv/`models/` pre-cargados).
@@ -219,6 +219,25 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 ## Open Questions
 
 Ninguna pendiente. Resuelta (D21): `--resume` **deduce por artefactos presentes + marker `.tepochcalli/.install-state`** — no guarda el estado de fase en `bin/.install-state`; reusa artefactos válidos y reanuda desde la primera fase incompleta.
+
+## Enmienda 2026-11-13 — estado de soporte de Windows en v1 (D-b)
+
+**Decisión (2026-11-13, evidencia `declarado`):** **Windows no está soportado en v1.**
+
+Esta spec describe un wizard que **declara** un target de Windows (`x86_64-pc-windows-msvc`),
+un `install.ps1` y el comando portable `venv/Scripts/python.exe` (D20). Eso es **código
+declarado**, no capacidad probada: ninguna de esas piezas tiene build ni ejecución en Windows
+registrados — `release.yml` nunca corrió (M6 en `docs/TECH_DEBT.md`) y la matriz de `phase3.yml`
+es ubuntu+macos. Los artefactos y su estado uno a uno: `docs/TECH_DEBT.md` §D-b;
+la decisión propagada: `docs/TRD.md` §2 y `docs/APPFLOW.md` §5.
+
+* **Consecuencia para el usuario:** en Windows no hay instalación soportada; usar `install.ps1`
+  es bajo su cuenta y riesgo y sin compromiso de soporte. El wizard **no** rechaza Windows
+  (`SUPPORTED_OS` lo incluye): la decisión es de soporte, no un gate de runtime.
+* **Para revertirla (paso a `medido`):** un smoke path-5 (`--non-interactive --skip-model`)
+  ejecutado en `windows-latest` o VM Windows limpia sobre una release real, con `install.ps1`
+  invocado y el layout `venv/Scripts/python.exe` + `mcp.servers` verificados en el vault
+  instalado, evidencia archivada y Windows añadido a la matriz CI.
 
 ## References
 

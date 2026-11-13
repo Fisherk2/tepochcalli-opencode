@@ -335,5 +335,44 @@ verificación de T20: nada aquí es deuda inventada en T20.
 | ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
 | --- | --- | --- | --- | --- |
 | **M6** | **CI y release nunca ejecutados**: `.github/workflows/phase3.yml` y `release.yml` existen y están revisados a mano (acciones pineadas), pero **ningún workflow ha corrido nunca** — ni `phase3.yml` (matrix ubuntu+macos, smoke path-5), ni `release.yml` (`dist` genera `install.sh`/`install.ps1` oficiales); no hay release publicada ni asset `tepochcalli-workspace-<ver>.tar.gz` real; los installers de referencia viven en `crates/tepochcalli/installers/` | T18/T19 (D-a: entrega sin publicar) | Se declara "matrix verde" o "release lista" sin evidencia; el primer `dist build` real puede fallar (divergencias deliberadas vs `dist init`, `allow-dirty = ["ci"]`) | Ejecutar `phase3.yml` + publicar una release de prueba en Phase 6 (o antes si se necesita el oneliner); reconciliar con `cargo dist generate --check` cuando `dist` esté instalado |
-| **D-b** | **Windows fuera de la matriz CI y sin probar**: el target `x86_64-pc-windows-msvc` se compila para que el instalador PowerShell exista, pero `phase3.yml` solo corre ubuntu+macos; el comando del MCP portable por SO (`venv/Scripts/python.exe`) y `install.ps1` **nunca se ejecutaron en Windows** | T18 (D-b) | Rutas, quoting y `Scripts/python.exe` pueden fallar solo en Windows sin que CI lo vea | Probar el smoke path-5 en una VM Windows antes de declarar soporte; Phase 6 corre la matriz completa o documenta Windows como no soportado |
+| **D-b** | **Windows fuera de la matriz CI y sin probar**: el target `x86_64-pc-windows-msvc` está declarado en `dist.toml` para que exista el instalador PowerShell, pero `phase3.yml` solo corre ubuntu+macos; el comando del MCP portable por SO (`venv/Scripts/python.exe`) y `install.ps1` **nunca se ejecutaron en Windows** | T18 (D-b) | Rutas, quoting y `Scripts/python.exe` pueden fallar solo en Windows sin que CI lo vea | **CERRADA (pendiente de firma del dueño) 2026-11-13 (Phase 6, T13):** Windows se documenta como **no soportado en v1** con etiqueta `declarado` (cero ejecuciones en Windows: ver §D-b). Revertir la decisión exige un smoke path-5 en un runner Windows con evidencia archivada |
 | **F-T20** | **Spec del wizard sin probar contra el gate de Phase 6**: `spec-installer-wizard.md` pasa a Approved con este FTR, pero sus afirmaciones de escala y UX (VM limpia en 3 plataformas, matriz de 5 caminos del menú, tiempos de instalación) no se han ejecutado contra el gate de aceptación (tabla §6.3 de WORKFLOW) | T20 (cierre documental) | La spec Approved se lee como "probada" cuando solo está "implementada + testeada en local" | Phase 6 ejecuta la tabla §6.3 contra el wizard real; divergencias ⇒ enmienda de spec (sin re-editar lo Accepted: ADR o nota de mapeo) |
+
+### D-b — estado de soporte de Windows en v1 (2026-11-13)
+
+**Estado de la deuda:** `CERRADA (pendiente de firma del dueño)` — la decisión de producto
+la firma el dueño; el texto queda listo para firmar y **no** se da por aprobada aquí.
+
+**Decisión (2026-11-13, evidencia `declarado`):** **Windows no está soportado en v1.**
+
+Ninguna ejecución en Windows respalda lo contrario. Lo que existe en el repo es **código
+declarado**, no capacidad probada:
+
+| Artefacto | Qué hay en el repo | Evidencia | Estado real |
+| --- | --- | --- | --- |
+| Target `x86_64-pc-windows-msvc` | `targets` de cargo-dist + job `build` con `windows-latest` | `crates/tepochcalli/dist.toml:30-35` · `.github/workflows/release.yml:109-111` | **declarado, sin build**: `release.yml` no ha corrido nunca (M6) ⇒ ningún artefacto Windows producido |
+| `install.ps1` | Script escrito a mano (71 líneas) con verificación SHA-256 antes de ejecutar | `crates/tepochcalli/installers/install.ps1` | **nunca ejecutado**: solo un pin estático del texto (`tests/e2e_installers.rs:332-357`) |
+| Layout de venv `Scripts/` (D20) | `venv_python()` y `mcp_python_command_for(windows)` | `src/application/installer.rs:317,663` · `src/application/phase8.rs:91-99` | **código + test de cadena**: `tests/int_phase_f8_mcp_merge.rs:471-482` compara literales en Linux; el layout real de Windows no se creó nunca |
+| Bootstrap `uv.exe` + `uv venv` en Windows | Ramas `cfg!(windows)` en el wizard | `src/application/installer.rs:300-306` | **nunca ejecutado** en Windows |
+| Matriz CI | `phase3.yml` corre `ubuntu-latest` y `macos-latest` | `.github/workflows/phase3.yml:50` | **fuera por diseño**; nunca se amplió a Windows |
+| Smoke path-5 (instalación real no interactiva) en Windows | No existe | `grep windows .github/workflows/phase3.yml` → 0 jobs | **no existe** |
+
+**Consecuencia para el usuario:** en Windows no hay camino de instalación soportado. El
+`install.ps1` del repo y el target de `dist.toml` no lo cambian: no hay release publicada (M6)
+y, cuando la haya, el script seguirá sin haberse ejecutado nunca. Usarlos es **bajo su cuenta y
+riesgo, sin compromiso de soporte**. El wizard además **no rechaza** Windows (`SUPPORTED_OS`
+incluye `"windows"`, `src/application/installer.rs:34`): la decisión es de **soporte**, no un
+gate de runtime, y por eso debe leerse como promesa retirada —no como imposibilidad técnica—.
+
+**Qué haría falta para revertirla (pasar a “soportado”, evidencia `medido`):**
+
+1. Un **smoke path-5** (`tepochcalli install --non-interactive --skip-model`) ejecutado en un
+   runner `windows-latest` o una VM Windows limpia **sobre una release real**, con
+   `install.ps1` invocado de verdad.
+2. Verificar el layout `venv/Scripts/python.exe` (D20) y el `mcp.servers` resultante en ese
+   vault instalado (el mismo criterio que el smoke de `phase3.yml`: `00-resources/` y una
+   entrada `mcp.servers` válida).
+3. Archivar la evidencia (transcript + árbol del vault) y **entonces** añadir `windows-latest`
+   a la matriz de `phase3.yml`, de modo que la promesa quede gated por CI y no por prosa.
+
+Sin esos tres pasos, Windows sigue siendo `declarado` y la decisión de v1 se mantiene.

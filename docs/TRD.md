@@ -19,7 +19,19 @@ Arquitectura hexagonal por capas con frontera única MCP (ADR-005). Detalle y di
 | --- | --- | --- |
 | Linux | x86_64, aarch64 | primary (distro-agnostic: binarios estáticos de uv/wizard; torch CPU wheel) |
 | macOS | arm64 (Apple Silicon), x86_64 | rutas estándar Obsidian; quarantine por Gatekeeper → documentado en wizard UX |
-| Windows | x86_64 | `install.ps1`; venv layout `Scripts\` — el merge de opencode.json usa rutas por plataforma |
+| Windows | x86_64 | `install.ps1`; venv layout `Scripts\` — el merge de opencode.json usa rutas por plataforma. **No soportado en v1** (ver nota) |
+
+**Estado de soporte de Windows en v1 — decisión declarada (2026-11-13):** **Windows no está
+soportado en v1.** Ninguna ejecución en Windows respalda lo contrario: el target
+`x86_64-pc-windows-msvc`, el `install.ps1` y el comando `venv/Scripts/python.exe` (D20) existen
+en el repo, pero no tienen build de CI ni ejecución en Windows registrados (`release.yml` jamás
+ha corrido — M6 —, la matriz de `phase3.yml` es ubuntu+macos y no hay smoke path-5 en Windows). Evidencia:
+`declarado`. **Consecuencia para el usuario:** en Windows no hay instalación soportada; usar
+`install.ps1` es bajo su cuenta y riesgo y sin compromiso de soporte. **Para revertirla** hace
+falta un smoke path-5 (`--non-interactive --skip-model`) ejecutado en un runner `windows-latest`
+o VM Windows limpia sobre una release real, con `install.ps1` y el layout `Scripts/` verificados
+y la evidencia archivada; entonces se añade Windows a la matriz CI. Detalle de artefactos:
+[docs/TECH_DEBT.md](TECH_DEBT.md) §D-b.
 
 Requisitos por plataforma: Obsidian instalado; OpenCode V2 en PATH (fase 1 del wizard solo
 detecta e instruye, no instala).

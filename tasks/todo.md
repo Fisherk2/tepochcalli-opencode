@@ -223,15 +223,16 @@
 
 ## Ola 2 — Deuda y decisiones
 
-### [ ] T10 — TD-27: el fate de la cita PDF sin heading (D54)
+### [~] T10 — TD-27: el fate de la cita PDF sin heading (D54)
 
 - Subagente: `rag-pipeline-engineer` → `software-architect` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `performance-analysis`, `doubt-driven-development` · Tools: `tepochcalli-rag` (payload, stdio), `codebase-memory-mcp`
-- [ ] **Medición del impacto**: fracción de citas de PDF en top-5 **sin** `heading` sobre el corpus de T1, y qué pasa con una query cuyo único material es un PDF
-- [ ] **Decisión con dato**: (a) reafirmar D54 con la cifra y el coste de revertir documentados, o (b) revertir ADR-011 ⇒ **ADR-013** que reemplace §4.3 + re-sincronización de las 4 specs
-- [ ] La decisión queda **escrita con fecha**; TD-27 **cerrada con evidencia**
-- [ ] **No reescribe el payload** (D-P6-1) ni toca el contrato MCP sin ADR
-- [ ] La **firma es del dueño** (cambia una decisión `Accepted`): el subagente prepara la opción con el dato
+- [x] **Medición del impacto**: fracción de citas de PDF en top-5 **sin** `heading` sobre el corpus de T1, y qué pasa con una query cuyo único material es un PDF
+- [~] **Decisión con dato**: (a) reafirmar D54 con la cifra y el coste de revertir documentados, o (b) revertir ADR-011 ⇒ **ADR-013** que reemplace §4.3 + re-sincronización de las 4 specs
+- [~] La decisión queda **escrita con fecha**; TD-27 **cerrada con evidencia** (con la firma, en T16)
+- [x] **No reescribe el payload** (D-P6-1) ni toca el contrato MCP sin ADR
+- [~] La **firma es del dueño** (cambia una decisión `Accepted`): el subagente prepara la opción con el dato
 - Deps: T0, T1 · Verificación: cifra reproducible con su comando
+- **Hecho (2026-11-13) — medido; pendiente de firma.** `tests/benchmarks/bench_pdf_heading.py` + receta `just python-bench-pdf-heading` (fases `extract|corpus-sample|query|report`). El corpus de T1 **no permite medir**: sus PDF son stubs de 54 caracteres y 1 chunk (n=20, 0 líneas ATX) ⇒ el 100 % sería por diseño del fixture; se mide sobre **8 PDF reales** (1–1 313 págs, los 5 libros de T2 + 3 fixtures). **Citas de PDF sin `heading`: 0/6 303 (100 %) — por construcción**, y si la política no lo forzara **7 de 8 PDF seguirían sin él** (0 líneas ATX); en CLRS hay 2 artefactos que darían heading falso al **79,0 %** del documento. **El nulo es del extractor, no de D54.** Caso «solo un PDF»: vault de 1 fichero, query ES → **5/5 citas del mismo `source_path`, 0 con heading, F1 5/5**; campos reales `text`·`source_path`·`heading null`·`char_start`·`char_end`·`score`·`offsets_ref="extract"` (`doc_kind` no viaja) y **sin número de página**. Hallazgo separado: el `.docx` **sí** trae ATX (3/4 chunks ganarían heading sin Docling) ⇒ decisión aparte. Recomendación **(a) reafirmar D54**, **sin firmar**: «Pendiente de firma del dueño (2026-11-XX)». Cero payload, cero contrato MCP, cero ADR. Evidencia: `docs/acceptance/pdf-heading.{md,json}` + README. TD-27 **sigue abierta** hasta la firma.
 
 ### [x] T11 — TD-28 + TD-29: hygiene del wizard y del modelo local
 
@@ -260,15 +261,15 @@
 
 - **Hecho (2026-11-12, re-verificado 2026-11-13):** `tests/e2e/verify_payload_refs.py` ⇒ **0 failure(s); 111 reference(s) checked against 39 skill(s) and 170 agent(s)**. 9 comandos y 5 agentes cotejados contra `ls .opencode/skills` (39 tras los retiros `c815eb0` y `e785072`); `git diff --stat -- obsidian-workspace` vacío en la verificación. Sin payload reescrito.
 
-### [ ] T13 — D-b: estado de soporte de Windows en v1
+### [x] T13 — D-b: estado de soporte de Windows en v1
 
 - Subagente: `technical-writer` · Skills: `documentation-and-adrs`, `changelog-generate`, `technical-writer` · Tools: `gitmcp`
-- [ ] Estado **verificado / no verificado** enumerado (target compilable, `install.ps1`, layout `Scripts/`, D20) y **nunca ejecutado** (instalador, smoke, CI)
-- [ ] **Decisión de soporte v1** escrita con fecha: *no soportado en v1* o *soportado con verificación pendiente*, con la **consecuencia para el usuario** y qué haría falta para revertirla
-- [ ] Propagación a `docs/TRD.md` §2, `specs/spec-installer-wizard.md`, `docs/APPFLOW.md`, `CHANGELOG.md`
-- [ ] **No** se toca `README.md` ni `LICENSE` (lista de «nunca» del `AGENTS.md`)
-- [ ] `docs/TECH_DEBT.md` §D-b **cerrada** con la decisión y su fecha
-- [ ] `just md-lint` 0
+- [x] Estado **verificado / no verificado** enumerado (target compilable, `install.ps1`, layout `Scripts/`, D20) y **nunca ejecutado** (instalador, smoke, CI) — tabla de 6 artefactos en `docs/TECH_DEBT.md` §D-b
+- [x] **Decisión de soporte v1** escrita con fecha: *no soportado en v1* (2026-11-13, `declarado`), con la **consecuencia para el usuario** y qué haría falta para revertirla
+- [x] Propagación a `docs/TRD.md` §2, `specs/spec-installer-wizard.md` (§Enmienda D-b), `docs/APPFLOW.md` §5, `CHANGELOG.md`
+- [x] **No** se toca `README.md` ni `LICENSE` (lista de «nunca» del `AGENTS.md`)
+- [x] `docs/TECH_DEBT.md` §D-b **cerrada** con la decisión y su fecha — estado `CERRADA (pendiente de firma del dueño)`
+- [x] `just md-lint` 0
 - Deps: T0 · Verificación: decisión citada en TRD §2 y APPFLOW · enlaces resuelven
 
 ### [ ] Checkpoint CP-4 — Deuda y decisiones cerradas (tras T10, T11, T12, T13)
