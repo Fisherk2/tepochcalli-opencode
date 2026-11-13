@@ -120,6 +120,23 @@ btrfs/NVMe, CPython 3.12.14: PDF de **30 páginas** = **3 144 ms p50 / 4 172 ms 
 **hallazgo** que se documenta con su cifra en `docs/TECH_DEBT.md` y, si toca un contrato
 `Accepted`, exige **ADR nuevo**.
 
+**Medición de la deriva FTS (T4, 2026-11-12).** Sobre el corpus de T1 (10 000 md + 1 000 PDF,
+`tree_sha256 27a20c05…3ecd2`), las **mismas 100 consultas** muestreadas (semilla `20261112`) y
+el **mismo índice** (11 006 chunks, sin reindexar entre brazos): recall@5 híbrido (ANN+FTS+RRF)
+**0,19** (19/100) vs **solo ANN** **0,15** (15/100) ⇒ variación relativa **−26,7 %** (el híbrido
+recupera más): **el umbral no se dispara**. La pierna FTS sola sitúa el fichero de origen en el
+top-5 en 19/100 consultas y no lo alcanza (top-50) en 75/100 — con un corpus de vocabulario fijo
+(~50 palabras, sin flexión) el corpus de escala mide el **signo** de la fusión, no la deriva
+morfológica. La sonda dirigida (9 pares flexivos + 2 controles EN, `tests/support/fts_probe.py`)
+sí la mide: con el índice **`language="English"`** que declara `app.py`, 4/7 pares ES llegan al
+top-50 del FTS (`países`, `investigar`, `aprobadas` **no** aparecen) y los 2 controles EN rankean
+1; con **`language="Spanish"`** suben a 6/7 ES y caen a **0/2** EN. Un solo índice FTS gobierna la
+columna `text` (`lancedb==0.40.0`; dos índices en la misma columna son ambiguos: `fts_columns` no
+los distingue), así que la configuración bilingüe exigiría una segunda columna de texto +
+re-index + ADR nuevo. **Decisión: v1 mantiene `language="English"`** (el híbrido no pierde
+recall medible) y el límite queda registrado como **TD-35**. Cifras, tablas, método y JSON:
+[docs/diagnosis/phase6-search-scale.md](diagnosis/phase6-search-scale.md).
+
 **Regla de origen de cifra (D-P6-7).** Cada cifra publicada en la tabla §6.3 de
 `docs/WORKFLOW.md` lleva **bench + n + método + filesystem**; la jerarquía de evidencia es
 `medido > estimado > declarado` (D8) y un número sin comando no entra en `docs/`.

@@ -194,14 +194,17 @@ def _swap_free_kb() -> int | None:
     return None
 
 
-def _stdio_phase(vault: Path, runs: int) -> None:
+def _stdio_phase(vault: Path, queries: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Fase de medida REAL por stdio: cliente → server hijo → payload (incluye IPC).
 
-    Emite un registro `call` por corrida con `client_ms` (reloj del cliente),
-    `took_ms` (reloj DEL HANDLER dentro del payload), `results_n` y
-    `truncated`. Una llamada de calentamiento —fuera de las muestras— construye
-    el lector y carga MiniLM dentro del hijo. Cualquier `is_error` aborta el
-    bench: medir errores no mide `search`.
+    Devuelve `(warm, calls)`: la llamada de calentamiento —fuera de las
+    muestras, construye el lector y carga MiniLM dentro del hijo— y un registro
+    por corrida con `client_ms` (reloj del cliente), `took_ms` (reloj DEL
+    HANDLER dentro del payload), `results_n`, `truncated` y `top_paths`.
+    Cualquier `is_error` aborta el bench: medir errores no mide `search`.
+
+    Parametrizada por `queries` (Phase 6 T4 la reusa con n=100 muestreadas del
+    corpus de escala); el driver de este bench le pasa sus 20 `QUERIES`.
     """
     from mcp import ClientSession, StdioServerParameters
     from mcp.client.stdio import stdio_client
@@ -211,7 +214,9 @@ def _stdio_phase(vault: Path, runs: int) -> None:
     if existing := os.environ.get("PYTHONPATH"):
         pythonpath.append(existing)
     env["PYTHONPATH"] = os.pathsep.join(pythonpath)
-    queries = QUERIES if runs == N_RUNS else QUERIES[:runs]
+
+    warm_record: dict[str, Any] = {}
+    calls: list[dict[str, Any]] = []
 
     async def go() -> None:
         params = StdioServerParameters(
@@ -226,44 +231,46 @@ def _stdio_phase(vault: Path, runs: int) -> None:
                 warm_payload = json.loads(warm.content[0].text)
                 if "error" in warm_payload:
                     raise SystemExit(f"[warm] search falló: {warm_payload}")
-                _emit(
+                warm_record.update(
                     {
-                        "kind": "warm",
                         "client_ms": None,
                         "took_ms": warm_payload["took_ms"],
                         "results_n": len(warm_payload["results"]),
                     }
                 )
-                for index in range(runs):
+                for index, query in enumerate(queries):
                     t0 = time.perf_counter()
-                    result = await session.call_tool(
-                        "search", {"query": queries[index], "top_k": TOP_K}
-                    )
+                    result = await session.call_tool("search", {"query": query, "top_k": TOP_K})
                     client_ms = round((time.perf_counter() - t0) * 1000)
                     payload = json.loads(result.content[0].text)
                     if result.is_error or "error" in payload:
                         raise SystemExit(f"[call {index}] search falló: {payload}")
-                    _emit(
+                    calls.append(
                         {
-                            "kind": "call",
                             "i": index,
+                            "query": query,
                             "client_ms": client_ms,
                             "took_ms": payload["took_ms"],
                             "results_n": len(payload["results"]),
                             "truncated": payload["truncated"],
+                            "top_paths": [
+                                str(chunk["source_path"]) for chunk in payload["results"]
+                            ],
                         }
                     )
 
     asyncio.run(go())
+    return warm_record, calls
 
 
-def _stage_phase(vault: Path) -> None:
+def _stage_phase(vault: Path, queries: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     """Presupuesto POR ETAPA medido en proceso — ver métodos y márgenes del docstring.
 
-    Emite `stage_meta` (filas del índice) y un registro `stage` por corrida con
-    los intervalos crudos de los que el padre deriva embed/ANN+FTS/ensamblado.
-    Sin instrumentación interna: solo envoltorios sobre los MISMOS objetos que
-    el composition root construye (`flow/` y `mcp/` intactos).
+    Devuelve `(stage_meta, stages)`: filas del índice y un registro por corrida
+    con los intervalos crudos de los que el padre deriva embed/ANN+FTS/
+    ensamblado. Sin instrumentación interna: solo envoltorios sobre los MISMOS
+    objetos que el composition root construye (`flow/` y `mcp/` intactos).
+    Parametrizada por `queries` (Phase 6 T4 la reusa con n=100).
     """
     from tepochcalli_flow.adapters.lancedb_reader import LanceDBChunkReader
     from tepochcalli_flow.config import load_config
@@ -346,11 +353,10 @@ def _stage_phase(vault: Path) -> None:
             "took_ms": payload["took_ms"],
         }
 
-    _run(QUERIES[0])  # warm: carga del modelo del driver FUERA de las 20 muestras
+    _run(queries[0])  # warm: carga del modelo del driver FUERA de las muestras
     rows = asyncio.run(reader.count_rows())
-    _emit({"kind": "stage_meta", "chunks_indexed": rows})
-    for index in range(N_RUNS):
-        _emit({"kind": "stage", "i": index, **_run(QUERIES[index])})
+    stages = [{"i": index, **_run(query)} for index, query in enumerate(queries)]
+    return {"chunks_indexed": rows}, stages
 
 
 def _driver(vault: Path, smoke: bool) -> None:
@@ -399,9 +405,15 @@ def _driver(vault: Path, smoke: bool) -> None:
         }
     )
 
-    _stdio_phase(vault, runs)
+    warm_record, calls = _stdio_phase(vault, QUERIES[:runs])
+    _emit({"kind": "warm", **warm_record})
+    for record in calls:
+        _emit({"kind": "call", **record})
     if not smoke:
-        _stage_phase(vault)
+        meta, stages = _stage_phase(vault, QUERIES)
+        _emit({"kind": "stage_meta", **meta})
+        for record in stages:
+            _emit({"kind": "stage", **record})
     _emit(
         {
             "kind": "done",

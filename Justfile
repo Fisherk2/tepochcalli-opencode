@@ -113,6 +113,13 @@ python-bench-smoke:
 python-bench-search *args:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_search.py {{args}}
 
+# Bench de ESCALA del criterio 3 (10k md + 1k pdf, n=100) + deriva FTS ES/EN
+# (Phase 6 T4): medición LOCAL, POR FASES en primer plano — la indexación en frío
+# dura ~10 min y no cabe en una llamada. `--phase prepare|index|queries|stages|
+# legs|probe|report` (o `all`); ver bench_search_scale.py.
+python-bench-search-scale *args:
+    cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_search_scale.py {{args}}
+
 # Bench de extracción/indexación de documentos con markitdown (TD-2): medición LOCAL.
 python-bench-documents *args:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_documents.py {{args}}
@@ -219,6 +226,9 @@ bench-smoke: python-bench-smoke
 # `args=` en vez de `*args`: just 1.59 no reenvía variádicos a una dependencia.
 # `just bench-search --smoke` = variante CI del bench de búsqueda.
 bench-search args="": (python-bench-search args)
+
+# Bench de escala del criterio 3 (10k/1k, n=100) + deriva FTS ES/EN — por fases.
+bench-search-scale args="": (python-bench-search-scale args)
 
 # Markdown lint de docs/specs/AGENTS.md/SPEC.md (markdownlint-cli2 vía npx).
 md-lint:

@@ -125,16 +125,17 @@
 
 ## Ola 1 — Los 7 criterios, medidos
 
-### [ ] T4 — Criterio 3 a escala (10k/1k) y deriva del índice FTS ES/EN
+### [x] T4 — Criterio 3 a escala (10k/1k) y deriva del índice FTS ES/EN
 
 - Subagente: `performance-benchmarker` → `search-relevance-engineer` (secuencial) · Skills: `performance-analysis`, `observability-and-instrumentation`, `source-driven-development` · Tools: `tepochcalli-rag` (payload, stdio), `context7`
-- [ ] `search` sobre el corpus **10 000 md + 1 000 PDF** con **n = 100 queries** muestreadas, `top_k=5`, nearest-rank declarado
-- [ ] Publicadas **las dos** cifras: `p95_client_ms` (puerta de gate) y `p95_server_took_ms` (punto de la spec)
-- [ ] Tabla **por etapa** (embed / ANN+FTS / ensamblado / IPC) con su margen
-- [ ] **Deriva FTS medida**: recall ES con FTS activa vs **solo ANN**, mismo corpus y mismas queries
-- [ ] Si supera el umbral de T0 ⇒ config bilingüe del FTS evaluada contra la **doc de la versión pineada** (R3) e implementada **o** límite documentado con su cifra
-- [ ] Decisión escrita en `docs/TRD.md` §6.2 y `docs/TECH_DEBT.md`
+- [x] `search` sobre el corpus **10 000 md + 1 000 PDF** con **n = 100 queries** muestreadas, `top_k=5`, nearest-rank declarado
+- [x] Publicadas **las dos** cifras: `p95_client_ms` (puerta de gate) y `p95_server_took_ms` (punto de la spec)
+- [x] Tabla **por etapa** (embed / ANN+FTS / ensamblado / IPC) con su margen
+- [x] **Deriva FTS medida**: recall ES con FTS activa vs **solo ANN**, mismo corpus y mismas queries
+- [x] Si supera el umbral de T0 ⇒ config bilingüe del FTS evaluada contra la **doc de la versión pineada** (R3) e implementada **o** límite documentado con su cifra
+- [x] Decisión escrita en `docs/TRD.md` §6.2 y `docs/TECH_DEBT.md`
 - Deps: T0, T1, T3 · Verificación: JSON del bench archivado como evidencia
+- **Hecho (2026-11-12):** corpus de T1 verificado + copiado (`tree_sha256 27a20c05…`), índice **11 006 chunks** en **543 645 ms** (`VmHWM` 3,78 GiB), **p95 cliente 97 ms / server 94 ms** (n=100, nearest-rank 95.º, 500 ms ⇒ **PASS**); etapas p95 embed 27,0 · ANN+FTS 24,5 · ensamblado 4,6 · IPC 3,0 (+ `index_state` 36,5, fuera de la tabla de la spec) → suma 95,6 ≈ 97 ms. Deriva: recall@5 híbrido **0,19** vs solo ANN **0,15** ⇒ **−26,7 %** (umbral >10 %, **no se dispara**; pierna FTS sola: 19/100 en top-5, 75/100 fuera del top-50); PDF 14/14 vs md 5/86 (corpus de vocabulario fijo: mide el signo, no la calidad). Sonda ES/EN medida: índice inglés **4/7** pares flexivos ES vs español **6/7** y controles EN **2/2 → 0/2** ⇒ v1 mantiene `language="English"` y el límite queda como **TD-35** (ADR nuevo para cualquier cambio). JSON: `docs/diagnosis/phase6-search-scale.json`; informe: `docs/diagnosis/phase6-search-scale.md`; bench por fases: `just python-bench-search-scale --phase prepare|index|queries|stages|legs|probe|report`.
 
 ### [ ] T5 — Criterio 6: escala 10k/1k y comparación 10 % vs 100 %
 

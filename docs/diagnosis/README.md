@@ -10,9 +10,13 @@ This directory documents technical diagnoses for issues identified in the projec
 
 ## Index
 
-| File                                     | Issue                                                       | Date       | Severity |
-| ---------------------------------------- | ----------------------------------------------------------- | ---------- | -------- |
-| [phase6-protocol.md](phase6-protocol.md) | Protocolo de aceptación Phase 6 (protocolo, no diagnóstico) | 2026-11-12 | —        |
+| File | Issue | Date | Severity |
+| --- | --- | --- | --- |
+| [phase6-protocol.md](phase6-protocol.md) | Protocolo de aceptación Phase 6 (protocolo, no diagnóstico) | 2026-11-12 | — |
+| [phase6-corpus.md](phase6-corpus.md) | Corpus de escala 10k/1k con manifiesto (T1) | 2026-11-12 | — |
+| [phase6-documents.md](phase6-documents.md) | Coste de extracción de documentos binarios (T2) | 2026-11-12 | — |
+| [phase6-payload-refs.md](phase6-payload-refs.md) | Refs del payload a skills/subagentes (T13/TQA) | 2026-11-12 | — |
+| [phase6-search-scale.md](phase6-search-scale.md) | Criterio 3 a escala + deriva FTS ES/EN (T4) | 2026-11-12 | — |
 
 <!-- Add entries here as diagnoses are created -->
 

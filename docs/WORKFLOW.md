@@ -278,7 +278,7 @@
 | --- | --- | --- |
 | 1. Sin interferencias | checklist Vault-OK post-instalación (0 puertos, `.obsidian/` intacto, UI limpia) | ☐ |
 | 2. Δ <30s | bench `index_refresh` 20 corridas típicas | ☐ |
-| 3. Búsqueda <500ms | bench `search` p95 sobre corpus 10k/1k | ☐ |
+| 3. Búsqueda <500ms | bench `search` p95 sobre corpus 10k/1k | ☑ **p95 cliente 97 ms** / 94 ms server (n=100, nearest-rank 95.º, btrfs/NVMe, 11 006 chunks). Origen: `just python-bench-search-scale --phase …` + [phase6-search-scale.json](diagnosis/phase6-search-scale.json) (T4) |
 | 4. ≤2000 tokens/consulta | fixture adverso + medidor e2e del harness | ☐ |
 | 5. Citas precisas | golden answers: 100% con `source_path`+`heading`+offsets reproducibles | ☐ |
 | 6. 10k notas + 1k PDFs | stress corpus + regresión de latencia vs 10% | ☐ |
