@@ -1,6 +1,6 @@
 # Spec: Skills del payload — inventario definitivo y tabla de invocación
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED) · **Enmendada 2026-11-12** (inventario real **40** tras retirar `database-lookup/` en `c815eb0`; tabla 9×4 y frase de subagentes **SUPERSEDED** por la §Enmienda 2026-11-12, generada desde los cuerpos)
 * **Fase:** Phase 4 (diseño) — Phase 5 verifica, no ejecuta cortes
 * **Date:** 2026-11-09 (congela inventario; rev. 2026-11-04 SUPERSEDED, ver §Histórico)
 * **Author:** Arquitecto (calpulli T2b, Phase 4)
@@ -25,6 +25,10 @@ dueño autorizó la skill 41 (`math-typesetting-guide`, commit `1c4a90b`, invoca
 del `AGENTS.md` del payload). D-P5-1 (freeze 40) queda **SUPERSEDED**; el inventario pasa
 a **41 dirs**, objetivo <60 sigue cumplido (41 < 60).
 
+**Enmienda 2026-11-12 — SUPERSEDED del párrafo anterior:** `database-lookup/` se retiró
+(`c815eb0`) y el inventario vuelve a **40 dirs reales** (`ls | wc -l`). El objetivo <60 se
+cumple igual (40 < 60). Ver §Enmienda 2026-11-12.
+
 No es dueña de: los cuerpos de comandos, agentes y `AGENTS.md` del vault (spec del
 blueprint). **No se escribe nada en `obsidian-workspace/` en esta fase.**
 
@@ -32,7 +36,8 @@ blueprint). **No se escribe nada en `obsidian-workspace/` en esta fase.**
 
 ```bash
 # fecha de la medición: 2026-11-09 (40); enmienda 2026-11-11: 41 con math-typesetting-guide
-ls obsidian-workspace/.opencode/skills | wc -l                    # 41
+# re-medido 2026-11-12: 40 (retiro de database-lookup/ en c815eb0 — ver §Enmienda 2026-11-12)
+ls obsidian-workspace/.opencode/skills | wc -l                    # 40 (41 era el valor pre-retiro)
 find obsidian-workspace/.opencode/agents -name '*.md' | wc -l    # 170
 find obsidian-workspace/.opencode/commands -name '*.md' | wc -l  # 9
 ls obsidian-workspace/00-Resources | wc -l                        # 0 (muestras de instalación: ver abajo)
@@ -41,10 +46,12 @@ wc -c obsidian-workspace/.opencode/skills/tepochcalli-mcp/SKILL.md # 13098 (cuer
 
 * **0 skills citadas e inexistentes**: toda referencia de comandos y agentes resuelve contra el `ls`.
 * **Cobertura 40/40** (2026-11-09): las 40 están citadas o disponibles para la tabla 9×4; ninguna cae en barrido.
-* **41 nombres** (2026-11-11: los 40 + `math-typesetting-guide`), orden alfabético:
+* **41 nombres** (2026-11-11: los 40 + `math-typesetting-guide`), orden alfabético
+  — **SUPERSEDED 2026-11-12: son 40 y `database-lookup` ya no existe** (§Enmienda E1):
 
 article-writing · brainstorming · citation-management · consciousness-council ·
-data-analysis · data-plotting · database-lookup · doc-coauthoring · experimental-design ·
+data-analysis · data-plotting · ~~database-lookup~~ (retirado en `c815eb0`) ·
+doc-coauthoring · experimental-design ·
 hypothesis-generation · idea-refine · image-prompt-generator · interview-me ·
 literature-review · literature-search-engine · markdown-mermaid-writing ·
 math-typesetting-guide · obsidian-cli ·
@@ -59,7 +66,7 @@ toon · websearch-engine · what-if-oracle · writing-skills
 
 | Cubo | Dirs | Qué son |
 | --- | --- | --- |
-| CONSERVAR (definitivo) | 40 (+1 enmienda 2026-11-11: `math-typesetting-guide` ⇒ 41) | las del inventario; sin recorte, sin fusión, sin instalación |
+| CONSERVAR (definitivo) | 40 — ver §Enmienda E1; el «+1 ⇒ 41» de la enmienda 2026-11-11 queda **SUPERSEDED** | las del inventario; sin recorte, sin fusión, sin instalación |
 | RETIRAR | 0 | congelado: ningún retiro en Phase 5 |
 | CONSOLIDAR | 0 | congelado: ninguna fusión en Phase 5 |
 | INSTALAR-GAP | 0 | v1 no instala ninguna skill nueva |
@@ -75,6 +82,11 @@ de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
 `search`, `index_refresh`, `add_source`, `convert_document`, `convert_base64`,
 `list_formats`, `rag_status`. Los nombres nativos son el vocabulario V2 de
 [specs/spec-payload-vault.md](spec-payload-vault.md) §Vocabulario de acciones V2.
+
+> **SUPERSEDED 2026-11-12.** La tabla siguiente es el **diseño Phase 4 (2026-11-09)** y no
+> describe los cuerpos vigentes: asigna skills que ningún comando carga y omite las que sí
+> (ver §Enmienda E2, que la reemplaza). Se conserva como historia. **No usar como fuente de
+> verdad de qué carga cada comando: los cuerpos lo son.**
 
 | Comando | Skills concretas (inventario 40) | Herramientas nativas | MCPs a ejecutar | Subagentes permitidos |
 | --- | --- | --- | --- | --- |
@@ -105,6 +117,8 @@ de los 40 o se declara **GAP**. Los 7 nombres de tool se copian verbatim de
   qué tool ejecuta cada comando.
 * **Subagentes:** **ninguno** en las 9 filas — los 5 primarios llevan `subagent * deny`; si un
   comando necesitara un helper, se documenta antes como enmienda al blueprint.
+  **SUPERSEDED 2026-11-12:** es falso en los dos extremos — solo `nezahualcoyotl` deniega
+  `subagent *` y hay **15 delegaciones reales**; ver §Enmienda E3.
 
 ## Cobertura y objetivo <60
 
@@ -112,9 +126,9 @@ Cobertura del inventario: **40/40** (2026-11-09; toda skill del `ls` está conse
 0 huérfanas fuera de tabla porque el congelado no exige cita exhaustiva).
 
 El objetivo de menos de 60 skills del payload base (métrica heredada de
-[docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 41 < 60**
-(40 al congelado 2026-11-09 + `math-typesetting-guide` por enmienda 2026-11-11,
-[ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)).
+[docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 40 < 60**
+(40 al congelado 2026-11-09 + `math-typesetting-guide` 2026-11-11 − `database-lookup/`
+retirada 2026-11-12, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) y `c815eb0`).
 **No se ejecuta ningún corte ni consolidación en Phase 5** — el inventario ya está por
 debajo del umbral por decisión del dueño (2026-11-09).
 
@@ -152,8 +166,9 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 ## Open Questions
 
 * Ninguna abierta. El congelado de 40 y las muestras (sin cambio) quedan como están por
-  decisión del dueño (2026-11-09); la matriz histórica queda SUPERSEDED. Enmienda
-  2026-11-11: inventario en 41 (`math-typesetting-guide`, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)).
+  decisión del dueño (2026-11-09); la matriz histórica queda SUPERSEDED. La enmienda
+  2026-11-11 (inventario en 41) queda **SUPERSEDED** por la enmienda 2026-11-12: **40 dirs
+  reales** tras el retiro de `database-lookup/` (§Enmienda E1).
 
 ## References
 
@@ -165,3 +180,140 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 * [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — capas y contratos que el payload debe respetar
 * `crates/tepochcalli/src/application/installer.rs` (muestras del instalador) y `crates/tepochcalli/assets/ejemplo.pdf`
 * [AGENTS.md](../AGENTS.md) — R1/R2 (no reinventar, cero asunción) y umbrales de líneas por fichero
+
+## Enmienda 2026-11-12 — inventario real 40 y delegaciones reales
+
+**Origen.** Auditoría `T12` ([docs/diagnosis/phase6-payload-refs.md](../docs/diagnosis/phase6-payload-refs.md),
+commit `bdb2da8`): **0 referencias huérfanas** en el payload y **3 defectos documentales**
+en esta spec. Orden del dueño (2026-11-12): **la spec se alinea al payload**, no al revés.
+**El payload no se toca** (D-P6-1, `obsidian-workspace/` congelado).
+
+**Jerarquía de evidencia.** Toda cifra y toda línea de esta enmienda es **`medido`** el
+2026-11-12 sobre `obsidian-workspace/.opencode/`; los **cuerpos** de comando son la fuente
+de verdad de qué carga cada comando. Convenio de rutas: `commands/<x>.md:línea` =
+`obsidian-workspace/.opencode/commands/`, `agents/<x>.md:línea` =
+`obsidian-workspace/.opencode/agents/`.
+
+### E1 — Inventario real: **40** (`database-lookup/` retirada)
+
+| Hecho | Valor medido | Cómo se midió |
+| --- | --- | --- |
+| Dirs de skill presentes | **40** | `ls obsidian-workspace/.opencode/skills \| wc -l` |
+| Con `SKILL.md` | 40/40 (0 huecos) | `for d in skills/*/; do [ -f "$d/SKILL.md" ] \|\| echo MISSING: $d; done` → sin salida |
+| Dir retirado | `database-lookup/` (no existe) | `ls …/skills/database-lookup` → *No such file or directory* |
+| Commit y fecha del retiro | `c815eb0`, 2026-11-12 — `chore(skill-database-lookup): retira skill superada por cadena EN` | `git log --oneline -1 c815eb0` |
+| Referencias al nombre retirado en el payload | **0** | `grep -rn database-lookup obsidian-workspace/.opencode` |
+| Objetivo <60 | cumplido: **40 < 60** | — |
+
+Inventario vigente (los 4 bloques se leen **en columna**: 1–10, 11–20, 21–30, 31–40):
+
+| # | Skill | # | Skill | # | Skill | # | Skill |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 1 | `article-writing` | 11 | `image-prompt-generator` | 21 | `paper-2-web` | 31 | `scientific-problem-selection` |
+| 2 | `brainstorming` | 12 | `interview-me` | 22 | `pdf` | 32 | `scientific-writing` |
+| 3 | `citation-management` | 13 | `literature-review` | 23 | `peer-review` | 33 | `spreadsheet-analysis` |
+| 4 | `consciousness-council` | 14 | `literature-search-engine` | 24 | `planning-and-task-breakdown` | 34 | `statistical-analysis` |
+| 5 | `data-analysis` | 15 | `markdown-mermaid-writing` | 25 | `posters-generator` | 35 | `statistical-power` |
+| 6 | `data-plotting` | 16 | `math-typesetting-guide` | 26 | `research-grants` | 36 | `tepochcalli-mcp` |
+| 7 | `doc-coauthoring` | 17 | `obsidian-cli` | 27 | `research-search-protocol` | 37 | `toon` |
+| 8 | `experimental-design` | 18 | `obsidian-markdown` | 28 | `scholar-evaluation` | 38 | `websearch-engine` |
+| 9 | `hypothesis-generation` | 19 | `obsidian-vault` | 29 | `scientific-brainstorming` | 39 | `what-if-oracle` |
+| 10 | `idea-refine` | 20 | `osint-skills` | 30 | `scientific-critical-thinking` | 40 | `writing-skills` |
+
+**SUPERSEDED por E1:** el párrafo de la enmienda 2026-11-11 y el cierre de §Summary, el
+`# 41` del bloque de medición, la lista de 41 nombres (con `database-lookup`), la fila
+CONSERVAR de §Veredictos, la cobertura `41 < 60` de §Cobertura y la Open Question. El
+diseño histórico se conserva; solo cambia qué cifra es vigente.
+
+### E2 — Tabla de invocación regenerada desde los cuerpos
+
+**Se regenera, no se degrada:** cabe en el presupuesto (9 filas medidas) y es la única
+forma de que la tabla deje de mentir; degradarla a histórico dejaría al lector sin tabla
+vigente.
+
+Las skills y los subagentes son **cita literal del cuerpo**. La cuarta columna histórica
+("herramientas nativas") **no se re-deriva**: los cuerpos no la declaran —solo citan
+`question`— y proviene de los `permissions` de cada agente (`agents/*.md`); su fuente
+vigente es [specs/spec-payload-permissions.md](spec-payload-permissions.md). Los **7 nombres
+de tool** del MCP son los del contrato (`search`, `index_refresh`, `add_source`,
+`convert_document`, `convert_base64`, `list_formats`, `rag_status`); la tabla anota la
+**primera** cita de cada tool que el cuerpo **nombra** (y la segunda cuando cambia de fase).
+
+| Comando (`agent:`) | Skills cargadas — `commands/<x>.md:línea` | MCP `tepochcalli-rag` nombrado | Subagentes delegados |
+| --- | --- | --- | --- |
+| `/rubric` (`nezahualcoyotl`) | `interview-me` :8 · `brainstorming` + `scientific-brainstorming` :9 · `idea-refine` + `scientific-problem-selection` :14 · `planning-and-task-breakdown` :27 · `obsidian-markdown` + `obsidian-vault` + `markdown-mermaid-writing` :31 · `what-if-oracle` :38 — **10** | `search` :47 · `rag_status` :48 | **ninguno** (0 `Delegate` en el cuerpo) |
+| `/research` (`pochteca`) | `research-search-protocol` + `research-grants` :6 · `tepochcalli-mcp` :38 · `osint-skills` :42 · `literature-search-engine` :49 · `websearch-engine` :50 · `obsidian-markdown` + `obsidian-vault` + `citation-management` :59 — **9** | `search` :38 · `websearch`/`webfetch` + «ingest sources with `tepochcalli-rag`» :40 · `index_refresh` :69 · `rag_status` :70 | `research-analyst` :27 · `search-specialist` :38 · `scientific-literature-researcher` :49 · `obsidian-vault-writer` :59 — **4** |
+| `/validate` (`chilam`) | `scholar-evaluation` :6 · `tepochcalli-mcp` :21 · `peer-review` :34 · `obsidian-markdown` + `obsidian-vault` :49 — **5** | `search` :25, :64 · `rag_status` :63 · `index_refresh` :64 | `research-analyst` :10 · `obsidian-vault-writer` :49 — **2** |
+| `/synthesize` (`nezahualcoyotl`) | `doc-coauthoring` :16 · `tepochcalli-mcp` :18 · `obsidian-markdown` + `obsidian-vault` :26 — **4** | `search` :10 · `index_refresh` :10 · `rag_status` :36 | **ninguno** (0 `Delegate`) |
+| `/cite` (`chilam`) | `tepochcalli-mcp` :6 · `citation-management` :17 · `obsidian-markdown` + `obsidian-vault` :28 — **4** | `rag_status` :37 | `obsidian-vault-writer` :28 — **1** |
+| `/draft` (`tlacuilo`) | `tepochcalli-mcp` :9 · `scientific-writing` :19 · `obsidian-markdown` + `obsidian-vault` :20 · `markdown-mermaid-writing` + `math-typesetting-guide` :21 — **6** | `search` :9, :31 · `index_refresh` :9, :31 · `rag_status` :9, :30 | `obsidian-vault-writer` :20 — **1** |
+| `/review` (`chilam`) | `tepochcalli-mcp` :9 · `peer-review` + `scholar-evaluation` :14 · `scientific-critical-thinking` :17 · `citation-management` :18 · `obsidian-markdown` + `obsidian-vault` :31 · `scientific-writing` + `article-writing` :36 — **9** | `search` :9, :46 · `index_refresh` :9, :46 · `rag_status` :47 | `research-analyst` :18 · `obsidian-vault-writer` :31 · `knowledge-synthesizer` :33 — **3** |
+| `/transform` (`tlacuilo`) | `obsidian-markdown` + `obsidian-vault` :24 · `spreadsheet-analysis` :29 · `posters-generator` :35 · `paper-2-web` :41 · `pdf` :47 · `data-plotting` :53 · `tepochcalli-mcp` :59 — **8** | `list_formats` :59 · `convert_document` + `convert_base64` :61 · `search` :73 | `obsidian-vault-writer` :24 — **1** |
+| `/update` (`tlacuilo`) | `tepochcalli-mcp` :10 (repetida en :15, inocuo) · `osint-skills` :19 · `literature-search-engine` :26 · `websearch-engine` :27 · `obsidian-markdown` + `obsidian-vault` :35 — **6** | `index_refresh` :10 · `add_source` :10 · `search` :15 · `websearch`/`webfetch` :17 · `rag_status` :48 | `search-specialist` :15 · `scientific-literature-researcher` :26 · `obsidian-vault-writer` :35 — **3** |
+
+**Control de cuadre:** 10 + 9 + 5 + 4 + 4 + 6 + 9 + 8 + 6 = **61** cargas de skill en los 9
+cuerpos, y los **40** nombres de E1 resuelven (el verificador de T12 da 0 huérfanos sobre
+111 referencias). La spec deja de asignar
+`database-lookup`, `literature-review`, `paper-2-web` (en `/research`), `statistical-analysis`
+y `statistical-power` (en `/validate`), `writing-skills` (en `/draft`) y `obsidian-cli`
+(en `/update`), y deja de omitir `research-grants` (`commands/research.md:6`) y
+`article-writing` (`commands/review.md:36`).
+
+### E3 — Delegaciones reales y reparto de `subagent`
+
+`grep -c 'Delegate'` sobre los 9 cuerpos = **17** ocurrencias del verbo: **15 nombran un
+subagente** (tabla siguiente) y **2** delegan de forma genérica en «appropriate/appropriated
+specialist subagents» (`commands/research.md:36`, `commands/update.md:14`). Los 5 nombres
+destino resuelven a `mode: subagent` (`grep -m1 '^mode:' agents/<x>.md`).
+
+| # | Comando | Subagente | `ruta:línea` |
+| --- | --- | --- | --- |
+| 1 | `/cite` | `obsidian-vault-writer` | `commands/cite.md:28` |
+| 2 | `/draft` | `obsidian-vault-writer` | `commands/draft.md:20` |
+| 3 | `/research` | `research-analyst` | `commands/research.md:27` |
+| 4 | `/research` | `search-specialist` | `commands/research.md:38` |
+| 5 | `/research` | `scientific-literature-researcher` | `commands/research.md:49` |
+| 6 | `/research` | `obsidian-vault-writer` | `commands/research.md:59` |
+| 7 | `/review` | `research-analyst` | `commands/review.md:18` |
+| 8 | `/review` | `obsidian-vault-writer` | `commands/review.md:31` |
+| 9 | `/review` | `knowledge-synthesizer` | `commands/review.md:33` |
+| 10 | `/transform` | `obsidian-vault-writer` | `commands/transform.md:24` |
+| 11 | `/update` | `search-specialist` | `commands/update.md:15` |
+| 12 | `/update` | `scientific-literature-researcher` | `commands/update.md:26` |
+| 13 | `/update` | `obsidian-vault-writer` | `commands/update.md:35` |
+| 14 | `/validate` | `research-analyst` | `commands/validate.md:10` |
+| 15 | `/validate` | `obsidian-vault-writer` | `commands/validate.md:49` |
+
+Reparto real de `subagent` en los 5 primarios (bloque `permissions` del frontmatter):
+
+| Agente | Bloque | `subagent *` | Denies nominales |
+| --- | --- | --- | --- |
+| `itzamna` | `agents/itzamna.md:20-34` | **allow** | `nezahualcoyotl`, `pochteca`, `chilam`, `tlacuilo` |
+| `nezahualcoyotl` | `agents/nezahualcoyotl.md:38-40` | **deny** | — |
+| `pochteca` | `agents/pochteca.md:26-40` | **allow** | `nezahualcoyotl`, `itzamna`, `chilam`, `tlacuilo` |
+| `chilam` | `agents/chilam.md:20-34` | **allow** | `nezahualcoyotl`, `pochteca`, `itzamna`, `tlacuilo` |
+| `tlacuilo` | `agents/tlacuilo.md:20-34` | **allow** | `nezahualcoyotl`, `pochteca`, `chilam`, `itzamna` |
+
+**Riesgo declarado: 4 de 5 primarios pueden delegar en cualquier subagente.** Los denies
+nominales solo bloquean a **los otros 4 primarios**: no acotan el catálogo de **165**
+agentes `mode: subagent` (`grep -h '^mode:' agents/*.md | sort | uniq -c` → 5 primary /
+165 subagent; `ls agents | wc -l` = 170). Es decir, `itzamna`,
+`pochteca`, `chilam` y `tlacuilo` pueden invocar cualquiera de los 165 sin restricción de
+nombre, aunque los cuerpos solo nombren 5. `nezahualcoyotl` es el único hermético, y es
+coherente con los cuerpos: `/rubric` y `/synthesize` no delegan y `agents/nezahualcoyotl.md:160`
+lo dice en prosa («NEVER delegate to subagents»).
+
+### E4 — Qué **no** se toca
+
+* **El payload sigue congelado** (D-P6-1): ni un byte de `obsidian-workspace/`. Esta
+  enmienda es documental; el payload ya era coherente (0 huérfanos, 15 delegaciones
+  resueltas).
+* **Cerrar el `subagent * allow`** de los 4 primarios exige **cambio de payload** (editar
+  los 4 bloques `permissions`) o un **ADR nuevo** que reemplace la política — no esta
+  enmienda, que solo declara el hecho medido.
+* **La cuarta columna «herramientas nativas»** sigue viviendo en
+  [specs/spec-payload-permissions.md](spec-payload-permissions.md); aquí no se duplica ni se
+  re-deriva.
+* **El verificador** `tests/e2e/verify_payload_refs.py` (T12) es el gate reproducible de
+  esto: pone rojo un huérfano de skill y una delegación a un no-subagente. No sustituye a
+  esta spec; la comprueba.
