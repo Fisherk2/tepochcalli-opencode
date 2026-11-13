@@ -20,6 +20,7 @@ método; lo estimado y lo declarado se etiquetan y nunca se presentan como medic
 | [search-scale.md](search-scale.md) | `search` a escala 10k/1k (p95) y deriva del índice FTS ES/EN | 3 y 6 |
 | [scale-ratio.md](scale-ratio.md) | Brazos 10 % vs 100 %: Δ de indexación y `search` (ratio vs cota 2×), walk-only y límite fuseblk/NTFS-3G | 6 (+2 y 3) |
 | [token-budget.md](token-budget.md) | Tokens por consulta con tokenizador real: payload del server (estimador vs real) y total e2e con la respuesta citada | 4 |
+| [citations.md](citations.md) | Identidad F1 re-verificada contra el archivo vivo (`verify.py --spot-check`): tasa de citas reproducibles, par exit 0/≠0 y solo lectura de `db/` | 5 |
 
 Si llega otra fase de aceptación, este directorio se parte en subcarpetas `acceptance/phaseN/` para no mezclar evidencias.
 

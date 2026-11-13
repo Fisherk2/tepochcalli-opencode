@@ -94,7 +94,8 @@ serializada; definición en spec-mcp-server §latencia).
 
 Relevancia de criterios no numéricos: 1 (no-interferencia) → checklist e2e de
 spec-vault-structure §Testing; 5 (citas) → golden answers con asserts de `source_path`/
-`heading`/offsets reproducibles; 7 (formatos) → matriz de conversión markitdown fixtures.
+`heading`/offsets reproducibles, más `verify.py --spot-check` re-verificando la identidad F1
+contra el archivo vivo; 7 (formatos) → matriz de conversión markitdown fixtures.
 
 **Documentos binarios (D51, medidos aparte del Δ de texto).** Extracción markitdown en proceso,
 btrfs/NVMe, CPython 3.12.14: PDF de **30 páginas** = **3 144 ms p50 / 4 172 ms p95** (n=3,
@@ -173,6 +174,20 @@ Cifras, desglose por caso, estabilidad de la medición y comando:
 [docs/acceptance/token-budget.json](acceptance/token-budget.json).
 Hallazgo F-T6-1: si el payload crece, el ajuste es del **techo del server** (p. ej. bajarlo a 1 500)
 o de la fórmula de §5 del plan — **decisión del dueño**; ADR-005 (contrato MCP) no se toca por esto.
+
+**Medición del criterio 5 (T7, 2026-11-13).** `verify.py --spot-check N` muestrea hasta N filas del
+índice y **re-verifica la identidad F1 contra el archivo vivo** reutilizando
+`citation.verify_slice_identity`: `offsets_ref == "source"` corta el archivo original y `"extract"`
+re-extrae el binario con markitdown (D50), sin mezclar los dos espacios. Sobre el golden vault
+(md + txt + pdf) indexado en subproceso: **6/6 citas reproducibles (100 %), 0 rotas, `exit 0`**;
+tras **editar un archivo después de indexarlo**: 3/6 (50 %), **`exit 1`** — el par demuestra que la
+guarda discrimina. Un `source_path` ausente se reporta como `MISSING` (también `exit 1`). El
+verificador **solo lee**: snapshot `(mtime_ns, size)` de `db/` igual antes/después en las tres
+corridas. En PDF, `heading is None` queda afirmado en el golden (D54/TD-27) y el golden **no** lo
+exige. Cifras, límites (n = 6 filas; muestreo determinista por orden de almacenamiento) y comando:
+[docs/acceptance/citations.md](acceptance/citations.md) · JSON
+[docs/acceptance/citations.json](acceptance/citations.json). TD-13 queda **cerrada**; la
+obsolescencia del índice sigue siendo TD-4 (el spot-check la detecta, `index_refresh()` la cura).
 
 **Regla de origen de cifra (D-P6-7).** Cada cifra publicada en la tabla §6.3 de
 `docs/WORKFLOW.md` lleva **bench + n + método + filesystem**; la jerarquía de evidencia es

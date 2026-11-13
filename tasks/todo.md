@@ -162,17 +162,18 @@
 - Deps: T0 · Verificación: `just python-test` verde
 - **Hecho (2026-11-13):** medidor `tests/support/token_budget.py` (tokenizador **`cl100k_base` de `tiktoken 0.14.0`**, ya en el venv; `o200k_base` publicado al lado; fuente `github.com/openai/tiktoken`) + guarda viva `tests/integration/test_mcp_token_budget.py` (3 tests, fixture adverso **reusado** de T7, sin marcadores `slow`). **Cifras (n=7 caras, `top_k=5` y `top_k=20`):** (a) payload **1 600 por el estimador** del contrato y **1 789 reales**; (b) **total e2e 1 995 < 2 000** en el peor caso (query 7 + payload 1 789 + respuesta citada 199) y 1 675 en la dorada ⇒ **PASS**, con **5 tokens de margen** (`o200k`: 1 785). La respuesta se modela con el formato que prescribe el payload (`source_path » heading (chars x–y)`, una afirmación por resultado, `(sin heading)` en PDF). Sonda de sensibilidad: 2 frases/resultado ⇒ **2 023** (el guard no es vacío); RED archivado (ModuleNotFoundError primero, luego la aserción disparada). Hallazgo **F-T6-1**: el 1 600 es del estimador (envoltura JSON ≈190 tokens fuera de la fórmula + `chars/4` optimista en ES) — si el payload crece, la decisión (bajar el techo a ~1 500) es **del dueño**; contrato MCP intacto y sin dependencias nuevas. Evidencia: `docs/acceptance/token-budget.{md,json}` + TRD §6.2 + WORKFLOW §6.3
 
-### [ ] T7 — Criterio 5: citas precisas y re-verificación contra el archivo vivo (TD-13)
+### [x] T7 — Criterio 5: citas precisas y re-verificación contra el archivo vivo (TD-13)
 
 - Subagente: `rag-pipeline-engineer` → `test-engineer` (secuencial) · Skills: `test-driven-development`, `incremental-implementation`, `debugging-and-error-recovery`, `clean-code` · Tools: `tepochcalli-rag` (payload, stdio), `codebase-memory-mcp`
-- [ ] `verify.py --spot-check N`: relee el `source_path` y afirma la identidad F1 **reusando** `citation.verify_slice_identity` (no se duplica)
-- [ ] `offsets_ref` respetado: `source` ⇒ slice contra el archivo original; `extract` ⇒ contra el texto extraído
-- [ ] **Solo lectura conservada**: snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios
-- [ ] **Golden answers ampliado**: md, txt y pdf con `source_path` real + `heading` (nullable) + offsets **reproducibles**
-- [ ] Para **pdf**, `heading is None` (D54) afirmado explícitamente: el golden **no** exige heading en PDF
-- [ ] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en T7 basta `just python-test`
-- [ ] Si el spot-check encuentra citas rotas ⇒ la **tasa** se documenta (no se maquilla) y se abre la remediación si > 0 (TD-4)
+- [x] `verify.py --spot-check N`: relee el `source_path` y afirma la identidad F1 **reusando** `citation.verify_slice_identity` (no se duplica)
+- [x] `offsets_ref` respetado: `source` ⇒ slice contra el archivo original; `extract` ⇒ contra el texto extraído
+- [x] **Solo lectura conservada**: snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios
+- [x] **Golden answers ampliado**: md, txt y pdf con `source_path` real + `heading` (nullable) + offsets **reproducibles**
+- [x] Para **pdf**, `heading is None` (D54) afirmado explícitamente: el golden **no** exige heading en PDF
+- [x] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en T7 basta `just python-test`
+- [x] Si el spot-check encuentra citas rotas ⇒ la **tasa** se documenta (no se maquilla) y se abre la remediación si > 0 (TD-4)
 - Deps: T0, T3 · Verificación: test que **edita** el archivo post-indexación y espera **exit ≠ 0**
+- **Hecho (2026-11-13):** `verify.py --spot-check N` (`LanceDBChunkReader.sample_rows` → `table.head`) re-verifica la identidad F1 **reutilizando `citation.verify_slice_identity`**; `source` corta el original, `extract` re-extrae con markitdown (D50); severidades `OK`/`BROKEN`/`MISSING` y **exit 1** si hay roturas. **Medido** (golden md + txt + pdf indexado en subproceso): **6/6 (100 %), 0 rotas, exit 0**; **edición externa tras indexar ⇒ 3/6 (50 %), exit 1**; txt borrado ⇒ `MISSING`, exit 1; snapshot de `db/` sin cambios en las 3 corridas. Golden ampliado a md + txt + pdf en el e2e del wire (txt y pdf con `heading is None`; refresh `(3,0,3)`). **Tasa de citas rotas publicada: 0 %** (el caso que debe fallar falla ⇒ el 0 no es tautología). RED archivado (argparse `unrecognized arguments: --spot-check`). Evidencia: `docs/acceptance/citations.{md,json}` + TRD §6.2 + README de aceptación; TD-13 cerrada. `coverage` **no** ejecutado (T16).
 
 ### [ ] T8 — Criterio 7: matriz de conversión multi-formato
 
@@ -198,13 +199,14 @@
 - [ ] Checklist de `spec-vault-structure.md` §Testing **ejecutado** y referenciado
 - Deps: T0 · Verificación: salida archivada como evidencia del criterio 1
 
-### [ ] Checkpoint CP-2 — Criterios 3 y 6 a escala (tras T4, T5)
+### [x] Checkpoint CP-2 — Criterios 3 y 6 a escala (tras T4, T5)
 
-- [ ] `search` p95 sobre 10k/1k con n = 100 nearest-rank; gate = `p95_client_ms`
-- [ ] Deriva FTS ES/EN medida contra el umbral de T0; decisión escrita
-- [ ] Δ p95 a escala + **ratio 10 % vs 100 %** ≤ 2× + walk-only
-- [ ] NTFS-3G medido y **declarado límite** con cifra y causa
-- [ ] Cifras de los dos criterios en §6.3 con su origen
+- [x] `search` p95 sobre 10k/1k con n = 100 nearest-rank; gate = `p95_client_ms`
+- [x] Deriva FTS ES/EN medida contra el umbral de T0; decisión escrita
+- [x] Δ p95 a escala + **ratio 10 % vs 100 %** ≤ 2× + walk-only
+- [x] NTFS-3G medido y **declarado límite** con cifra y causa
+- [x] Cifras de los dos criterios en §6.3 con su origen
+- **Hecho (2026-11-12):** `p95_client_ms` **97 ms** (T4) y **87 ms** (T5, n=100, 11k) ⇒ criterio 3 **PASS**. Deriva FTS **no se dispara** (−26,7 % a favor del híbrido; mecanismo probado con sonda, TD-35). Criterio 6: Δ **15 695 ms** vs **2 543 ms** = **6,17×** > 2× ⇒ **FAIL medido** (TD-36), Δ absoluto dentro de 30 s; NTFS **52 996 ms** como límite. Ningún umbral se tocó.
 
 ### [ ] Checkpoint CP-3 — Los 7 criterios con evidencia medida (tras T6, T7, T8, T9)
 

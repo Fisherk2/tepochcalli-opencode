@@ -16,7 +16,13 @@ un byte).
 Uso:
 
     python -m tepochcalli_flow.verify <vault_root> [--query TEXTO]
-        [--top-k N] [--path-filter GLOB]
+        [--top-k N] [--path-filter GLOB] [--spot-check N]
+
+`--spot-check N` (TD-13) muestrea hasta N filas y re-verifica la identidad F1
+(`text[char_start:char_end] == chunk.text`) contra el ARCHIVO VIVO: `source`
+corta el original, `extract` re-extrae el documento con markitdown (D50). Si
+alguna cita ya no reproduce su texto —edición externa posterior a la
+indexación, TD-4— publica la tasa y sale con código 1.
 
 El query vector lo produce el MISMO embedder configurado del vault
 (`tepochcalli.toml` → `[embedding]`), montado por
@@ -33,10 +39,11 @@ import sys
 from pathlib import Path
 from typing import Final
 
-from .adapters.lancedb_reader import build_reader
-from .citation import verify_slice_identity
+from .adapters.lancedb_reader import LanceDBChunkReader, build_reader
+from .citation import OFFSETS_REF_SOURCE, verify_slice_identity
 from .config import load_config
 from .layout import DB_RELPATH
+from .parsers import ExtractionError, extract_text
 from .ports import CitedChunk
 
 EXIT_OK: Final = 0
@@ -46,6 +53,13 @@ EXIT_DB_BROKEN: Final = 3
 """Salida cuando la DB existe pero el índice/tabla falla (esquema roto, a medio
 indexar): distinta a 2 para diferenciar «aún no hay índice» de «hay índice pero
 no sirve». Mensaje accionable por stderr, sin traceback."""
+EXIT_SPOT_BROKEN: Final = 1
+"""Salida cuando `--spot-check` encuentra citas no reproducibles (TD-13).
+
+El índice existe y se leyó, pero al menos una cita ya no reproduce su texto
+contra el archivo VIVO (editado por otra app, borrado o re-extraído distinto):
+la cita es estructuralmente válida y falsa — daño directo al criterio 5.
+"""
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -75,9 +89,21 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Glob relativo al vault, p. ej. '00-Resources/sub/**/*.md' (opcional)",
     )
+    parser.add_argument(
+        "--spot-check",
+        type=int,
+        default=None,
+        metavar="N",
+        help=(
+            "Re-verifica la identidad F1 de hasta N filas muestreadas contra el "
+            "archivo vivo (TD-13); exit 1 si alguna cita ya no reproduce su texto"
+        ),
+    )
     args = parser.parse_args(argv)
     if args.top_k < 1:
         parser.error(f"--top-k debe ser >= 1, recibido: {args.top_k}")
+    if args.spot_check is not None and args.spot_check < 1:
+        parser.error(f"--spot-check debe ser >= 1, recibido: {args.spot_check}")
 
     vault_root: Path = args.vault_root.resolve()
     db_uri = vault_root / DB_RELPATH
@@ -123,7 +149,54 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Chunks citados: {len(results)}")
     for position, chunk in enumerate(results, start=1):
         _print_chunk(position, vault_root, chunk)
+    if args.spot_check is not None:
+        return _run_spot_check(vault_root, reader, args.spot_check)
     return EXIT_OK
+
+
+def _live_identity(vault_root: Path, chunk: CitedChunk) -> str | None:
+    """Re-verifica la identidad F1 contra el archivo VIVO (TD-13); `None` si reproduce.
+
+    `offsets_ref == "source"` corta el archivo ORIGINAL (md/markdown/txt);
+    `"extract"` corta el texto que markitdown extrae HOY del binario (D50) —
+    el binario nunca es espacio de cita. Devuelve la severidad del fallo:
+    `MISSING` si el archivo ya no está, `BROKEN` si el slice no reproduce
+    `text` o la extracción falla. Nunca lanza: una cita rota es el hallazgo,
+    no un crash del verificador.
+    """
+    path = vault_root / chunk.source_path
+    if not path.is_file():
+        return "MISSING"
+    try:
+        text = (
+            path.read_text(encoding="utf-8")
+            if chunk.offsets_ref == OFFSETS_REF_SOURCE
+            else extract_text(path)
+        )
+    except (OSError, ValueError, ExtractionError):
+        return "BROKEN"
+    if verify_slice_identity(text, chunk.char_start, chunk.char_end, chunk.text):
+        return None
+    return "BROKEN"
+
+
+def _run_spot_check(vault_root: Path, reader: LanceDBChunkReader, requested: int) -> int:
+    """Muestrea hasta `requested` filas y publica la tasa de citas reproducibles (TD-13)."""
+    rows = asyncio.run(reader.sample_rows(requested))
+    print(f"\nSpot-check (TD-13): {len(rows)} filas muestreadas (pide {requested})")
+    broken = 0
+    for chunk in rows:
+        severity = _live_identity(vault_root, chunk)
+        if severity is not None:
+            broken += 1
+        print(
+            f"  [{severity or 'OK'}] {chunk.source_path} offsets_ref={chunk.offsets_ref} "
+            f"[{chunk.char_start}, {chunk.char_end})"
+        )
+    reproducible = len(rows) - broken
+    rate = 100.0 * reproducible / len(rows) if rows else 100.0
+    print(f"Tasa de citas reproducibles: {reproducible}/{len(rows)} ({rate:.1f}%) — {broken} rotas")
+    return EXIT_SPOT_BROKEN if broken else EXIT_OK
 
 
 def _source_slice_ok(vault_root: Path, chunk: CitedChunk) -> bool | None:

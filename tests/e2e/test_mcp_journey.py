@@ -8,19 +8,21 @@ reproducibles).
 Decisiones de test, documentadas a propósito:
 
 * **Fixture golden GRABADO en `tests/fixtures/golden_vault/`** (nota md +
-  PDF): los ficheros viven en el repo y NO se regeneran en cada corrida — la
-  prueba solo los COPIA a un tmp y los indexa (el índice sí es por corrida,
-  en SUBPROCESO con `index_vault`, patrón T2/T7: el environment global de
-  cocoindex no admite dos vaults en el mismo proceso, sonda T9).
+  transcripción txt + PDF): los ficheros viven en el repo y NO se regeneran en
+  cada corrida — la prueba solo los COPIA a un tmp y los indexa (el índice sí
+  es por corrida, en SUBPROCESO con `index_vault`, patrón T2/T7: el
+  environment global de cocoindex no admite dos vaults en el mismo proceso,
+  sonda T9).
 * **Un solo test = UNA sesión stdio = un viaje completo**: el proceso
   `python -m tepochcalli_mcp` responde `index_refresh` (idempotente sobre el
   índice del fixture), luego las dos preguntas — el estado y el modelo
   cargado viven ENTRE llamadas, como los ve el harness en producción.
 * **Cierra el punto 2 heredado de CP-B**: el corte DIRECTO «slice del
   original reproduce `text`» partiendo de un resultado de `search` por el
-  WIRE (md) — lo que CP-B aprobó heredado y encargó a T8 — más
+  WIRE (md y txt) — lo que CP-B aprobó heredado y encargó a T8 — más
   `offsets_ref == "extract"` y `heading` nulo en el PDF (los offsets citan el
-  texto extraído por markitdown, nunca el binario: D50/D54).
+  texto extraído por markitdown, nunca el binario: D50/D54). El golden cubre
+  los TRES espacios de cita del contrato: md y txt (`source`) + pdf (`extract`).
 * **Cero red y cero LLM**: el hijo corre con el canario `nonet` y
   `HF_HUB_OFFLINE=1`; la única ventana sin canario es el indexado del
   fixture en su subproceso (donde en frío se permite la descarga que el
@@ -52,10 +54,14 @@ GOLDEN_VAULT = Path(__file__).parents[1] / "fixtures" / "golden_vault"
 """Vault golden GRABADO (md + PDF) — se copia a tmp, jamás se regenera en la corrida."""
 
 GOLDEN_MD = "00-Resources/nota_dorada.md"
+GOLDEN_TXT = "00-Resources/transcripcion_dorada.txt"
 GOLDEN_PDF = "00-Resources/articulo_dorado.pdf"
 
 MD_QUERY = "espectrómetro de partículas y reducción de datos"
 """Pregunta sobre el md golden — vocabulario real de `nota_dorada.md`."""
+
+TXT_QUERY = "brújula de inclinación y rumbo magnético"
+"""Pregunta sobre el txt golden — prosa continua sin headings (D13: `heading` nulo)."""
 
 PDF_QUERY = "metodo de prueba y resultados del parseo con Docling"
 """Pregunta sobre el PDF golden — vocabulario de sus secciones extraídas."""
@@ -76,7 +82,7 @@ def test_journey_from_question_to_cited_json_over_the_stdio_process(
     models_link = index_vault(vault)  # md + PDF indexados en subproceso (ventana sin canario)
     env = server_env(vault, models_link)
 
-    async def journey() -> tuple[dict, dict, dict]:
+    async def journey() -> tuple[dict, dict, dict, dict]:
         async with running_server(env) as session:
             refresh_result = await session.call_tool("index_refresh", {})
             refresh = wire_payload(refresh_result)
@@ -84,24 +90,29 @@ def test_journey_from_question_to_cited_json_over_the_stdio_process(
                 "search", {"query": MD_QUERY, "path_filter": GOLDEN_MD}
             )
             md = wire_payload(md_result)
+            txt_result = await session.call_tool(
+                "search", {"query": TXT_QUERY, "path_filter": GOLDEN_TXT}
+            )
+            txt = wire_payload(txt_result)
             pdf_result = await session.call_tool(
                 "search", {"query": PDF_QUERY, "path_filter": GOLDEN_PDF}
             )
             pdf = wire_payload(pdf_result)
-            # Los tres pasos del viaje son de éxito: un error aquí es texto de diagnóstico.
+            # Los cuatro pasos del viaje son de éxito: un error aquí es texto de diagnóstico.
             assert not refresh_result.is_error, refresh
             assert not md_result.is_error, md
+            assert not txt_result.is_error, txt
             assert not pdf_result.is_error, pdf
-            return refresh, md, pdf
+            return refresh, md, txt, pdf
 
-    refresh, md, pdf = asyncio.run(journey())
+    refresh, md, txt, pdf = asyncio.run(journey())
 
     # 1) Ciclo Δ a través de la tool: idempotente sobre el índice del fixture.
-    #    Exactamente los 2 indexables del golden (md + PDF); el PDF cuenta en
+    #    Exactamente los 3 indexables del golden (md + txt + PDF); el PDF cuenta en
     #    scanned — F-T7-2 cerrado, ahora por stdio.
     assert list(refresh) == REFRESH_FIELDS
-    assert (refresh["scanned"], refresh["indexed"], refresh["skipped"]) == (2, 0, 2), (
-        "el golden tiene exactamente 2 indexables ya memoizados: nada que reescribir"
+    assert (refresh["scanned"], refresh["indexed"], refresh["skipped"]) == (3, 0, 3), (
+        "el golden tiene exactamente 3 indexables ya memoizados: nada que reescribir"
     )
     assert refresh["locked"] is False
 
@@ -123,7 +134,25 @@ def test_journey_from_question_to_cited_json_over_the_stdio_process(
         "algún chunk md debe citar su heading ATX (D13: heading nullable, no anulado)"
     )
 
+    # 2b) txt: source_path real + offsets contra el ORIGINAL + heading NULO (D13).
+    assert list(txt) == SEARCH_TOP_LEVEL_FIELDS
+    txt_results = txt["results"]
+    assert txt_results, "la pregunta txt debe devolver citas del golden"
+    for item in txt_results:
+        assert list(item) == SEARCH_RESULT_FIELDS
+        assert (vault / str(item["source_path"])).is_file(), item["source_path"]
+        assert item["source_path"] == GOLDEN_TXT, "el path_filter acota la cita al txt"
+        original = (vault / str(item["source_path"])).read_text(encoding="utf-8")
+        assert original[int(item["char_start"]) : int(item["char_end"])] == item["text"], (
+            f"identidad F1 rota en [{item['char_start']}, {item['char_end']}) de {GOLDEN_TXT}"
+        )
+        assert item["offsets_ref"] == "source", "txt: los offsets citan el archivo original"
+        assert item["heading"] is None, (
+            "D13: prosa sin headings ATX ⇒ `heading` nulo (nunca una cadena vacía)"
+        )
+
     # 3) PDF: source_path real + heading NULO (D54) + offsets_ref == "extract".
+    #    La AUSENCIA de heading es el contrato, no un fallo: el golden NO lo exige.
     assert list(pdf) == SEARCH_TOP_LEVEL_FIELDS
     pdf_results = pdf["results"]
     assert pdf_results, "la pregunta pdf debe devolver citas del golden"

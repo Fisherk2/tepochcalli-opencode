@@ -234,6 +234,21 @@ class LanceDBChunkReader:
         async with self._open_table() as table:
             return await table.count_rows()
 
+    async def sample_rows(self, n: int) -> list[CitedChunk]:
+        """Las primeras `n` filas con su cita — muestreo del `--spot-check` (TD-13).
+
+        `head` conserva el orden de almacenamiento y no vectoriza ninguna
+        consulta: el spot-check mide IDENTIDAD de la cita, no relevancia, así
+        que un muestreo determinista vale más que uno aleatorio (la misma
+        corrida reproduce el mismo informe). `score` queda en 0.0 — campo sin
+        significado fuera de una consulta y que el verificador no lee. La
+        cita se mapea con el MISMO `_to_cited_chunks` de `search`, de modo que
+        el spot-check afirma exactamente lo que el wire vería.
+        """
+        async with self._open_table() as table:
+            rows = (await table.head(n)).to_pylist()
+        return _to_cited_chunks([{**row, "_relevance_score": 0.0} for row in rows])
+
     async def explain_plan(
         self,
         query: str,

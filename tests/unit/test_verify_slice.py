@@ -11,7 +11,11 @@ from dataclasses import replace
 from pathlib import Path
 
 from tepochcalli_flow import verify
+from tepochcalli_flow.parsers import extract_text
 from tepochcalli_flow.ports import CitedChunk
+
+GOLDEN_VAULT = Path(__file__).parents[1] / "fixtures" / "golden_vault"
+GOLDEN_PDF = "00-Resources/articulo_dorado.pdf"
 
 
 def _chunk(source_path: str, text: str, document: str) -> CitedChunk:
@@ -42,3 +46,26 @@ def test_source_slice_resolves_vault_relative_and_detects_missing_or_extract(
         verify._source_slice_ok(tmp_path, replace(chunk, source_path="materiales/otra.md")) is False
     )
     assert verify._source_slice_ok(tmp_path, replace(chunk, offsets_ref="extract")) is None
+
+
+def test_live_identity_distinguishes_source_from_extract() -> None:
+    """`extract` re-extrae el PDF (D50); el mismo rango etiquetado `source` no reproduce."""
+    extracted = extract_text(GOLDEN_VAULT / GOLDEN_PDF)
+    chunk = CitedChunk(
+        text=extracted[100:300],
+        source_path=GOLDEN_PDF,
+        heading=None,
+        char_start=100,
+        char_end=300,
+        score=0.5,
+        offsets_ref="extract",
+    )
+
+    # El texto extraído hoy reproduce el slice: la cita es viva.
+    assert verify._live_identity(GOLDEN_VAULT, chunk) is None
+    # Los mismos offsets contra el binario como si fuera `source` NO son cita.
+    assert verify._live_identity(GOLDEN_VAULT, replace(chunk, offsets_ref="source")) == "BROKEN"
+    # Archivo ausente ⇒ severidad propia, nunca excepción.
+    assert verify._live_identity(
+        GOLDEN_VAULT, replace(chunk, source_path="00-Resources/x.pdf")
+    ) == ("MISSING")
