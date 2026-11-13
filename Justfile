@@ -2,11 +2,13 @@
 #
 # `just` sin argumentos ejecuta `quality`: el gate local de corrección
 # (lint + formato + tipos + tests rápidos). `just ci` es el gate de integración:
-# añade `sync`, la cobertura con umbral y el smoke de Δ.
+# añade `sync`, el smoke de Δ y `rust-ci`.
 #
-# Divergencia conocida con CI: `.github/workflows/phase1.yml` NO ejecuta el gate
-# de cobertura (solo el workflow local lo exige); inventariado en
-# docs/TECH_DEBT.md. GitHub Actions nunca ha corrido en este repo (M6).
+# La cobertura NO está en `ci` (decisión del dueño 2026-11-12): `just coverage`
+# es una corrida LOCAL de desarrollo, la más cara del repo (~1 h instrumentada),
+# y se hace al cierre de fase. Ni `quality` ni `ci` la ejecutan, así que ambos
+# caben en el día a día y coinciden con `.github/workflows/` (que tampoco la
+# ejecuta). GitHub Actions nunca ha corrido en este repo (M6).
 #
 # Se exporta UV_PROJECT_ENVIRONMENT=venv porque uv 0.12.9 ignora la clave
 # `[tool.uv] project-environment` del pyproject.toml: la única forma de que uv
@@ -227,13 +229,13 @@ md-lint:
 quality: lint fmt-check typecheck test
 
 # Espejo local del gate de integración: sync → lint → fmt-check → typecheck →
-# coverage → smoke → rust-ci. `coverage` corre el MISMO `pytest -m "not slow"`
-# que `test` (solo instrumentado), así que sustituirlo no encarece el gate: le
-# añade el umbral `fail_under = 95` sobre `tepochcalli_flow` + `tepochcalli_mcp`
-# (decisión del usuario 2026-10-27: un gate que nadie ejecuta no es un gate).
+# test → smoke → rust-ci. La COBERTURA no entra (decisión del dueño 2026-11-12):
+# `just coverage` corre la misma suite instrumentada (~1 h, subprocesos incluidos)
+# y es una medición local de desarrollo que se hace al cierre de fase, no en cada
+# gate. `test` y `ci` son por tanto el mismo conjunto que ejecuta CI.
 # Rust no tiene coverage: su lado corre `rust-ci` (= fmt + clippy + test).
 # Gate de integración completo: Python (sync…bench-smoke) + rust-ci.
-ci: python-sync lint fmt-check typecheck coverage bench-smoke rust-ci
+ci: python-sync lint fmt-check typecheck test bench-smoke rust-ci
 
 # Cualquier `.venv` accidental lo crea un `uv` invocado a mano sin
 # UV_PROJECT_ENVIRONMENT. No toca fuentes ni `venv/`.

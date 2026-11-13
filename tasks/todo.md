@@ -27,9 +27,11 @@
 - **Commits atómicos:** uno por calpulli, Conventional Commits ≤ 72 cols, trailer `Co-Authored-By`.
 - **Benchmarks fuera del gate:** los benches de la fase **no** entran en `just ci` (regla anti-flake
   y coste deminutes-to-hours); se corren a mano y su JSON se archiva como evidencia.
-- **`just coverage` solo en el cierre de fase** (CP/FTR): ~1 h de suite instrumentada y calienta el
-  host hasta apagarlo. Por tarea basta `just quality`, `just python-test` o la receta dirigida
-  (`just python-test-unit`, `just python-test-file <patrón>`); la cobertura se reconcilia en T16.
+- **`just coverage` solo en el cierre de fase** (T16): ~1 h de suite instrumentada y calienta el
+  host hasta apagarlo. **No está en `just ci`** (decisión del dueño 2026-11-12): es una corrida
+  local de desarrollo, no un gate. Por tarea basta `just quality`, `just python-test` o la receta
+  dirigida (`just python-test-unit`, `just python-test-file <patrón>`); la cobertura se
+  reconcilia en T16.
 
 ## Leyenda
 
@@ -111,12 +113,13 @@
 - [x] Tabla de huecos completa: cada criterio tiene su calpulli
 - [x] Tabla §6.3 copiada con la columna `origen de la cifra`
 
-### [ ] Checkpoint CP-1 — Fundaciones de medición (tras T1, T2, T3)
+### [x] Checkpoint CP-1 — Fundaciones de medición (tras T1, T2, T3)
 
-- [ ] Corpus de 11 000 entradas reproducible **byte a byte** (manifiesto verificado 2×)
-- [ ] Coste del PDF de 30 páginas **medido** (n ≥ 3, RSS pico, `medido`) y la condición de TD-2 resuelta
-- [ ] Recall@5 = 1.0 con el **umbral de T0**
-- [ ] `just ci` verde
+- [x] Corpus de 11 000 entradas reproducible **byte a byte** (manifiesto verificado 2×)
+- [x] Coste del PDF de 30 páginas **medido** (n ≥ 3, RSS pico, `medido`) y la condición de TD-2 resuelta
+- [x] Recall@5 = 1.0 con el **umbral de T0**
+- [x] `just ci` verde (ya **sin** cobertura: `python-sync → lint → fmt-check → typecheck → test → bench-smoke → rust-ci`; la cobertura es medición local y se reconcilia en T16)
+- **Hecho (2026-11-12):** `just ci` **verde en 31:54** (`CARGO_TARGET_DIR=/tmp/opencode/cargo-target`): 872 passed + 3 deselected, smoke Δ **850 ms** < 10 000 ms, `rust-ci` verde. La cobertura sale de `ci` por decisión del dueño (2026-11-12) y pasa a corrida local en T16.
 
 ---
 

@@ -330,10 +330,12 @@ el único por debajo es `__main__.py` (91 %, rama `24->exit`). Lo que queda fuer
 **Phase 1** (`refresh_lock` 83 %, `verify` 94 %, `source` 96 %, `app.py:383`), inventariadas como
 Q-2 en [TECH_DEBT.md](TECH_DEBT.md).
 
-**El gate ya no es manual:** `just ci` ejecuta `coverage` en lugar de `test` (misma suite, solo
-instrumentada ⇒ mismo coste) — un gate que nadie ejecuta no es un gate. Ciclo corto sin cobertura:
-`just quality`. **Divergencia conocida:** `.github/workflows/phase1.yml` **no** ejecuta cobertura
-(inventariado en [TECH_DEBT.md](TECH_DEBT.md)); GitHub Actions sigue sin haber corrido (M6).
+**La cobertura es una medición local, no un gate:** `just coverage` corre la misma suite
+instrumentada (~1 h) y se ejecuta al cierre de fase — decisión del dueño 2026-11-12, que la sacó
+de `just ci` para que el gate de integración sea corrible siempre. `just ci` = `python-sync` +
+`quality` + `bench-smoke` + `rust-ci`. Ciclo corto sin cobertura: `just quality`. **Coincide con
+CI:** `.github/workflows/phase1.yml` **tampoco** ejecuta cobertura; GitHub Actions sigue sin
+haber corrido (M6).
 
 ## 4. Formal Technical Reviews (FTRs)
 

@@ -62,19 +62,20 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   corridas largas (benches, matrices, indexaciones) van en **primer plano y por partes** —un
   documento, un tamaño o un tramo por llamada, cada uno con su JSON— para verlas terminar y
   poder cortarlas. Si una tarea no cabe en una llamada, se trocea; no se suelta.
-* **`just coverage` SOLO al cierre de fase.** Es el gate más caro del repo (~1 h: suite completa
-  más instrumentación de subprocesos) y calienta el host hasta apagarlo. Se ejecuta **una vez**
-  en el cierre de cada fase (FTR/checkpoint), **nunca por tarea, calpulli ni commit**. Para el
-  trabajo diario: `just quality` (lint + fmt-check + typecheck + test) o la receta dirigida
-  (`just python-test-unit`, `just python-test-file <patrón>`); si el cambio toca `flow/` o
-  `mcp/`, `just python-test`. La cobertura se reconcilia en el cierre, no antes.
-* **Suite diaria vs cierre (medido 2026-11-12).** `just python-test`: **803 tests / ~18 min**;
+* **`just coverage` NO está en `ci` y SOLO se corre al cierre de fase.** Es la medición más cara
+  del repo (~1 h: suite completa más instrumentación de subprocesos) y calienta el host hasta
+  apagarlo. Decisión del dueño (2026-11-12): es una **corrida local de desarrollo**, no un gate
+  — se ejecuta **una vez** en el cierre de cada fase (FTR/T16), **nunca por tarea, calpulli ni
+  commit**. Para el trabajo diario: `just quality` (lint + fmt-check + typecheck + test) o la
+  receta dirigida (`just python-test-unit`, `just python-test-file <patrón>`); si el cambio toca
+  `flow/` o `mcp/`, `just python-test`. `just ci` = `quality` + `python-sync` + `bench-smoke` +
+  `rust-ci`, sin cobertura: ese es el gate que se puede correr siempre.
+* **Suite diaria vs cierre (medido 2026-11-12).** `just python-test`: **872 tests / ~20-24 min**;
   `just python-test-unit`: **686 / 2:19**. El coste está repartido por integración/e2e, no
   concentrado en un subconjunto, así que marcar tests no paga: para iterar usa
-  `python-test-unit` o `python-test-file <patrón>`, y deja la suite completa y `coverage` para
-  el cierre.
+  `python-test-unit` o `python-test-file <patrón>`, y deja la suite completa para el gate.
 * **Si la ejecución se cancela abruptamente, trocea**: prefiere `python-test-unit` o `python-test-file` a la
-  suite entera, y no lances `coverage`/`ci` fuera del cierre de fase.
+  suite entera, y no lances `coverage` fuera del cierre de fase.
 
 ## Code Style Rules
 
@@ -83,8 +84,9 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `.tepochcalli/flow/` y `.tepochcalli/mcp/`; nada de lógica de negocio en `opencode.json`.
 * El portero de comandos es el Justfile (raíz): **lanzar comandos vía recetas `just`, nunca
   crudos** — `just typecheck` es el gate mypy strict sobre `flow/`, `just quality` el gate
-  táctico, y `just ci` el gate completo (python-sync → lint → fmt-check → typecheck →
-  coverage → bench-smoke → rust-ci; `coverage` impone `fail_under = 95` sobre `flow` + `mcp`).
+  táctico, y `just ci` el gate completo (python-sync → lint → fmt-check → typecheck → test →
+  bench-smoke → rust-ci). La cobertura (`just coverage`, `fail_under = 95` sobre `flow` + `mcp`)
+  es una **medición local** que no está en `ci` y se corre al cierre de fase.
   Las recetas `python-*` / `rust-*` tocan un solo lenguaje; las unprefixed reparten a ambos.
 * Rust (wizard): `cargo fmt` + `cargo clippy -D warnings`; fases del instalador como
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).
