@@ -1,0 +1,210 @@
+{
+  "criterion": 1,
+  "task": "T9",
+  "date": "2026-11-13T06:03:44-0600",
+  "host": {
+    "uname": "7.3.1-1-cachyos",
+    "nproc": 12
+  },
+  "command": {
+    "install": "/tmp/opencode/cargo-target/debug/tepochcalli install --non-interactive --skip-model --vault <vault> --payload <payload>",
+    "script": "verify_no_interference.py --evidence docs/acceptance/no-interference.json",
+    "fault": "none"
+  },
+  "vault": "/tmp/opencode/tepochcalli-t9-xobcm2th/vault",
+  "install": {
+    "argv": [
+      "/tmp/opencode/cargo-target/debug/tepochcalli",
+      "install",
+      "--non-interactive",
+      "--skip-model",
+      "--vault",
+      "/tmp/opencode/tepochcalli-t9-xobcm2th/vault",
+      "--payload",
+      "/tmp/opencode/tepochcalli-t9-xobcm2th/payload"
+    ],
+    "exit": 0,
+    "stdout_tail": [
+      "/tmp/opencode/tepochcalli-t9-xobcm2th/vault",
+      "",
+      "== RAG degradado: sin embedder (ruta 5) ==",
+      "El índice no se construyó. Re-entrada:",
+      "  1) tepochcalli config embedder --confirm",
+      "  2) tepochcalli reindex --confirm"
+    ],
+    "stderr_tail": [
+      "uv uv 0.12.9 (x86_64-unknown-linux-gnu) ready",
+      "embedder: provider=none (none)",
+      "index: scanned=0 indexed=0 (0 ms)",
+      "mcp: tepochcalli-rag up to date (rag_status=degraded)"
+    ]
+  },
+  "embedder": {
+    "argv": [
+      "/tmp/opencode/cargo-target/debug/tepochcalli",
+      "config",
+      "embedder",
+      "--non-interactive",
+      "--confirm",
+      "--vault",
+      "/tmp/opencode/tepochcalli-t9-xobcm2th/vault"
+    ],
+    "exit": 0,
+    "stdout_tail": [
+      "embedder: paraphrase-multilingual-MiniLM-L12-v2 (dims 384)"
+    ],
+    "stderr_tail": [
+      "tamaño de db: 0 bytes",
+      "rag_status: {\"state\":\"degraded\",\"mode\":\"none\"}",
+      "== Advertencia de re-index ==",
+      "El swap a paraphrase-multilingual-MiniLM-L12-v2 exige un re-index COMPLETO (LanceDB no mezcla dimensiones).",
+      "Tiempo estimado: ≈1 s (ficheros en db/: 0, 0 bytes).",
+      "Durante el proceso el índice viejo sigue servable; al triunfar, config y metadatos conmutan atómicamente y el modelo anterior se purga de models/.",
+      "Requiere --confirm explícito.",
+      "== Embedding OK ==",
+      "modelo paraphrase-multilingual-MiniLM-L12-v2 · dims 384 · RSS pico 1240MB (medido)",
+      "== Swap completo ==",
+      "modelo paraphrase-multilingual-MiniLM-L12-v2 · dims 384 · RSS pico 1240MB (medido)",
+      "config y metadatos conmutados atómicamente; modelo anterior purgado de models/"
+    ]
+  },
+  "obsidian": {
+    "before": {
+      "hash": "751186fc6685e6f3bc96ccc6a2a23266693c6aa3b0e8706d9afdd382ffea35a0",
+      "files": [
+        "app.json",
+        "workspace.json"
+      ]
+    },
+    "after": {
+      "hash": "751186fc6685e6f3bc96ccc6a2a23266693c6aa3b0e8706d9afdd382ffea35a0",
+      "files": [
+        "app.json",
+        "workspace.json"
+      ]
+    }
+  },
+  "ports": {
+    "command": "ss -ltnp",
+    "before": {
+      "command": "ss -ltnp",
+      "raw": [
+        "State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess",
+        "LISTEN 0      4096       127.0.0.1:35001      0.0.0.0:*   ",
+        "LISTEN 0      512        127.0.0.1:49374      0.0.0.0:*    users:((\"opencode\",pid=5106,fd=10))",
+        "LISTEN 0      50         127.0.0.1:33053      0.0.0.0:*    users:((\"plasmashell\",pid=1185,fd=23))",
+        "LISTEN 0      4096       127.0.0.1:631        0.0.0.0:*   ",
+        "LISTEN 0      50         127.0.0.1:6341       0.0.0.0:*    users:((\"megasync\",pid=1499,fd=68))",
+        "LISTEN 0      511        127.0.0.1:6463       0.0.0.0:*    users:((\"vesktop\",pid=1510,fd=115))",
+        "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*   ",
+        "LISTEN 0      4096               *:6566             *:*   ",
+        "LISTEN 0      4096           [::1]:631           [::]:*   ",
+        "LISTEN 0      128             [::]:22            [::]:*   ",
+        "LISTEN 0      50                 *:1716             *:*    users:((\"kdeconnectd\",pid=1505,fd=17))",
+        "LISTEN 0      511                *:34571            *:*    users:((\"electron\",pid=34811,fd=99))"
+      ],
+      "endpoints": [
+        "*:1716",
+        "*:34571",
+        "*:6566",
+        "0.0.0.0:22",
+        "127.0.0.1:33053",
+        "127.0.0.1:35001",
+        "127.0.0.1:49374",
+        "127.0.0.1:631",
+        "127.0.0.1:6341",
+        "127.0.0.1:6463",
+        "[::1]:631",
+        "[::]:22"
+      ]
+    },
+    "after": {
+      "command": "ss -ltnp",
+      "raw": [
+        "State  Recv-Q Send-Q Local Address:Port  Peer Address:PortProcess",
+        "LISTEN 0      4096       127.0.0.1:35001      0.0.0.0:*   ",
+        "LISTEN 0      512        127.0.0.1:49374      0.0.0.0:*    users:((\"opencode\",pid=5106,fd=10))",
+        "LISTEN 0      50         127.0.0.1:33053      0.0.0.0:*    users:((\"plasmashell\",pid=1185,fd=23))",
+        "LISTEN 0      4096       127.0.0.1:631        0.0.0.0:*   ",
+        "LISTEN 0      50         127.0.0.1:6341       0.0.0.0:*    users:((\"megasync\",pid=1499,fd=68))",
+        "LISTEN 0      511        127.0.0.1:6463       0.0.0.0:*    users:((\"vesktop\",pid=1510,fd=115))",
+        "LISTEN 0      128          0.0.0.0:22         0.0.0.0:*   ",
+        "LISTEN 0      4096               *:6566             *:*   ",
+        "LISTEN 0      4096           [::1]:631           [::]:*   ",
+        "LISTEN 0      128             [::]:22            [::]:*   ",
+        "LISTEN 0      50                 *:1716             *:*    users:((\"kdeconnectd\",pid=1505,fd=17))",
+        "LISTEN 0      511                *:34571            *:*    users:((\"electron\",pid=34811,fd=99))"
+      ],
+      "endpoints": [
+        "*:1716",
+        "*:34571",
+        "*:6566",
+        "0.0.0.0:22",
+        "127.0.0.1:33053",
+        "127.0.0.1:35001",
+        "127.0.0.1:49374",
+        "127.0.0.1:631",
+        "127.0.0.1:6341",
+        "127.0.0.1:6463",
+        "[::1]:631",
+        "[::]:22"
+      ]
+    },
+    "new": []
+  },
+  "hidden": {
+    "allowed_root": [
+      ".git",
+      ".gitignore",
+      ".obsidian",
+      ".opencode",
+      ".tepochcalli",
+      ".trash"
+    ],
+    "allowed_files": [
+      ".gitkeep"
+    ],
+    "violations": []
+  },
+  "vault_valid": {
+    "opencode_json_parseable": true,
+    "tepochcalli_rag_registered": true,
+    "agents_md": true,
+    "trays": {
+      "00-Resources": true,
+      "01-tasks": true,
+      "02-drafts": true,
+      "03-citations": true,
+      "04-review": true,
+      "05-outputs": true
+    },
+    "valid": true
+  },
+  "observations": [
+    "alias de raíz: el wizard crea `00-Resources/` (D22) y el payload trae `00-resources/`; `index_refresh` indexa roots=['00-resources'] — la nota medida vive en la raíz efectiva, no en la del scaffold (Open Question de spec-vault-structure)"
+  ],
+  "tools": {
+    "refresh": {
+      "scanned": 1,
+      "indexed": 1,
+      "skipped": 0,
+      "elapsed_ms": 13281,
+      "locked": false,
+      "roots": [
+        "00-resources"
+      ]
+    },
+    "search_results": 1,
+    "sources": [
+      "00-resources/nota-t9-no-interferencia.md"
+    ]
+  },
+  "results": {
+    "obsidian_identical": true,
+    "no_new_ports": true,
+    "no_hidden_litter": true,
+    "vault_valid": true,
+    "engine_did_work": true
+  },
+  "verdict": "PASS"
+}

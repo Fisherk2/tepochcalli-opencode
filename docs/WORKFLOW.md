@@ -276,7 +276,7 @@
 
 | Criterio UH.md | Test | Result |
 | --- | --- | --- |
-| 1. Sin interferencias | checklist Vault-OK post-instalación (0 puertos, `.obsidian/` intacto, UI limpia) | ☐ |
+| 1. Sin interferencias | checklist Vault-OK post-instalación (0 puertos, `.obsidian/` intacto, UI limpia) | ☑ **PASS**: `.obsidian/` byte-idéntico (`sha256 751186fc…`, 2 ficheros), **0 puertos nuevos** (12 listeners antes y después, lista archivada), 0 basura oculta y vault válido, con `index_refresh` real (`scanned=1 indexed=1`) + `search` (1 cita). Origen: `just python-no-interference --evidence …` sobre vault instalado por `install --non-interactive --skip-model` + [no-interference.json](acceptance/no-interference.json) (T9) |
 | 2. Δ <30s | bench `index_refresh` 20 corridas típicas | ☐ |
 | 3. Búsqueda <500ms | bench `search` p95 sobre corpus 10k/1k | ☑ **p95 cliente 97 ms** / 94 ms server (n=100, nearest-rank 95.º, btrfs/NVMe, 11 006 chunks). Origen: `just python-bench-search-scale --phase …` + [search-scale.json](acceptance/search-scale.json) (T4) |
 | 4. ≤2000 tokens/consulta | fixture adverso + medidor e2e del harness | ☑ **total 1 995 < 2 000** en el peor caso (`top_k=20`, 4 resultados) y 1 675 en la consulta dorada, con **tokenizador real** `cl100k_base` (tiktoken 0.14.0; `o200k_base` 1 785/1 536 al lado); **payload del server**: 1 600 por el estimador del contrato y **1 789** reales. Desglose: query + `content[0].text` + esqueleto mínimo de respuesta citada (`source_path » heading (chars x–y)`). Margen del peor caso: **5 tokens** (hallazgo F-T6-1). Origen: `just python-test-file token_budget` (n=7 caras del fixture adverso de T7) + [token-budget.json](acceptance/token-budget.json) (T6) |

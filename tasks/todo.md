@@ -188,17 +188,18 @@
 - Deps: T0 · Verificación: test e2e verde
 - **Hecho (2026-11-13):** `tests/e2e/test_format_matrix.py` (16 tests, ~2 min, sin `slow`): vault temporal con los 7 formatos del índice + PDF escaneado + fuentes del conversor, medido en **un** servidor por stdio (wire real). **8/9 celdas PASS medidas** — `md/txt` `offsets_ref=source`; `pdf/docx/pptx/xlsx/xls` `extract` con `heading` nulo (D54) y `source_path` = **el original**; `html` entra por el conversor, su `.html` **nunca** es citable y el artefacto `00-Resources/pagina.md` lo es **solo tras `index_refresh`** (refresh medido: `scanned 10, indexed 2, skipped 8`). **Celda `url` = GAP declarado**, no PASS: la suite corre con `nonet` y el guard SSRF rechaza loopback por diseño (el positivo con servidor local se retiró en Phase 2); lo ejecutado es el rechazo `VALIDATION_ERROR` «red interna» sin escritura, y el método que haría falta (host con red o allowlist, ADR) queda escrito. **3 GAP ejecutados** con mensaje literal del wire: `.doc`/`.ppt` ⇒ `VALIDATION_ERROR` «formato no soportado» + catálogo (el borde corta antes de markitdown) y PDF escaneado ⇒ `SOURCE_UNREACHABLE` + `GUIDE_OCR`, sin fila vacía al indexar (OM-11). `.xls` se **ejecuta de verdad** con un BIFF2 mínimo escrito con `struct` (`xlwt` no está): sin dependencias nuevas (R1). La tabla se **imprime desde el test** y `test_published_matrix_matches_docs_trd` pone el gate rojo si `docs/TRD.md` §6.3 diverge (RED archivado: 15 passed / 1 failed antes de publicar). Evidencia: `docs/acceptance/format-matrix.{md,json}` + TRD §6.3 + README de aceptación. Contrato de las 3 tools y payload intactos; `coverage` no ejecutado (T16).
 
-### [ ] T9 — Criterio 1: no-interferencia con Obsidian
+### [x] T9 — Criterio 1: no-interferencia con Obsidian
 
 - Subagente: `test-engineer` → `security-architect` (secuencial) · Skills: `test-driven-development`, `bash-defensive-patterns`, `security-and-hardening`, `observability-and-instrumentation` · Tools: `tepochcalli-rag` (payload, stdio)
-- [ ] Script sobre un vault **instalado de verdad** por el wizard (`install --non-interactive --skip-model`)
-- [ ] (a) `.obsidian/` **byte-idéntico** antes/después de `index_refresh()` + `search` (hash de árbol)
-- [ ] (b) **0** puertos nuevos escuchando; la lista `ss -ltnp` antes/después se **publica y archiva**
-- [ ] (c) **0** ficheros con prefijo punto en el árbol visible (`.tepochcalli/`, `.obsidian/`, `.git/`)
-- [ ] (d) el vault sigue siendo válido (`opencode.json` parseable + `AGENTS.md` + bandejas)
-- [ ] El script **falla** (exit ≠ 0) si `.obsidian/` cambia o aparece un puerto
-- [ ] Checklist de `spec-vault-structure.md` §Testing **ejecutado** y referenciado
+- [x] Script sobre un vault **instalado de verdad** por el wizard (`install --non-interactive --skip-model`)
+- [x] (a) `.obsidian/` **byte-idéntico** antes/después de `index_refresh()` + `search` (hash de árbol)
+- [x] (b) **0** puertos nuevos escuchando; la lista `ss -ltnp` antes/después se **publica y archiva**
+- [x] (c) **0** ficheros con prefijo punto en el árbol visible (`.tepochcalli/`, `.obsidian/`, `.git/`)
+- [x] (d) el vault sigue siendo válido (`opencode.json` parseable + `AGENTS.md` + bandejas)
+- [x] El script **falla** (exit ≠ 0) si `.obsidian/` cambia o aparece un puerto
+- [x] Checklist de `spec-vault-structure.md` §Testing **ejecutado** y referenciado
 - Deps: T0 · Verificación: salida archivada como evidencia del criterio 1
+- **Hecho (2026-11-13):** `tests/e2e/verify_no_interference.py` + recetas `rust-build` / `python-no-interference`. Instala un vault con el binario (`install --non-interactive --skip-model --vault <tmp> --payload <template completo>`; el flag es `--vault`, no `--dir`), ejecuta la re-entrada que el wizard imprime (`config embedder --confirm`, snapshot del modelo enlazado del cache HF: `dims 384`), siembra `.obsidian/{app,workspace}.json` y mide entre capturas con el server spawneado **como el harness** (command/cwd/environment leídos de `opencode.json`). **PASS en las 4 caras** con trabajo real: `index_refresh scanned=1 indexed=1` (13 281 ms) + `search` con 1 cita `00-resources/nota-t9-no-interferencia.md`; `.obsidian/` `sha256 751186fc…` idéntico; **0 puertos nuevos** con las dos listas `ss -ltnp` archivadas (12 listeners del host, ninguno del motor ⇒ stdio ADR-002/005); 0 basura oculta; vault válido. **RED archivado**: `--fault obsidian` ⇒ `obsidian_identical=false`, exit 1; `--fault port` ⇒ `puertos nuevos: 127.0.0.1:47923`, exit 1 (mismo montaje, solo la interrupción inyectada ⇒ la guarda no es decorativa). Interpretación de (c) declarada (Sección 3 de la evidencia): allowlist `.tepochcalli`/`.opencode`/`.obsidian`/`.git`/`.trash`/`.gitignore` + `.gitkeep` del payload; el resto es violación. **Hallazgo colateral publicado, no arreglado (fuera de alcance):** el wizard crea `00-Resources/` (D22) y el payload trae `00-resources/`, y `index_refresh` reporta `roots=["00-resources"]` ⇒ lo escrito en la carpeta que anuncia D9.1 no se indexa (Open Question de `spec-vault-structure`; deuda candidata). Evidencia: `docs/acceptance/no-interference.{md,json}` + README de aceptación + WORKFLOW §6.3. `coverage` no ejecutado (T16).
 
 ### [x] Checkpoint CP-2 — Criterios 3 y 6 a escala (tras T4, T5)
 

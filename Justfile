@@ -124,6 +124,13 @@ python-bench-search-scale *args:
 python-bench-documents *args:
     cd {{flow_dir}} && uv run python ../../tests/benchmarks/bench_documents.py {{args}}
 
+# Criterio 1 (Phase 6 T9): no-interferencia sobre un vault INSTALADO por el
+# wizard — `.obsidian/` byte-idéntico, 0 puertos nuevos, 0 basura oculta y
+# vault válido tras `index_refresh`+`search`. Medición LOCAL.
+# `--fault obsidian|port` demuestra que la guarda falla; `--evidence` archiva.
+python-no-interference *args:
+    cd {{flow_dir}} && uv run python ../../tests/e2e/verify_no_interference.py {{args}}
+
 # Bench del criterio 6 a escala (Phase 6 T5): brazos 10 % vs 100 % (Δ p95 n=20 +
 # search p95 n=100) y contraste btrfs vs fuseblk/NTFS-3G. Medición LOCAL, POR
 # TRAMOS en primer plano: `--phase prepare|index10|search|walk|delta|ntfs|report`
@@ -139,6 +146,11 @@ crate_dir := "crates/tepochcalli"
 # rustfmt en sitio: mismo comando que `rust-fmt`, pero escribiendo.
 rust-fmt-fix:
     cd {{crate_dir}} && cargo fmt
+
+# Compila el wizard (debug) para los scripts de aceptación.
+# En este montaje NTFS hay que exportar CARGO_TARGET_DIR (ver AGENTS.md).
+rust-build:
+    cd {{crate_dir}} && cargo build --locked
 
 # Formato del wizard (falla si algo habría que reescribir).
 rust-fmt:
