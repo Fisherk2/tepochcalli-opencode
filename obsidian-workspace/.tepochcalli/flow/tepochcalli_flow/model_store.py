@@ -2,7 +2,7 @@
 
 El write path (refresh) y el `embed-check` del CLI llaman aquí para garantizar
 `<vault>/.tepochcalli/models/<slug>@<sha>/`. El read path (MCP) **no** llama:
-solo exige que el directorio exista (`tepochcalli_mcp.embedder.require_local_model`)
+solo exige el snapshot con `snapshot_defect` (`tepochcalli_mcp.embedder.require_local_model`)
 y nunca descarga.
 
 **Por qué en el flow y no en el wizard (D25):** el wizard Rust no descarga
@@ -26,9 +26,20 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
 from .config import Config
+
+_WEIGHT_FILES: Final = ("model.safetensors", "pytorch_model.bin")
+"""Pesos que la librería acepta (`SAFE_WEIGHTS_NAME`/`WEIGHTS_NAME` de transformers, pin
+verificado): `SentenceTransformer.save()` escribe safetensors.
+
+shortcut: no se reconoce el snapshot shardeado (`model.safetensors.index.json`); MiniLM y
+bge-m3 son de un solo fichero — añadirlo si se adopta un modelo con shards.
+"""
+
+_HUB_SNAPSHOTS_DIR: Final = "snapshots"
+"""Nivel del layout de caché hub de HuggingFace: `models--<slug>/snapshots/<sha>/`."""
 
 
 class _LoadableModel(Protocol):
@@ -47,6 +58,27 @@ def is_materialized(config: Config) -> bool:
     """Indica si el snapshot estable existe y NO está vacío (sin tocar red)."""
     path = config.embedding_model_path
     return path.is_dir() and any(path.iterdir())
+
+
+def snapshot_defect(path: Path, revision: str) -> str | None:
+    """Qué le falta al snapshot para que la librería lo cargue; `None` si está completo.
+
+    Comprobación **barata** (sin cargar torch): manifiesto `config.json`, un fichero de
+    pesos real (`model.safetensors`, el que escribe `save()`, o `pytorch_model.bin`) y
+    —si el snapshot es una caché hub de HuggingFace (`snapshots/<sha>/`, layout real del
+    cache)— que la revisión resuelta sea la pineada. Una descarga interrumpida deja el
+    directorio con entradas y sin pesos: mirar solo «no vacío» lo daba por bueno (TD-29).
+    """
+    if not path.is_dir():
+        return "no existe"
+    if not (path / "config.json").is_file():
+        return "falta el manifiesto config.json"
+    if not any((path / weight).is_file() for weight in _WEIGHT_FILES):
+        return f"faltan los pesos ({' o '.join(_WEIGHT_FILES)})"
+    resolved = path.resolve()
+    if resolved.parent.name == _HUB_SNAPSHOTS_DIR and resolved.name != revision:
+        return f"la revisión del snapshot es {resolved.name}, no la configurada {revision}"
+    return None
 
 
 def ensure_local_model(config: Config, *, loader: ModelLoader | None = None) -> Path:

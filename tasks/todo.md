@@ -233,27 +233,32 @@
 - [ ] La **firma es del dueño** (cambia una decisión `Accepted`): el subagente prepara la opción con el dato
 - Deps: T0, T1 · Verificación: cifra reproducible con su comando
 
-### [ ] T11 — TD-28 + TD-29: hygiene del wizard y del modelo local
+### [x] T11 — TD-28 + TD-29: hygiene del wizard y del modelo local
 
 - Subagentes: `rust-refactoring-specialist` **∥** `python-pro` (paralelo — ficheros, lenguajes y suites distintos, cero estado compartido) · Skills: `refactoring-patterns`, `clean-code`, `design-patterns`, `test-driven-development`, `incremental-implementation` · Tools: —
-- [ ] **(a)** `embedder_menu.rs` de 894 → **<500** líneas, partiendo por responsabilidad, **sin cambiar ni un mensaje** pinneado por `e2e_cli_help`/`int_*`
-- [ ] **(a)** `cargo fmt` limpio, `clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests**
-- [ ] **(b)** `require_local_model` valida el snapshot **real** (`config.json` + pesos), no «el directorio no está vacío» ⇒ `E_MODEL_INVALID` donde hoy no se emite
-- [ ] **(b)** Test que falla con snapshot a medias y con snapshot de otra revisión (RED demostrado)
-- [ ] `just coverage` ≥ 95 % **se verifica en el cierre de fase (T16)**, no en este calpulli; aquí basta `just python-test`
-- [ ] `wc -l` de ambos ficheros y recuento de tests publicados (TD-28 y TD-29 **cerradas**)
+- [x] **(a)** `embedder_menu.rs` de 894 → **<500** líneas, partiendo por responsabilidad, **sin cambiar ni un mensaje** pinneado por `e2e_cli_help`/`int_*`
+- [x] **(a)** `cargo fmt` limpio, `clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests**
+- [x] **(b)** `require_local_model` valida el snapshot **real** (`config.json` + pesos), no «el directorio no está vacío» ⇒ `E_MODEL_INVALID` donde hoy no se emite
+- [x] **(b)** Test que falla con snapshot a medias y con snapshot de otra revisión (RED demostrado)
+- [x] `just coverage` ≥ 95 % **se verifica en el cierre de fase (T16)**, no en este calpulli; aquí basta `just python-test`
+- [x] `wc -l` de ambos ficheros y recuento de tests publicados (TD-28 y TD-29 **cerradas**)
 - Deps: T0 · Verificación: `just rust-ci` verde · `just python-test` verde (cobertura en el cierre)
 
-### [ ] T12 — TD-34: refs a skills/subagentes del payload (solo lectura)
+- **Hecho (2026-11-13), parte (a) TD-28:** `embedder_menu.rs` **894 → 298** líneas partido por responsabilidad en 4 módulos hermanos planos (no en un subdirectorio: `int_architecture.rs` escanea `application/*.rs` con `read_dir` y un `embedder_menu/` habría escapado del gate): `embedder_config.rs` 218, `embedder_gate.rs` 202, `embedder_estimate.rs` 155, `embedder_options.rs` 102. **178 literales byte-idénticos** (multiset igual), `rust-test` **323 passed** (mismo número que antes), clippy `-D warnings` limpio. Visibilidad: solo `pub(super)` interno, superficie pública intacta.
+- **Hecho (2026-11-13), parte (b) TD-29:** `snapshot_defect(path, revision)` valida el snapshot **real** (`config.json` + `model.safetensors`/`pytorch_model.bin` + revisión cuando el layout HF la declara) sin cargar el modelo; `require_local_model` pasa a `E_MODEL_INVALID` diciendo **qué falta**. RED archivado: solo-config, solo-pesos y revisión distinta ⇒ `DID NOT RAISE EmbedderModelError`; verde tras el fix. Suite **898 → 902 passed**. `model_store.py` 93→125, `embedder.py` 235→237.
+
+### [x] T12 — TD-34: refs a skills/subagentes del payload (solo lectura)
 
 - Subagente: `codebase-archaeologist` · Skills: `codebase-memory`, `documentation-and-adrs`, `context-engineering` · Tools: `vercel-grep`, `codebase-memory-mcp`
-- [ ] `ls .opencode/skills` (40) cotejado con **todos** los nombres citados en los **9 comandos** y los **5 agentes** ⇒ **0 huérfanos**
-- [ ] Tabla nombre → fichero → línea → presente
-- [ ] `grep` de carga por comando: cada skill se carga **en el comando que la cita**; cada `agent:` resuelve a un primario existente
-- [ ] `git diff --stat -- obsidian-workspace` **vacío** antes y después (D-P6-1)
+- [x] `ls .opencode/skills` (39) cotejado con **todos** los nombres citados en los **9 comandos** y los **5 agentes** ⇒ **0 huérfanos**
+- [x] Tabla nombre → fichero → línea → presente
+- [x] `grep` de carga por comando: cada skill se carga **en el comando que la cita**; cada `agent:` resuelve a un primario existente
+- [x] `git diff --stat -- obsidian-workspace` **vacío** antes y después (D-P6-1)
 - [ ] Si hay un nombre equivocado ⇒ **no se reescribe el payload**: se reporta y se corrige en la spec con enmienda fechada **o** se acepta como GAP declarado
-- [ ] El informe desbloquea el gate de T15
+- [x] El informe desbloquea el gate de T15
 - Deps: T0 · Verificación: tabla nombre→fichero→presente · `git diff --stat` vacío
+
+- **Hecho (2026-11-12, re-verificado 2026-11-13):** `tests/e2e/verify_payload_refs.py` ⇒ **0 failure(s); 111 reference(s) checked against 39 skill(s) and 170 agent(s)**. 9 comandos y 5 agentes cotejados contra `ls .opencode/skills` (39 tras los retiros `c815eb0` y `e785072`); `git diff --stat -- obsidian-workspace` vacío en la verificación. Sin payload reescrito.
 
 ### [ ] T13 — D-b: estado de soporte de Windows en v1
 

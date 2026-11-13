@@ -30,11 +30,22 @@ MODEL = "org/custom-model"
 REVISION = "abc123"
 
 
+OTHER_REVISION = "0ld5ha"
+
+
+def _write_snapshot(path: Path, *, weights: str = "model.safetensors") -> Path:
+    """Snapshot mínimo cargable por `SentenceTransformer(path)`: manifiesto + pesos."""
+    path.mkdir(parents=True, exist_ok=True)  # `save()` recibe un staging ya creado
+    (path / "config.json").write_text("{}", encoding="utf-8")
+    (path / weights).write_bytes(b"pesos")
+    return path
+
+
 class _FakeModel:
-    """Doble del modelo cargado: `save` crea un directorio con un marcador."""
+    """Doble del modelo cargado: `save` deja un snapshot cargable (config + pesos)."""
 
     def save(self, path: str) -> None:
-        Path(path, "config.json").write_text("{}", encoding="utf-8")
+        _write_snapshot(Path(path))
 
 
 class _FakeOp:
@@ -234,3 +245,39 @@ def test_default_loader_pins_the_revision_and_the_temp_cache(
     assert str(recorded["cache_folder"]).startswith(str(config.models_dir))
     assert recorded["device"] == config.embedding.device
     assert not list(config.models_dir.glob(".model-*"))
+
+
+# --- TD-29: el read path exige el snapshot COMPLETO, no un directorio con algo -------------
+
+
+@pytest.mark.parametrize("present", [["config.json"], ["model.safetensors"]])
+def test_incomplete_snapshot_raises_model_invalid(tmp_path: Path, present: list[str]) -> None:
+    """Descarga interrumpida: el directorio tiene algo, pero no lo que la carga exige."""
+    config = _config(tmp_path)
+    stable = config.embedding_model_path
+    stable.mkdir(parents=True)
+    for name in present:
+        (stable / name).write_bytes(b"x")
+
+    with pytest.raises(embedder.EmbedderModelError, match="tepochcalli config embedder"):
+        embedder.require_local_model(config)
+
+
+def test_snapshot_of_another_revision_raises_model_invalid(tmp_path: Path) -> None:
+    """Un snapshot completo de OTRA revisión (layout hub de HF) no es el pineado."""
+    config = _config(tmp_path)
+    snapshot = _write_snapshot(
+        config.models_dir / f"models--{MODEL.replace('/', '--')}" / "snapshots" / OTHER_REVISION
+    )
+    config.embedding_model_path.symlink_to(snapshot, target_is_directory=True)
+
+    with pytest.raises(embedder.EmbedderModelError, match="tepochcalli config embedder"):
+        embedder.require_local_model(config)
+
+
+def test_complete_snapshot_is_accepted_by_the_read_path(tmp_path: Path) -> None:
+    """El caso legítimo (manifiesto + pesos) sigue pasando — es el que usa toda la suite."""
+    config = _config(tmp_path)
+    written = _write_snapshot(config.embedding_model_path)
+
+    assert embedder.require_local_model(config) == written

@@ -40,7 +40,7 @@ from pathlib import Path
 from typing import Literal, Protocol, cast
 
 from tepochcalli_flow.config import Config
-from tepochcalli_flow.model_store import is_materialized
+from tepochcalli_flow.model_store import snapshot_defect
 
 type EmbedderMode = Literal["local", "api", "none"]
 """Vocabulario D7.3/ADR-007 de `rag_status.embedder.mode` (spec §rag_status)."""
@@ -132,16 +132,18 @@ def is_available(config: Config) -> bool:
 
 
 def require_local_model(config: Config) -> Path:
-    """Path estable exigido por el read path; ausente ⇒ `E_MODEL_INVALID` (cero red).
+    """Path estable exigido por el read path; inválido ⇒ `E_MODEL_INVALID` (cero red).
 
-    NO materializa ni importa torch: solo comprueba el directorio
-    `<models>/<slug>@<sha>/` (el mismo que escribe el write path). El mensaje
-    incluye la guía `tepochcalli config embedder` que el agente reporta.
+    NO materializa ni importa torch: valida el snapshot `<models>/<slug>@<sha>/`
+    (manifiesto + pesos, y la revisión si el snapshot la declara) — el mismo que
+    escribe el write path. El mensaje dice qué falta e incluye la guía
+    `tepochcalli config embedder` que el agente reporta.
     """
     path = config.embedding_model_path
-    if not is_materialized(config):
+    defect = snapshot_defect(path, config.embedding.revision)
+    if defect is not None:
         raise EmbedderModelError(
-            f"snapshot local ausente en {path}; ejecuta `tepochcalli config embedder`"
+            f"snapshot local inválido en {path}: {defect}; ejecuta `tepochcalli config embedder`"
         )
     return path
 

@@ -3,7 +3,11 @@
 //! Depends on `domain` + `ports` only — never on `adapters/` (hexagonal
 //! rule, same direction as `domain/`).
 
+mod embedder_config;
+mod embedder_estimate;
+mod embedder_gate;
 pub mod embedder_menu;
+mod embedder_options;
 pub mod failure;
 pub(crate) mod flow_cli;
 pub mod installer;
