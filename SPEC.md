@@ -55,7 +55,7 @@ repo                                # este repositorio (producto + plantilla)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
 │   ├── spec-*.md                   #   12 specs (motor, MCP, vault, embeddings, wizard… + 5 del payload)
-│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03 + ADR-012 Accepted 2026-11-11
+│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03 + ADR-012 (2026-11-11) + ADR-013 (2026-11-13)
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
     ├── 00-resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10-templates/ · 10+ biblioteca personal
@@ -74,7 +74,7 @@ repo                                # este repositorio (producto + plantilla)
 | Vector store | **LanceDB embebido** (file-based, sin daemon/puerto) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) |
 | Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
 | Selección de embedder (wizard) | **menú "Embedding provider"** con default preseleccionado; `presets.toml` como datos; modo `degraded` + `rag_status` (D7) | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
-| Instalador | **TUI Rust + cargo-dist + GitHub Releases** (`curl\|sh`, `cargo binstall`); NO bunx | [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) |
+| Instalador | **TUI Rust + cargo-dist + GitHub Releases**; canal recomendado **`cargo binstall tepochcalli`**, `shell`/`powershell` como fallback sin toolchain; NO bunx | [ADR-013](specs/adr/adr-013-distribucion-cargo-binstall.md) (canal) + [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) (backend) |
 | Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` (Phase 3.5); el conjunto de raíces del índice es solo `INDEXER_DIR` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md), [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md), [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) |
 | Conversor soporte | **markitdown** como librería **en proceso** en el venv (el server standalone `markitdown-mcp` se retira del payload) | specs/spec-markitdown.md, [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) |
 | Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) |
@@ -164,6 +164,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` con `source_path` relativo al vault (D32/D41/D64/D65; rev. 2 2026-11-03) | Accepted 2026-11-03 |
 | [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Accepted 2026-11-03 |
 | [ADR-012](specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills (supersede D-P4-2/D-P5-1/D-P5-4) | Accepted 2026-11-11 |
+| [ADR-013](specs/adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003, no su backend cargo-dist) | Accepted 2026-11-13 |
 
 ## Referencias
 

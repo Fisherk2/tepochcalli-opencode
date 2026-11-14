@@ -15,6 +15,10 @@
 # `cargo dist generate --check` cuando `dist` esté instalado (T19); M6 sigue
 # vigente: este workflow NUNCA se ha ejecutado.
 #
+# Canal recomendado (ADR-013): `cargo binstall tepochcalli` desde crates.io
+# (`[package.metadata.binstall]` de Cargo.toml apunta a estos assets). Los
+# instaladores `shell`/`powershell` se conservan como FALLBACK sin toolchain.
+#
 # T19: el asset del payload (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`,
 # empaquetado por `release.yml`, NO es un artefacto cargo) lo descarga el
 # binario con verificación de checksum (`ReleasePayload::for_current_version`,

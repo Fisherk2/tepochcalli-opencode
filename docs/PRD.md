@@ -43,7 +43,7 @@ nativas.
 | F3 | Herramientas MCP | `tepochcalli-rag`: `search` (chunks citables), `index_refresh()` (delta del conjunto declarado en `INDEXER_DIR` + reporte), `add_source` (ingesta convertida), `rag_status` (diagnóstico) | spec-mcp-server |
 | F4 | Conversor Markdown | markitdown **como librería en proceso** en el venv: `convert_document`/`convert_base64`/`list_formats` escriben a disco y devuelven solo el resumen (summary-only); URL/DOCX/PPTX/XLSX/XLS/PDF/HTML → Markdown indexable; fallback `anydoc` deshabilitado (criterio 7) | spec-markitdown, ADR-009, ADR-011 |
 | F5 | Wizard atomico | TUI Rust, 8 fases con rollback, bootstrap uv→venv→modelo→índice→config MCP; flags `--offline`, `--skip-model` | spec-installer-wizard |
-| F6 | Distribución versionada | cargo-dist + GitHub Releases: `curl \| sh` / `cargo binstall tepochcalli`; payload y wizard versionan juntos | ADR-003 |
+| F6 | Distribución versionada | cargo-dist + GitHub Releases; canal recomendado `cargo binstall tepochcalli` (crates.io), con `shell`/`powershell` como fallback sin toolchain; instalación en dos pasos (`cargo binstall` + `tepochcalli install`); payload y wizard versionan juntos | ADR-013, ADR-003 |
 | F7 | Metodología de investigación | `/rubric /research /validate /synthesize /cite /draft /review /transform /update` con agentes Itzamná/Nezahualcóyotl/Pochteca/Chilam/Tlacuilo | spec-agent-workflow |
 
 ## 5. Out of scope (v1)

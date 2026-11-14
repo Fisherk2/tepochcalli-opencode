@@ -2,6 +2,28 @@
 name = "tepochcalli"
 version = "0.3.0"
 edition = "2021"
+description = "Distributable Obsidian workspace with cited semantic search over notes and PDFs (OpenCode V2 + CocoIndex + LanceDB)"
+license = "MIT"
+repository = "https://github.com/Fisherk2/tepochcalli-opencode"
+homepage = "https://github.com/Fisherk2/tepochcalli-opencode"
+# El README raíz es el del producto: `cargo package` lo copia al `.crate`.
+readme = "../../README.md"
+keywords = ["obsidian", "rag", "semantic-search", "knowledge-base", "installer"]
+categories = ["command-line-utilities", "development-tools"]
+# `cargo install` no usa los tests; empaquetarlos solo infla el `.crate`.
+exclude = ["tests/"]
+
+# `cargo binstall tepochcalli` (ADR-013): los assets de cargo-dist viven bajo el
+# tag `tepochcalli-v<version>`, que no es el default de binstall (`<version>`/`v<version>`),
+# así que la URL se declara explícitamente. Ver .github/workflows/release.yml.
+[package.metadata.binstall]
+pkg-url = "{ repo }/releases/download/tepochcalli-v{ version }/{ name }-{ target }{ archive-suffix }"
+bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
+
+# cargo-dist empaqueta Windows como `.zip` (`windows-archive` default) y el
+# `pkg-fmt` por defecto de binstall es `tgz`.
+[package.metadata.binstall.overrides.'cfg(windows)']
+pkg-fmt = "zip"
 
 [[bin]]
 name = "tepochcalli"

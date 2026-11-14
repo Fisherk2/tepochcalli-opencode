@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed (canal de instalación `cargo binstall`, 2026-11-13)
+
+- **El canal recomendado de instalación del wizard pasa a `cargo binstall tepochcalli`**
+  (decisión del dueño, 2026-11-13; [ADR-013](specs/adr/adr-013-distribucion-cargo-binstall.md)),
+  con `shell`/`powershell` conservados como **fallback sin toolchain**: el usuario objetivo no
+  debe ejecutar un `.sh` como primer paso, y el dueño acepta `cargo` como dependencia del host.
+  Reemplaza el **canal** de ADR-003 (que no se re-edita); cargo-dist sigue siendo el backend de
+  release. La instalación son **dos pasos** (`cargo binstall` instala el binario y termina;
+  `tepochcalli install --vault <ruta>` configura el vault) porque **binstall no reenvía flags**
+  al binario — a diferencia de `bunx`. Requisito del host: `cargo` + `cargo-binstall`; assets
+  solo para los 5 targets de `dist.toml`; el namespace `tepochcalli-v<ver>` exige
+  `[package.metadata.binstall]` con `pkg-url`; orden de release tag → assets → `cargo publish`;
+  `tepochcalli uninstall` no borra el binario; las versiones de crates.io no se borran (solo
+  `cargo yank`). npm/homebrew/msi quedan fuera de v1 (activarlos exige token, no ADR nuevo).
+  Propagado a `SPEC.md`, `specs/spec-installer-wizard.md` (§Enmienda canal), `docs/APPFLOW.md`
+  §5, `docs/PRD.md` F6 y `docs/ARCHITECTURE.md`. Evidencia `declarado`: `cargo binstall` nunca
+  se ejecutó contra un release (M6 abierto). Sin cambio de código.
+
 ### Changed (soporte de Windows en v1, 2026-11-13)
 
 - **Windows está soportado con verificación pendiente** (decisión firmada por el dueño el

@@ -282,13 +282,14 @@ graph TB
 | [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` + `source_path` relativo al vault (rev. 2 2026-11-03) | Accepted | 2026-11-03 |
 | [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
 | [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills | Accepted | 2026-11-11 |
+| [ADR-013](../specs/adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003) | Accepted | 2026-11-13 |
 
 ## Key decisions summary
 
 1. **CocoIndex** (ADR-001) — incrementalismo memoizado, live-watch y cero LLM por índice: los tres requisitos que ningún otro candidato cumplía a la vez.
 2. **LanceDB sin daemon** (ADR-002) — el índice es archivos bajo `.tepochcalli/db/`; Obsidian y la nube del usuario solo ven una carpeta más.
 3. **stdio MCP = frontera** (ADR-005) — contratos `search/index_refresh/add_source` congelados; motor y almacén intercambiables sin tocar el harness.
-4. **Distribución Rust one-liner** (ADR-003/004) — `curl | sh` o `cargo binstall`; el wizard hace bootstrap de `uv`, que a su vez instala un CPython gestionado: el investigador no instala nada.
+4. **Distribución Rust one-liner + segundo paso** (ADR-013/003/004) — el binario se instala con `cargo binstall tepochcalli` (fallback sin toolchain: `curl | sh` / `install.ps1`) y el vault se configura con `tepochcalli install`: binstall no reenvía flags. El wizard hace bootstrap de `uv`, que a su vez instala un CPython gestionado: el investigador no instala Python ni Node.
 5. **MiniLM local default** (ADR-006) — ES+EN, CPU, 8GB, $0; upgrades bge-m3/LiteLLM por config.
 
 ## Engine-migration contingency

@@ -174,6 +174,18 @@ rust-test:
 # Gate Rust local: espejo del job `rust` de `.github/workflows/phase3.yml`.
 rust-ci: rust-fmt rust-lint rust-test
 
+# Verifica el paquete tal como lo verá crates.io (metadata, .crate, build de
+# verificación) SIN subir nada. Requiere red para el índice de crates.io.
+# `--allow-dirty` porque el flujo normal es publicar desde un árbol con el
+# cambio de versión aún sin commitear; no afecta a lo que se empaqueta.
+rust-publish-dry-run:
+    cd {{crate_dir}} && cargo publish --dry-run --locked
+
+# Publica la versión actual en crates.io (requiere `cargo login` antes).
+# NUNCA en `ci`: publicar no es un gate.
+rust-publish:
+    cd {{crate_dir}} && cargo publish --locked
+
 # Path 5: `--skip-model`, sin descargar modelos de 470 MB; la red solo se usa
 # para `uv` y `uv sync`. Espejo del job `smoke` de `phase3.yml` con el payload
 # local del repo.

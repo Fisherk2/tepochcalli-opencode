@@ -1,14 +1,15 @@
 # Spec: Wizard de instalación (TUI Rust atomico y versionado)
 
-* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b)
+* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-003 (cargo-dist), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), ADR-008 (transparencia de hardware D8.1-D8.3 + swap atómico D8.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
+* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-013 (canal de instalación), ADR-003 (cargo-dist como backend de release), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), ADR-008 (transparencia de hardware D8.1-D8.3 + swap atómico D8.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
 
 ## Summary
 
-`tepochcalli` es una TUI en Rust, distribuida vía cargo-dist + GitHub Releases (ADR-003), que materializa un vault de Obsidian listo-para-usar: instala el payload del workspace (espejo del modelo `template/` de Fisherk2/codice-opencode, aquí `obsidian-workspace/`), bootea `uv`, crea el venv del proyecto, presenta el paso **"Embedding provider"** (menú de cinco salidas de ADR-007/D7.1 con `paraphrase-multilingual-MiniLM-L12-v2` pre-seleccionado), ejecuta la indexación inicial de `00-resources/` y valida/fusiona las entradas `mcp.servers` de `opencode.json`. Cada corrida es atómica con rollback en fallo; la salida 5 del menú ("Configurar después") degrada RAG honestamente sin abortar la instalación.
+`tepochcalli` es una TUI en Rust, distribuida vía cargo-dist + GitHub Releases (ADR-003) y con
+`cargo binstall tepochcalli` como canal recomendado de instalación (ADR-013), que materializa un vault de Obsidian listo-para-usar: instala el payload del workspace (espejo del modelo `template/` de Fisherk2/codice-opencode, aquí `obsidian-workspace/`), bootea `uv`, crea el venv del proyecto, presenta el paso **"Embedding provider"** (menú de cinco salidas de ADR-007/D7.1 con `paraphrase-multilingual-MiniLM-L12-v2` pre-seleccionado), ejecuta la indexación inicial de `00-resources/` y valida/fusiona las entradas `mcp.servers` de `opencode.json`. Cada corrida es atómica con rollback en fallo; la salida 5 del menú ("Configurar después") degrada RAG honestamente sin abortar la instalación.
 
 ## Problem / Motivation
 
@@ -20,7 +21,10 @@ Preguntas abiertas de UH.md: ¿qué gestor de paquetes?, ¿debo registrarme en a
 
 ### Goals
 
-* Oneliner de instalación: `curl -L https://github.com/Fisherk2/tepochcalli-opencode/releases/latest/download/install.sh | sh` o `cargo binstall tepochcalli` (ADR-003).
+* Canal de instalación recomendado: **`cargo binstall tepochcalli`** (ADR-013), seguido del
+  segundo paso `tepochcalli install`; fallback sin toolchain:
+  `curl -L https://github.com/Fisherk2/tepochcalli-opencode/releases/latest/download/install.sh | sh`
+  (o `install.ps1`). Ver §Enmienda canal 2026-11-13.
 * Flujo atómico de 8 fases con rollback por compensación (ver Detailed Design).
 * Idempotencia: re-ejecutar = reparación/no-op, nunca duplicados.
 * Flags `--offline` (usa cachés locales, sin red — válido solo con `models/` o config API presente) y `--skip-model` (equivale a la salida 5 del menú embedder: instalar sin provider).
@@ -31,7 +35,8 @@ Preguntas abiertas de UH.md: ¿qué gestor de paquetes?, ¿debo registrarme en a
 * Actualizaciones automáticas del vault del usuario (se re-ejecuta el wizard; upgrade asistido = futuro).
 * Gestionar la instalación de Obsidian ni de OpenCode (solo detectar; el wizard abre instrucciones si faltan).
 * Editor de la config RAG (eso es `tepochcalli.toml`, spec-embeddings).
-* Publicación en crates.io (opcional posterior — ADR-003).
+* Gestionar la instalación del binario en el host: la hace `cargo binstall` (o el fallback
+  `install.sh`/`install.ps1`), no el wizard; `tepochcalli uninstall` tampoco borra el binario.
 
 ## Proposed Solution
 
@@ -172,9 +177,12 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 
 ### Versionado y release (D5/ADR-003)
 
-* semver en el crate; tags `v*` → CI cargo-dist → release con `install.sh`/`install.ps1` + artefactos (x86_64/aarch64 Linux, macOS, Windows) + SHA-256.
+* semver en el crate; tags `tepochcalli-v<ver>` → CI cargo-dist → release con `install.sh`/`install.ps1` + artefactos (x86_64/aarch64 Linux, macOS, Windows) + SHA-256.
 * El payload viaja como asset de la misma release (`tepochcalli-workspace-<ver>.tar.gz`): wizard y vault versionan juntos — el binario v0.3.x instala siempre payload v0.3.x (one-version rule).
-* `cargo binstall tepochcalli` funciona out-of-box porque el layout de assets respeta el estándar de cargo-dist.
+* `cargo binstall tepochcalli` resuelve el asset **solo** con `[package.metadata.binstall]`
+  (`pkg-url` explícito): el namespace `tepochcalli-v<ver>` no coincide con los defaults de
+  binstall (`{ version }`/`v{ version }`). Sin ese bloque, binstall no encuentra asset y compila.
+* Orden de release: tag → release con assets → `cargo publish` (ADR-013 §6(e)).
 
 ### UX de fallo
 
@@ -207,7 +215,9 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 
 ## Security Considerations
 
-* Verificación SHA-256 de assets de release; `curl | sh` documentado con el caveat de inspección (docs/SECURITY.md).
+* Verificación SHA-256 de assets de release; canal recomendado `cargo binstall` (checksum del
+  crate en crates.io + del asset, sin ejecutar código de instalador) y `curl | sh` como fallback
+  con el caveat de inspección (docs/SECURITY.md).
 * El modelo se descarga de HuggingFace; uv baja wheels de PyPI — ambas provenancias declaradas en SECURITY.
 * El wizard solo escribe la clave API de la salida 4 (LiteLLM) en `.tepochcalli/config/tepochcalli.toml` (gitignored) — nunca en logs, `opencode.json` ni fuera del vault; `HF_TOKEN` vive solo en el entorno del proceso de descarga (specs/spec-embeddings.md §HF_TOKEN).
 
@@ -241,9 +251,35 @@ artefactos y su estado uno a uno: `docs/TECH_DEBT.md` §D-b; la decisión propag
   `install.ps1` invocado y el layout `venv/Scripts/python.exe` + `mcp.servers` verificados en el
   vault instalado, la evidencia archivada y Windows añadido como fila de la matriz CI.
 
+## Enmienda canal 2026-11-13 — `cargo binstall` como canal recomendado (ADR-013)
+
+**Decisión del dueño (2026-11-13):** el canal recomendado de instalación del wizard pasa a ser
+**`cargo binstall tepochcalli`**, con `shell`/`powershell` conservados como **fallback sin
+toolchain**. Reemplaza el **canal** de ADR-003; cargo-dist sigue siendo el backend de release
+(`dist.toml`, 5 targets, check-sums, `install.sh`/`install.ps1`). Evidencia: `declarado` —
+`cargo binstall` **nunca se ha ejecutado contra un release de este repo** (M6 abierto).
+
+* **Dos pasos, no uno:** `cargo binstall tepochcalli` instala el binario y termina;
+  `tepochcalli install --vault <ruta>` configura el vault. **Binstall no reenvía flags al
+  binario** (`--vault`, `--offline`, `--skip-model` van en el segundo comando) — a diferencia
+  de `bunx`, que sí los acepta.
+* **Requisito del host:** `cargo` + `cargo-binstall`
+  (`cargo install cargo-binstall --locked`); si binstall cae a `cargo install`, hace falta
+  linker/compilador.
+* **Cobertura:** solo los 5 targets de `dist.toml` tienen asset; musl/ARMv7/Windows-ARM caen a
+  compilar.
+* **Metadatos obligatorios:** `[package.metadata.binstall]` con `pkg-url` explícito por el
+  namespace `tepochcalli-v<ver>` (fixture de otro calpulli en `Cargo.toml`).
+* **Orden de release:** tag → release con assets → `cargo publish`.
+* **Desinstalación:** `tepochcalli uninstall` **no** retira el binario (solo `.tepochcalli/`);
+  se retira con `cargo uninstall tepochcalli`.
+* **npm/homebrew/msi** quedan fuera de v1: cargo-dist los soporta y activarlos exige su token,
+  no un ADR nuevo.
+
 ## References
 
 * Fisherk2/codice-opencode (modelo `template/` → instalación)
 * cargo-dist — <https://opensource.axo.dev/cargo-dist/>
 * uv — <https://docs.astral.sh/uv/>
-* ADR-003 / ADR-004 / ADR-007 (paso embedder + re-entrada) / ADR-008 (transparencia hardware + swap atómico); docs/APPFLOW.md journeys d, e y f
+* ADR-003 / ADR-004 / ADR-007 (paso embedder + re-entrada) / ADR-008 (transparencia hardware + swap atómico) / ADR-013 (canal `cargo binstall`); docs/APPFLOW.md journeys d, e y f
+* cargo-binstall — <https://github.com/cargo-bins/cargo-binstall> · SUPPORT (`pkg-url`) — <https://github.com/cargo-bins/cargo-binstall/blob/main/SUPPORT.md>

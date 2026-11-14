@@ -60,10 +60,17 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
 
 ## 5. Journey (d) — primer arranque con wizard
 
-1. Usuario (VM/host limpio): `curl -L https://github.com/Fisherk2/…/install.sh | sh`
-   (o `cargo binstall tepochcalli`). El instalador descarga el binario de la release,
-   verifica su SHA-256 y lo ejecuta — inspecciona el script antes de ejecutarlo.
-2. Ejecuta `tepochcalli install` → TUI line-based (`dialoguer`, sin TTY con
+1. **Paso 1 — instalar el binario:** `cargo binstall tepochcalli` (canal recomendado,
+   ADR-013). El usuario ve a binstall resolver el crate en crates.io, descargar el asset de la
+   release y dejarlo en `~/.cargo/bin/tepochcalli`; **no ejecuta ningún `.sh`** y no compila si
+   hay asset para su target (`x86_64`/`aarch64` Linux GNU, `x86_64`/`aarch64` macOS, `x86_64`
+   Windows MSVC). Requisito del host: `cargo` + `cargo-binstall`
+   (`cargo install cargo-binstall --locked`). Fallback sin toolchain:
+   `curl -L https://github.com/Fisherk2/…/install.sh | sh` (o `install.ps1`), inspeccionando el
+   script antes de ejecutarlo.
+2. **Paso 2 — configurar el vault:** `tepochcalli install --vault <ruta>`. Son dos comandos
+   porque **binstall no reenvía flags al binario**: `--vault`, `--offline` y `--skip-model` van
+   aquí, no en el `cargo binstall`. El usuario ve la TUI line-based (`dialoguer`, sin TTY con
    `--non-interactive`): detección de prereqs F1 (SO/arch, RAM ≥ 8 GB, disco ≥ 4 GB;
    Obsidian y OpenCode V2 solo se detectan, no se instalan) → F2 elige/crea el
    directorio del vault (reutiliza si existe, nunca borra).
@@ -121,7 +128,8 @@ reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedde
    (instalación COMPLETA degradada), no a "instalación fallida".
 4. Usuario borra el runtime a mano o `tepochcalli uninstall --vault <ruta>` → `.tepochcalli/`
    eliminado (runtime: `venv/`, `bin/`, `db/`, `models/`, `config/`); notas, payload y
-   `opencode.json` intactos — `00-resources/` nunca se borra.
+   `opencode.json` intactos — `00-resources/` nunca se borra. El **binario** no se toca: se
+   retira con `cargo uninstall tepochcalli` (ADR-013 §6(f)).
 5. Índice corrupto o cambio de modelo: `tepochcalli reindex --confirm` borra y reconstruye
    con el modelo actual (sin `--confirm` no hace nada); `E_MODEL_MISMATCH` explica el
    desajuste dims del modelo vs índice.
