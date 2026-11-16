@@ -2,7 +2,8 @@
 
 El verificador solo LEE: `_source_slice_ok` resuelve `vault_root / source_path`
 (nunca asume `00-resources/`) y distingue «no aplica» (extracto de un binario)
-de «no reproducible» (original ausente o slice roto).
+de «no reproducible» (original ausente o slice roto). `_live_identity` (TD-13)
+nunca lanza: una lectura o extracción rota es `BROKEN`, no un crash.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
 from tepochcalli_flow import verify
 from tepochcalli_flow.parsers import extract_text
 from tepochcalli_flow.ports import CitedChunk
@@ -69,3 +71,31 @@ def test_live_identity_distinguishes_source_from_extract() -> None:
     assert verify._live_identity(
         GOLDEN_VAULT, replace(chunk, source_path="00-resources/x.pdf")
     ) == ("MISSING")
+
+
+def test_live_identity_returns_broken_on_a_non_utf8_source_without_raising(
+    tmp_path: Path,
+) -> None:
+    """Bytes no-UTF-8 ⇒ `BROKEN` sin lanzar: la rama `except` de `_live_identity` (TD-13).
+
+    Los tests vecinos llegan a `BROKEN` por mismatch de slice o `MISSING`; este
+    cubre la excepción de lectura, que ningún otro test dispara.
+    """
+    path = tmp_path / "00-resources" / "nota-rota.md"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(b"# \xff\xfe\nesto no es UTF-8\n")
+    chunk = CitedChunk(
+        text="cita inexistente",
+        source_path="00-resources/nota-rota.md",
+        heading=None,
+        char_start=0,
+        char_end=16,
+        score=0.5,
+    )
+
+    # El fixture DEBE provocar la excepción que absorbe la rama `except`: si la
+    # lectura no fallara, este test cubriría el mismatch y no la rama (falsa verde).
+    with pytest.raises(UnicodeDecodeError):
+        path.read_text(encoding="utf-8")
+
+    assert verify._live_identity(tmp_path, chunk) == "BROKEN"

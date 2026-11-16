@@ -24,6 +24,11 @@ Reglas y fuentes (consultadas el 2026-11-09):
   al modelo). Sin lista cerrada de claves extra: la docs admite campos de
   portabilidad (`license`, `compatibility`, `metadata`) y el payload real
   trae además `allowed-tools`, `author`, `origin`, `version` y `reference`.
+* Invariante `name` == directorio (bug `920acdd`): el `name` de una SKILL.md
+  debe igualar al nombre de su directorio padre — un rename desalineado dejó
+  el frontmatter divergente y la comprobación fue manual. El guardrail sobre
+  el payload real se acompaña de un caso sintético que demuestra que la
+  aserción dispara.
 
 Los tests sobre datos reales nacen verdes (los frontmatters ya cumplen): es
 la naturaleza de un guardrail. El portero muerde en los controles negativos,
@@ -127,6 +132,56 @@ def test_skill_frontmatters_declare_a_non_empty_name_and_description() -> None:
     assert paths, "el payload sin skills dejaría este guardrail vacío"
     errors = _validation_errors(paths, SKILL_SCHEMA)
     assert not errors, "frontmatters de skill inválidos:\n" + "\n".join(errors)
+
+
+def _assert_skill_names_match_directories(skills_dir: Path) -> None:
+    """Exige que el `name` de cada SKILL.md iguale al nombre de su directorio padre.
+
+    Invariante post-`920acdd`: un skill renombró su carpeta y el frontmatter
+    quedó divergente; la verificación fue manual. Acumula TODOS los desajustes
+    (mismo patrón que `_validation_errors`) para que un guardrail rojo liste de
+    un vistazo qué skills incumplen, con qué valores y en qué ruta.
+    """
+    # shortcut: un solo nivel — misma razón que el glob del schema de skills.
+    paths = sorted(skills_dir.glob("*/SKILL.md"))
+    assert paths, f"{skills_dir}: sin skills dejaría este guardrail vacío"
+    errors: list[str] = []
+    for path in paths:
+        directory = path.parent.name
+        declared = _frontmatter(path).get("name")
+        if declared != directory:
+            errors.append(f"{path}: name={declared!r} != directorio={directory!r}")
+    assert not errors, "skills con `name` divergente del directorio:\n" + "\n".join(errors)
+
+
+def test_skill_frontmatter_name_equals_the_parent_directory_name() -> None:
+    """Cada SKILL.md real declara `name` == nombre de su directorio (920acdd).
+
+    Guardrail nacido verde (hoy el invariante se cumple): su valor es cortar
+    renames a medias como el de `920acdd` antes de que lleguen al payload.
+    """
+    _assert_skill_names_match_directories(SKILLS_DIR)
+
+
+def test_skill_name_guardrail_fires_when_name_diverges_from_directory(tmp_path: Path) -> None:
+    """Sensibilidad: un `name` distinto del directorio SÍ dispara la aserción.
+
+    Sin este control, el guardrail sobre el payload real pasaría a la primera
+    sin probar que la aserción muerde — el caso sintético es la prueba.
+    """
+    skill_dir = tmp_path / "skill-renombrada"
+    skill_dir.mkdir()
+    (skill_dir / "SKILL.md").write_text(
+        "---\nname: skill-original\ndescription: sintética\n---\n\nCuerpo.\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(AssertionError) as excinfo:
+        _assert_skill_names_match_directories(tmp_path)
+    message = str(excinfo.value)
+    assert all(
+        fragment in message for fragment in (str(skill_dir), "skill-original", "skill-renombrada")
+    ), f"el mensaje debe citar la ruta y ambos valores: {message}"
 
 
 # --- Controles negativos: la validación DEBE fallar sobre instancias mutadas. ---
