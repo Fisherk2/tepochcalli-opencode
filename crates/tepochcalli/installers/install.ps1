@@ -18,7 +18,7 @@
 # command in the portable Windows form (`venv/Scripts/python.exe`, D20).
 #
 # Versioning: the installer fetches the LATEST binary by default (pass
-# `-Tag tepochcalli-v0.3.0` to pin one). The one-version rule lives one layer
+# `-Tag tepochcalli-v0.1.0-beta.1` to pin one). The one-version rule lives one layer
 # down: the binary always downloads the payload asset matching its OWN
 # version (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`), never a
 # floating `latest` (see `adapters::payload::payload_asset_url`).

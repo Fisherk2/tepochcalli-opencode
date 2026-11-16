@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "tepochcalli"
-version = "0.3.0"
+version = "0.1.0-beta.1"
 dependencies = [
  "dialoguer",
  "flate2",

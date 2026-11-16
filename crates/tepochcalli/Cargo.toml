@@ -1,6 +1,6 @@
 [package]
 name = "tepochcalli"
-version = "0.3.0"
+version = "0.1.0-beta.1"
 edition = "2021"
 description = "Distributable Obsidian workspace with cited semantic search over notes and PDFs (OpenCode V2 + CocoIndex + LanceDB)"
 license = "MIT"

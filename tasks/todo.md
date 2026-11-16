@@ -287,6 +287,11 @@
 
 ## Ola 3 — Gate del agente y cierre
 
+> **Bloqueo de cierre (decisión del dueño, 2026-11-16):** T15, T16, CP-5 y CP-6 quedan **en espera**
+> hasta el **lanzamiento de `0.1.0-beta.1`** y el flujo de despliegue por fases que definirá el dueño.
+> Phase 6 **no se cierra antes del lanzamiento**: el gate de aceptación se reanuda después, con el
+> artefacto publicado y el `cargo binstall` e2e ya validado (M6 cerrado).
+
 ### [x] T14 — Scaffolding de la corrida D9 (TD-31): evidencia verificable
 
 - Subagente: `technical-writer` → `test-engineer` (secuencial) · Skills: `documentation-and-adrs`, `test-driven-development`, `bash-defensive-patterns`, `doubt-driven-development` · Tools: `vercel-grep`
