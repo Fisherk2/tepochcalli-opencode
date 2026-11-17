@@ -137,7 +137,7 @@ fn report_maintenance_failure(
         body.push_str(&format!("code: {code}\n"));
     }
     body.push_str(&format!("log: {}\n", log_path.display()));
-    report(ui, &title, body, &owned, err.exit_code())
+    report(ui, &title, body, &owned, &log_path, err.exit_code())
 }
 
 fn unknown(stderr: &mut dyn std::io::Write, arg: &str) -> u8 {
@@ -157,11 +157,18 @@ fn bare_config(stderr: &mut dyn std::io::Write) -> u8 {
 /// `title`/`body` arrive composed by the caller (install keeps the graded
 /// `failure_title/failure_body` shapes; maintenance names its own command
 /// and carries no install retry line); the typed exit code is returned
-/// unchanged.
-fn report(ui: &dyn Ui, title: &str, body: String, secrets: &[String], code: u8) -> u8 {
+/// unchanged. `log_path` is the one the caller already computed for the
+/// body — the panel and the written log can never diverge.
+fn report(
+    ui: &dyn Ui,
+    title: &str,
+    body: String,
+    secrets: &[String],
+    log_path: &Path,
+    code: u8,
+) -> u8 {
     let masked: Vec<&str> = secrets.iter().map(String::as_str).collect();
-    let log_path = log_path_in(&state_dir(), now_secs());
-    write_failure_log(&log_path, &redact(&format!("{title}\n{body}"), &masked));
+    write_failure_log(log_path, &redact(&format!("{title}\n{body}"), &masked));
     ui.panel(title, &redact(&body, &masked));
     code
 }
@@ -179,7 +186,7 @@ fn report_failure(
     let log_path = log_path_in(&state_dir(), now_secs());
     let title = failure_title(phase);
     let body = failure_body(context, phase, err, &log_path, &masked);
-    report(ui, &title, body, &owned, err.exit_code())
+    report(ui, &title, body, &owned, &log_path, err.exit_code())
 }
 
 /// `install` flag parsing (T6) + F1→F2 execution (T7) + F3 merge (T8) +
