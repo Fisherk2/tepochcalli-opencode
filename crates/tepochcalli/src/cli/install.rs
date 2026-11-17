@@ -2,7 +2,6 @@
 //! selection, offline pre-check and the hand-off to `run_phases` — plus the
 //! offline error mapping and the F6 degraded fallback.
 
-use std::io::IsTerminal;
 use std::path::Path;
 
 use tepochcalli::adapters::{path_dirs, HeadlessUi, SysHostProbe, TtyUi};
@@ -15,9 +14,16 @@ use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
 use tepochcalli::ports::Ui;
 use tepochcalli::EMBEDDER_PATHS;
 
+use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install_phases::run_phases;
 use super::report::report_failure;
-use super::usage::{print_help, print_version};
+
+const INSTALL_SPEC: FlagSpec = FlagSpec {
+    prefix: "install",
+    help_command: "install",
+    takes_value: &["--vault", "--payload", "--payload-url", "--payload-sha256"],
+    boolean: &["--non-interactive", "--skip-model", "--resume", "--offline"],
+};
 
 /// `install` flag parsing (T6) + F1→F2 execution (T7) + F3 merge (T8) +
 /// F4 `uv` bootstrap, F5 venv/`sync` (T9), F6 embedder menu (T11) and F7
@@ -34,88 +40,19 @@ pub(crate) fn run_install(
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
-    let mut non_interactive = false;
-    let mut skip_model = false;
-    let mut resume = false;
-    let mut offline = false;
-    let mut vault: Option<String> = None;
-    let mut payload: Option<String> = None;
-    let mut payload_url: Option<String> = None;
-    let mut payload_sha256: Option<String> = None;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i] {
-            "--help" => {
-                print_help(stdout, Some("install"));
-                return 0;
-            }
-            "--version" => {
-                print_version(stdout);
-                return 0;
-            }
-            "--non-interactive" => non_interactive = true,
-            "--skip-model" => skip_model = true,
-            "--resume" => resume = true,
-            "--offline" => offline = true,
-            "--vault" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => vault = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "install: --vault needs a value");
-                        return 2;
-                    }
-                }
-            }
-            "--payload" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => payload = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "install: --payload needs a value");
-                        return 2;
-                    }
-                }
-            }
-            "--payload-url" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => payload_url = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "install: --payload-url needs a value");
-                        return 2;
-                    }
-                }
-            }
-            "--payload-sha256" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => payload_sha256 = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "install: --payload-sha256 needs a value");
-                        return 2;
-                    }
-                }
-            }
-            flag if flag.starts_with("--vault=") => {
-                vault = Some(flag["--vault=".len()..].to_string());
-            }
-            flag if flag.starts_with("--payload=") => {
-                payload = Some(flag["--payload=".len()..].to_string());
-            }
-            flag if flag.starts_with("--payload-url=") => {
-                payload_url = Some(flag["--payload-url=".len()..].to_string());
-            }
-            flag if flag.starts_with("--payload-sha256=") => {
-                payload_sha256 = Some(flag["--payload-sha256=".len()..].to_string());
-            }
-            flag => {
-                let _ = writeln!(stderr, "install: unknown flag: {flag}");
-                return 2;
-            }
-        }
-        i += 1;
-    }
+    let flags = match parse_flags(&args, &INSTALL_SPEC, stdout, stderr) {
+        Ok(Some(flags)) => flags,
+        Ok(None) => return 0,
+        Err(code) => return code,
+    };
+    let non_interactive = flags.is_set("--non-interactive");
+    let skip_model = flags.is_set("--skip-model");
+    let resume = flags.is_set("--resume");
+    let offline = flags.is_set("--offline");
+    let vault = flags.value("--vault").map(str::to_string);
+    let payload = flags.value("--payload").map(str::to_string);
+    let payload_url = flags.value("--payload-url").map(str::to_string);
+    let payload_sha256 = flags.value("--payload-sha256").map(str::to_string);
     // Payload source validation (usage errors, exit 2 — no network touched).
     // First: an EMPTY value is a typo, not an absent flag. Filtering it out
     // used to turn `--payload-url "$URL"` with an empty `$URL` into a silent
@@ -157,11 +94,7 @@ pub(crate) fn run_install(
     }
     // T6 rule: no TTY means no prompts — fail fast instead of hanging or
     // resolving the default dir under an unintended cwd.
-    if !non_interactive && !std::io::stdin().is_terminal() {
-        let _ = writeln!(
-            stderr,
-            "install: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
-        );
+    if !tty_ok(stderr, non_interactive, "install") {
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {

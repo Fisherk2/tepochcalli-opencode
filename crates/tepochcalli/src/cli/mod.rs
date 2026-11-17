@@ -3,6 +3,7 @@
 //! cross `lib.rs` — the `application::*` public exports are unchanged.
 
 mod commands;
+mod flags;
 mod install;
 mod install_phases;
 mod report;

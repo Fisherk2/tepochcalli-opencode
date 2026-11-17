@@ -19,6 +19,26 @@ use super::install::{offline_map, run_f6_or_degraded};
 use super::report::report_failure;
 use super::usage::VERSION;
 
+/// Marker-and-artifact skip for one phase: prints the resume note and
+/// returns `true` when the caller may skip. Callers guard with `resume`
+/// (`resume && resume_skip(...)`) so the note only prints on a real resume.
+fn resume_skip(
+    stderr: &mut dyn std::io::Write,
+    path: &VaultPath,
+    phase: Phase,
+    note: &str,
+) -> bool {
+    let done = is_phase_done(path.as_path(), phase);
+    if done {
+        let _ = writeln!(
+            stderr,
+            "resume: {} already done, skipping{note}",
+            phase.name()
+        );
+    }
+    done
+}
+
 /// F3..F8 with `--resume` skips (marker + artifacts, never a re-download).
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_phases(
@@ -129,8 +149,7 @@ pub(crate) fn run_phases(
         // Unreachable: `run_install` rejects a half override with exit 2.
         _ => return 2,
     };
-    let skipped: Vec<std::path::PathBuf> = if resume && is_phase_done(path.as_path(), Phase::F3) {
-        let _ = writeln!(stderr, "resume: F3 already done, skipping");
+    let skipped: Vec<std::path::PathBuf> = if resume && resume_skip(stderr, path, Phase::F3, "") {
         Vec::new()
     } else {
         let outcome = match (&payload_dir, &online) {
@@ -191,8 +210,8 @@ pub(crate) fn run_phases(
     // F4: pinned `uv` into `.tepochcalli/bin/` (+ version proof).
     // Compensates itself on failure.
     let proc = StdCommandRunner;
-    if resume && is_phase_done(path.as_path(), Phase::F4) {
-        let _ = writeln!(stderr, "resume: F4 already done, skipping (uv cached)");
+    if resume && resume_skip(stderr, path, Phase::F4, " (uv cached)") {
+        // uv cached — nothing to re-download.
     } else {
         match run_phase4(&http, &proc, path.as_path()) {
             Ok(phase4) => {
@@ -213,8 +232,8 @@ pub(crate) fn run_phases(
     }
     // F5: venv + frozen sync + R6 import check. `bin/` stays when F5 fails
     // (each phase compensates only what it wrote).
-    if resume && is_phase_done(path.as_path(), Phase::F5) {
-        let _ = writeln!(stderr, "resume: F5 already done, skipping (venv cached)");
+    if resume && resume_skip(stderr, path, Phase::F5, " (venv cached)") {
+        // venv cached — nothing to re-sync.
     } else {
         match run_phase5(&proc, path.as_path()) {
             Ok(_) => mark_phase_done(path.as_path(), Phase::F5),
@@ -263,8 +282,8 @@ pub(crate) fn run_phases(
     );
     // F7: initial index via the flow CLI. Path 5 short-circuits inside
     // `run_phase7` (no spawn, no index).
-    if resume && is_phase_done(path.as_path(), Phase::F7) {
-        let _ = writeln!(stderr, "resume: F7 already done, skipping");
+    if resume && resume_skip(stderr, path, Phase::F7, "") {
+        // Index already built on a previous run.
     } else {
         match run_phase7(&proc, path.as_path(), &picked) {
             Ok(indexed) => {
@@ -291,8 +310,8 @@ pub(crate) fn run_phases(
         }
     }
     // F8: merge `mcp.servers` (+ `.bak`) and verify `rag_status` end to end.
-    if resume && is_phase_done(path.as_path(), Phase::F8) {
-        let _ = writeln!(stderr, "resume: F8 already done, skipping");
+    if resume && resume_skip(stderr, path, Phase::F8, "") {
+        // MCP registration already merged on a previous run.
     } else {
         match run_phase8(&proc, path.as_path(), Some(ui)) {
             Ok(f8) => {

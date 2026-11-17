@@ -1,7 +1,6 @@
 //! `config embedder` (T16), `reindex` (T17) and `uninstall` (T17): the three
 //! non-install commands, flag parsing and typed exits byte-identical.
 
-use std::io::IsTerminal;
 use std::path::Path;
 
 use tepochcalli::adapters::{HeadlessUi, StdCommandRunner, SysHostProbe, TtyUi, UreqHttpClient};
@@ -12,8 +11,29 @@ use tepochcalli::application::{
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::Ui;
 
+use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::report::{report_failure, report_maintenance_failure};
-use super::usage::{print_help, print_version};
+
+const SWAP_SPEC: FlagSpec = FlagSpec {
+    prefix: "config embedder",
+    help_command: "config embedder",
+    takes_value: &["--vault"],
+    boolean: &["--non-interactive", "--confirm", "--keep-previous"],
+};
+
+const REINDEX_SPEC: FlagSpec = FlagSpec {
+    prefix: "reindex",
+    help_command: "reindex",
+    takes_value: &["--vault"],
+    boolean: &["--non-interactive", "--confirm"],
+};
+
+const UNINSTALL_SPEC: FlagSpec = FlagSpec {
+    prefix: "uninstall",
+    help_command: "uninstall",
+    takes_value: &["--vault"],
+    boolean: &["--non-interactive", "--confirm"],
+};
 
 /// `config embedder` (T16, D8.4): six-step atomic swap on an installed vault —
 /// current-state display, same D7.1 menu, `--confirm` warning, gate + reindex,
@@ -23,50 +43,17 @@ pub(crate) fn run_config_embedder(
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
-    let mut non_interactive = false;
-    let mut confirm = false;
-    let mut keep_previous = false;
-    let mut vault: Option<String> = None;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i] {
-            "--help" => {
-                print_help(stdout, Some("config embedder"));
-                return 0;
-            }
-            "--version" => {
-                print_version(stdout);
-                return 0;
-            }
-            "--non-interactive" => non_interactive = true,
-            "--confirm" => confirm = true,
-            "--keep-previous" => keep_previous = true,
-            "--vault" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => vault = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "config embedder: --vault needs a value");
-                        return 2;
-                    }
-                }
-            }
-            flag if flag.starts_with("--vault=") => {
-                vault = Some(flag["--vault=".len()..].to_string());
-            }
-            flag => {
-                let _ = writeln!(stderr, "config embedder: unknown flag: {flag}");
-                return 2;
-            }
-        }
-        i += 1;
-    }
+    let flags = match parse_flags(&args, &SWAP_SPEC, stdout, stderr) {
+        Ok(Some(flags)) => flags,
+        Ok(None) => return 0,
+        Err(code) => return code,
+    };
+    let non_interactive = flags.is_set("--non-interactive");
+    let confirm = flags.is_set("--confirm");
+    let keep_previous = flags.is_set("--keep-previous");
+    let vault = flags.value("--vault").map(str::to_string);
     // T6 rule: no TTY means no prompts — fail fast instead of hanging.
-    if !non_interactive && !std::io::stdin().is_terminal() {
-        let _ = writeln!(
-            stderr,
-            "config embedder: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
-        );
+    if !tty_ok(stderr, non_interactive, "config embedder") {
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
@@ -126,42 +113,14 @@ pub(crate) fn run_reindex_cmd(
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
-    let mut non_interactive = false;
-    let mut confirm = false;
-    let mut vault: Option<String> = None;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i] {
-            "--help" => {
-                print_help(stdout, Some("reindex"));
-                return 0;
-            }
-            "--version" => {
-                print_version(stdout);
-                return 0;
-            }
-            "--non-interactive" => non_interactive = true,
-            "--confirm" => confirm = true,
-            "--vault" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => vault = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "reindex: --vault needs a value");
-                        return 2;
-                    }
-                }
-            }
-            flag if flag.starts_with("--vault=") => {
-                vault = Some(flag["--vault=".len()..].to_string());
-            }
-            flag => {
-                let _ = writeln!(stderr, "reindex: unknown flag: {flag}");
-                return 2;
-            }
-        }
-        i += 1;
-    }
+    let flags = match parse_flags(&args, &REINDEX_SPEC, stdout, stderr) {
+        Ok(Some(flags)) => flags,
+        Ok(None) => return 0,
+        Err(code) => return code,
+    };
+    let non_interactive = flags.is_set("--non-interactive");
+    let confirm = flags.is_set("--confirm");
+    let vault = flags.value("--vault").map(str::to_string);
     if !confirm {
         let _ = writeln!(
             stderr,
@@ -171,11 +130,7 @@ pub(crate) fn run_reindex_cmd(
         return 2;
     }
     // T6 rule: no TTY means no prompts — fail fast instead of hanging.
-    if !non_interactive && !std::io::stdin().is_terminal() {
-        let _ = writeln!(
-            stderr,
-            "reindex: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
-        );
+    if !tty_ok(stderr, non_interactive, "reindex") {
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
@@ -224,42 +179,14 @@ pub(crate) fn run_uninstall_cmd(
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
 ) -> u8 {
-    let mut non_interactive = false;
-    let mut confirm = false;
-    let mut vault: Option<String> = None;
-    let mut i = 0;
-    while i < args.len() {
-        match args[i] {
-            "--help" => {
-                print_help(stdout, Some("uninstall"));
-                return 0;
-            }
-            "--version" => {
-                print_version(stdout);
-                return 0;
-            }
-            "--non-interactive" => non_interactive = true,
-            "--confirm" => confirm = true,
-            "--vault" => {
-                i += 1;
-                match args.get(i) {
-                    Some(value) => vault = Some((*value).to_string()),
-                    None => {
-                        let _ = writeln!(stderr, "uninstall: --vault needs a value");
-                        return 2;
-                    }
-                }
-            }
-            flag if flag.starts_with("--vault=") => {
-                vault = Some(flag["--vault=".len()..].to_string());
-            }
-            flag => {
-                let _ = writeln!(stderr, "uninstall: unknown flag: {flag}");
-                return 2;
-            }
-        }
-        i += 1;
-    }
+    let flags = match parse_flags(&args, &UNINSTALL_SPEC, stdout, stderr) {
+        Ok(Some(flags)) => flags,
+        Ok(None) => return 0,
+        Err(code) => return code,
+    };
+    let non_interactive = flags.is_set("--non-interactive");
+    let confirm = flags.is_set("--confirm");
+    let vault = flags.value("--vault").map(str::to_string);
     // Gate `--confirm` (patrón reindex, L4-3): sin el flag nada se resuelve
     // ni se borra — el uninstall elimina TODO el runtime, destructivo.
     if !confirm {
@@ -272,11 +199,7 @@ pub(crate) fn run_uninstall_cmd(
         return 2;
     }
     // T6 rule: no TTY means no prompts — fail fast instead of hanging.
-    if !non_interactive && !std::io::stdin().is_terminal() {
-        let _ = writeln!(
-            stderr,
-            "uninstall: no TTY detected; re-run with --non-interactive (and --vault <ruta>)"
-        );
+    if !tty_ok(stderr, non_interactive, "uninstall") {
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
