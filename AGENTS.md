@@ -72,10 +72,11 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   desarrollo**, no un gate — se ejecuta **una vez** en el cierre de cada fase (FTR/T16), **nunca
   por tarea, calpulli ni commit**.
 * **Reglas de tiempo del dueño (esquema 2026-11-17, reemplaza al de 2026-11-16):**
-  1. **Suites de desarrollo por módulo** — `just test-mcp`, `just test-engine`,
-     `just test-converter` — **≤ 10 min (600 s)** cada una; solo **informan** su tiempo al
-     terminar, sin gate que falle. Corren solo los tests de su módulo (listas explícitas en el
-     `Justfile`, no globs: `test_mcp_*.py` arrastraría el conversor).
+  1. **Suites de desarrollo por módulo** — `just test-mcp-tools`, `just test-mcp-wire`,
+     `just test-engine`, `just test-converter`, `just test-acceptance` — **≤ 10 min (600 s)**
+     cada una; solo **informan** su tiempo al terminar, sin gate que falle. Corren solo los
+     tests de su módulo (listas explícitas en el `Justfile`, no globs: `test_mcp_*.py`
+     arrastraría el conversor). `test-mcp` es el **alias de sus dos mitades** (≈24 min).
   2. **La suite COMPLETA solo corre al cierre de fase**, vía `just coverage`;
      `python-test-durations` es su auditoría de lentitud, también de cierre.
   3. **`just coverage` < 30 min** — medido **50m46s / 97 %** el 2026-11-16 con `-n 3` ⇒
@@ -84,18 +85,21 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   fue reemplazada por la de ≤10 min de las suites de módulo.
 * **Qué corre cada gate (medido 2026-11-16/17).** `just quality` = lint + fmt-check + typecheck +
   **unit** (`python-test-unit`: 702 tests / **52–76 s**) — el gate rápido de iteración. `just ci` =
-  eso + `python-sync` + las **3 suites de módulo** + **`test-acceptance`** (10 tests: la guarda
+  eso + `python-sync` + las **4 suites de módulo** + **`test-acceptance`** (10 tests: la guarda
   del criterio 6 en `tests/support/` y el verificador T14, que no pertenecen a ningún módulo;
   **4 s**) + `bench-smoke` + `rust-ci` (323 tests), **sin cobertura**: es el gate que se puede
   correr siempre; con `quality` suman los 914 tests de la suite completa (**20:58–36:58** con
   `pytest-xdist -n 3`).
-* **Tiempos medidos de las suites de módulo (2026-11-17) — las tres primeras POR ENCIMA del
-  tope informativo de 10 min:** `test-mcp` **23:17** (109 tests) · `test-engine` **13:53** (80) ·
-  `test-converter` **1:06** (12) · `test-acceptance` **4 s** (10). Causa: el balance de
-  `--dist loadfile` con **pocos ficheros pesados** (los `setup` de índice cuestan 100-155 s
-  cada uno), no un test lento — en la suite completa hay 60+ ficheros para repartir entre 3
-  workers, y por eso un módulo puede tardar **más** que la suite entera. Deuda
-  **TD-38** en `docs/TECH_DEBT.md`. Para un test suelto: `python-test-file <patrón>`. El coste está repartido por
+* **Tiempos medidos de las suites de módulo (2026-11-17) — `mcp-tools` y `engine` POR ENCIMA del
+  tope informativo de 10 min:** `test-mcp-tools` **15:33** (81 tests) · `test-mcp-wire`
+  **7:30** (28) ✓ · `test-engine` **13:53** (80) · `test-converter` **1:06** (12) ✓ ·
+  `test-acceptance` **4 s** (10) ✓. `mcp` medía **23:17** con los 12 ficheros juntos y se partió
+  en dos el 2026-11-17 (**TD-38**): el reparto **no ahorra tiempo total** (940 + 457 = 1397 s
+  ≈ 1407 s), solo rebalancea la iteración. Causa del exceso: el balance de `--dist loadfile`
+  con **pocos ficheros pesados** (los `setup` de índice cuestan 100-155 s cada uno), no un test
+  lento — en la suite completa hay 60+ ficheros para repartir entre 3 workers, y por eso un
+  módulo puede tardar **más** que la suite entera. Deuda **TD-38** en `docs/TECH_DEBT.md`.
+  Para un test suelto: `python-test-file <patrón>`. El coste está repartido por
   integración/e2e, no concentrado en un subconjunto, así que **marcar tests no paga**: usa las
   suites de módulo, no el marcador `slow`.
 * **Si la ejecución se cancela abruptamente, trocea**: prefiere `python-test-unit` o `python-test-file` a la

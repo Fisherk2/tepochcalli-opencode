@@ -11,7 +11,8 @@
 # Actions nunca ha corrido en este repo (M6).
 #
 # REGLAS DEL DUEÑO (esquema 2026-11-17; reemplaza al de 2026-11-16):
-#   1. Suites de DESARROLLO por módulo (`test-mcp`/`test-engine`/`test-converter`)
+#   1. Suites de DESARROLLO por módulo (`test-mcp-tools`/`test-mcp-wire`/
+#      `test-engine`/`test-converter`/`test-acceptance`)
 #      ≤ 10 min (600 s): solo INFORMAN su tiempo, sin gate que falle.
 #   2. La suite COMPLETA solo corre al cierre de fase, vía `just coverage`.
 #   3. `just coverage` dura < 30 min.
@@ -98,9 +99,14 @@ python-typecheck:
 # Sin `set -e`: el tiempo se informa aunque la suite salga en rojo, y el exit
 # code se propaga igual.
 
-# mcp: contrato wire y tools del servidor (los handlers unit están en
-# `python-test-unit`).
-test-mcp:
+# mcp está partido en DOS desde 2026-11-17 (TD-38): con los 12 ficheros juntos
+# medía **23:17**, muy por encima del tope de 10 min — `--dist loadfile` balancea
+# mal cuando hay pocos ficheros pesados (los `setup` de índice cuestan 100-155 s).
+# Cada mitad imprime SU tiempo. Los handlers unit siguen en `python-test-unit`.
+
+# mcp-tools: las 8 suites de integración de tools/handlers (add_source, budget
+# adverso + token, rag_status, refresh + progress, search, server).
+test-mcp-tools:
     #!/usr/bin/env bash
     set -uo pipefail
     start="$(date +%s)"
@@ -113,13 +119,27 @@ test-mcp:
         ../../tests/integration/test_mcp_refresh_progress.py \
         ../../tests/integration/test_mcp_search.py \
         ../../tests/integration/test_mcp_server.py \
-        ../../tests/integration/test_mcp_token_budget.py \
+        ../../tests/integration/test_mcp_token_budget.py || status=$?
+    echo "test-mcp-tools: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
+    exit "${status}"
+
+# mcp-wire: los 4 e2e que ejercen el contrato por stdio — contract, journey,
+# transversal y la matriz de formatos del criterio 7.
+test-mcp-wire:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    start="$(date +%s)"
+    status=0
+    cd {{flow_dir}} && uv run python -m pytest -c pyproject.toml \
         ../../tests/e2e/test_mcp_contract.py \
         ../../tests/e2e/test_mcp_journey.py \
         ../../tests/e2e/test_mcp_transversal.py \
         ../../tests/e2e/test_format_matrix.py || status=$?
-    echo "test-mcp: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
+    echo "test-mcp-wire: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
     exit "${status}"
+
+# Alias de las DOS mitades (≈24 min). Para iterar, corre UNA de las dos.
+test-mcp: test-mcp-tools test-mcp-wire
 
 # engine: el motor RAG — walk, indexación, Δ, lectura, verify y relevancia.
 test-engine:
@@ -191,7 +211,8 @@ python-test-file name:
 # Duraciones top-40 de la suite COMPLETA (`--durations=40 -q`): auditoría de
 # lentitud para la regla "suites de módulo ≤10 min" del dueño (2026-11-17).
 # Corre TODO el repo ⇒ es una medición de CIERRE DE FASE, no del día a día
-# (para el día a día están `test-mcp`/`test-engine`/`test-converter`).
+# (para el día a día están `test-mcp-tools`/`test-mcp-wire`/`test-engine`/
+# `test-converter`).
 # NO está en `ci` ni en `quality`.
 python-test-durations *args:
     cd {{flow_dir}} && uv run python -m pytest -m "not slow" --durations=40 -q {{args}}
@@ -380,7 +401,8 @@ fmt-check: python-fmt-check rust-fmt
 typecheck: python-typecheck
 
 # Tests rápidos de ambos lenguajes: se sustituyó por las suites por módulo
-# (`test-mcp`/`test-engine`/`test-converter`) + `python-test-unit` (2026-11-17).
+# (`test-mcp-tools`/`test-mcp-wire`/`test-engine`/`test-converter`) +
+# `python-test-unit` (2026-11-17).
 # El alias `test` desapareció con `python-test`: ver cabecera del Justfile.
 
 # Solo unitarios Python: Rust no tiene split unit/integración a este nivel.
@@ -419,12 +441,14 @@ md-lint:
 # Gate local: lint → fmt-check → typecheck → unit (corta en el primer fallo).
 # Cubre los dos lenguajes (Python + wizard Rust): no hay gate parcial de un solo lado.
 # La suite de integración/e2e NO entra aquí: es de 76 s de unit para iterar;
-# el módulo que toque se corre aparte (`just test-mcp`, etc.) y la suite
+# el módulo que toque se corre aparte (`just test-mcp-tools`, etc.) y la suite
 # completa, al cierre de fase con `coverage` (regla del dueño 2026-11-17).
 quality: lint fmt-check typecheck python-test-unit
 
 # Espejo local del gate de integración: sync → quality (lint → fmt-check →
-# typecheck → **unit**) → las 3 suites de módulo → smoke → rust-ci.
+# typecheck → **unit**) → las 4 suites de módulo (`test-mcp-tools`,
+# `test-mcp-wire`, `test-engine`, `test-converter`) → `test-acceptance` →
+# smoke → rust-ci.
 # `quality` entra como dependencia y NO como lista suelta: así el unit no se
 # puede olvidar al cambiar la composición (fallo que tuvo esta receta el
 # 2026-11-17, detectado por la revisión de docs).
@@ -433,10 +457,10 @@ quality: lint fmt-check typecheck python-test-unit
 # -n 3 — fuera aún de la regla <30 min del dueño), subprocesos incluidos; es una
 # medición local que se hace al cierre de fase, no en cada gate.
 # Rust no tiene coverage: su lado corre `rust-ci` (= fmt + clippy + test).
-# Las 3 suites de módulo cubren TODO integración/e2e salvo la aceptación (10
+# Las 4 suites de módulo cubren TODO integración/e2e salvo la aceptación (10
 # tests); con el unit de `quality` y `test-acceptance` suman los 914 tests de la
 # suite completa, sin invocarla de golpe.
-ci: python-sync quality test-mcp test-engine test-converter test-acceptance bench-smoke rust-ci
+ci: python-sync quality test-mcp-tools test-mcp-wire test-engine test-converter test-acceptance bench-smoke rust-ci
 
 # Cualquier `.venv` accidental lo crea un `uv` invocado a mano sin
 # UV_PROJECT_ENVIRONMENT. No toca fuentes ni `venv/`.
