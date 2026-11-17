@@ -14,6 +14,8 @@ pub mod installer;
 pub mod maintenance;
 pub mod phase7;
 pub mod phase8;
+mod prereqs;
+mod resume;
 pub mod swap;
 pub mod text;
 pub use embedder_menu::{
