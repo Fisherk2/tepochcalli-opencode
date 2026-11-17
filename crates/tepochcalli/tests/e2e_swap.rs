@@ -3,267 +3,55 @@
 //!
 //! RED-first: todo aquí fallaba antes de que existiera
 //! `application::swap::run_swap`. Vaults `tempfile` reales (D26: sin puerto
-//! FS); solo fakes (`TapUi` de `common` que graba paneles, `FakeProc`,
-//! `FakeHost`, `FakeHttp`). Ningún modelo se descarga: los fixtures
-//! `gate_ok`/`refresh_ok` replican los contratos T11/T12.
+//! FS); solo fakes (`TapUi` de `common` que graba paneles, fakes de guion).
+//! Ningún modelo se descarga: los fixtures `gate_ok`/`refresh_ok` replican
+//! los contratos T11/T12. El soporte del contrato (vault con caches HF,
+//! familias de aserción del GC, snapshot byte-idéntico, `CheckingProc`) vive
+//! en `common/swap_support.rs`; aquí quedan solo los casos.
 
 #[allow(dead_code)]
 mod common;
 
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use common::{
-    gate_ok, host_16gb, seed_runtime, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent,
+use common::swap_support::{
+    argv, assert_byte_identical, assert_gc_outcome, assert_no_spawns, assert_old_slug_dirs_gone,
+    assert_old_slug_dirs_present, assert_zero_state, bodies, confirmed, deps, empty_http, gated,
+    http_serving, installed_vault, installed_vault_with, no_stray_temps, panel_mentions,
+    refresh_ok, refreshed, run_swap_case, sidecar_becomes_nonempty_dir, snapshot, titles,
+    visible_text, CheckingProc, EXTERNAL_MODEL, FAKE_KEY, GATED_ID, GATED_TOKEN, NEW_MODEL,
+    OLD_MODEL, OLD_MODEL_ST,
 };
-use tepochcalli::application::swap::{run_swap, SwapDeps, SwapOptions};
+use common::{gate_ok, host_16gb, TapUi};
+use tepochcalli::application::swap::{run_swap, SwapOptions};
 use tepochcalli::domain::WizardError;
-use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
+use tepochcalli::ports::CommandOutput;
 use tepochcalli::RagHealth;
 
-const OLD_MODEL: &str = "paraphrase-multilingual-MiniLM-L12-v2";
-const NEW_MODEL: &str = "BAAI/bge-m3";
-/// sentence-transformers-qualified twin of the default old model.
-const OLD_MODEL_ST: &str = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
-/// Unrelated third-party cache no swap may ever touch.
-const OTHER_MODEL_DIR: &str = "models--sentence-transformers--all-MiniLM-L6-v2";
-
-fn tmp() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir for T16 fixtures")
-}
-
-/// Vault ya instalado: config local + sidecar de índice + índice vivo +
-/// caches realistas del modelo viejo (slug dirs HF bajo `models/` y
-/// `models/hub/`) + decoy con el nombre del esquema antiguo (debe sobrevivir:
-/// el GC viejo lo purgaba por error) + cache no relacionada + caché del
-/// modelo nuevo (ya descargada por el gate; debe sobrevivir) + intérprete.
-fn installed_vault() -> tempfile::TempDir {
-    installed_vault_with(OLD_MODEL, &[NEW_MODEL])
-}
-
-fn installed_vault_with(old_model: &str, extra_cached: &[&str]) -> tempfile::TempDir {
-    let vault = tmp();
-    seed_runtime(vault.path(), old_model, old_model);
-    let rt = vault.path().join(".tepochcalli");
-    let mut cached = vec![old_model];
-    cached.extend_from_slice(extra_cached);
-    for model in cached {
-        for dir in slug_dirs(model) {
-            for root in [rt.join("models"), rt.join("models").join("hub")] {
-                let marker = root.join(&dir).join("snapshots").join("marker");
-                std::fs::create_dir_all(marker.parent().expect("marker parent"))
-                    .expect("model cache dir fixture");
-                std::fs::write(&marker, b"old-model-cache-bytes").expect("model cache fixture");
-            }
-        }
-    }
-    // Decoy con el esquema antiguo de nombre plano: el GC correcto no lo toca.
-    std::fs::write(
-        rt.join("models").join(legacy_decoy_name(old_model)),
-        b"decoy-bytes",
-    )
-    .expect("decoy fixture");
-    let other = rt
-        .join("models")
-        .join(OTHER_MODEL_DIR)
-        .join("snapshots")
-        .join("marker");
-    std::fs::create_dir_all(other.parent().expect("other parent")).expect("other dir fixture");
-    std::fs::write(&other, b"other-model-cache-bytes").expect("other cache fixture");
-    vault
-}
-
-/// Esquema antiguo (erróneo) de nombre plano: no alfanumérico → `_`.
-/// Solo vive en los tests como decoy que debe sobrevivir al GC.
-fn legacy_decoy_name(model: &str) -> String {
-    model
-        .chars()
-        .map(|c| {
-            if c.is_ascii_alphanumeric() || c == '.' || c == '-' {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect()
-}
-
-/// Slug dirs HF de un model id: `models--<id con / → -->`, más el gemelo
-/// con prefijo `sentence-transformers` (en ambas direcciones). Replica el
-/// contrato del GC; si divergen, estos tests lo delatan.
-fn slug_dirs(model: &str) -> Vec<String> {
-    let slug = model.replace('/', "--");
-    let mut out = vec![format!("models--{slug}")];
-    const ST: &str = "sentence-transformers--";
-    if let Some(rest) = slug.strip_prefix(ST) {
-        let bare = format!("models--{rest}");
-        if bare != out[0] {
-            out.push(bare);
-        }
-    } else {
-        out.push(format!("models--{ST}{slug}"));
-    }
-    out
-}
-
-/// Todas las raíces donde el GC debe buscar: `models/` y `models/hub/`.
-fn cache_roots(vault: &Path) -> [PathBuf; 2] {
-    let base = vault.join(".tepochcalli").join("models");
-    [base.clone(), base.join("hub")]
-}
-
-fn assert_old_slug_dirs_present(vault: &Path, model: &str) {
-    for root in cache_roots(vault) {
-        for dir in slug_dirs(model) {
-            let marker = root.join(&dir).join("snapshots").join("marker");
-            assert!(
-                marker.is_file(),
-                "la caché vieja debe seguir intacta: {}",
-                marker.display()
-            );
-        }
-    }
-}
-
-fn assert_old_slug_dirs_gone(vault: &Path, model: &str) {
-    for root in cache_roots(vault) {
-        for dir in slug_dirs(model) {
-            let gone = root.join(&dir);
-            assert!(
-                !gone.exists(),
-                "la caché vieja debe purgarse: {}",
-                gone.display()
-            );
-        }
-    }
-}
-
-fn assert_survivors_intact(vault: &Path, old_model: &str, new_model: &str) {
-    let rt = vault.join(".tepochcalli");
-    for dir in slug_dirs(new_model) {
-        let marker = rt
-            .join("models")
-            .join(&dir)
-            .join("snapshots")
-            .join("marker");
-        assert!(
-            marker.is_file(),
-            "la caché del modelo nuevo debe sobrevivir: {}",
-            marker.display()
-        );
-    }
-    assert_eq!(
-        std::fs::read(
-            rt.join("models")
-                .join(OTHER_MODEL_DIR)
-                .join("snapshots")
-                .join("marker")
-        )
-        .expect("other cache readable"),
-        b"other-model-cache-bytes",
-        "la caché no relacionada debe sobrevivir"
-    );
-    assert_eq!(
-        std::fs::read(rt.join("models").join(legacy_decoy_name(old_model)))
-            .expect("decoy readable"),
-        b"decoy-bytes",
-        "el decoy del esquema antiguo debe sobrevivir"
-    );
-}
-
-fn refresh_ok(indexed: u64) -> Result<CommandOutput, WizardError> {
-    Ok(CommandOutput {
-        status: 0,
-        stdout: format!("{{\"scanned\":2,\"indexed\":{indexed},\"skipped\":0,\"elapsed_ms\":9}}"),
-        stderr: String::new(),
-    })
-}
-
-fn empty_http() -> FakeHttp {
-    FakeHttp::new(HashMap::new())
-}
-
-fn deps<'a>(
-    ui: &'a dyn Ui,
-    host: &'a FakeHost,
-    proc: &'a dyn CommandRunner,
-    http: &'a FakeHttp,
-) -> SwapDeps<'a> {
-    SwapDeps {
-        ui,
-        host,
-        proc,
-        http,
-    }
-}
-
-fn confirmed() -> SwapOptions {
-    SwapOptions {
-        confirm: true,
-        keep_previous: false,
-    }
-}
-
-/// Config + sidecar + índice vivo + marker de caché vieja + decoy.
-type FileSnapshot = (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
-
-fn snapshot(vault: &Path) -> FileSnapshot {
-    let rt = vault.join(".tepochcalli");
-    (
-        std::fs::read(rt.join("config").join("tepochcalli.toml")).expect("config snap"),
-        std::fs::read(rt.join("db").join("index-meta.json")).expect("meta snap"),
-        std::fs::read(rt.join("db").join("chunks.lance")).expect("index snap"),
-        std::fs::read(
-            rt.join("models")
-                .join("models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2")
-                .join("snapshots")
-                .join("marker"),
-        )
-        .expect("model snap"),
-        std::fs::read(rt.join("models").join(legacy_decoy_name(OLD_MODEL))).expect("decoy snap"),
-    )
-}
-
-fn assert_byte_identical(vault: &Path, before: &FileSnapshot) {
-    let after = snapshot(vault);
-    assert_eq!(after.0, before.0, "la config debe quedar byte-idéntica");
-    assert_eq!(
-        after.1, before.1,
-        "el sidecar del índice debe quedar byte-idéntico"
-    );
-    assert_eq!(after.2, before.2, "el índice vivo debe seguir servable");
-    assert_eq!(after.3, before.3, "el modelo viejo debe seguir intacto");
-    assert_eq!(after.4, before.4, "el decoy debe seguir intacto");
-    assert_old_slug_dirs_present(vault, OLD_MODEL);
-}
-
-fn no_stray_temps(vault: &Path) {
-    let rt = vault.join(".tepochcalli");
-    for candidate in [
-        rt.join("config").join("tepochcalli.toml.tmp"),
-        rt.join("config").join("tepochcalli.toml.swap"),
-        rt.join("db").join("index-meta.json.tmp"),
-        rt.join("db").join("index-meta.json.swap"),
-    ] {
-        assert!(
-            !candidate.exists(),
-            "ningún temporal puede fugarse: {}",
-            candidate.display()
-        );
-    }
+/// Spawn del binario real `config embedder` con `args` y el state home de
+/// prueba (las 3 variantes del contrato `--vault` lo comparten).
+fn run_embedder_cli(state: &Path, args: &[String]) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args(args)
+        .env("XDG_STATE_HOME", state)
+        .env("LOCALAPPDATA", state)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("spawn binary")
 }
 
 #[test]
 fn swap_success_runs_six_steps_in_order_and_purges_old_model() {
     let vault = installed_vault();
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("el swap confirmado con gate+refresh OK debe triunfar");
+    let (result, ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("el swap confirmado con gate+refresh OK debe triunfar");
 
     assert_eq!(report.model.as_str(), NEW_MODEL);
     assert_eq!(report.dims, Some(1024));
@@ -329,31 +117,27 @@ fn swap_success_runs_six_steps_in_order_and_purges_old_model() {
     // Auto-GC: solo los slug dirs HF del modelo viejo se purgan (ambas
     // raíces); el decoy del esquema antiguo, la caché no relacionada y la
     // caché del modelo nuevo sobreviven. Sin fugas de temporales.
-    assert_old_slug_dirs_gone(vault.path(), OLD_MODEL);
-    assert_survivors_intact(vault.path(), OLD_MODEL, NEW_MODEL);
-    no_stray_temps(vault.path());
+    assert_gc_outcome(vault.path(), OLD_MODEL, NEW_MODEL, true);
 }
 
 #[test]
 fn swap_missing_confirm_explains_and_mutates_nothing() {
     let vault = installed_vault();
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
     // Guion vacío: cualquier spawn devuelve `Internal` y revienta el test,
     // luego `Ok` aquí prueba que sin --confirm nada se descarga ni reindexa.
-    let proc = FakeProc::scripted([]);
-    let http = empty_http();
-
-    let err = run_swap(
-        &deps(&ui, &host, &proc, &http),
+    let (result, ui, _proc) = run_swap_case(
         vault.path(),
+        vec![1],
+        vec![],
+        vec![],
+        empty_http(),
         &SwapOptions {
             confirm: false,
             keep_previous: false,
         },
-    )
-    .expect_err("sin --confirm el swap no debe correr");
+    );
+    let err = result.expect_err("sin --confirm el swap no debe correr");
     assert_eq!(err, WizardError::UserAborted);
 
     let bodies = bodies(&ui).join("\n");
@@ -365,91 +149,90 @@ fn swap_missing_confirm_explains_and_mutates_nothing() {
         bodies.to_lowercase().contains("irreversible"),
         "debe advertir que el re-index es irreversible, got:\n{bodies}"
     );
-    assert_byte_identical(vault.path(), &before);
-    no_stray_temps(vault.path());
+    assert_zero_state(vault.path(), &before);
 }
 
 #[test]
 fn swap_interrupted_download_rolls_back_to_zero_state() {
     let vault = installed_vault();
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([Err(WizardError::NetDownload)]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("la descarga interrumpida debe fallar el swap");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![Err(WizardError::NetDownload)],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("la descarga interrumpida debe fallar el swap");
     assert_eq!(err, WizardError::NetDownload);
 
     // Cambio de estado cero: config/índice/modelo byte-idénticos, índice
     // viejo legible (servable) y sin temporales.
-    assert_byte_identical(vault.path(), &before);
-    no_stray_temps(vault.path());
+    assert_zero_state(vault.path(), &before);
 }
 
 #[test]
 fn swap_failed_refresh_rolls_back_to_zero_state() {
     let vault = installed_vault();
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([
-        gate_ok(NEW_MODEL, 1024, 3_000_000_000),
-        Err(WizardError::PhaseFailed),
-    ]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("el refresh fallido debe fallar el swap");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![
+            gate_ok(NEW_MODEL, 1024, 3_000_000_000),
+            Err(WizardError::PhaseFailed),
+        ],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("el refresh fallido debe fallar el swap");
     assert_eq!(err, WizardError::PhaseFailed);
 
-    assert_byte_identical(vault.path(), &before);
-    no_stray_temps(vault.path());
+    assert_zero_state(vault.path(), &before);
 }
 
 #[test]
 fn swap_rejected_gate_rolls_back_to_zero_state() {
     let vault = installed_vault();
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([Ok(CommandOutput {
-        status: 0,
-        stdout: "{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}".to_string(),
-        stderr: String::new(),
-    })]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("el gate rechazado debe fallar el swap");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![Ok(CommandOutput {
+            status: 0,
+            stdout: "{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}".to_string(),
+            stderr: String::new(),
+        })],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("el gate rechazado debe fallar el swap");
     assert_eq!(err, WizardError::ModelInvalid);
 
-    assert_byte_identical(vault.path(), &before);
-    no_stray_temps(vault.path());
+    assert_zero_state(vault.path(), &before);
 }
 
 #[test]
 fn swap_keep_previous_retains_old_model() {
     let vault = installed_vault();
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let report = run_swap(
-        &deps(&ui, &host, &proc, &http),
+    let (result, _ui, _proc) = run_swap_case(
         vault.path(),
+        vec![1],
+        vec![],
+        vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
+        empty_http(),
         &SwapOptions {
             confirm: true,
             keep_previous: true,
         },
-    )
-    .expect("--keep-previous debe triunfar igual");
+    );
+    let report = result.expect("--keep-previous debe triunfar igual");
 
     assert_eq!(report.model.as_str(), NEW_MODEL);
-    assert_old_slug_dirs_present(vault.path(), OLD_MODEL);
-    assert_survivors_intact(vault.path(), OLD_MODEL, NEW_MODEL);
+    assert_gc_outcome(vault.path(), OLD_MODEL, NEW_MODEL, false);
     let config = std::fs::read_to_string(
         vault
             .path()
@@ -462,118 +245,6 @@ fn swap_keep_previous_retains_old_model() {
         config.contains(NEW_MODEL),
         "la conmutación ocurre igual, got:\n{config}"
     );
-    no_stray_temps(vault.path());
-}
-
-fn _db_size_probe(vault: &Path) -> PathBuf {
-    vault.join(".tepochcalli").join("db").join("chunks.lance")
-}
-
-/// Live-file snapshot the mid-flight check compares against. El campo 2
-/// (config) es el FRAGMENTO que la config viva debe contener en cada spawn
-/// (C1: la config elegida vive antes del gate/refresh).
-type LiveSnapshot = (PathBuf, String, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>);
-
-/// `CommandRunner` fake that proves the D8.4 servability invariant mid-flight:
-/// every proc call (gate, refresh) runs while the live sidecar, index and
-/// model cache are still byte-identical to the pre-swap snapshot, y la config
-/// viva ya lleva el nuevo embedder (captura + assert, pin del auditor).
-/// A swap que reconstruyera la db viva in place falla aquí.
-struct CheckingProc {
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-    expected: RefCell<Option<LiveSnapshot>>,
-    /// C1: la config viva capturada EN CADA spawn (gate/refresh).
-    config_seen: RefCell<Vec<String>>,
-}
-
-impl CheckingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            script: RefCell::new(script.into_iter().collect()),
-            expected: RefCell::new(None),
-            config_seen: RefCell::new(Vec::new()),
-        }
-    }
-
-    fn configs_seen(&self) -> Vec<String> {
-        self.config_seen.borrow().clone()
-    }
-
-    fn expect_live(
-        &self,
-        vault: &Path,
-        config_fragment: &str,
-        meta: &[u8],
-        index: &[u8],
-        model: &[u8],
-        decoy: &[u8],
-    ) {
-        *self.expected.borrow_mut() = Some((
-            vault.to_path_buf(),
-            config_fragment.to_string(),
-            meta.to_vec(),
-            index.to_vec(),
-            model.to_vec(),
-            decoy.to_vec(),
-        ));
-    }
-}
-
-impl CommandRunner for CheckingProc {
-    fn run(
-        &self,
-        _program: &str,
-        _args: &[&str],
-        _cwd: &Path,
-        _env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        let guard = self.expected.borrow();
-        let (vault, config_fragment, meta, index, model, decoy) =
-            guard.as_ref().expect("expect_live must be armed first");
-        let rt = vault.join(".tepochcalli");
-        // C1: la config viva YA lleva el nuevo embedder durante el
-        // gate/refresh — captura por spawn (pin del auditor).
-        let live_config_bytes = std::fs::read(rt.join("config").join("tepochcalli.toml"))
-            .expect("live config readable");
-        let live_config = String::from_utf8_lossy(&live_config_bytes).into_owned();
-        self.config_seen.borrow_mut().push(live_config.clone());
-        assert!(
-            live_config.contains(config_fragment),
-            "la config viva en el spawn debe llevar el nuevo embedder, got:\n{live_config}"
-        );
-        assert_eq!(
-            std::fs::read(rt.join("db").join("index-meta.json")).expect("live meta readable"),
-            *meta,
-            "el sidecar vivo no se toca durante el reemplazo"
-        );
-        assert_eq!(
-            std::fs::read(rt.join("db").join("chunks.lance")).expect("live index readable"),
-            *index,
-            "el índice viejo sigue servable durante el reemplazo"
-        );
-        assert_eq!(
-            std::fs::read(
-                rt.join("models")
-                    .join("models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2")
-                    .join("snapshots")
-                    .join("marker")
-            )
-            .expect("live model readable"),
-            *model,
-            "el modelo viejo no se toca durante el reemplazo"
-        );
-        assert_eq!(
-            std::fs::read(rt.join("models").join(legacy_decoy_name(OLD_MODEL)))
-                .expect("live decoy readable"),
-            *decoy,
-            "el decoy no se toca durante el reemplazo"
-        );
-        drop(guard);
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
 }
 
 #[test]
@@ -584,10 +255,13 @@ fn swap_live_files_untouched_while_replacement_runs() {
     let host = host_16gb();
     let proc = CheckingProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
     proc.expect_live(vault.path(), NEW_MODEL, &meta, &index, &model, &decoy);
-    let http = empty_http();
 
-    run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("el swap debe triunfar con el índice viejo servable");
+    run_swap(
+        &deps(&ui, &host, &proc, &empty_http()),
+        vault.path(),
+        &confirmed(),
+    )
+    .expect("el swap debe triunfar con el índice viejo servable");
 
     // Pin del auditor (C1): la config capturada EN EL SPAWN del refresh
     // (segunda llamada) ya lleva el modelo nuevo; la vieja ya no está.
@@ -609,18 +283,18 @@ fn swap_gc_maps_org_qualified_id_to_slug_dirs() {
     // RED: el GC viejo sanitizaba `BAAI/bge-m3` a `BAAI_bge-m3` y nunca
     // tocaba `models--BAAI--bge-m3/`; este test falla hasta el fix.
     let vault = installed_vault_with(NEW_MODEL, &[OLD_MODEL]);
-    let ui = TapUi::new(vec![0], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("el swap desde un id con org debe triunfar");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![0],
+        vec![],
+        vec![gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("el swap desde un id con org debe triunfar");
 
     assert_eq!(report.model.as_str(), OLD_MODEL);
-    assert_old_slug_dirs_gone(vault.path(), NEW_MODEL);
-    assert_survivors_intact(vault.path(), NEW_MODEL, OLD_MODEL);
-    no_stray_temps(vault.path());
+    assert_gc_outcome(vault.path(), NEW_MODEL, OLD_MODEL, true);
 }
 
 #[test]
@@ -628,20 +302,21 @@ fn swap_gc_maps_st_qualified_id_to_both_slug_variants() {
     // Un id `sentence-transformers/...` comparte caché con su forma escueta:
     // el GC debe purgar ambas variantes bajo ambas raíces.
     let vault = installed_vault_with(OLD_MODEL_ST, &[NEW_MODEL]);
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("el swap desde un id sentence-transformers debe triunfar");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("el swap desde un id sentence-transformers debe triunfar");
 
     assert_eq!(report.model.as_str(), NEW_MODEL);
     assert_old_slug_dirs_gone(vault.path(), OLD_MODEL_ST);
     // La variante escueta pertenece a la misma familia: también se purga.
     assert_old_slug_dirs_gone(vault.path(), OLD_MODEL);
-    assert_survivors_intact(vault.path(), OLD_MODEL_ST, NEW_MODEL);
-    no_stray_temps(vault.path());
+    assert_gc_outcome(vault.path(), OLD_MODEL_ST, NEW_MODEL, true);
 }
 
 /// GAP 12: `config embedder` comparte el contrato de `--vault` con el resto de
@@ -655,31 +330,17 @@ fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
     for form in ["--vault", "--vault="] {
         let vault = installed_vault();
         let path = vault.path().to_str().expect("utf8 tmp").to_string();
-        let args: Vec<String> = if form == "--vault" {
-            vec![
-                "config".to_string(),
-                "embedder".to_string(),
-                "--non-interactive".to_string(),
-                "--confirm".to_string(),
-                "--vault".to_string(),
-                path,
-            ]
+        let mut args: Vec<String> = ["config", "embedder", "--non-interactive", "--confirm"]
+            .iter()
+            .map(|s| (*s).to_string())
+            .collect();
+        if form == "--vault" {
+            args.push("--vault".to_string());
+            args.push(path);
         } else {
-            vec![
-                "config".to_string(),
-                "embedder".to_string(),
-                "--non-interactive".to_string(),
-                "--confirm".to_string(),
-                format!("--vault={path}"),
-            ]
-        };
-        let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-            .args(&args)
-            .env("XDG_STATE_HOME", state.path())
-            .env("LOCALAPPDATA", state.path())
-            .stdin(std::process::Stdio::null())
-            .output()
-            .expect("spawn binary");
+            args.push(format!("--vault={path}"));
+        }
+        let out = run_embedder_cli(state.path(), &args);
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert_eq!(out.status.code(), Some(42), "args {args:?}:\n{stderr}");
         assert!(
@@ -695,19 +356,16 @@ fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
     // `--vault` sin valor: error de uso explicado, cero efectos.
     let vault = installed_vault();
     let before = snapshot(vault.path());
-    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-        .args([
-            "config",
-            "embedder",
-            "--non-interactive",
-            "--confirm",
-            "--vault",
-        ])
-        .env("XDG_STATE_HOME", state.path())
-        .env("LOCALAPPDATA", state.path())
-        .stdin(std::process::Stdio::null())
-        .output()
-        .expect("spawn binary");
+    let out = run_embedder_cli(
+        state.path(),
+        &[
+            "config".to_string(),
+            "embedder".to_string(),
+            "--non-interactive".to_string(),
+            "--confirm".to_string(),
+            "--vault".to_string(),
+        ],
+    );
     assert_eq!(
         out.status.code(),
         Some(2),
@@ -723,71 +381,8 @@ fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
         out.stdout.is_empty(),
         "un error de uso no imprime nada en stdout"
     );
-    assert_byte_identical(vault.path(), &before);
-    no_stray_temps(vault.path());
+    assert_zero_state(vault.path(), &before);
 }
-
-/// Títulos en orden (superset del `TapUi` local anterior): los prompts van
-/// con su marcador de canal (`MENU`/`INPUT`/`SECRET INPUT`) y los paneles
-/// con su título real — la secuencia prueba los 6 pasos de D8.4 en orden.
-fn titles(ui: &TapUi) -> Vec<String> {
-    ui.events()
-        .iter()
-        .map(|event| match event {
-            UiEvent::Panel { title, .. } => title.clone(),
-            UiEvent::Select { .. } => "MENU".to_string(),
-            UiEvent::Input { .. } => "INPUT".to_string(),
-            UiEvent::Secret { .. } => "SECRET INPUT".to_string(),
-        })
-        .collect()
-}
-
-/// Cuerpos/prompt en orden, alineados con `titles`.
-fn bodies(ui: &TapUi) -> Vec<String> {
-    ui.events()
-        .iter()
-        .map(|event| match event {
-            UiEvent::Panel { body, .. } => body.clone(),
-            UiEvent::Select { prompt, .. }
-            | UiEvent::Input { prompt }
-            | UiEvent::Secret { prompt } => prompt.clone(),
-        })
-        .collect()
-}
-
-/// argv de cada hijo registrado (una lista por llamada).
-fn argv(proc: &RecordingProc) -> Vec<Vec<String>> {
-    proc.calls().into_iter().map(|call| call.args).collect()
-}
-
-/// ¿Corrió el gate test-embed (`embed-check --model`)?
-fn gated(proc: &RecordingProc) -> bool {
-    proc.calls()
-        .iter()
-        .any(|call| call.args.iter().any(|arg| arg == "embed-check"))
-}
-
-/// ¿Corrió el re-index (`refresh`)?
-fn refreshed(proc: &RecordingProc) -> bool {
-    proc.calls()
-        .iter()
-        .any(|call| call.args.iter().any(|arg| arg == "refresh"))
-}
-
-/// HF API base del pre-chequeo D8.1 (contrato de `pending_free_id`).
-const HF_API: &str = "https://huggingface.co/api/models/";
-
-/// `FakeHttp` sirviendo exactamente la metadata de ese id.
-fn http_serving(id: &str, body: &str) -> FakeHttp {
-    FakeHttp::new(HashMap::from([(
-        format!("{HF_API}{id}"),
-        body.as_bytes().to_vec(),
-    )]))
-}
-
-const EXTERNAL_MODEL: &str = "openai/text-embedding-3-small";
-/// Clave señuelo: si aparece fuera de la config gitignored, el test lo delata.
-const FAKE_KEY: &str = "sk-LEAK-TEST-0123456789abcdef";
 
 /// GAP 2: el camino de API externa (índice 3) nunca se ejercitaba. La clave
 /// viaja empaquetada como `model\0api_key` y solo `picked_config_body` la
@@ -798,16 +393,15 @@ const FAKE_KEY: &str = "sk-LEAK-TEST-0123456789abcdef";
 fn external_api_swap_writes_key_once_and_never_in_panel() {
     let vault = installed_vault();
     let rt = vault.path().join(".tepochcalli");
-    let ui = TapUi::new(
+    let (result, ui, proc) = run_swap_case(
+        vault.path(),
         vec![3],
         vec![EXTERNAL_MODEL.to_string(), FAKE_KEY.to_string()],
+        vec![refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
     );
-    let host = host_16gb();
-    let proc = RecordingProc::scripted([refresh_ok(2)]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("el swap a API externa debe triunfar sin descarga local");
+    let report = result.expect("el swap a API externa debe triunfar sin descarga local");
 
     // (a) config: provider litellm, modelo y clave exactamente una vez.
     let config = std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
@@ -833,9 +427,8 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
     // (b) la clave nunca sale por la UI (títulos, cuerpos ni prompts), y el
     // prompt en sí va por el canal sin eco (L2-7): la entrada de la API key
     // se registra como SECRET INPUT, no como INPUT.
-    let visible = format!("{}\n{}", titles(&ui).join("\n"), bodies(&ui).join("\n"));
     assert!(
-        !visible.contains(FAKE_KEY),
+        !visible_text(&ui).contains(FAKE_KEY),
         "la clave nunca puede aparecer en un panel (títulos/cuerpos/prompts)"
     );
     let secret_prompts = bodies(&ui)
@@ -902,15 +495,17 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
 fn external_api_swap_with_empty_key_is_refused_before_writing() {
     let vault = installed_vault();
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![3], vec![EXTERNAL_MODEL.to_string(), "   ".to_string()]);
-    let host = host_16gb();
     // Guion de procesos vacío: cualquier spawn devolvería Internal y delataría
     // que el swap siguió adelante sin clave.
-    let proc = RecordingProc::scripted([]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("sin clave el swap no puede escribir config");
+    let (result, ui, proc) = run_swap_case(
+        vault.path(),
+        vec![3],
+        vec![EXTERNAL_MODEL.to_string(), "   ".to_string()],
+        vec![],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("sin clave el swap no puede escribir config");
 
     assert_eq!(
         err,
@@ -918,18 +513,12 @@ fn external_api_swap_with_empty_key_is_refused_before_writing() {
         "el rechazo es tipado (re-pregunta agotada), nunca un half-swap"
     );
     assert!(
-        titles(&ui)
-            .iter()
-            .any(|title| title.contains("Falta un dato")),
+        panel_mentions(&ui, "Falta un dato"),
         "explica que el valor no puede ir vacío, títulos: {:?}",
         titles(&ui)
     );
     assert_byte_identical(vault.path(), &before);
-    assert!(
-        proc.calls().is_empty(),
-        "sin clave válida no se lanza gate ni refresh, argv: {:?}",
-        argv(&proc)
-    );
+    assert_no_spawns(&proc, "sin clave válida no se lanza gate ni refresh");
     no_stray_temps(vault.path());
 }
 
@@ -944,22 +533,20 @@ fn swap_live_config_write_failure_rolls_back_to_zero_state_like_the_other_branch
     std::fs::create_dir(rt.join("config").join("tepochcalli.toml.tmp"))
         .expect("sabotaje del staging .tmp");
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![0], vec![]);
-    let host = host_16gb();
     // Guion vacío: si el swap intentara gate/refresh, fallaría con Internal
     // y delataría que un write-config fallido no abortó a tiempo.
-    let proc = RecordingProc::scripted([]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("el staging saboteado debe abortar el swap");
+    let (result, _ui, proc) = run_swap_case(
+        vault.path(),
+        vec![0],
+        vec![],
+        vec![],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("el staging saboteado debe abortar el swap");
     assert_eq!(err, WizardError::PermissionDenied);
     assert_byte_identical(vault.path(), &before);
-    assert!(
-        proc.calls().is_empty(),
-        "un stage que falla no llega a ningún spawn, argv: {:?}",
-        argv(&proc)
-    );
+    assert_no_spawns(&proc, "un stage que falla no llega a ningún spawn");
     // El dir saboteador sobrevive por construcción (`remove_file` no borra
     // dirs); los demás temporales no quedan.
     for candidate in [
@@ -988,20 +575,18 @@ fn swap_to_configure_later_keeps_meta_describing_the_old_index_and_never_refresh
     let vault = installed_vault();
     let rt = vault.path().join(".tepochcalli");
     let before = snapshot(vault.path());
-    let ui = TapUi::new(vec![4], vec![]);
-    let host = host_16gb();
-    let proc = RecordingProc::scripted([]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("«Configurar después» debe completarse sin índice");
+    let (result, _ui, proc) = run_swap_case(
+        vault.path(),
+        vec![4],
+        vec![],
+        vec![],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("«Configurar después» debe completarse sin índice");
 
     // (a) nada se descarga ni se reindexa: el índice vivo queda intacto.
-    assert!(
-        proc.calls().is_empty(),
-        "la salida 5 no lanza gate ni refresh, argv: {:?}",
-        argv(&proc)
-    );
+    assert_no_spawns(&proc, "la salida 5 no lanza gate ni refresh");
     assert!(!gated(&proc) && !refreshed(&proc));
     assert_eq!(
         std::fs::read(rt.join("db").join("chunks.lance")).expect("índice vivo"),
@@ -1044,10 +629,6 @@ fn swap_to_configure_later_keeps_meta_describing_the_old_index_and_never_refresh
     no_stray_temps(vault.path());
 }
 
-const GATED_ID: &str = "org/gated-embed-model";
-/// Token señuelo: solo puede aparecer en el env del hijo del gate.
-const GATED_TOKEN: &str = "hf_LEAK-TEST-gated-token-0987";
-
 /// GAP 5a: un repo de HF que no es de embeddings se rechaza ANTES de tocar
 /// disco (pre-filtro D8.1 por `pipeline_tag`/tags ⇒ `E_MODEL_INVALID`).
 #[test]
@@ -1055,30 +636,26 @@ fn free_id_non_embedding_repo_aborts_with_model_invalid() {
     let vault = installed_vault();
     let before = snapshot(vault.path());
     let id = "microsoft/phi-3-mini-4k-instruct";
-    let ui = TapUi::new(vec![2], vec![id.to_string()]);
-    let host = host_16gb();
-    let proc = RecordingProc::scripted([]);
-    let http = http_serving(
-        id,
-        "{\"tags\":[\"text-generation\"],\"pipeline_tag\":\"text-generation\"}",
+    let (result, ui, proc) = run_swap_case(
+        vault.path(),
+        vec![2],
+        vec![id.to_string()],
+        vec![],
+        http_serving(
+            id,
+            "{\"tags\":[\"text-generation\"],\"pipeline_tag\":\"text-generation\"}",
+        ),
+        &confirmed(),
     );
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("un repo no-embeddings debe abortar el swap");
+    let err = result.expect_err("un repo no-embeddings debe abortar el swap");
 
     assert_eq!(err, WizardError::ModelInvalid);
     assert!(
-        titles(&ui)
-            .iter()
-            .any(|title| title.contains("E_MODEL_INVALID")),
+        panel_mentions(&ui, "E_MODEL_INVALID"),
         "el código público se muestra al usuario, títulos: {:?}",
         titles(&ui)
     );
-    assert!(
-        proc.calls().is_empty(),
-        "ni descarga ni gate: el rechazo ocurre antes, argv: {:?}",
-        argv(&proc)
-    );
+    assert_no_spawns(&proc, "ni descarga ni gate: el rechazo ocurre antes");
     assert_byte_identical(vault.path(), &before);
     no_stray_temps(vault.path());
 }
@@ -1089,16 +666,18 @@ fn free_id_non_embedding_repo_aborts_with_model_invalid() {
 fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
     let vault = installed_vault();
     let rt = vault.path().join(".tepochcalli");
-    let ui = TapUi::new(vec![2], vec![GATED_ID.to_string(), GATED_TOKEN.to_string()]);
-    let host = host_16gb();
-    let proc = RecordingProc::scripted([gate_ok(GATED_ID, 768, 1_500_000_000), refresh_ok(2)]);
-    let http = http_serving(
-        GATED_ID,
-        "{\"tags\":[\"sentence-similarity\"],\"gated\":true}",
+    let (result, ui, proc) = run_swap_case(
+        vault.path(),
+        vec![2],
+        vec![GATED_ID.to_string(), GATED_TOKEN.to_string()],
+        vec![gate_ok(GATED_ID, 768, 1_500_000_000), refresh_ok(2)],
+        http_serving(
+            GATED_ID,
+            "{\"tags\":[\"sentence-similarity\"],\"gated\":true}",
+        ),
+        &confirmed(),
     );
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("un id gated con token debe completar el swap");
+    let report = result.expect("un id gated con token debe completar el swap");
 
     assert_eq!(report.model, GATED_ID);
     assert_eq!(report.dims, Some(768));
@@ -1126,9 +705,8 @@ fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
     );
 
     // Ni panel, ni argv, ni config/sidecar: la única salida es el env del hijo.
-    let visible = format!("{}\n{}", titles(&ui).join("\n"), bodies(&ui).join("\n"));
     assert!(
-        !visible.contains(GATED_TOKEN),
+        !visible_text(&ui).contains(GATED_TOKEN),
         "el token no aparece en ningún panel"
     );
     assert!(
@@ -1167,18 +745,18 @@ fn swap_meta_rename_failure_restores_config_byte_identical() {
     let config_before = std::fs::read(rt.join("config").join("tepochcalli.toml")).expect("config");
     let index_before = std::fs::read(rt.join("db").join("chunks.lance")).expect("índice vivo");
     // El sidecar pasa a ser un directorio con contenido: el rename final muere.
+    sidecar_becomes_nonempty_dir(&rt);
     let meta_path = rt.join("db").join("index-meta.json");
-    std::fs::remove_file(&meta_path).expect("sidecar fixture removible");
-    std::fs::create_dir_all(&meta_path).expect("sidecar como directorio");
-    std::fs::write(meta_path.join("marker"), b"unreadable-sidecar").expect("marker del sidecar");
 
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("un fallo en el segundo rename debe fallar el swap");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("un fallo en el segundo rename debe fallar el swap");
     assert_eq!(
         err,
         WizardError::PermissionDenied,
@@ -1219,18 +797,18 @@ fn swap_meta_rename_failure_keeps_an_absent_config_absent() {
     let vault = installed_vault();
     let rt = vault.path().join(".tepochcalli");
     std::fs::remove_file(rt.join("config").join("tepochcalli.toml")).expect("config fuera");
+    sidecar_becomes_nonempty_dir(&rt);
     let meta_path = rt.join("db").join("index-meta.json");
-    std::fs::remove_file(&meta_path).expect("sidecar fixture removible");
-    std::fs::create_dir_all(&meta_path).expect("sidecar como directorio");
-    std::fs::write(meta_path.join("marker"), b"unreadable-sidecar").expect("marker del sidecar");
 
-    let ui = TapUi::new(vec![1], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let err = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect_err("un fallo en el segundo rename debe fallar el swap");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1],
+        vec![],
+        vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let err = result.expect_err("un fallo en el segundo rename debe fallar el swap");
     assert_eq!(err, WizardError::PermissionDenied);
     assert!(
         !rt.join("config").join("tepochcalli.toml").exists(),
@@ -1254,25 +832,25 @@ fn swap_meta_rename_failure_keeps_an_absent_config_absent() {
 fn swap_to_the_same_model_does_not_purge_models() {
     let vault = installed_vault();
     let rt = vault.path().join(".tepochcalli");
-    let ui = TapUi::new(vec![0], vec![]);
-    let host = host_16gb();
-    let proc = FakeProc::scripted([gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("re-elegir el mismo modelo debe completar el swap");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![0],
+        vec![],
+        vec![gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("re-elegir el mismo modelo debe completar el swap");
 
     assert_eq!(report.model, OLD_MODEL);
     // El swap se completa igual (conmutación), solo se salta la purga.
-    assert_old_slug_dirs_present(vault.path(), OLD_MODEL);
-    assert_survivors_intact(vault.path(), OLD_MODEL, OLD_MODEL);
+    assert_gc_outcome(vault.path(), OLD_MODEL, OLD_MODEL, false);
     assert!(
         std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
             .expect("config tras el swap")
             .contains(OLD_MODEL),
         "el swap se completa igual (conmutación, no purga)"
     );
-    no_stray_temps(vault.path());
 }
 
 /// GAP 11b: swap a `none` («Configurar después»). Intencionado que la caché
@@ -1285,17 +863,17 @@ fn swap_to_the_same_model_does_not_purge_models() {
 #[test]
 fn swap_to_none_keeps_the_previous_model_cache() {
     let vault = installed_vault();
-    let ui = TapUi::new(vec![4], vec![]);
-    let host = host_16gb();
-    let proc = RecordingProc::scripted([]);
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("«Configurar después» debe completarse sin índice");
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![4],
+        vec![],
+        vec![],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("«Configurar después» debe completarse sin índice");
     assert_eq!(report.health, RagHealth::Degraded);
-    assert_old_slug_dirs_present(vault.path(), OLD_MODEL);
-    assert_survivors_intact(vault.path(), OLD_MODEL, OLD_MODEL);
-    no_stray_temps(vault.path());
+    assert_gc_outcome(vault.path(), OLD_MODEL, OLD_MODEL, false);
 }
 
 /// GAP 5c: metadata inalcanzable (404) degrada la estimación a «sin dato» —
@@ -1305,21 +883,21 @@ fn swap_to_none_keeps_the_previous_model_cache() {
 fn free_id_missing_metadata_proceeds_to_download() {
     let vault = installed_vault();
     let id = "acme/unlisted-embed";
-    let ui = TapUi::new(vec![2], vec![id.to_string()]);
-    let host = host_16gb();
-    let proc = RecordingProc::scripted([gate_ok(id, 512, 900_000_000), refresh_ok(2)]);
     // Sin entradas: cualquier GET devuelve NetDownload (404/API caída).
-    let http = empty_http();
-
-    let report = run_swap(&deps(&ui, &host, &proc, &http), vault.path(), &confirmed())
-        .expect("sin metadatos de la API el swap sigue por el gate");
+    let (result, ui, proc) = run_swap_case(
+        vault.path(),
+        vec![2],
+        vec![id.to_string()],
+        vec![gate_ok(id, 512, 900_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    let report = result.expect("sin metadatos de la API el swap sigue por el gate");
 
     assert_eq!(report.model, id);
     assert_eq!(report.dims, Some(512), "las dims las mide el gate");
     assert!(
-        titles(&ui)
-            .iter()
-            .any(|title| title.contains("Sin estimación")),
+        panel_mentions(&ui, "Sin estimación"),
         "explica que la estimación no llegó, títulos: {:?}",
         titles(&ui)
     );
