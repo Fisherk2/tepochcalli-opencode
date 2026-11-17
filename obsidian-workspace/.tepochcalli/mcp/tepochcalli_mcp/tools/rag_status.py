@@ -100,8 +100,6 @@ def _provider_of(mode: embedder.EmbedderMode, config: Config) -> str | None:
 
 def _dims_of(model: str | None) -> int | None:
     """384 solo para el modelo pineado del repo (ADR-006); `null` sin dims conocidas."""
-    if model is None:
-        return None
     return DEFAULT_EMBEDDING_DIMS if model == DEFAULT_EMBEDDING_MODEL else None
 
 

@@ -69,7 +69,7 @@ async def convert_document(
     try:
         source = paths.validate_vault_path(path, root, must_exist=True, expect="file")
         hint = formats.normalize_suffix(format) if format else None
-        suffix = _suffix(format, source)
+        suffix = _destination_suffix(hint, source)
         target = paths.validate_vault_path(
             _destination(path, output_path, suffix), root, must_exist=False
         )
@@ -87,22 +87,22 @@ async def convert_document(
     )
 
 
-def _suffix(format: str | None, source: Path) -> str:
+def _destination_suffix(hint: str | None, source: Path) -> str:
     """Extensión del DESTINO: `format` la fuerza; sin él, `.md` (D37).
 
-    La validación del catálogo usa la extensión EFECTIVA (`format` como pista de
-    tipo o la del documento, normalizada por `formats.normalize_suffix`): fuera
-    del catálogo ⇒ `VaultPathError` (el borde lo mapea a `VALIDATION_ERROR` con
+    `hint` es el `format` ya normalizado por el handler (el MISMO valor que
+    sirve de pista de conversión) — no se recalcula aquí. La validación del
+    catálogo usa la extensión EFECTIVA (`hint` o la del documento): fuera del
+    catálogo ⇒ `VaultPathError` (el borde lo mapea a `VALIDATION_ERROR` con
     la lista).
     """
-    hinted = formats.normalize_suffix(format) if format else ""
-    effective = hinted or formats.normalize_suffix(source.suffix)
+    effective = hint or formats.normalize_suffix(source.suffix)
     if not formats.is_supported(effective):
         raise paths.VaultPathError(
             f"formato no soportado: {effective or '(sin extensión)'!r}",
             {"formats": list(formats.SUPPORTED_FORMATS)},
         )
-    return hinted or ".md"
+    return hint or ".md"
 
 
 def _destination(path: str, output_path: str | None, suffix: str) -> str:

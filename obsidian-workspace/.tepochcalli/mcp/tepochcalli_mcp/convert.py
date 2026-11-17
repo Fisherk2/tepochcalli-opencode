@@ -150,7 +150,7 @@ def convert_local(path: Path, *, source_uri: str, extension_hint: str | None = N
     handler — pista de conversión real (`StreamInfo.extension`): un fichero
     SIN extensión + `format=".txt"` se convierte en vez de responder
     `UnsupportedFormatException` engañoso. El sufijo del DELTINO lo fuerza el
-    handler (`_destination`/`_suffix`); aquí no se toca.
+    handler (`_destination`/`_destination_suffix`); aquí no se toca.
 
     `UnsupportedFormatException` no cruza la costura: se traduce a
     `formats.UnsupportedFormatError` (dominio), que el handler mapea a
