@@ -14,6 +14,12 @@
 //! commit final conmuta SOLO el index-meta. El índice (los ficheros de db/)
 //! no se toca antes del commit, así cualquier fallo se arrolla con el
 //! snapshot byte-identical (rollback + temps fuera, cero estado).
+//!
+//! Umbral de líneas (923, tramo 701-1000, justificado): dominio único — el
+//! swap atómico D8.4 de 6 pasos con su rollback por snapshot — con ~25 % de
+//! unit tests Tier 1 en el propio módulo; partirlo repartiría un solo
+//! invariante (conmutar-vivo-antes-del-gate + arrollar-al-fallo) entre
+//! ficheros que ya no se leerían por sí solos.
 
 use std::path::{Path, PathBuf};
 
