@@ -22,8 +22,10 @@ adaptador la aplica (importarla aquí arrastraría `lancedb` al paquete del
 server; test de arquitectura). El adaptador además re-valida en su propio
 borde: defensa en profundidad SIN duplicar la traducción.
 
-**Frontera B′ (T7, D31/D64/D65).** `validate_vault_path` cubre entrada y salida
-de las 3 tools del conversor: dentro del vault ⇒ ruta absoluta; absoluta
+**Frontera B′ (T7, D31/D64/D65).** `validate_input_path`/`validate_destination`
+cubren entrada y salida de las 3 tools del conversor (`validate_vault_path`
+queda como dispatcher para los tests del borde): dentro del vault ⇒ ruta
+absoluta; absoluta
 externa, `..` o symlink que escapa ⇒ `VaultPathError` (el borde lo mapea a
 `VALIDATION_ERROR`). Existencia y tipo se deciden AQUÍ, antes de tocar el
 disco, porque el `ValueError` de `walk_dir` del motor saldría como `INTERNAL`
@@ -426,23 +428,14 @@ def _wrong_type_details(requested: str, expected: str, found: Path) -> dict[str,
     }
 
 
-def validate_vault_path(
-    raw: str | Path,
-    vault_root: Path,
-    *,
-    must_exist: bool,
-    expect: Literal["file", "directory"] | None = None,
-) -> Path:
-    """Valida una ruta contra el vault y devuelve su forma ABSOLUTA resuelta.
+def _resolve_within_vault(raw: str | Path, root: Path) -> tuple[Path, str]:
+    """Resuelve `raw` dentro del vault (B′) o lanza `VaultPathError`.
 
-    `must_exist=True` es una ENTRADA (archivo o directorio, D46): inexistente ⇒
-    `VaultPathError` con `details.suggestions`; `expect` exige además el tipo
-    (el conversor pide `file`, una raíz no exige nada). `must_exist=False` es un
-    DESTINO: se valida el **padre**, que debe existir y ser directorio — el
-    fichero todavía no existe. Absoluta externa, `..` o symlink que escapa ⇒
-    `VaultPathError` sin `details` (el mensaje lleva la ruta y el motivo).
+    `root` debe venir ya resuelto (`vault_root.resolve()`). Cubre los rechazos
+    comunes de entrada y destino: vacía, `..`, null byte (W-03) y ruta que no
+    resuelve dentro del vault. Devuelve la forma ABSOLUTA resuelta y el texto
+    pedido (los cubos posteriores lo nombran en su mensaje).
     """
-    root = vault_root.resolve()
     text = str(raw).strip()
     if not text:
         raise VaultPathError("ruta vacía: indica un path dentro del vault")
@@ -455,19 +448,24 @@ def validate_vault_path(
         raise VaultPathError(f"ruta invalida: {text!r} ({exc})") from None
     if not resolved.is_relative_to(root):
         raise VaultPathError(f"fuera del vault (B′): {text!r} no resuelve dentro de {root}")
-    if not must_exist:
-        parent = resolved.parent
-        if not parent.is_dir():
-            if parent.exists():
-                raise VaultPathError(
-                    f"el padre de {text!r} no es un directorio",
-                    _wrong_type_details(text, "directory", parent),
-                )
-            raise VaultPathError(
-                f"el directorio padre de {text!r} no existe",
-                _missing_details(text, parent, root),
-            )
-        return resolved
+    return resolved, text
+
+
+def validate_input_path(
+    raw: str | Path,
+    vault_root: Path,
+    *,
+    expect: Literal["file", "directory"] | None = None,
+) -> Path:
+    """Valida una ENTRADA (debe existir) y devuelve su forma ABSOLUTA resuelta.
+
+    Inexistente ⇒ `VaultPathError` con `details.suggestions`; `expect` exige
+    además el tipo (el conversor pide `file`, una raíz no exige nada). Absoluta
+    externa, `..` o symlink que escapa ⇒ `VaultPathError` sin `details` (el
+    mensaje lleva la ruta y el motivo).
+    """
+    root = vault_root.resolve()
+    resolved, text = _resolve_within_vault(raw, root)
     if not resolved.exists():
         raise VaultPathError(f"la ruta no existe: {text!r}", _missing_details(text, resolved, root))
     if expect is not None and _kind(resolved) != expect:
@@ -476,6 +474,50 @@ def validate_vault_path(
             _wrong_type_details(text, expect, resolved),
         )
     return resolved
+
+
+def validate_destination(raw: str | Path, vault_root: Path) -> Path:
+    """Valida un DESTINO (aún no existe) y devuelve su forma ABSOLUTA resuelta.
+
+    Se valida el **padre**, que debe existir y ser directorio — el fichero
+    todavía no existe. Absoluta externa, `..` o symlink que escapa ⇒
+    `VaultPathError` sin `details` (el mensaje lleva la ruta y el motivo).
+    """
+    root = vault_root.resolve()
+    resolved, text = _resolve_within_vault(raw, root)
+    parent = resolved.parent
+    if not parent.is_dir():
+        if parent.exists():
+            raise VaultPathError(
+                f"el padre de {text!r} no es un directorio",
+                _wrong_type_details(text, "directory", parent),
+            )
+        raise VaultPathError(
+            f"el directorio padre de {text!r} no existe",
+            _missing_details(text, parent, root),
+        )
+    return resolved
+
+
+def validate_vault_path(
+    raw: str | Path,
+    vault_root: Path,
+    *,
+    must_exist: bool,
+    expect: Literal["file", "directory"] | None = None,
+) -> Path:
+    """Dispatcher del borde B′: entrada (`must_exist=True`) o destino (`False`).
+
+    La lógica ya NO vive en el flag: `validate_input_path` cubre la entrada
+    (debe existir, con `expect` opcional) y `validate_destination` el destino
+    (se valida el padre). La puerta única se conserva porque los tests del
+    borde la llaman directamente (test_paths_frontier.py); los handlers de
+    producción ya usan la función específica. Con `must_exist=False`,
+    `expect` se ignora — igual que en la versión monolítica.
+    """
+    if must_exist:
+        return validate_input_path(raw, vault_root, expect=expect)
+    return validate_destination(raw, vault_root)
 
 
 def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple[str, ...]:
@@ -493,9 +535,7 @@ def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple
     roots: list[str] = []
     for entry in [entry for entry in entries if entry] or list(DEFAULT_INDEXER_ROOTS):
         relative = (
-            validate_vault_path(entry, vault_root, must_exist=True)
-            .relative_to(vault_root.resolve())
-            .as_posix()
+            validate_input_path(entry, vault_root).relative_to(vault_root.resolve()).as_posix()
         )
         if relative == ".":
             raise VaultPathError(

@@ -17,8 +17,8 @@ Contrato y precedencia, en orden:
 3. **Identidad** (D38) — `source_uri` = `filename` si vino; sin él,
    `base64:<sha256-8>` de los bytes decodificados. La entrada tal como llegó,
    nunca inventada.
-4. **Frontera B′** (D31) — `output_path` con `validate_vault_path(...,
-   must_exist=False)`; omitido ⇒ `00-resources/<slug>.md`.
+4. **Frontera B′** (D31) — `output_path` con `validate_destination`; omitido ⇒
+   `00-resources/<slug>.md`.
 5. **Conversión** — costura inyectada por el composition root (`tools/` no
    importa markitdown). Markdown vacío ⇒ `SOURCE_UNREACHABLE` con `GUIDE_OCR` y
    **sin** escribir parciales.
@@ -81,10 +81,9 @@ async def convert_base64(
         # (`base64-<sha256-8>`): reintentar escribe en el mismo destino y la
         # idempotencia de D66 aplica.
         slug = paths.slugify_uri(filename) if filename else f"base64-{digest}"
-        target = paths.validate_vault_path(
+        target = paths.validate_destination(
             destination_path(output_path, slug, extension if format else ".md"),
             root,
-            must_exist=False,
         )
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)

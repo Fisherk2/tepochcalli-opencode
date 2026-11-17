@@ -12,7 +12,7 @@ Los mensajes son cortos (≤80 chars) y planos: el bloque `config` de
 El tope de 3 elementos —el último es `… y N más`— evita que una config muy rota
 hinche el payload; el contador sale del propio `len`, sin claves nuevas.
 
-Reutiliza `paths.validate_vault_path` (misma frontera B′ que `index_refresh`):
+Reutiliza `paths.validate_input_path` (misma frontera B′ que `index_refresh`):
 aquí se recogen TODAS las raíces malas, no solo la primera — el borde de
 `index_refresh` es fail-fast por diseño (D65), esto es diagnóstico.
 """
@@ -59,7 +59,7 @@ def config_problems(config: Config, vault_root: Path) -> tuple[str, ...]:
         problems.append(f"TEPOCHCALLI_ROOT: {contract_root!r} no existe o no es un directorio")
     for root in config.indexer_roots:
         try:
-            paths.validate_vault_path(root, vault_root, must_exist=True)
+            paths.validate_input_path(root, vault_root)
         except paths.VaultPathError as exc:
             problems.append(_root_problem(root, exc))
     top_k = os.environ.get(TOP_K_ENV)

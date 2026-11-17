@@ -9,10 +9,10 @@ originales; para indexar se usa `index_refresh` o `add_source`.
 
 Contrato y precedencia, en orden:
 
-1. **Frontera B′** (D31) — `path` con `validate_vault_path(..., must_exist=True,
-   expect="file")`: inexistente o directorio ⇒ `VALIDATION_ERROR` ANTES de
-   tocar markitdown (D64; sin esto el motor lo volvería `INTERNAL` por una ruta
-   mal escrita). `output_path` con `must_exist=False`: se valida su padre.
+1. **Frontera B′** (D31) — `path` con `validate_input_path(..., expect="file")`:
+   inexistente o directorio ⇒ `VALIDATION_ERROR` ANTES de tocar markitdown
+   (D64; sin esto el motor lo volvería `INTERNAL` por una ruta mal escrita).
+   `output_path` con `validate_destination`: se valida su padre.
 2. **Catálogo** (D39) — extensión efectiva (`format` o la del fichero) fuera de
    `formats.SUPPORTED_FORMATS` ⇒ `VALIDATION_ERROR` con la lista en `details`.
 3. **Conversión** — costura inyectada por el composition root (`tools/` no
@@ -65,13 +65,12 @@ async def convert_document(
     """
     root = vault_root().resolve()
     try:
-        source = paths.validate_vault_path(path, root, must_exist=True, expect="file")
+        source = paths.validate_input_path(path, root, expect="file")
         hint = formats.normalize_suffix(format) if format else None
         suffix = _destination_suffix(hint, source)
-        target = paths.validate_vault_path(
+        target = paths.validate_destination(
             destination_path(output_path, paths.slugify_uri(path), suffix),
             root,
-            must_exist=False,
         )
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
