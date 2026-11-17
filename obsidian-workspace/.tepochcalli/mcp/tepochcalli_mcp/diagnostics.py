@@ -68,12 +68,7 @@ def config_problems(config: Config, vault_root: Path) -> tuple[str, ...]:
             value: int | None = int(top_k.strip())
         except ValueError:
             value = None
-        if value is None or value < budget.TOP_K_MIN:
-            problems.append(
-                f"TEPOCHCALLI_TOP_K: {top_k!r} fuera de "
-                f"[{budget.TOP_K_MIN},{budget.TOP_K_MAX}] (se usa 5)"
-            )
-        elif value > budget.TOP_K_MAX:
+        if value is None or not (budget.TOP_K_MIN <= value <= budget.TOP_K_MAX):
             problems.append(
                 f"TEPOCHCALLI_TOP_K: {top_k!r} fuera de "
                 f"[{budget.TOP_K_MIN},{budget.TOP_K_MAX}] (se usa 5)"
