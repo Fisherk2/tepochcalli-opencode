@@ -167,17 +167,30 @@ def _live_identity(vault_root: Path, chunk: CitedChunk) -> str | None:
     path = vault_root / chunk.source_path
     if not path.is_file():
         return "MISSING"
+    if chunk.offsets_ref == OFFSETS_REF_SOURCE:
+        return None if _source_identity(vault_root, chunk) else "BROKEN"
     try:
-        text = (
-            path.read_text(encoding="utf-8")
-            if chunk.offsets_ref == OFFSETS_REF_SOURCE
-            else extract_text(path)
-        )
+        text = extract_text(path)
     except (OSError, ValueError, ExtractionError):
         return "BROKEN"
     if verify_slice_identity(text, chunk.char_start, chunk.char_end, chunk.text):
         return None
     return "BROKEN"
+
+
+def _source_identity(vault_root: Path, chunk: CitedChunk) -> bool:
+    """Lee el ORIGINAL y verifica la identidad F1; `False` si la lectura falla.
+
+    Lectura imposible (fichero ausente, ilegible o no-UTF-8) ⇒ `False`: la
+    cita no es reproducible (TD-13). Cada caller traduce el fallo a su
+    severidad propia: `slice=BROKEN` en el print de `_print_chunk` y
+    `MISSING`/`BROKEN` en el spot-check — nunca una excepción al usuario.
+    """
+    try:
+        original = (vault_root / chunk.source_path).read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return False
+    return verify_slice_identity(original, chunk.char_start, chunk.char_end, chunk.text)
 
 
 def _run_spot_check(vault_root: Path, reader: LanceDBChunkReader, requested: int) -> int:
@@ -205,16 +218,13 @@ def _source_slice_ok(vault_root: Path, chunk: CitedChunk) -> bool | None:
     `source_path` es relativo al vault (D41), así que el original se resuelve
     como `vault_root / source_path` — nunca `vault_root / 00-resources / …`.
     Solo aplica a `offsets_ref == "source"`; un binario extraído no es espacio
-    de cita (D50). Un fichero ausente devuelve `False`: la cita no es
-    reproducible y el verificador debe decirlo.
+    de cita (D50) ⇒ `None` (`slice=n/a` en el print). Un fallo de lectura
+    devuelve `False`: la cita no es reproducible y el verificador debe
+    decirlo (`_source_identity`).
     """
     if chunk.offsets_ref != "source":
         return None
-    try:
-        original = (vault_root / chunk.source_path).read_text(encoding="utf-8")
-    except OSError:
-        return False
-    return verify_slice_identity(original, chunk.char_start, chunk.char_end, chunk.text)
+    return _source_identity(vault_root, chunk)
 
 
 def _print_chunk(position: int, vault_root: Path, chunk: CitedChunk) -> None:
