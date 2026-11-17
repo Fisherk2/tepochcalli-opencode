@@ -221,3 +221,196 @@ impl Ui for ScriptedUi {
 
     fn panel(&self, _title: &str, _body: &str) {}
 }
+
+// --- RecordingProc: CommandRunner fake que REGISTRA argv/env (T12/T16) ---
+
+/// Una invocación hija registrada: programa, argv, cwd y env (copias propias).
+#[derive(Debug, Clone)]
+pub struct Call {
+    /// Programa lanzado (intérprete del venv o binario).
+    pub program: String,
+    /// Argumentos, en orden.
+    pub args: Vec<String>,
+    /// Directorio de ejecución.
+    pub cwd: PathBuf,
+    /// Variables de entorno explícitas de la llamada.
+    pub env: Vec<(String, String)>,
+}
+
+/// `CommandRunner` fake que REGISTRA cada llamada antes de repertir el
+/// guion: única forma de afirmar «no se lanzó el gate» / «la clave llegó
+/// solo al env de un hijo» (FakeProc no guarda argv/env). Guion agotado
+/// (o llamada inesperada) es `Internal` — bug del test.
+pub struct RecordingProc {
+    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
+    calls: RefCell<Vec<Call>>,
+}
+
+impl RecordingProc {
+    /// Build from any ordered script of results.
+    pub fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
+        Self {
+            script: RefCell::new(script.into_iter().collect()),
+            calls: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Calls registradas hasta ahora (copias propias).
+    pub fn calls(&self) -> Vec<Call> {
+        self.calls.borrow().clone()
+    }
+}
+
+impl CommandRunner for RecordingProc {
+    fn run(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &str)],
+    ) -> Result<CommandOutput, WizardError> {
+        self.calls.borrow_mut().push(Call {
+            program: program.to_string(),
+            args: args.iter().map(|arg| (*arg).to_string()).collect(),
+            cwd: cwd.to_path_buf(),
+            env: env
+                .iter()
+                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
+                .collect(),
+        });
+        self.script
+            .borrow_mut()
+            .pop_front()
+            .unwrap_or(Err(WizardError::Internal))
+    }
+}
+
+// --- TapUi: Ui fake que graba todo y responde por guion (T11(g)) ---
+
+/// Evento de UI grabado, en orden de llamada (la respuesta viene del script,
+/// nunca del evento).
+#[derive(Debug, Clone)]
+pub enum UiEvent {
+    /// `select`: prompt, opciones y fila preseleccionada.
+    Select {
+        /// Prompt mostrado.
+        prompt: String,
+        /// Opciones mostradas, en orden.
+        options: Vec<String>,
+        /// Fila preseleccionada.
+        default: usize,
+    },
+    /// `input`: prompt (canal con eco).
+    Input {
+        /// Prompt mostrado.
+        prompt: String,
+    },
+    /// `input_secret`: prompt (canal SIN eco).
+    Secret {
+        /// Prompt mostrado.
+        prompt: String,
+    },
+    /// `panel`: título y cuerpo.
+    Panel {
+        /// Título del panel.
+        title: String,
+        /// Cuerpo del panel.
+        body: String,
+    },
+}
+
+/// `Ui` fake that records every prompt/panel (never the answers) and
+/// answers from its script; exhausted script is `UserAborted` (same
+/// invariant as `ScriptedUi`). `captured()` expone los formatos de captura
+/// EXACTOS que aserta `int_embedder_menu`; `events()` da la secuencia
+/// ordenada para los tests de orden de pasos y de paneles.
+pub struct TapUi {
+    selects: RefCell<VecDeque<usize>>,
+    inputs: RefCell<VecDeque<String>>,
+    events: RefCell<Vec<UiEvent>>,
+}
+
+impl TapUi {
+    /// Answers from this script, in call order.
+    pub fn new(selects: Vec<usize>, inputs: Vec<String>) -> Self {
+        Self {
+            selects: RefCell::new(selects.into()),
+            inputs: RefCell::new(inputs.into()),
+            events: RefCell::new(Vec::new()),
+        }
+    }
+
+    /// Eventos grabados, en orden.
+    pub fn events(&self) -> Vec<UiEvent> {
+        self.events.borrow().clone()
+    }
+
+    /// Captura de texto con los formatos exactos del menú:
+    /// `SELECT default={d} {prompt} :: {opts}` · `INPUT {p}` ·
+    /// `SECRET INPUT {p}` · `PANEL {t} :: {b}`.
+    pub fn captured(&self) -> Vec<String> {
+        self.events
+            .borrow()
+            .iter()
+            .map(|event| match event {
+                UiEvent::Select {
+                    prompt,
+                    options,
+                    default,
+                } => format!(
+                    "SELECT default={default} {prompt} :: {}",
+                    options.join(" | ")
+                ),
+                UiEvent::Input { prompt } => format!("INPUT {prompt}"),
+                UiEvent::Secret { prompt } => format!("SECRET INPUT {prompt}"),
+                UiEvent::Panel { title, body } => format!("PANEL {title} :: {body}"),
+            })
+            .collect()
+    }
+}
+
+impl Ui for TapUi {
+    fn select(
+        &self,
+        prompt: &str,
+        options: &[&str],
+        default_index: usize,
+    ) -> Result<usize, WizardError> {
+        self.events.borrow_mut().push(UiEvent::Select {
+            prompt: prompt.to_string(),
+            options: options.iter().map(|o| (*o).to_string()).collect(),
+            default: default_index,
+        });
+        self.selects
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
+    fn input(&self, prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
+        self.events.borrow_mut().push(UiEvent::Input {
+            prompt: prompt.to_string(),
+        });
+        self.inputs
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        self.events.borrow_mut().push(UiEvent::Secret {
+            prompt: prompt.to_string(),
+        });
+        self.inputs
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)
+    }
+
+    fn panel(&self, title: &str, body: &str) {
+        self.events.borrow_mut().push(UiEvent::Panel {
+            title: title.to_string(),
+            body: body.to_string(),
+        });
+    }
+}

@@ -10,11 +10,10 @@
 #[allow(dead_code)]
 mod common;
 
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use common::{FakeHost, FakeHttp, FakeProc};
+use common::{FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi};
 use tepochcalli::application::embedder_menu::{Phase6Deps, EMBEDDER_PATHS};
 use tepochcalli::domain::{EmbedderChoice, WizardError};
 use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
@@ -101,115 +100,6 @@ fn config_path(vault: &Path) -> PathBuf {
         .join("tepochcalli.toml")
 }
 
-/// `Ui` fake that records every prompt/panel (never the answers): the T11(g)
-/// redaction test asserts the path-4 key appears in none of them.
-struct TapUi {
-    selects: RefCell<VecDeque<usize>>,
-    inputs: RefCell<VecDeque<String>>,
-    captured: RefCell<Vec<String>>,
-}
-
-impl TapUi {
-    fn new(selects: Vec<usize>, inputs: Vec<String>) -> Self {
-        Self {
-            selects: RefCell::new(selects.into()),
-            inputs: RefCell::new(inputs.into()),
-            captured: RefCell::new(Vec::new()),
-        }
-    }
-
-    fn captured(&self) -> Vec<String> {
-        self.captured.borrow().clone()
-    }
-}
-
-impl Ui for TapUi {
-    fn select(
-        &self,
-        prompt: &str,
-        options: &[&str],
-        default_index: usize,
-    ) -> Result<usize, WizardError> {
-        self.captured.borrow_mut().push(format!(
-            "SELECT default={default_index} {prompt} :: {}",
-            options.join(" | ")
-        ));
-        self.selects
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn input(&self, prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
-        self.captured.borrow_mut().push(format!("INPUT {prompt}"));
-        self.inputs
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
-        self.captured
-            .borrow_mut()
-            .push(format!("SECRET INPUT {prompt}"));
-        self.inputs
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn panel(&self, title: &str, body: &str) {
-        self.captured
-            .borrow_mut()
-            .push(format!("PANEL {title} :: {body}"));
-    }
-}
-
-/// One recorded gate call: program + argv + env.
-type RecordedCall = (String, Vec<String>, Vec<(String, String)>);
-
-/// `CommandRunner` fake that records program + argv + env: pins the T12 gate
-/// contract (`venv python -m tepochcalli_flow embed-check --model <id>`).
-struct RecordingProc {
-    calls: RefCell<Vec<RecordedCall>>,
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-}
-
-impl RecordingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            calls: RefCell::new(Vec::new()),
-            script: RefCell::new(script.into_iter().collect()),
-        }
-    }
-
-    fn calls(&self) -> Vec<RecordedCall> {
-        self.calls.borrow().clone()
-    }
-}
-
-impl CommandRunner for RecordingProc {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        _cwd: &Path,
-        env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        self.calls.borrow_mut().push((
-            program.to_string(),
-            args.iter().map(ToString::to_string).collect(),
-            env.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        ));
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
-}
-
 fn deps<'a>(
     ui: &'a dyn Ui,
     host: &'a FakeHost,
@@ -292,13 +182,14 @@ fn path1_ok_writes_local_config_after_gate() {
     // incluida la revisión pineada (el snapshot estable depende de ella).
     let calls = proc.calls();
     assert_eq!(calls.len(), 1, "exactly one gate call, got: {calls:?}");
-    let (program, args, env) = &calls[0];
+    let call = &calls[0];
     assert!(
-        program.ends_with("python") || program.ends_with("python.exe"),
-        "gate must run the venv interpreter, got: {program}"
+        call.program.ends_with("python") || call.program.ends_with("python.exe"),
+        "gate must run the venv interpreter, got: {}",
+        call.program
     );
     assert_eq!(
-        args,
+        &call.args,
         &[
             "-m",
             "tepochcalli_flow",
@@ -310,9 +201,11 @@ fn path1_ok_writes_local_config_after_gate() {
         ]
     );
     assert!(
-        env.iter()
+        call.env
+            .iter()
             .any(|(k, v)| k == "HF_HOME" && v.contains(".tepochcalli")),
-        "gate must sandbox the model cache under the vault, got: {env:?}"
+        "gate must sandbox the model cache under the vault, got: {:?}",
+        call.env
     );
 
     // Atomic config: exact expected body, provider local + model + revision.
@@ -433,7 +326,7 @@ fn path3_free_id_estimates_then_gates_ok() {
         ui.captured()
     );
     // La revisión sale del `sha` de la API: gate y config la comparten.
-    let (_, args, _) = &proc.calls()[0];
+    let args = &proc.calls()[0].args;
     assert_eq!(
         args,
         &[
@@ -542,11 +435,11 @@ fn path3_gated_repo_asks_token_and_passes_it_to_gate_env() {
     assert_eq!(calls.len(), 1);
     assert!(
         calls[0]
-            .2
+            .env
             .iter()
             .any(|(k, v)| k == "HF_TOKEN" && v == token),
         "token must reach the download env, got: {:?}",
-        calls[0].2
+        calls[0].env
     );
     assert!(
         ui.captured().iter().any(|line| line.contains("gated")),

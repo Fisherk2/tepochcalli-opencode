@@ -11,15 +11,13 @@
 #[allow(dead_code)]
 mod common;
 
-use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
-use common::FakeProc;
+use common::{FakeProc, RecordingProc};
 use tepochcalli::application::phase7::{run_phase7, Phase7Report};
 use tepochcalli::application::Phase6Report;
 use tepochcalli::domain::WizardError;
-use tepochcalli::ports::{CommandOutput, CommandRunner};
+use tepochcalli::ports::CommandOutput;
 
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T12 fixtures")
@@ -79,52 +77,6 @@ fn refresh_ok(scanned: u64, indexed: u64, skipped: u64) -> Result<CommandOutput,
     })
 }
 
-/// `CommandRunner` fake that records program + argv + cwd + env: pins the
-/// T12 contract (`venv python -m tepochcalli_flow refresh`, cwd = vault,
-/// model cache sandboxed under the vault).
-type RecordedCall = (String, Vec<String>, PathBuf, Vec<(String, String)>);
-
-struct RecordingProc {
-    calls: RefCell<Vec<RecordedCall>>,
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-}
-
-impl RecordingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            calls: RefCell::new(Vec::new()),
-            script: RefCell::new(script.into_iter().collect()),
-        }
-    }
-
-    fn calls(&self) -> Vec<RecordedCall> {
-        self.calls.borrow().clone()
-    }
-}
-
-impl CommandRunner for RecordingProc {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        cwd: &Path,
-        env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        self.calls.borrow_mut().push((
-            program.to_string(),
-            args.iter().map(ToString::to_string).collect(),
-            cwd.to_path_buf(),
-            env.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        ));
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
-}
-
 fn index_meta(vault: &Path) -> PathBuf {
     vault
         .join(".tepochcalli")
@@ -154,15 +106,17 @@ fn f7_post_path1_indexes_both_placeholders_and_persists_metadata() {
     // Exact subprocess shape: venv interpreter, flow CLI, cwd = vault.
     let calls = proc.calls();
     assert_eq!(calls.len(), 1, "exactly one refresh call, got: {calls:?}");
-    let (program, args, cwd, env) = &calls[0];
-    assert_eq!(*program, python.to_str().expect("utf8 tmp"));
-    assert_eq!(args, &["-m", "tepochcalli_flow", "refresh"]);
-    assert_eq!(cwd, &vault.path().to_path_buf());
+    let call = &calls[0];
+    assert_eq!(call.program, python.to_str().expect("utf8 tmp"));
+    assert_eq!(call.args, ["-m", "tepochcalli_flow", "refresh"]);
+    assert_eq!(call.cwd, vault.path().to_path_buf());
     for key in ["HF_HOME", "SENTENCE_TRANSFORMERS_HOME"] {
         assert!(
-            env.iter()
+            call.env
+                .iter()
                 .any(|(k, v)| k == key && v.contains(".tepochcalli")),
-            "{key} must sandbox the model cache under the vault, got: {env:?}"
+            "{key} must sandbox the model cache under the vault, got: {:?}",
+            call.env
         );
     }
 

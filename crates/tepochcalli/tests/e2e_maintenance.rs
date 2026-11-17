@@ -3,23 +3,21 @@
 //! RED-first: todo aquí fallaba antes de que existieran
 //! `application::maintenance::{run_reindex, run_uninstall}` y su cableado en
 //! `main.rs`. Vaults `tempfile` reales (D26: sin puerto FS); solo fakes
-//! (`TapUi` local que graba paneles, `RecordingProc` que fija argv + cwd +
-//! env). Ningún modelo se descarga: los fixtures `gate_ok`/`refresh_ok`
+//! (`TapUi` de `common` que graba paneles, `RecordingProc` que fija argv +
+//! cwd + env). Ningún modelo se descarga: los fixtures `gate_ok`/`refresh_ok`
 //! replican los contratos T11/T12. El gate `--confirm` y los flags
 //! `--vault`/`--non-interactive` se prueban contra el binario real.
 
 #[allow(dead_code)]
 mod common;
 
-use std::cell::RefCell;
-use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use common::FakeProc;
+use common::{FakeProc, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::maintenance::{run_reindex, run_uninstall};
 use tepochcalli::domain::WizardError;
-use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
+use tepochcalli::ports::CommandOutput;
 
 const OLD_MODEL: &str = "paraphrase-multilingual-MiniLM-L12-v2";
 const NEW_MODEL: &str = "BAAI/bge-m3";
@@ -104,99 +102,16 @@ fn refresh_ok(scanned: u64, indexed: u64, skipped: u64) -> Result<CommandOutput,
     })
 }
 
-/// `Ui` fake: sin respuestas (todo `select`/`input` es `UserAborted`) +
-/// captura ordenada de paneles (aquí vive la prueba del `E_MODEL_MISMATCH`
-/// explicado, nunca silencioso).
-struct TapUi {
-    panels: RefCell<Vec<(String, String)>>,
-}
-
-impl TapUi {
-    fn new() -> Self {
-        Self {
-            panels: RefCell::new(Vec::new()),
-        }
-    }
-
-    fn bodies(&self) -> String {
-        self.panels
-            .borrow()
-            .iter()
-            .map(|(_, body)| body.clone())
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-}
-
-impl Ui for TapUi {
-    fn select(
-        &self,
-        _prompt: &str,
-        _options: &[&str],
-        _default_index: usize,
-    ) -> Result<usize, WizardError> {
-        Err(WizardError::UserAborted)
-    }
-
-    fn input(&self, _prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
-        Err(WizardError::UserAborted)
-    }
-
-    fn input_secret(&self, _prompt: &str) -> Result<String, WizardError> {
-        Err(WizardError::UserAborted)
-    }
-
-    fn panel(&self, title: &str, body: &str) {
-        self.panels
-            .borrow_mut()
-            .push((title.to_string(), body.to_string()));
-    }
-}
-
-type RecordedCall = (String, Vec<String>, PathBuf, Vec<(String, String)>);
-
-/// `CommandRunner` fake que fija programa + argv + cwd + env (el contrato
-/// T12: intérprete del venv, `tepochcalli_flow refresh`, cwd = vault, caché
-/// bajo el vault). Guion vacío ⇒ `Internal`, luego `Ok` prueba cero spawns.
-struct RecordingProc {
-    calls: RefCell<Vec<RecordedCall>>,
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-}
-
-impl RecordingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            calls: RefCell::new(Vec::new()),
-            script: RefCell::new(script.into_iter().collect()),
-        }
-    }
-
-    fn calls(&self) -> Vec<RecordedCall> {
-        self.calls.borrow().clone()
-    }
-}
-
-impl CommandRunner for RecordingProc {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        cwd: &Path,
-        env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        self.calls.borrow_mut().push((
-            program.to_string(),
-            args.iter().map(ToString::to_string).collect(),
-            cwd.to_path_buf(),
-            env.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        ));
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
+/// Cuerpos de panel (en orden), como el antiguo `TapUi::bodies` local.
+fn panel_bodies(ui: &TapUi) -> String {
+    ui.events()
+        .iter()
+        .filter_map(|event| match event {
+            UiEvent::Panel { body, .. } => Some(body.clone()),
+            _ => None,
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 /// Instantánea ordenada `(ruta relativa, bytes)` de todo el árbol: la
@@ -252,7 +167,7 @@ fn no_stray_meta_temps(vault: &Path) {
 #[test]
 fn reindex_rebuilds_index_and_rewrites_meta_atomically() {
     let vault = installed_vault();
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     // Mismo modelo + dims en el sidecar: el gate se omite (un spawn extra
     // devolvería `Internal` y reventaría el test).
     let proc = RecordingProc::scripted([refresh_ok(2, 2, 0)]);
@@ -266,18 +181,21 @@ fn reindex_rebuilds_index_and_rewrites_meta_atomically() {
 
     let calls = proc.calls();
     assert_eq!(calls.len(), 1, "un solo refresh, got: {calls:?}");
-    let (program, args, cwd, env) = &calls[0];
+    let call = &calls[0];
     assert!(
-        program.ends_with("python"),
-        "vía el intérprete del venv, got: {program}"
+        call.program.ends_with("python"),
+        "vía el intérprete del venv, got: {}",
+        call.program
     );
-    assert_eq!(args, &["-m", "tepochcalli_flow", "refresh"]);
-    assert_eq!(cwd, &vault.path().to_path_buf());
+    assert_eq!(call.args, ["-m", "tepochcalli_flow", "refresh"]);
+    assert_eq!(call.cwd, vault.path().to_path_buf());
     for key in ["HF_HOME", "SENTENCE_TRANSFORMERS_HOME"] {
         assert!(
-            env.iter()
+            call.env
+                .iter()
                 .any(|(k, v)| k == key && v.contains(".tepochcalli")),
-            "{key} debe sandboxear la caché bajo el vault, got: {env:?}"
+            "{key} debe sandboxear la caché bajo el vault, got: {:?}",
+            call.env
         );
     }
 
@@ -317,7 +235,7 @@ fn reindex_rebuilds_index_and_rewrites_meta_atomically() {
 fn reindex_explains_model_mismatch_then_rebuilds() {
     // Drift manual (spec-embeddings: `model` editado en config sin reindexar).
     let vault = installed_vault_with(NEW_MODEL, OLD_MODEL);
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     // Modelo distinto al del sidecar: gate (mide las dims nuevas) + refresh.
     let proc = RecordingProc::scripted([gate_ok(NEW_MODEL, 1024), refresh_ok(2, 2, 0)]);
 
@@ -327,7 +245,7 @@ fn reindex_explains_model_mismatch_then_rebuilds() {
     assert_eq!(report.model.as_str(), NEW_MODEL);
     assert_eq!(report.dims, Some(1024));
 
-    let bodies = ui.bodies();
+    let bodies = panel_bodies(&ui);
     assert!(
         bodies.contains("E_MODEL_MISMATCH"),
         "el drift se explica con su código, got:\n{bodies}"
@@ -339,7 +257,7 @@ fn reindex_explains_model_mismatch_then_rebuilds() {
     let calls = proc.calls();
     assert_eq!(calls.len(), 2, "gate + refresh, got: {calls:?}");
     assert_eq!(
-        calls[0].1,
+        calls[0].args,
         vec![
             "-m",
             "tepochcalli_flow",
@@ -348,7 +266,7 @@ fn reindex_explains_model_mismatch_then_rebuilds() {
             NEW_MODEL
         ]
     );
-    assert_eq!(calls[1].1, vec!["-m", "tepochcalli_flow", "refresh"]);
+    assert_eq!(calls[1].args, ["-m", "tepochcalli_flow", "refresh"]);
 
     let meta = std::fs::read_to_string(
         vault
@@ -377,7 +295,7 @@ fn reindex_degraded_vault_fails_without_spawning() {
         "[embedding]\nprovider = \"none\"\n",
     )
     .expect("degraded config fixture");
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     // Guion vacío: cualquier spawn revienta el test.
     let proc = FakeProc::scripted([]);
 
@@ -385,7 +303,7 @@ fn reindex_degraded_vault_fails_without_spawning() {
         .expect_err("sin embedder no hay nada que reconstruir");
     assert_eq!(err, WizardError::PhaseFailed);
     assert_eq!(err.exit_code(), 42);
-    let bodies = ui.bodies();
+    let bodies = panel_bodies(&ui);
     assert!(
         bodies.contains("config embedder"),
         "debe decir cómo salir del degraded, got:\n{bodies}"
@@ -396,7 +314,7 @@ fn reindex_degraded_vault_fails_without_spawning() {
 fn reindex_without_config_fails_without_creating_anything() {
     let vault = tmp();
     std::fs::create_dir_all(vault.path().join("notes")).expect("notes fixture");
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     let proc = FakeProc::scripted([]);
 
     let err = run_reindex(&proc, &ui, vault.path())
@@ -419,7 +337,7 @@ fn reindex_failed_refresh_keeps_old_meta_byte_identical() {
             .join("index-meta.json"),
     )
     .expect("meta fixture");
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     let proc = FakeProc::scripted([Ok(CommandOutput {
         status: 1,
         stdout: String::new(),
@@ -456,7 +374,7 @@ fn reindex_gate_refusal_is_model_invalid_without_touching_meta() {
             .join("index-meta.json"),
     )
     .expect("meta fixture");
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     let proc = FakeProc::scripted([Ok(CommandOutput {
         status: 0,
         stdout: "{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}".to_string(),
@@ -492,7 +410,7 @@ fn reindex_missing_venv_is_internal_without_spawning() {
             .join("python"),
     )
     .expect("remove venv fixture");
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     let proc = FakeProc::scripted([]);
 
     let err =
@@ -518,7 +436,7 @@ fn reindex_external_provider_writes_null_dims_without_gate() {
         format!("[embedding]\nprovider = \"litellm\"\nmodel = \"{EXTERNAL_MODEL}\"\n"),
     )
     .expect("config externa fixture");
-    let ui = TapUi::new();
+    let ui = TapUi::new(vec![], vec![]);
     // Guion con un solo turno: un gate espurio caería en `Internal`.
     let proc = RecordingProc::scripted([refresh_ok(2, 2, 0)]);
 
@@ -527,9 +445,9 @@ fn reindex_external_provider_writes_null_dims_without_gate() {
     // (a) sin gate: solo el refresh baja al venv.
     let calls = proc.calls();
     assert_eq!(calls.len(), 1, "solo el refresh, got: {calls:?}");
-    assert_eq!(calls[0].1, vec!["-m", "tepochcalli_flow", "refresh"]);
+    assert_eq!(calls[0].args, ["-m", "tepochcalli_flow", "refresh"]);
     assert!(
-        calls[0].1.iter().all(|arg| arg != "embed-check"),
+        calls[0].args.iter().all(|arg| arg != "embed-check"),
         "el externo no corre el gate test-embed, got: {calls:?}"
     );
 
@@ -562,9 +480,9 @@ fn reindex_external_provider_writes_null_dims_without_gate() {
     );
     assert!(report.mismatch, "el drift del sidecar se cura y se marca");
     assert!(
-        ui.bodies().contains("indexed 2") && ui.bodies().contains("dims (sin dato)"),
+        panel_bodies(&ui).contains("indexed 2") && panel_bodies(&ui).contains("dims (sin dato)"),
         "el reporte del refresh se paneliza con sus conteos, got:\n{}",
-        ui.bodies()
+        panel_bodies(&ui)
     );
     no_stray_meta_temps(vault.path());
 }

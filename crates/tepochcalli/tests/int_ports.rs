@@ -3,6 +3,9 @@
 //! One test per port minimum; each test pins the exact signature from the
 //! task so T5 adapters must conform to it.
 
+// `common` es módulo compartido: este target no toca los fakes de los tests
+// de fases (RecordingProc/TapUi) — el allow cubre el residuo no usado aquí.
+#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;

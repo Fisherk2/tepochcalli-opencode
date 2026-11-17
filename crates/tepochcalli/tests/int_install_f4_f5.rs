@@ -2,7 +2,7 @@
 //!
 //! RED-first: every behavior here failed before `installer::run_phase4` and
 //! `run_phase5` existed. Real `tempfile` vaults (D26: no FS port); fakes only
-//! (`FakeProc`/`FakeHttp` plus a local `RecordingProc` that pins the exact
+//! (`FakeProc`/`FakeHttp` plus the `common::RecordingProc` that pins the exact
 //! argv + cwd + env — no `sh -c` anywhere). The single real-network test is
 //! `#[ignore]`d and never syncs (torch would be ~1 GB).
 
@@ -10,19 +10,18 @@
 #[allow(dead_code)]
 mod common;
 
-use std::cell::RefCell;
-use std::collections::{HashMap, VecDeque};
+use std::collections::HashMap;
 use std::io::Write as _;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use common::{FakeHttp, FakeProc};
+use common::{FakeHttp, FakeProc, RecordingProc};
 use sha2::{Digest as _, Sha256};
 use tepochcalli::adapters::fetch::{self, UvAsset};
 use tepochcalli::adapters::{StdCommandRunner, UreqHttpClient};
 use tepochcalli::application::installer::{
     compensate_phase4, compensate_phase5, run_phase4, run_phase4_with, run_phase5,
 };
-use tepochcalli::ports::{CommandOutput, CommandRunner};
+use tepochcalli::ports::CommandOutput;
 use tepochcalli::WizardError;
 
 fn tmp() -> tempfile::TempDir {
@@ -83,53 +82,6 @@ fn ok_version() -> Result<CommandOutput, WizardError> {
         stdout: format!("uv {} (test fake)\n", fetch::UV_VERSION),
         stderr: String::new(),
     })
-}
-
-/// One recorded `CommandRunner::run` call: program + argv + cwd + env.
-type RecordedCall = (String, Vec<String>, PathBuf, Vec<(String, String)>);
-
-/// `CommandRunner` fake that records every call (program + argv + cwd + env)
-/// and replays a script — proves the exact `uv` invocation, which `FakeProc`
-/// cannot observe.
-struct RecordingProc {
-    calls: RefCell<Vec<RecordedCall>>,
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-}
-
-impl RecordingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            calls: RefCell::new(Vec::new()),
-            script: RefCell::new(script.into_iter().collect()),
-        }
-    }
-
-    fn calls(&self) -> Vec<RecordedCall> {
-        self.calls.borrow().clone()
-    }
-}
-
-impl CommandRunner for RecordingProc {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        cwd: &Path,
-        env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        self.calls.borrow_mut().push((
-            program.to_string(),
-            args.iter().map(ToString::to_string).collect(),
-            cwd.to_path_buf(),
-            env.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        ));
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
 }
 
 fn ok_status() -> Result<CommandOutput, WizardError> {
@@ -324,24 +276,28 @@ fn f5_ok_runs_sync_frozen_with_project_env() {
     // Every `uv` call runs in the project dir (pyproject.toml + uv.lock live
     // there) with the uv 0.12.9 quirk env (the venv location is ONLY honored
     // via `UV_PROJECT_ENVIRONMENT`, same as the repo's own Justfile).
-    for (program, args, cwd, env) in &calls[..3] {
+    for call in &calls[..3] {
         assert_eq!(
-            program, &uv_str,
-            "uv runs from .tepochcalli/bin, got: {program}"
+            call.program, uv_str,
+            "uv runs from .tepochcalli/bin, got: {}",
+            call.program
         );
-        assert_eq!(cwd, &project, "uv cwd must be the project dir");
+        assert_eq!(call.cwd, project, "uv cwd must be the project dir");
         assert!(
-            env.iter()
+            call.env
+                .iter()
                 .any(|(k, v)| k == "UV_PROJECT_ENVIRONMENT" && v == "venv"),
-            "missing project env in {args:?}"
+            "missing project env in {:?}",
+            call.env
         );
     }
-    assert_eq!(calls[0].1, ["python", "install", "3.12"]);
-    assert_eq!(calls[1].1, ["venv", "--clear", "venv"]);
-    assert_eq!(calls[2].1, ["sync", "--frozen"]);
+    assert_eq!(calls[0].args, ["python", "install", "3.12"]);
+    assert_eq!(calls[1].args, ["venv", "--clear", "venv"]);
+    assert_eq!(calls[2].args, ["sync", "--frozen"]);
     // The import check runs the venv interpreter (R6/T4: the tools subpackage
     // and the flow's document extractor must import), never the system python.
-    let (python, import_args, _, _) = &calls[3];
+    let import_call = &calls[3];
+    let (python, import_args) = (&import_call.program, &import_call.args);
     assert!(
         python.ends_with("python") || python.ends_with("python.exe"),
         "import check must use the venv interpreter, got: {python}"

@@ -28,6 +28,8 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 
+use common::RecordingProc;
+
 use tepochcalli::application::phase8::{
     compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
     RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
@@ -123,52 +125,6 @@ fn venv_python(vault: &Path) -> PathBuf {
     std::fs::create_dir_all(python.parent().expect("venv bin parent")).expect("venv fixture dir");
     std::fs::write(&python, b"fake-python").expect("venv python fixture");
     python
-}
-
-/// `CommandRunner` fake that records program + argv + cwd + env (pins the
-/// T13 contract: vault venv python, `-c` probe, cwd = vault,
-/// `TEPOCHCALLI_ROOT=.` — the exact entry F8 registers).
-type RecordedCall = (String, Vec<String>, PathBuf, Vec<(String, String)>);
-
-struct RecordingProc {
-    calls: RefCell<Vec<RecordedCall>>,
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-}
-
-impl RecordingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            calls: RefCell::new(Vec::new()),
-            script: RefCell::new(script.into_iter().collect()),
-        }
-    }
-
-    fn calls(&self) -> Vec<RecordedCall> {
-        self.calls.borrow().clone()
-    }
-}
-
-impl CommandRunner for RecordingProc {
-    fn run(
-        &self,
-        program: &str,
-        args: &[&str],
-        cwd: &Path,
-        env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        self.calls.borrow_mut().push((
-            program.to_string(),
-            args.iter().map(ToString::to_string).collect(),
-            cwd.to_path_buf(),
-            env.iter()
-                .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect(),
-        ));
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
 }
 
 /// Spec-literal healthy payload (spec-mcp-server §rag_status, salida 1).
@@ -515,16 +471,23 @@ fn f8_probe_runs_venv_python_with_registered_cwd_and_env() {
     // Exactly one verification call, shaped like the registered entry.
     let calls = proc.calls();
     assert_eq!(calls.len(), 1, "one rag_status probe, got: {calls:?}");
-    let (program, args, cwd, env) = &calls[0];
+    let call = &calls[0];
     assert!(
-        program.ends_with(".tepochcalli/venv/bin/python"),
-        "vault venv interpreter, got: {program}"
+        call.program.ends_with(".tepochcalli/venv/bin/python"),
+        "vault venv interpreter, got: {}",
+        call.program
     );
-    assert_eq!(args, &vec!["-c".to_string(), RAG_STATUS_PROBE.to_string()]);
-    assert_eq!(cwd, &vault.path().to_path_buf(), "cwd = vault");
+    assert_eq!(
+        &call.args,
+        &vec!["-c".to_string(), RAG_STATUS_PROBE.to_string()]
+    );
+    assert_eq!(call.cwd, vault.path().to_path_buf(), "cwd = vault");
     assert!(
-        env.iter().any(|(k, v)| k == "TEPOCHCALLI_ROOT" && v == "."),
-        "contract env mirrors opencode.json, got: {env:?}"
+        call.env
+            .iter()
+            .any(|(k, v)| k == "TEPOCHCALLI_ROOT" && v == "."),
+        "contract env mirrors opencode.json, got: {:?}",
+        call.env
     );
 }
 

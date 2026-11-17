@@ -3,9 +3,9 @@
 //!
 //! RED-first: todo aquí fallaba antes de que existiera
 //! `application::swap::run_swap`. Vaults `tempfile` reales (D26: sin puerto
-//! FS); solo fakes (`TapUi` local que graba paneles, `FakeProc`, `FakeHost`,
-//! `FakeHttp`). Ningún modelo se descarga: los fixtures `gate_ok`/`refresh_ok`
-//! replican los contratos T11/T12.
+//! FS); solo fakes (`TapUi` de `common` que graba paneles, `FakeProc`,
+//! `FakeHost`, `FakeHttp`). Ningún modelo se descarga: los fixtures
+//! `gate_ok`/`refresh_ok` replican los contratos T11/T12.
 
 #[allow(dead_code)]
 mod common;
@@ -14,7 +14,7 @@ use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 
-use common::{FakeHost, FakeHttp, FakeProc};
+use common::{FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::swap::{run_swap, SwapDeps, SwapOptions};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
@@ -205,83 +205,6 @@ fn refresh_ok(indexed: u64) -> Result<CommandOutput, WizardError> {
     })
 }
 
-/// `Ui` fake: respuestas guionadas + captura ordenada de paneles (la
-/// secuencia de títulos prueba los 6 pasos de D8.4 en orden).
-struct TapUi {
-    selects: RefCell<VecDeque<usize>>,
-    inputs: RefCell<VecDeque<String>>,
-    panels: RefCell<Vec<(String, String)>>,
-}
-
-impl TapUi {
-    fn new(selects: Vec<usize>, inputs: Vec<String>) -> Self {
-        Self {
-            selects: RefCell::new(selects.into()),
-            inputs: RefCell::new(inputs.into()),
-            panels: RefCell::new(Vec::new()),
-        }
-    }
-
-    fn titles(&self) -> Vec<String> {
-        self.panels
-            .borrow()
-            .iter()
-            .map(|(title, _)| title.clone())
-            .collect()
-    }
-
-    fn bodies(&self) -> Vec<String> {
-        self.panels
-            .borrow()
-            .iter()
-            .map(|(_, body)| body.clone())
-            .collect()
-    }
-}
-
-impl Ui for TapUi {
-    fn select(
-        &self,
-        prompt: &str,
-        _options: &[&str],
-        _default_index: usize,
-    ) -> Result<usize, WizardError> {
-        self.panels
-            .borrow_mut()
-            .push(("MENU".to_string(), prompt.to_string()));
-        self.selects
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn input(&self, prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
-        self.panels
-            .borrow_mut()
-            .push(("INPUT".to_string(), prompt.to_string()));
-        self.inputs
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
-        self.panels
-            .borrow_mut()
-            .push(("SECRET INPUT".to_string(), prompt.to_string()));
-        self.inputs
-            .borrow_mut()
-            .pop_front()
-            .ok_or(WizardError::UserAborted)
-    }
-
-    fn panel(&self, title: &str, body: &str) {
-        self.panels
-            .borrow_mut()
-            .push((title.to_string(), body.to_string()));
-    }
-}
-
 fn host_16gb() -> FakeHost {
     FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
 }
@@ -375,7 +298,7 @@ fn swap_success_runs_six_steps_in_order_and_purges_old_model() {
     assert_eq!(report.dims, Some(1024));
 
     // Paso 1→3→6: estado actual, menú, advertencia y cierre, en orden.
-    let titles = ui.titles();
+    let titles = titles(&ui);
     let pos = |needle: &str| {
         titles
             .iter()
@@ -396,7 +319,7 @@ fn swap_success_runs_six_steps_in_order_and_purges_old_model() {
     );
     // El estado actual muestra modelo, dims y tamaño; la advertencia nombra
     // el re-index completo y exige --confirm con tiempo estimado.
-    let bodies = ui.bodies().join("\n");
+    let bodies = bodies(&ui).join("\n");
     assert!(
         bodies.contains(OLD_MODEL),
         "el estado muestra el modelo viejo"
@@ -462,7 +385,7 @@ fn swap_missing_confirm_explains_and_mutates_nothing() {
     .expect_err("sin --confirm el swap no debe correr");
     assert_eq!(err, WizardError::UserAborted);
 
-    let bodies = ui.bodies().join("\n");
+    let bodies = bodies(&ui).join("\n");
     assert!(
         bodies.contains("--confirm"),
         "debe explicar que el re-index exige --confirm, got:\n{bodies}"
@@ -833,72 +756,51 @@ fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
     no_stray_temps(vault.path());
 }
 
-/// Una invocación hija registrada: argv + env (copias propias).
-#[derive(Debug, Clone)]
-struct Call {
-    args: Vec<String>,
-    env: Vec<(String, String)>,
+/// Títulos en orden (superset del `TapUi` local anterior): los prompts van
+/// con su marcador de canal (`MENU`/`INPUT`/`SECRET INPUT`) y los paneles
+/// con su título real — la secuencia prueba los 6 pasos de D8.4 en orden.
+fn titles(ui: &TapUi) -> Vec<String> {
+    ui.events()
+        .iter()
+        .map(|event| match event {
+            UiEvent::Panel { title, .. } => title.clone(),
+            UiEvent::Select { .. } => "MENU".to_string(),
+            UiEvent::Input { .. } => "INPUT".to_string(),
+            UiEvent::Secret { .. } => "SECRET INPUT".to_string(),
+        })
+        .collect()
 }
 
-/// `CommandRunner` fake que REGISTRA cada llamada antes de repertir el guion:
-/// única forma de afirmar «no se lanzó el gate» / «HF_TOKEN llegó solo al
-/// env de un hijo» (FakeProc de `common` no guarda argv/env).
-struct RecordingProc {
-    script: RefCell<VecDeque<Result<CommandOutput, WizardError>>>,
-    calls: RefCell<Vec<Call>>,
+/// Cuerpos/prompt en orden, alineados con `titles`.
+fn bodies(ui: &TapUi) -> Vec<String> {
+    ui.events()
+        .iter()
+        .map(|event| match event {
+            UiEvent::Panel { body, .. } => body.clone(),
+            UiEvent::Select { prompt, .. }
+            | UiEvent::Input { prompt }
+            | UiEvent::Secret { prompt } => prompt.clone(),
+        })
+        .collect()
 }
 
-impl RecordingProc {
-    fn scripted(script: impl IntoIterator<Item = Result<CommandOutput, WizardError>>) -> Self {
-        Self {
-            script: RefCell::new(script.into_iter().collect()),
-            calls: RefCell::new(Vec::new()),
-        }
-    }
-
-    fn calls(&self) -> Vec<Call> {
-        self.calls.borrow().clone()
-    }
-
-    fn argv(&self) -> Vec<Vec<String>> {
-        self.calls().into_iter().map(|call| call.args).collect()
-    }
-
-    /// ¿Corrió el gate test-embed (`embed-check --model`)?
-    fn gated(&self) -> bool {
-        self.calls()
-            .iter()
-            .any(|call| call.args.iter().any(|arg| arg == "embed-check"))
-    }
-
-    /// ¿Corrió el re-index (`refresh`)?
-    fn refreshed(&self) -> bool {
-        self.calls()
-            .iter()
-            .any(|call| call.args.iter().any(|arg| arg == "refresh"))
-    }
+/// argv de cada hijo registrado (una lista por llamada).
+fn argv(proc: &RecordingProc) -> Vec<Vec<String>> {
+    proc.calls().into_iter().map(|call| call.args).collect()
 }
 
-impl CommandRunner for RecordingProc {
-    fn run(
-        &self,
-        _program: &str,
-        args: &[&str],
-        _cwd: &Path,
-        env: &[(&str, &str)],
-    ) -> Result<CommandOutput, WizardError> {
-        self.calls.borrow_mut().push(Call {
-            args: args.iter().map(|arg| (*arg).to_string()).collect(),
-            env: env
-                .iter()
-                .map(|(key, value)| ((*key).to_string(), (*value).to_string()))
-                .collect(),
-        });
-        self.script
-            .borrow_mut()
-            .pop_front()
-            .unwrap_or(Err(WizardError::Internal))
-    }
+/// ¿Corrió el gate test-embed (`embed-check --model`)?
+fn gated(proc: &RecordingProc) -> bool {
+    proc.calls()
+        .iter()
+        .any(|call| call.args.iter().any(|arg| arg == "embed-check"))
+}
+
+/// ¿Corrió el re-index (`refresh`)?
+fn refreshed(proc: &RecordingProc) -> bool {
+    proc.calls()
+        .iter()
+        .any(|call| call.args.iter().any(|arg| arg == "refresh"))
 }
 
 /// HF API base del pre-chequeo D8.1 (contrato de `pending_free_id`).
@@ -960,16 +862,15 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
     // (b) la clave nunca sale por la UI (títulos, cuerpos ni prompts), y el
     // prompt en sí va por el canal sin eco (L2-7): la entrada de la API key
     // se registra como SECRET INPUT, no como INPUT.
-    let visible = format!("{}\n{}", ui.titles().join("\n"), ui.bodies().join("\n"));
+    let visible = format!("{}\n{}", titles(&ui).join("\n"), bodies(&ui).join("\n"));
     assert!(
         !visible.contains(FAKE_KEY),
         "la clave nunca puede aparecer en un panel (títulos/cuerpos/prompts)"
     );
-    let secret_prompts = ui
-        .bodies()
+    let secret_prompts = bodies(&ui)
         .iter()
         .enumerate()
-        .filter(|(index, _)| ui.titles()[*index].contains("SECRET INPUT"))
+        .filter(|(index, _)| titles(&ui)[*index].contains("SECRET INPUT"))
         .map(|(_, body)| body.clone())
         .collect::<Vec<_>>();
     assert!(
@@ -979,7 +880,7 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
         "el prompt de la API key debe ir por el canal sin eco (SECRET INPUT), prompts: {secret_prompts:?}"
     );
     assert!(
-        !ui.titles()
+        !titles(&ui)
             .iter()
             .any(|t| t.starts_with("INPUT") && t.contains("API key")),
         "el prompt de la API key no puede ir por el canal con eco"
@@ -988,14 +889,14 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
     // (c) sin gate de dims: el externo no descarga; el re-index sí corre y
     // su hijo no recibe la clave (ni por env ni por argv).
     assert!(
-        !proc.gated(),
+        !gated(&proc),
         "el camino externo no corre el gate test-embed/dims, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
     assert!(
-        proc.refreshed(),
+        refreshed(&proc),
         "el re-index corre para el externo, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
     for call in proc.calls() {
         assert!(
@@ -1007,7 +908,7 @@ fn external_api_swap_writes_key_once_and_never_in_panel() {
         );
     }
     assert!(
-        !format!("{:?}", proc.argv()).contains(FAKE_KEY),
+        !format!("{:?}", argv(&proc)).contains(FAKE_KEY),
         "la clave no viaja en argv"
     );
 
@@ -1046,17 +947,17 @@ fn external_api_swap_with_empty_key_is_refused_before_writing() {
         "el rechazo es tipado (re-pregunta agotada), nunca un half-swap"
     );
     assert!(
-        ui.titles()
+        titles(&ui)
             .iter()
             .any(|title| title.contains("Falta un dato")),
         "explica que el valor no puede ir vacío, títulos: {:?}",
-        ui.titles()
+        titles(&ui)
     );
     assert_byte_identical(vault.path(), &before);
     assert!(
         proc.calls().is_empty(),
         "sin clave válida no se lanza gate ni refresh, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
     no_stray_temps(vault.path());
 }
@@ -1086,7 +987,7 @@ fn swap_live_config_write_failure_rolls_back_to_zero_state_like_the_other_branch
     assert!(
         proc.calls().is_empty(),
         "un stage que falla no llega a ningún spawn, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
     // El dir saboteador sobrevive por construcción (`remove_file` no borra
     // dirs); los demás temporales no quedan.
@@ -1128,9 +1029,9 @@ fn swap_to_configure_later_keeps_meta_describing_the_old_index_and_never_refresh
     assert!(
         proc.calls().is_empty(),
         "la salida 5 no lanza gate ni refresh, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
-    assert!(!proc.gated() && !proc.refreshed());
+    assert!(!gated(&proc) && !refreshed(&proc));
     assert_eq!(
         std::fs::read(rt.join("db").join("chunks.lance")).expect("índice vivo"),
         before.2,
@@ -1196,16 +1097,16 @@ fn free_id_non_embedding_repo_aborts_with_model_invalid() {
 
     assert_eq!(err, WizardError::ModelInvalid);
     assert!(
-        ui.titles()
+        titles(&ui)
             .iter()
             .any(|title| title.contains("E_MODEL_INVALID")),
         "el código público se muestra al usuario, títulos: {:?}",
-        ui.titles()
+        titles(&ui)
     );
     assert!(
         proc.calls().is_empty(),
         "ni descarga ni gate: el rechazo ocurre antes, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
     assert_byte_identical(vault.path(), &before);
     no_stray_temps(vault.path());
@@ -1233,7 +1134,7 @@ fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
 
     // El token llega al env del gate y a ningún otro hijo.
     let calls = proc.calls();
-    assert_eq!(calls.len(), 2, "gate + refresh, argv: {:?}", proc.argv());
+    assert_eq!(calls.len(), 2, "gate + refresh, argv: {:?}", argv(&proc));
     let gate = &calls[0];
     assert!(
         gate.args.iter().any(|arg| arg == "embed-check"),
@@ -1254,13 +1155,13 @@ fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
     );
 
     // Ni panel, ni argv, ni config/sidecar: la única salida es el env del hijo.
-    let visible = format!("{}\n{}", ui.titles().join("\n"), ui.bodies().join("\n"));
+    let visible = format!("{}\n{}", titles(&ui).join("\n"), bodies(&ui).join("\n"));
     assert!(
         !visible.contains(GATED_TOKEN),
         "el token no aparece en ningún panel"
     );
     assert!(
-        !format!("{:?}", proc.argv()).contains(GATED_TOKEN),
+        !format!("{:?}", argv(&proc)).contains(GATED_TOKEN),
         "el token nunca viaja en argv"
     );
     for file in ["config/tepochcalli.toml", "db/index-meta.json"] {
@@ -1445,17 +1346,17 @@ fn free_id_missing_metadata_proceeds_to_download() {
     assert_eq!(report.model, id);
     assert_eq!(report.dims, Some(512), "las dims las mide el gate");
     assert!(
-        ui.titles()
+        titles(&ui)
             .iter()
             .any(|title| title.contains("Sin estimación")),
         "explica que la estimación no llegó, títulos: {:?}",
-        ui.titles()
+        titles(&ui)
     );
     let calls = proc.calls();
     assert!(
         calls[0].args.iter().any(|arg| arg == "embed-check"),
         "la descarga se intenta igual, argv: {:?}",
-        proc.argv()
+        argv(&proc)
     );
     assert!(
         calls
