@@ -161,10 +161,7 @@ def convert_local(path: Path, *, source_uri: str, extension_hint: str | None = N
     try:
         return MarkItDown().convert(str(path), stream_info=stream_info).markdown
     except UnsupportedFormatException:
-        raise formats.UnsupportedFormatError(
-            f"formato no soportado para {source_uri!r}; "
-            f"usa uno de {', '.join(formats.SUPPORTED_FORMATS)}"
-        ) from None
+        raise _unsupported(source_uri) from None
 
 
 def convert_bytes(data: bytes, *, filename: str | None, extension: str, source_uri: str) -> str:
@@ -193,7 +190,19 @@ def convert_bytes(data: bytes, *, filename: str | None, extension: str, source_u
             .markdown
         )
     except UnsupportedFormatException:
-        raise formats.UnsupportedFormatError(
-            f"formato no soportado para {source_uri!r}; "
-            f"usa uno de {', '.join(formats.SUPPORTED_FORMATS)}"
-        ) from None
+        raise _unsupported(source_uri) from None
+
+
+def _unsupported(source_uri: str) -> formats.UnsupportedFormatError:
+    """Fallo tipado de formato no soportado con el catálogo (mismo template).
+
+    La traducción `UnsupportedFormatException` ⇒ `formats.
+    UnsupportedFormatError` es idéntica en `convert_local` y `convert_bytes`:
+    mensaje con `source_uri` y la lista curada, `from None` para no arrastrar
+    el traceback markitdown al log del server. El handler la mapea a
+    `VALIDATION_ERROR` con el catálogo.
+    """
+    return formats.UnsupportedFormatError(
+        f"formato no soportado para {source_uri!r}; "
+        f"usa uno de {', '.join(formats.SUPPORTED_FORMATS)}"
+    )
