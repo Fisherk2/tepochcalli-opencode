@@ -174,5 +174,6 @@ just python-no-interference --evidence docs/acceptance/no-interference.json
 * JSON de evidencia: [no-interference.json](no-interference.json) — incluye `install`,
   `embedder`, hashes antes/después, las dos listas `ss` crudas, el payload de las dos tools,
   `results` y `verdict`.
-* No entra en la suite diaria (`just python-test`) como test: es un script de aceptación que
-  **instala un vault** (~2 min) y no debe correr en cada push.
+* No entra en ninguna suite de módulo (`just test-mcp` / `test-engine` / `test-converter`) como
+  test: es un script de aceptación que **instala un vault** (~2 min) y no debe correr en cada
+  push.

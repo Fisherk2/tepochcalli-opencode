@@ -71,7 +71,7 @@ TEPOCHCALLI_CITATIONS_EVIDENCE="/mnt/HDDFish/Documents/Programacion/PROYECTOS/14
   just python-test-file spot_check
 ```
 
-Los 3 tests del par (limpio ⇒ 0, edición ⇒ 1, ausente ⇒ `MISSING`) corren en `just python-test`.
+Los 3 tests del par (limpio ⇒ 0, edición ⇒ 1, ausente ⇒ `MISSING`) corren en `just test-engine`.
 La cifra de cobertura de este código nuevo se reconcilia en **T16** con `just coverage` (no se
 corre aquí: ~1 h y calienta el host).
 

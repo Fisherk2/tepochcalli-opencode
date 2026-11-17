@@ -7,7 +7,7 @@
 
 | Área | Toolchain | Comandos (recetas del Justfile raíz) |
 | --- | --- | --- |
-| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `just python-lint-fix` · `just python-fmt` · `just python-typecheck` · `just python-test` |
+| Python (`.tepochcalli/flow/`, `.tepochcalli/mcp/`) | ruff (lint+format) + mypy `--strict` + pytest | `just python-lint-fix` · `just python-fmt` · `just python-typecheck` · `just python-test-unit` · `just test-mcp`/`test-engine`/`test-converter` |
 | Rust (wizard `crates/tepochcalli`) | rustfmt, clippy | `just rust-fmt` · `just rust-lint` · `just rust-test` · `just rust-ci` |
 | Docs | markdownlint (reglas desactivadas: líneas largas en MD) | `just md-lint` |
 | Commits | Conventional Commits manuales (hook a decisión en Phase 1) | ver §Commits |

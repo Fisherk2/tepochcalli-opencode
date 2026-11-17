@@ -237,7 +237,7 @@ calpulli cierra TD-15 con un golden etiquetado y un recall medido.
 - [ ] **RED demostrado** antes de implementar (el commit del test en rojo, luego en verde).
 - [ ] El test **falla** si el golden vault se vacía o si una etiqueta cambia ⇒ no es una tautología (lección de Phase 3.5 (c)).
 
-**Verificación:** `just python-test` verde; el recall se publica con n = 10 y el nombre del fixture.
+**Verificación:** `just test-engine` verde; el recall se publica con n = 10 y el nombre del fixture.
 
 **Dependencias:** T0 · **Scope:** M (fixture de etiquetas + test de integración)
 
@@ -311,7 +311,7 @@ respuesta del agente con sus citas. Esa cifra **nunca se ha medido con un tokeni
 - [ ] Si el total **excede** 2000 ⇒ el contrato MCP **no se toca** (ADR-005 congelado): el ajuste es del **techo del server** (p. ej. bajar 1600) y requiere decisión explícita del dueño + ADR si altera el contrato publicado. **Nunca** se maquilla la cifra recortando el corpus.
 - [ ] Test e2e que **falla** si el total supera 2000 con el fixture adverso (guarda viva, no un número en un doc).
 
-**Verificación:** el test corre en `just python-test` (es rápido) y la cifra publicada es reproducible.
+**Verificación:** el test corre en `just test-mcp` (es rápido) y la cifra publicada es reproducible.
 
 **Dependencias:** T0 · **Scope:** M (test e2e + medidor + informe)
 
@@ -335,7 +335,7 @@ lectura.
 - [ ] El verificador **conserva su carácter de solo lectura**: test de snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios (patrón ya existente en la suite de Phase 1).
 - [ ] **Golden answers ampliado**: el conjunto cubre **md, txt y pdf** con `source_path` real + `heading` (nullable, D13) + offsets **reproducibles** (re-slice desde disco == `text`).
 - [ ] Para **pdf**, `heading is None` (D54) se afirma **explícitamente**: el golden **no** exige heading en PDF — la ausencia es el contrato, no un fallo.
-- [ ] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en este calpulli basta `just python-test`.
+- [ ] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en este calpulli basta `just test-engine`.
 - [ ] Si el spot-check encuentra citas rotas en el corpus real, se **documenta la tasa** (no se maquilla) y, si es > 0, se abre la remediación (re-index o aviso de obsolescencia, TD-4).
 
 **Verificación:** un test **edita el archivo** post-indexación y espera **exit ≠ 0** del verificador (RED demostrado antes de implementar el flag).
@@ -437,7 +437,7 @@ tarde, donde `E_MODEL_INVALID` no se emite.
 - [ ] Cobertura Python: **no se mide aquí**; se reconcilia con `just coverage` en el cierre de fase (T16).
 - [ ] `wc -l` de ambos ficheros y el recuento de tests publicados como evidencia (TD-28 y TD-29 **cerradas**).
 
-**Verificación:** `just rust-ci` verde · `just python-test` verde · `git diff --stat` reviewed. La cobertura se mide en el cierre de fase, no aquí.
+**Verificación:** `just rust-ci` verde · `just python-test-unit` verde · `git diff --stat` reviewed. La cobertura se mide en el cierre de fase, no aquí.
 
 **Dependencias:** T0 · **Scope:** M (dos ficheros de código + tests)
 

@@ -133,11 +133,11 @@ fichero de contenido del payload (`.opencode/`, `AGENTS.md`, `opencode.json`).
 | `just python-fmt-check` | **171 files already formatted** |
 | `just python-typecheck` (`mypy --strict`, 40 ficheros) | **Success: no issues found** |
 | `just md-lint` | **0 issues** |
-| `just python-test` (suite completa) | **747 passed, 3 deselected, 63 failed** |
+| Suite completa (receta de la época: `python-test`; hoy `just ci`) | **747 passed, 3 deselected, 63 failed** |
 | `just rust-ci` | **no ejecutable en este checkout** (ver abajo) |
 | bench de escala | sigue **fuera** de `just ci` (no es `test_*`; runtime dominado por la indexación en frío) |
 
-**Los 63 fallos de `just python-test` son pre-existentes y ajenos a T1** — todos en
+**Los 63 fallos de esa corrida (receta de la época: `python-test`) son pre-existentes y ajenos a T1** — todos en
 `test_payload_permissions.py` (62) y `test_opencode_payload_registration.py` (1), que leen los
 bloques `permissions` de `obsidian-workspace/.opencode/agents/*.md` y esperan `deny` donde hoy
 hay `ask` (p. ej. `.env` en `itzamna.md`, que no declara reglas `read`). Verificado en un

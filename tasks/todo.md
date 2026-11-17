@@ -29,9 +29,9 @@
   y coste deminutes-to-hours); se corren a mano y su JSON se archiva como evidencia.
 - **`just coverage` solo en el cierre de fase** (T16): ~1 h de suite instrumentada y calienta el
   host hasta apagarlo. **No está en `just ci`** (decisión del dueño 2026-11-12): es una corrida
-  local de desarrollo, no un gate. Por tarea basta `just quality`, `just python-test` o la receta
-  dirigida (`just python-test-unit`, `just python-test-file <patrón>`); la cobertura se
-  reconcilia en T16.
+  local de desarrollo, no un gate. Por tarea basta `just quality`, la suite de su módulo
+  (`just test-mcp`/`test-engine`/`test-converter`) o la receta dirigida (`just python-test-unit`,
+  `just python-test-file <patrón>`); la cobertura se reconcilia en T16.
 
 ## Leyenda
 
@@ -92,7 +92,7 @@
 - [x] `.md`/`.txt` **no** se trazan uno a uno (10 000 notas serían 10 000 líneas de ruido)
 - [x] Tests: `tests/unit/test_progress.py` (3) + `tests/integration/test_mcp_refresh_progress.py` (3) — **6 passed**
 - [x] **C y D no se abren** (ni límite de páginas ni caché de parseo); se reabre con ADR nuevo si hay quejas reales de latencia
-- Deps: T2 · Verificación: `just python-test` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
+- Deps: T2 · Verificación: `just test-mcp` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
 
 ### [x] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
 
@@ -103,7 +103,7 @@
 - [x] Umbral (1.0) y método publicados en `docs/TRD.md` §6.2 — **el de T0**, sin ajustar
 - [x] **RED demostrado** antes de implementar
 - [x] El test **falla** si el golden vault se vacía o si una etiqueta cambia (no es tautología)
-- Deps: T0 · Verificación: `just python-test` verde · recall publicado con n = 10
+- Deps: T0 · Verificación: `just test-engine` verde · recall publicado con n = 10
 - **Hecho (2026-11-12):** fixture propio `tests/fixtures/relevance_vault/` (**20 notas ES/EN**, 5 familias de 4 con distractores cercanos) + `tests/fixtures/relevance_queries.json` (n = 10, 5 ES/5 EN, 10 ficheros distintos) + `tests/integration/test_search_relevance.py` (**5 tests**, subproceso, sin latencia). **recall@5 = 1.00 (10/10)**, todas en el puesto 1; etiquetas desplazadas ⇒ **0.00** (la métrica discrimina); vault vacío ⇒ `INDEX_EMPTY` y 0.00 (el gate cae, no `skip`). Comando: `just python-test-file relevance` (5 passed, 83,6 s). Umbral de §6.2 intacto (D-P6-8); RED archivado en el informe del calpulli
 
 ### [x] Checkpoint CP-0 — Protocolo y umbrales aprobados
@@ -118,7 +118,7 @@
 - [x] Corpus de 11 000 entradas reproducible **byte a byte** (manifiesto verificado 2×)
 - [x] Coste del PDF de 30 páginas **medido** (n ≥ 3, RSS pico, `medido`) y la condición de TD-2 resuelta
 - [x] Recall@5 = 1.0 con el **umbral de T0**
-- [x] `just ci` verde (ya **sin** cobertura: `python-sync → lint → fmt-check → typecheck → test → bench-smoke → rust-ci`; la cobertura es medición local y se reconcilia en T16)
+- [x] `just ci` verde (ya **sin** cobertura: `python-sync → lint → fmt-check → typecheck → suites de módulo → bench-smoke → rust-ci`; la cobertura es medición local y se reconcilia en T16)
 - **Hecho (2026-11-12):** `just ci` **verde en 31:54** (`CARGO_TARGET_DIR=/tmp/opencode/cargo-target`): 872 passed + 3 deselected, smoke Δ **850 ms** < 10 000 ms, `rust-ci` verde. La cobertura sale de `ci` por decisión del dueño (2026-11-12) y pasa a corrida local en T16.
 
 ---
@@ -159,7 +159,7 @@
 - [x] Publicadas con n, tokenizador y método en `docs/TRD.md` §6
 - [x] Si el total excede 2000 ⇒ el contrato MCP **no se toca** (ADR-005): el ajuste es del techo del server, con decisión explícita del dueño
 - [x] Test e2e que **falla** si el total supera 2000 (guarda viva)
-- Deps: T0 · Verificación: `just python-test` verde
+- Deps: T0 · Verificación: `just test-mcp` verde
 - **Hecho (2026-11-13):** medidor `tests/support/token_budget.py` (tokenizador **`cl100k_base` de `tiktoken 0.14.0`**, ya en el venv; `o200k_base` publicado al lado; fuente `github.com/openai/tiktoken`) + guarda viva `tests/integration/test_mcp_token_budget.py` (3 tests, fixture adverso **reusado** de T7, sin marcadores `slow`). **Cifras (n=7 caras, `top_k=5` y `top_k=20`):** (a) payload **1 600 por el estimador** del contrato y **1 789 reales**; (b) **total e2e 1 995 < 2 000** en el peor caso (query 7 + payload 1 789 + respuesta citada 199) y 1 675 en la dorada ⇒ **PASS**, con **5 tokens de margen** (`o200k`: 1 785). La respuesta se modela con el formato que prescribe el payload (`source_path » heading (chars x–y)`, una afirmación por resultado, `(sin heading)` en PDF). Sonda de sensibilidad: 2 frases/resultado ⇒ **2 023** (el guard no es vacío); RED archivado (ModuleNotFoundError primero, luego la aserción disparada). Hallazgo **F-T6-1**: el 1 600 es del estimador (envoltura JSON ≈190 tokens fuera de la fórmula + `chars/4` optimista en ES) — si el payload crece, la decisión (bajar el techo a ~1 500) es **del dueño**; contrato MCP intacto y sin dependencias nuevas. Evidencia: `docs/acceptance/token-budget.{md,json}` + TRD §6.2 + WORKFLOW §6.3
 
 ### [x] T7 — Criterio 5: citas precisas y re-verificación contra el archivo vivo (TD-13)
@@ -170,7 +170,7 @@
 - [x] **Solo lectura conservada**: snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios
 - [x] **Golden answers ampliado**: md, txt y pdf con `source_path` real + `heading` (nullable) + offsets **reproducibles**
 - [x] Para **pdf**, `heading is None` (D54) afirmado explícitamente: el golden **no** exige heading en PDF
-- [x] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en T7 basta `just python-test`
+- [x] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en T7 basta `just test-engine`
 - [x] Si el spot-check encuentra citas rotas ⇒ la **tasa** se documenta (no se maquilla) y se abre la remediación si > 0 (TD-4)
 - Deps: T0, T3 · Verificación: test que **edita** el archivo post-indexación y espera **exit ≠ 0**
 - **Hecho (2026-11-13):** `verify.py --spot-check N` (`LanceDBChunkReader.sample_rows` → `table.head`) re-verifica la identidad F1 **reutilizando `citation.verify_slice_identity`**; `source` corta el original, `extract` re-extrae con markitdown (D50); severidades `OK`/`BROKEN`/`MISSING` y **exit 1** si hay roturas. **Medido** (golden md + txt + pdf indexado en subproceso): **6/6 (100 %), 0 rotas, exit 0**; **edición externa tras indexar ⇒ 3/6 (50 %), exit 1**; txt borrado ⇒ `MISSING`, exit 1; snapshot de `db/` sin cambios en las 3 corridas. Golden ampliado a md + txt + pdf en el e2e del wire (txt y pdf con `heading is None`; refresh `(3,0,3)`). **Tasa de citas rotas publicada: 0 %** (el caso que debe fallar falla ⇒ el 0 no es tautología). RED archivado (argparse `unrecognized arguments: --spot-check`). Evidencia: `docs/acceptance/citations.{md,json}` + TRD §6.2 + README de aceptación; TD-13 cerrada. `coverage` **no** ejecutado (T16).
@@ -242,9 +242,9 @@
 - [x] **(a)** `cargo fmt` limpio, `clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests**
 - [x] **(b)** `require_local_model` valida el snapshot **real** (`config.json` + pesos), no «el directorio no está vacío» ⇒ `E_MODEL_INVALID` donde hoy no se emite
 - [x] **(b)** Test que falla con snapshot a medias y con snapshot de otra revisión (RED demostrado)
-- [x] `just coverage` ≥ 95 % **se verifica en el cierre de fase (T16)**, no en este calpulli; aquí basta `just python-test`
+- [x] `just coverage` ≥ 95 % **se verifica en el cierre de fase (T16)**, no en este calpulli; aquí basta `just python-test-unit`
 - [x] `wc -l` de ambos ficheros y recuento de tests publicados (TD-28 y TD-29 **cerradas**)
-- Deps: T0 · Verificación: `just rust-ci` verde · `just python-test` verde (cobertura en el cierre)
+- Deps: T0 · Verificación: `just rust-ci` verde · `just python-test-unit` verde (cobertura en el cierre)
 
 - **Hecho (2026-11-13), parte (a) TD-28:** `embedder_menu.rs` **894 → 298** líneas partido por responsabilidad en 4 módulos hermanos planos (no en un subdirectorio: `int_architecture.rs` escanea `application/*.rs` con `read_dir` y un `embedder_menu/` habría escapado del gate): `embedder_config.rs` 218, `embedder_gate.rs` 202, `embedder_estimate.rs` 155, `embedder_options.rs` 102. **178 literales byte-idénticos** (multiset igual), `rust-test` **323 passed** (mismo número que antes), clippy `-D warnings` limpio. Visibilidad: solo `pub(super)` interno, superficie pública intacta.
 - **Hecho (2026-11-13), parte (b) TD-29:** `snapshot_defect(path, revision)` valida el snapshot **real** (`config.json` + `model.safetensors`/`pytorch_model.bin` + revisión cuando el layout HF la declara) sin cargar el modelo; `require_local_model` pasa a `E_MODEL_INVALID` diciendo **qué falta**. RED archivado: solo-config, solo-pesos y revisión distinta ⇒ `DID NOT RAISE EmbedderModelError`; verde tras el fix. Suite **898 → 902 passed**. `model_store.py` 93→125, `embedder.py` 235→237.
