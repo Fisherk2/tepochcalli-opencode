@@ -63,6 +63,7 @@ dev = [
     "pytest",
     "coverage",
     "ruff",
+    "pytest-xdist>=3.8.0",
 ]
 
 [tool.ruff]
@@ -107,10 +108,23 @@ testpaths = [
 # Suite de CORRECCION por defecto: los tests `slow` (mediciones de latencia)
 # quedan fuera. Es el filtro que docs/WORKFLOW.md §Phase 2/§Testing ya
 # prescribe para CI (`pytest -m "not slow"`); ver `tasks/todo.md` T11.
-# Medido 2026-11-12: 803 tests en ~18 min (686 unit en 2:19). El coste está
-# repartido en integración/e2e, no concentrado: marcar subconjuntos no paga.
 # Para el día a día usa `python-test-unit` o `python-test-file`.
-addopts = "-m 'not slow'"
+#
+# Paralelismo pytest-xdist (R1 aprobada por el dueño 2026-11-16):
+#   - `-n 3` fijos, JAMÁS `auto` (auto = 12 y provocaría OOM): el host tiene
+#     15 GiB totales / ~8,2 GiB disponibles y cada worker que carga
+#     MiniLM/torch cuesta ~1,5-2 GiB ⇒ techo seguro = 4 workers; con 4 la
+#     corrida completa de 2026-11-16 tropezó (verify CLI agotó su timeout de
+#     300 s por contención/swap) ⇒ estable a 3.
+#   - `--dist loadfile` agrupa por fichero y garantiza que todo un fichero
+#     corre en UN solo worker (doc: pytest-xdist docs/distribution.rst):
+#     mantiene los fixtures module-scope con índices caros en un único proceso
+#     y evita re-indexar por worker.
+# Medido 2026-11-16: 914 tests en 2 corridas verdes (36:58 y 27:53) frente a
+# 45:25 en serial; unit (702) en 76 s. El coste sigue repartido en integración/
+# e2e, no concentrado: marcar subconjuntos no paga.
+# Doc: https://github.com/pytest-dev/pytest-xdist/blob/master/docs/distribution.rst
+addopts = "-m 'not slow' -n 3 --dist loadfile"
 markers = [
     "slow: medicion de latencia/bench — no pertenece a la suite de correccion",
 ]
