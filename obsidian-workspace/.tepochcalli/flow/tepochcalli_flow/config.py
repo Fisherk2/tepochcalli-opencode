@@ -244,14 +244,7 @@ def _read_toml(config_path: Path) -> dict[str, object]:
         raw: dict[str, object] = tomllib.loads(config_path.read_text(encoding="utf-8"))
     except FileNotFoundError:
         return {}
-    except UnicodeDecodeError as exc:
-        logger.warning(
-            "TOML malformado en %s (%s); se descartan las overrides y se usan los defaults",
-            config_path,
-            exc,
-        )
-        return {}
-    except tomllib.TOMLDecodeError as exc:
+    except (UnicodeDecodeError, tomllib.TOMLDecodeError) as exc:
         logger.warning(
             "TOML malformado en %s (%s); se descartan las overrides y se usan los defaults",
             config_path,
