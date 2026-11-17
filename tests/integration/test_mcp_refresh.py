@@ -6,10 +6,15 @@ Fuentes de verdad:
   `locked:true` ⇒ tres ceros sin update; idempotencia (`indexed: 0`); canario
   cero red / cero LLM; `just quality` con Phase 1 intacta.
 * specs/spec-mcp-server.md §Tool `index_refresh`.
-* `tests/integration/test_delta.py` (Phase 1) — la secuencia
-  crea→modifica→borra→idempotencia y las cuentas exactas que aquí se repiten
-  a través de la TOOL (2 ficheros md: (2,2,0) → (3,1,2) → (3,1,2) →
-  (2,0,2) → (2,0,2)).
+* `tests/integration/test_delta.py` (Phase 1) — la secuencia completa
+  crea→modifica→borra→idempotencia con sus cuentas exactas
+  ((2,2,0) → (3,1,2) → (3,1,2) → (2,0,2) → (2,0,2), `test_delta.py:414/:429`
+  para modify/delete). Aquí el journey va REDUCIDO a 3 pasadas por el wire
+  (P1-2, orden del dueño 2026-11-16): `initial` (2,2,0), `add` (3,1,2) e
+  `idempotente` (indexed 0) — `modify`/`delete` no se repiten a nivel tool:
+  sus cuentas ya las cubre el nivel flow y ninguna AC de la spec
+  (`spec-mcp-server` §Tool `index_refresh` / §Testing) exige verlos por el
+  wire.
 
 Decisiones de test, documentadas:
 
@@ -42,8 +47,18 @@ Decisiones de test, documentadas:
      solapamiento: ambos unlocked). Ninguna aserción de esta suite depende ya
      del reloj: la raca de reloj se retiró, la vista CONCURRENTE se conserva
      con el candado del padre como garantía determinista.
-* El `journey` (5 pasos en UNA sesión) mantiene el server vivo entre llamadas
+* El `journey` (3 pasos en UNA sesión) mantiene el server vivo entre llamadas
   — la carga del modelo se amortiza y los mtime/Δ los ve el hijo, no el padre.
+* **Cache de modelo ENLAZADO, no recalentado** (P0-2): los 3 tests con
+  `tmp_path` propio (`INDEXER_DIR` ×2 y directorio vacío) usan
+  `link_model_cache(tmp_path, resolve_model_cache())` — el mismo enlace a la
+  cache caliente que ya usan `test_delta`/`test_change_detection`— en vez de
+  lanzar otro `warm_model` (subproceso que importa `sentence_transformers` y
+  carga ~470 MB ya presentes en cache: 40-85 s medidos por llamada). El hijo
+  ve EXACTAMENTE la misma env que daría `warm_model` (symlink
+  `.tepochcalli/models` + snapshot estable + `HF_HUB_OFFLINE=1` via
+  `server_env`); la ventana de descarga en frío la abre el fixture
+  `refresh_vault` (`warm_model` en el journey, el primer test del módulo).
 """
 
 from __future__ import annotations
@@ -54,6 +69,7 @@ from pathlib import Path
 
 import pytest
 from mcp import ClientSession
+from model_cache import link_model_cache, resolve_model_cache
 from support.mcp_server import running_server, server_env, warm_model
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
@@ -69,11 +85,6 @@ ALPHA = (
     "## Sección beta\n\n"
     "Segundo párrafo de alpha con métricas, cohorte y seguimiento de referencia.\n"
 )
-ALPHA_V2 = (
-    "# Alpha — versión modificada\n\n"
-    "Reescrito por el paso `modify` del journey T3: el delta debe reescribir SOLO "
-    "los chunks de alpha y contar exactamente un archivo indexado.\n"
-)
 BETA = (
     "# Beta — segunda nota\n\n"
     "Fichero estable del vault T3: no se toca en ningún paso, así que siempre "
@@ -81,8 +92,8 @@ BETA = (
 )
 GAMMA = (
     "# Gamma — nota añadida\n\n"
-    "Creado en el paso `add` y borrado en el paso `delete`: un archivo que entra "
-    "y sale del índice dentro del mismo journey.\n"
+    "Creado en el paso `add`: un archivo que entra al índice dentro del mismo "
+    "journey (modify/delete viven en el nivel flow, test_delta.py).\n"
 )
 
 
@@ -145,13 +156,21 @@ def refresh_vault(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Path]
     return vault, models_link
 
 
-# --- journey: crea → modifica → borra → idempotencia (5 pasos, 1 sesión) -----------
+# --- journey: crea → añade → idempotencia (3 pasos, 1 sesión; P1-2) ---------------
 
 
-def test_journey_creates_modifies_deletes_and_stays_idempotent(
+def test_journey_creates_adds_and_stays_idempotent(
     refresh_vault: tuple[Path, Path],
 ) -> None:
-    """Secuencia completa a través de la tool con las cuentas exactas de Phase 1."""
+    """`initial → add → idempotente` a través de la tool, con sus cuentas exactas.
+
+    `modify`/`delete` NO se repiten por el wire (P1-2): sus cuentas exactas
+    ((3,1,2) y (2,0,2)) las cubre el nivel flow en `test_delta.py:414/:429`
+    sobre el MISMO `RefreshReport`, y ninguna AC de `spec-mcp-server`
+    (§Tool `index_refresh` / §Testing) exige verlos en el wire. Este journey
+    conserva el contrato por pasada, la cuenta exacta de `add` y la
+    idempotencia (2ª pasada sin cambios ⇒ `indexed 0`).
+    """
     vault, models_link = refresh_vault
     resources = vault / citation.RESOURCES_DIR
     env = server_env(vault, models_link)
@@ -162,23 +181,17 @@ def test_journey_creates_modifies_deletes_and_stays_idempotent(
             reports.append(await _call_refresh(session))  # initial: indexa los 2 ficheros
             (resources / "gamma.md").write_text(GAMMA, encoding="utf-8")
             reports.append(await _call_refresh(session))  # add
-            (resources / "alpha.md").write_text(ALPHA_V2, encoding="utf-8")
-            reports.append(await _call_refresh(session))  # modify
-            (resources / "gamma.md").unlink()
-            reports.append(await _call_refresh(session))  # delete
             reports.append(await _call_refresh(session))  # idempotent
         return reports
 
-    initial, added, modified, deleted, idempotent = asyncio.run(journey())
+    initial, added, idempotent = asyncio.run(journey())
 
-    for report in (initial, added, modified, deleted, idempotent):
+    for report in (initial, added, idempotent):
         _assert_contract(report)
         assert report["locked"] is False
 
     assert _counts(initial) == (2, 2, 0), "el primer refresh de la tool indexa los 2 md"
     assert _counts(added) == (3, 1, 2), "add: SOLO gamma se (re)escribe"
-    assert _counts(modified) == (3, 1, 2), "modify: SOLO alpha se reescribe"
-    assert _counts(deleted) == (2, 0, 2), "borrados NO cuentan (RefreshReport §doc)"
     assert idempotent["indexed"] == 0, "2ª pasada sin cambios: indexed 0 (idempotencia)"
     assert idempotent["scanned"] == idempotent["skipped"]
 
@@ -341,7 +354,7 @@ def test_indexer_dir_indexes_two_roots_recursively_and_reports_them(tmp_path: Pa
     (tmp_path / "documentos" / "pdf" / "articulo.md").write_text(
         "# Artículo\n\nTexto bajo documentos/pdf: la recursión debe alcanzarlo.\n", encoding="utf-8"
     )
-    models_link = warm_model(tmp_path)
+    models_link = link_model_cache(tmp_path, resolve_model_cache())
     env = {**server_env(tmp_path, models_link), "INDEXER_DIR": "materiales,documentos"}
 
     async def go() -> tuple[dict[str, object], dict]:
@@ -374,7 +387,7 @@ def test_indexer_dir_env_supplies_the_default_roots(tmp_path: Path) -> None:
     (tmp_path / "documentos" / "articulo.md").write_text(
         "# Artículo\n\nTexto bajo documentos: debe entrar por `INDEXER_DIR`.\n", encoding="utf-8"
     )
-    models_link = warm_model(tmp_path)
+    models_link = link_model_cache(tmp_path, resolve_model_cache())
     env = {**server_env(tmp_path, models_link), "INDEXER_DIR": "materiales,documentos"}
 
     async def go() -> dict[str, object]:
@@ -425,7 +438,7 @@ def test_missing_root_in_indexer_dir_is_validation_error_and_indexes_nothing(
 def test_empty_directory_is_not_an_error(tmp_path: Path) -> None:
     """Directorio vacío ⇒ `ok` con `scanned: 0` — el agente no lo lee como fallo."""
     (tmp_path / citation.RESOURCES_DIR).mkdir()
-    models_link = warm_model(tmp_path)
+    models_link = link_model_cache(tmp_path, resolve_model_cache())
     env = server_env(tmp_path, models_link)
 
     async def go() -> dict[str, object]:

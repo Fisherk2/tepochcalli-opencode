@@ -18,9 +18,10 @@ Decisiones de test, documentadas a propósito (convención de T2/T6):
   (mismo patrón e indexador compartido que T2 — hoy
   `support.mcp_server.index_vault`, extracción R4 de T8): el environment
   global de cocoindex no admite dos vaults en el proceso padre.
-* **Reutilización de T2**: `FIXTURE_VAULT`, `IndexedVault`, `_search` y
-  `_backend_on` se importan del módulo de T2; aquí SOLO se compone el vault
-  adverso.
+* **Reutilización de T2**: `IndexedVault`, `_search` y `_backend_on` se
+  importan del módulo de T2; la COMPOSICIÓN del vault adverso vive en el
+  `conftest.py` de este directorio como fixture de SESIÓN (P0-1): T7 y T6
+  comparten UNA indexación del mismo contenido en vez de dos.
 * **Premisas de fixture vía `parsers`** (chunker real de Phase 1, sin red): el
   tamaño de chunk (1536 BYTES, D11), la multibyte-idad y la tabla del PDF son
   propiedades deterministas de `parsers.extract_text`/`chunk_document`; lo que
@@ -63,12 +64,10 @@ from __future__ import annotations
 
 import asyncio
 import json
-import shutil
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 import pytest
-from support.mcp_server import index_vault
 from tepochcalli_flow import citation, parsers
 from tepochcalli_flow.config import DEFAULT_EMBEDDING_MODEL
 from tepochcalli_flow.layout import DB_RELPATH, TABLE_NAME
@@ -78,7 +77,6 @@ from tepochcalli_mcp import budget
 from tepochcalli_mcp.server import _VaultSearchBackend
 from tepochcalli_mcp.tools.search import SearchBackend
 from test_mcp_search import (
-    FIXTURE_VAULT,
     IndexedVault,
     _backend_on,
     _search,
@@ -174,32 +172,12 @@ def _cjk_content() -> str:
     return "".join(sections)
 
 
-def _build_adversarial_vault(tmp_path_factory: pytest.TempPathFactory) -> IndexedVault:
-    """Vault dorada + las 3 fuentes adversas (cjk, denso, PDF tabular), indexado en subproceso.
-
-    El indexador es el compartido `support.mcp_server.index_vault` (R4/T8):
-    MISMA env canónica, mismo `offline_env` cuando el cache resuelto ya tiene
-    el modelo — el que antes duplicaba el `UPDATE_SCRIPT` de T2.
-
-    El PDF se COPIA y se INDEXA de verdad (fix de F-T7-2: `index_file` delega
-    en `parsers.extract_text`, Docling corre dentro del subproceso): su presencia
-    en el índice es lo que hace firme el test de búsqueda sobre el PDF indexado.
-    """
-    vault = tmp_path_factory.mktemp("vault-t7-adversarial")
-    shutil.copytree(FIXTURE_VAULT, vault, dirs_exist_ok=True)
-    resources = vault / citation.RESOURCES_DIR
-    (resources / "cjk.md").write_text(_cjk_content(), encoding="utf-8")
-    (resources / "denso.md").write_text(_dense_content(), encoding="utf-8")
-    shutil.copy(TABLE_PDF, resources / "tablas.pdf")
-
-    models_link = index_vault(vault)
-    return IndexedVault(vault=vault, model_cache=models_link)
-
-
-@pytest.fixture(scope="module")
-def adversarial_vault(tmp_path_factory: pytest.TempPathFactory) -> IndexedVault:
-    """Vault adverso indexado — módulo-scoped: UNA indexación para todo el archivo."""
-    return _build_adversarial_vault(tmp_path_factory)
+# El vault adverso y su builder viven en `conftest.py` de este directorio
+# (fixture de SESIÓN compartido con `test_mcp_token_budget` — P0-1): aquí solo
+# se consume. El PDF se COPIA y se INDEXA de verdad allí (fix de F-T7-2:
+# `index_file` delega en `parsers.extract_text`, Docling corre dentro del
+# subproceso): su presencia en el índice es lo que hace firme el test de
+# búsqueda sobre el PDF indexado.
 
 
 @pytest.fixture(scope="module")

@@ -34,9 +34,16 @@ Decisiones de test, documentadas a propósito:
   componente `index_file` (`num_adds + num_reprocesses`), nunca del total de la
   pasada — la traversa `build_flow` reporta `reprocess=1` por diseño (E2), así
   que leer el total mentiría.
-* **El lock se prueba reteniéndolo desde el padre**: el subproceso bloqueado no
-  solo devuelve `locked:true`; NO ARRANCA el update — el snapshot byte a byte
-  (mtime_ns + size) de `.tepochcalli/db/` antes/después lo prueba.
+* **El lock se prueba reteniéndolo desde el padre**: aquí la vista
+  DETERMINISTA (stale-lock, paso `stale`); la concurrente — subproceso
+  bloqueado ⇒ `locked:true` con tres ceros y snapshot byte a byte de
+  `.tepochcalli/db/` sin la menor escritura — vive en
+  `tests/integration/test_mcp_refresh.py` (`test_retained_lock…` +
+  `test_two_concurrent_refreshes…`, mismo `flock` del kernel). El test
+  concurrente propio de este módulo se retiró en P1-1 (2026-11-16): repetía
+  esa misma aserción con un subproceso extra por corrida, y su única pieza
+  exclusiva (ubicación del lock file) ya la pinna
+  `tests/unit/test_refresh_lock.py:20`.
 """
 
 from __future__ import annotations
@@ -63,7 +70,6 @@ except ModuleNotFoundError:  # modo script (`--driver`): pytest no añadió test
 from tepochcalli_flow import app as flow_app
 from tepochcalli_flow import citation
 from tepochcalli_flow import models as flow_models
-from tepochcalli_flow.layout import DB_RELPATH
 
 # Contenidos del journey: ficheros cortos, SIEMPRE de UN chunk, para que el
 # número de filas por source_path sea 1 y las comparaciones sean exactas.
@@ -233,14 +239,6 @@ def _journey_driver() -> None:
     os.chmod(resources_dir / "carpeta_prohibida", 0o755)
 
 
-LOCKED_SCRIPT = """
-import dataclasses, json
-from tepochcalli_flow import app as flow_app
-report = flow_app.refresh_blocking()
-print(json.dumps({"tag": "locked", "report": dataclasses.asdict(report)}), flush=True)
-"""
-
-
 @dataclass(frozen=True)
 class StepRecord:
     """Evidencia de un paso del journey: reporte, filas y snapshot de LanceDB."""
@@ -351,27 +349,6 @@ def journey(tmp_path_factory: pytest.TempPathFactory) -> Journey:
 def _sorted_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Filas ordenadas por id: comparar estados de la tabla sin depender del orden."""
     return sorted(rows, key=lambda row: row["id"])
-
-
-def _tree_snapshot(base: Path) -> dict[str, tuple[int, int]]:
-    """Snapshot `{relpath: (mtime_ns, size)}` de todos los archivos bajo `base`."""
-    return {
-        str(path.relative_to(base)): (path.stat().st_mtime_ns, path.stat().st_size)
-        for path in sorted(base.rglob("*"))
-        if path.is_file()
-    }
-
-
-def _read_all_rows(vault: Path) -> list[dict[str, Any]]:
-    """Lee la tabla `chunks` completa desde disco (patrón T9; en el padre)."""
-
-    async def go() -> list[dict[str, Any]]:
-        connection = await lancedb.connect_async(str(vault / DB_RELPATH))
-        table = await connection.open_table("chunks")
-        arrow = await table.to_arrow()
-        return arrow.to_pylist()
-
-    return asyncio.run(go())
 
 
 def _sources(rows: list[dict[str, Any]]) -> set[str]:
@@ -620,50 +597,6 @@ def test_stale_lock_file_from_a_crash_does_not_block_the_refresh(
     )
     assert _sorted_rows(reconcile.rows) == _sorted_rows(stale.rows)
     assert reconcile.lance == stale.lance
-
-
-def test_concurrent_refresh_returns_locked_and_writes_nothing(
-    journey: Journey,
-) -> None:
-    """2º proceso concurrente: `locked:true` con ceros Y sin la menor escritura.
-
-    El padre RETIENE el candado (flock sobre el lock file del vault) mientras
-    un subproceso invoca `refresh_blocking()`: el reporte es cero y el snapshot
-    byte a byte de TODO `.tepochcalli/db/` (LanceDB + estado del engine + lock
-    file) antes/después demuestra que no se escribió nada.
-    """
-    vault = journey.vault
-    assert flow_app.LOCK_RELPATH.parts[:2] == (".tepochcalli", "db"), (
-        "el candado vive bajo .tepochcalli/db/ (gitignored; D14/T2)"
-    )
-    lock_fd = flow_app._acquire_refresh_lock(vault)
-    assert lock_fd is not None, "el vault no tiene el candado retenido aún"
-    try:
-        db_snapshot = _tree_snapshot(vault / ".tepochcalli" / "db")
-        rows_before = _read_all_rows(vault)
-        proc = subprocess.run(
-            [sys.executable, "-c", LOCKED_SCRIPT, str(vault)],
-            env={**os.environ, flow_app.VAULT_ROOT_ENV: str(vault)},
-            capture_output=True,
-            text=True,
-            timeout=600,
-            check=False,
-        )
-    finally:
-        flow_app._release_refresh_lock(lock_fd)
-
-    assert proc.returncode == 0, f"la invocación concurrente falló:\n{proc.stderr}"
-    report = json.loads(proc.stdout.strip().splitlines()[-1])["report"]
-    assert (report["scanned"], report["indexed"], report["skipped"]) == (0, 0, 0)
-    assert report["locked"] is True
-    assert report["elapsed_ms"] >= 0
-    assert set(report) == set(REPORT_FIELDS), "el reporte bloqueado lleva el contrato completo"
-    assert _tree_snapshot(vault / ".tepochcalli" / "db") == db_snapshot, (
-        "la invocación bloqueada NO debe escribir ni un byte"
-    )
-    assert _read_all_rows(vault) == rows_before, (
-        "las filas deben quedar idénticas tras la invocación bloqueada"
-    )
 
 
 # --- higiene del payload --------------------------------------------------------

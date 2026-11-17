@@ -31,11 +31,13 @@ Qué mide este módulo y por qué así:
   (la prosa adicional del agente no se cuenta aquí): el margen que queda
   hasta 2000 se publica en tokens y lo convierte en frases extra
   `test_the_guard_is_not_vacuous…`.
-* **Fixture adverso REUSADO**, no duplicado: `adversarial_vault` y `backend`
-  se importan del módulo de T7 (unicode, CJK, emoji, tablas, listas largas).
-  El índice se construye en subproceso y cuesta una indexación por módulo
-  (misma premisa que T7: el environment global de cocoindex no admite dos
-  vaults en el proceso padre).
+* **Fixture adverso COMPARTIDO**, no duplicado: `adversarial_vault` es el
+  fixture de SESIÓN del conftest de `integration/` (unicode, CJK, emoji,
+  tablas, listas largas) y `_backend_on` viene de T7. El índice se construye
+  en subproceso UNA vez por sesión y lo consumen T7 y este módulo (P0-1:
+  antes cada módulo indexaba el mismo vault — dos pasadas de ~50 s; misma
+  premisa que T7, el environment global de cocoindex no admite dos vaults en
+  el proceso padre, por eso TODO indexado corre en subproceso).
 * **Nada de latencia** (regla anti-flake T3): aquí solo se cuentan tokens.
 
 Hallazgo que este módulo deja por escrito (medido, no estimado):
@@ -64,18 +66,19 @@ from test_mcp_budget_adversarial import (
     EMOJI_LATIN_QUERY,
     GOLDEN_QUERY,
     PDF_QUERY,
-    _build_adversarial_vault,
 )
-from test_mcp_search import _backend_on, _search
+from test_mcp_search import IndexedVault, _backend_on, _search
 
 
 @pytest.fixture(scope="module")
-def backend(tmp_path_factory: pytest.TempPathFactory) -> Iterator[_VaultSearchBackend]:
-    """Backend real sobre el vault adverso — su builder y su `_backend_on` de T7, sin copiarlos.
+def backend(adversarial_vault: IndexedVault) -> Iterator[_VaultSearchBackend]:
+    """Backend real sobre el vault adverso COMPARTIDO de sesión — su `_backend_on` de T7.
 
-    Una indexación por módulo (el vault adverso completo se construye en subproceso).
+    El índice lo construye UNA vez por sesión el fixture `adversarial_vault`
+    del conftest de este directorio (P0-1): antes este módulo re-indexaba el
+    mismo vault adverso que T7 (~50 s duplicados).
     """
-    yield from _backend_on(_build_adversarial_vault(tmp_path_factory))
+    yield from _backend_on(adversarial_vault)
 
 
 EVIDENCE_ENV = "TEPOCHCALLI_TOKEN_EVIDENCE"
