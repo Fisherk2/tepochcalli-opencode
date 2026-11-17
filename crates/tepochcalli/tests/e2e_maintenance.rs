@@ -14,7 +14,7 @@ mod common;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use common::{FakeProc, RecordingProc, TapUi, UiEvent};
+use common::{gate_ok, seed_runtime, FakeProc, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::maintenance::{run_reindex, run_uninstall};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::CommandOutput;
@@ -39,24 +39,7 @@ fn installed_vault() -> tempfile::TempDir {
 /// drift `E_MODEL_MISMATCH` basta pedirlos distintos).
 fn installed_vault_with(config_model: &str, meta_model: &str) -> tempfile::TempDir {
     let vault = tmp();
-    let rt = vault.path().join(".tepochcalli");
-    for dir in ["config", "db", "models", "bin", "venv/bin"] {
-        std::fs::create_dir_all(rt.join(dir)).expect("runtime dir fixture");
-    }
-    std::fs::write(
-        rt.join("config").join("tepochcalli.toml"),
-        format!("[embedding]\nprovider = \"local\"\nmodel = \"{config_model}\"\n"),
-    )
-    .expect("config fixture");
-    std::fs::write(
-        rt.join("db").join("index-meta.json"),
-        format!("{{\"model\":\"{meta_model}\",\"dims\":384}}\n"),
-    )
-    .expect("index-meta fixture");
-    std::fs::write(rt.join("db").join("chunks.lance"), b"live-index-bytes")
-        .expect("live index fixture");
-    std::fs::write(rt.join("venv").join("bin").join("python"), b"fake-python")
-        .expect("venv python fixture");
+    seed_runtime(vault.path(), config_model, meta_model);
     // Ficheros del usuario: fuera de `.tepochcalli/`, intocables.
     std::fs::create_dir_all(vault.path().join("00-resources")).expect("resources fixture");
     std::fs::write(
@@ -79,16 +62,6 @@ fn installed_vault_with(config_model: &str, meta_model: &str) -> tempfile::TempD
     std::fs::write(vault.path().join(".obsidian").join("app.json"), "{}\n")
         .expect("obsidian fixture");
     vault
-}
-
-fn gate_ok(model: &str, dims: u32) -> Result<CommandOutput, WizardError> {
-    Ok(CommandOutput {
-        status: 0,
-        stdout: format!(
-            "{{\"ok\":true,\"model\":\"{model}\",\"dims\":{dims},\"rss_peak_bytes\":999}}"
-        ),
-        stderr: String::new(),
-    })
 }
 
 fn refresh_ok(scanned: u64, indexed: u64, skipped: u64) -> Result<CommandOutput, WizardError> {
@@ -237,7 +210,7 @@ fn reindex_explains_model_mismatch_then_rebuilds() {
     let vault = installed_vault_with(NEW_MODEL, OLD_MODEL);
     let ui = TapUi::new(vec![], vec![]);
     // Modelo distinto al del sidecar: gate (mide las dims nuevas) + refresh.
-    let proc = RecordingProc::scripted([gate_ok(NEW_MODEL, 1024), refresh_ok(2, 2, 0)]);
+    let proc = RecordingProc::scripted([gate_ok(NEW_MODEL, 1024, 999), refresh_ok(2, 2, 0)]);
 
     let report = run_reindex(&proc, &ui, vault.path()).expect("el drift se cura reindexando");
 

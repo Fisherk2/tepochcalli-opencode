@@ -13,7 +13,7 @@ mod common;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use common::{FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi};
+use common::{gate_ok, host_16gb, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi};
 use tepochcalli::application::embedder_menu::{Phase6Deps, EMBEDDER_PATHS};
 use tepochcalli::domain::{EmbedderChoice, WizardError};
 use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
@@ -54,20 +54,6 @@ fn materialize(vault: &Path, model: &str, revision: &str) {
         .join(format!("{}@{revision}", model.replace('/', "__")));
     std::fs::create_dir_all(&dir).expect("snapshot dir fixture");
     std::fs::write(dir.join("config.json"), b"{}").expect("snapshot file fixture");
-}
-
-fn host_16gb() -> FakeHost {
-    FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
-}
-
-fn gate_ok(model: &str, dims: u32, rss: u64) -> Result<CommandOutput, WizardError> {
-    Ok(CommandOutput {
-        status: 0,
-        stdout: format!(
-            "{{\"ok\":true,\"model\":\"{model}\",\"dims\":{dims},\"rss_peak_bytes\":{rss}}}"
-        ),
-        stderr: String::new(),
-    })
 }
 
 fn gate_invalid() -> Result<CommandOutput, WizardError> {

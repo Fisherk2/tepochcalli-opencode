@@ -11,7 +11,7 @@ mod common;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use common::{FakeHost, FakeHttp, FakeProc, FakeUiScript, ScriptedUi};
+use common::{host_16gb, FakeHost, FakeHttp, FakeProc, FakeUiScript, ScriptedUi};
 use tepochcalli::application::embedder_menu::Phase6Deps;
 use tepochcalli::application::installer::{
     check_prereqs_on, ensure_vault_dir, guard_offline_before_touch, is_phase_done, mark_phase_done,
@@ -31,10 +31,6 @@ fn write(path: &Path, body: &str) {
         std::fs::create_dir_all(parent).expect("fixture parents");
     }
     std::fs::write(path, body).expect("fixture write");
-}
-
-fn host_16gb() -> FakeHost {
-    FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
 }
 
 fn payload_tree(base: &Path) {

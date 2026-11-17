@@ -414,3 +414,55 @@ impl Ui for TapUi {
         });
     }
 }
+
+// --- Fixtures de vault instalado y del gate (T16/T17) ---
+
+/// Host estándar de swap/menú/atomicidad: 16 GiB RAM (total y disponible),
+/// 100 GiB libres y sin GPU.
+pub fn host_16gb() -> FakeHost {
+    FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
+}
+
+/// Núcleo de vault ya instalado (T16/T17): dirs del runtime, config local,
+/// sidecar de índice, índice vivo e intérprete del venv. El resto del
+/// fixture (caches HF, ficheros de usuario) queda en cada test.
+pub fn seed_runtime(vault: &Path, config_model: &str, meta_model: &str) {
+    let rt = vault.join(".tepochcalli");
+    for dir in ["config", "db", "models", "bin", "venv/bin"] {
+        std::fs::create_dir_all(rt.join(dir)).expect("runtime dir fixture");
+    }
+    std::fs::write(
+        rt.join("config").join("tepochcalli.toml"),
+        format!("[embedding]\nprovider = \"local\"\nmodel = \"{config_model}\"\n"),
+    )
+    .expect("config fixture");
+    std::fs::write(
+        rt.join("db").join("index-meta.json"),
+        format!("{{\"model\":\"{meta_model}\",\"dims\":384}}\n"),
+    )
+    .expect("index-meta fixture");
+    std::fs::write(rt.join("db").join("chunks.lance"), b"live-index-bytes")
+        .expect("live index fixture");
+    std::fs::write(rt.join("venv").join("bin").join("python"), b"fake-python")
+        .expect("venv python fixture");
+}
+
+/// Salida OK del gate test-embed (contrato T12). El `rss` es `Option`:
+/// el parse de producción admite su ausencia y el fixture puede omitirlo
+/// (`None`); un `u64` directo sigue valiendo para los fixtures con medida.
+pub fn gate_ok(
+    model: &str,
+    dims: u32,
+    rss: impl Into<Option<u64>>,
+) -> Result<CommandOutput, WizardError> {
+    let mut stdout = format!("{{\"ok\":true,\"model\":\"{model}\",\"dims\":{dims}");
+    if let Some(rss) = rss.into() {
+        stdout.push_str(&format!(",\"rss_peak_bytes\":{rss}"));
+    }
+    stdout.push('}');
+    Ok(CommandOutput {
+        status: 0,
+        stdout,
+        stderr: String::new(),
+    })
+}

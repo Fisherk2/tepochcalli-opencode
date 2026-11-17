@@ -14,7 +14,9 @@ use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 
-use common::{FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent};
+use common::{
+    gate_ok, host_16gb, seed_runtime, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent,
+};
 use tepochcalli::application::swap::{run_swap, SwapDeps, SwapOptions};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
@@ -42,22 +44,8 @@ fn installed_vault() -> tempfile::TempDir {
 
 fn installed_vault_with(old_model: &str, extra_cached: &[&str]) -> tempfile::TempDir {
     let vault = tmp();
+    seed_runtime(vault.path(), old_model, old_model);
     let rt = vault.path().join(".tepochcalli");
-    std::fs::create_dir_all(rt.join("config")).expect("config dir fixture");
-    std::fs::create_dir_all(rt.join("db")).expect("db dir fixture");
-    std::fs::create_dir_all(rt.join("models")).expect("models dir fixture");
-    std::fs::write(
-        rt.join("config").join("tepochcalli.toml"),
-        format!("[embedding]\nprovider = \"local\"\nmodel = \"{old_model}\"\n"),
-    )
-    .expect("config fixture");
-    std::fs::write(
-        rt.join("db").join("index-meta.json"),
-        format!("{{\"model\":\"{old_model}\",\"dims\":384}}\n"),
-    )
-    .expect("index-meta fixture");
-    std::fs::write(rt.join("db").join("chunks.lance"), b"live-index-bytes")
-        .expect("live index fixture");
     let mut cached = vec![old_model];
     cached.extend_from_slice(extra_cached);
     for model in cached {
@@ -83,9 +71,6 @@ fn installed_vault_with(old_model: &str, extra_cached: &[&str]) -> tempfile::Tem
         .join("marker");
     std::fs::create_dir_all(other.parent().expect("other parent")).expect("other dir fixture");
     std::fs::write(&other, b"other-model-cache-bytes").expect("other cache fixture");
-    let python = rt.join("venv").join("bin").join("python");
-    std::fs::create_dir_all(python.parent().expect("venv bin parent")).expect("venv fixture dir");
-    std::fs::write(&python, b"fake-python").expect("venv python fixture");
     vault
 }
 
@@ -187,26 +172,12 @@ fn assert_survivors_intact(vault: &Path, old_model: &str, new_model: &str) {
     );
 }
 
-fn gate_ok(model: &str, dims: u32, rss: u64) -> Result<CommandOutput, WizardError> {
-    Ok(CommandOutput {
-        status: 0,
-        stdout: format!(
-            "{{\"ok\":true,\"model\":\"{model}\",\"dims\":{dims},\"rss_peak_bytes\":{rss}}}"
-        ),
-        stderr: String::new(),
-    })
-}
-
 fn refresh_ok(indexed: u64) -> Result<CommandOutput, WizardError> {
     Ok(CommandOutput {
         status: 0,
         stdout: format!("{{\"scanned\":2,\"indexed\":{indexed},\"skipped\":0,\"elapsed_ms\":9}}"),
         stderr: String::new(),
     })
-}
-
-fn host_16gb() -> FakeHost {
-    FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
 }
 
 fn empty_http() -> FakeHttp {
