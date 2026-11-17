@@ -19,6 +19,8 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 from typing import Protocol
 
+from tepochcalli_flow.citation import RESOURCES_DIR
+
 from tepochcalli_mcp import errors, formats, paths, summary, writer
 
 
@@ -47,6 +49,20 @@ class BytesConvert(Protocol):
     ) -> str:
         """Markdown de los bytes en contexto (`BytesIO` + `StreamInfo`)."""
         ...
+
+
+def destination_path(output_path: str | None, slug: str, suffix: str) -> str:
+    """Destino pedido o `00-resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
+
+    El alternativo ante colisión solo se **propone** en el error de
+    `writer.write_atomic`: renombrar solo rompería la idempotencia. El slug y
+    el sufijo los calcula cada handler — la identidad de la fuente difiere
+    por tool (`path` pedido vs `filename`/`base64-<digest>`).
+    """
+    candidate = (
+        Path(output_path) if output_path is not None else Path(RESOURCES_DIR) / (slug + suffix)
+    )
+    return str(candidate.with_suffix(suffix))
 
 
 async def write_converted(

@@ -37,10 +37,8 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from tepochcalli_flow.citation import RESOURCES_DIR
-
 from tepochcalli_mcp import errors, formats, paths
-from tepochcalli_mcp.tools._convert_tail import LocalConvert, write_converted
+from tepochcalli_mcp.tools._convert_tail import LocalConvert, destination_path, write_converted
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +69,9 @@ async def convert_document(
         hint = formats.normalize_suffix(format) if format else None
         suffix = _destination_suffix(hint, source)
         target = paths.validate_vault_path(
-            _destination(path, output_path, suffix), root, must_exist=False
+            destination_path(output_path, paths.slugify_uri(path), suffix),
+            root,
+            must_exist=False,
         )
     except paths.VaultPathError as exc:
         return errors.validation_error(str(exc), exc.details)
@@ -103,17 +103,3 @@ def _destination_suffix(hint: str | None, source: Path) -> str:
             {"formats": list(formats.SUPPORTED_FORMATS)},
         )
     return hint or ".md"
-
-
-def _destination(path: str, output_path: str | None, suffix: str) -> str:
-    """Destino pedido o `00-resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
-
-    El alternativo ante colisión solo se **propone** en el error de
-    `writer.write_atomic`: renombrar solo rompería la idempotencia.
-    """
-    candidate = (
-        Path(output_path)
-        if output_path is not None
-        else Path(RESOURCES_DIR) / (paths.slugify_uri(path) + suffix)
-    )
-    return str(candidate.with_suffix(suffix))

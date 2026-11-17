@@ -40,10 +40,8 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Final
 
-from tepochcalli_flow.citation import RESOURCES_DIR
-
 from tepochcalli_mcp import errors, formats, paths
-from tepochcalli_mcp.tools._convert_tail import BytesConvert, write_converted
+from tepochcalli_mcp.tools._convert_tail import BytesConvert, destination_path, write_converted
 
 logger = logging.getLogger(__name__)
 
@@ -79,8 +77,12 @@ async def convert_base64(
         raw = _decode(data)
         digest = hashlib.sha256(raw).hexdigest()[:8]
         source_uri = filename or f"base64:{digest}"
+        # Sin `filename`, el slug sale de la MISMA identidad que `source_uri`
+        # (`base64-<sha256-8>`): reintentar escribe en el mismo destino y la
+        # idempotencia de D66 aplica.
+        slug = paths.slugify_uri(filename) if filename else f"base64-{digest}"
         target = paths.validate_vault_path(
-            _destination(output_path, filename, digest, extension if format else ".md"),
+            destination_path(output_path, slug, extension if format else ".md"),
             root,
             must_exist=False,
         )
@@ -137,18 +139,3 @@ def _decode(data: str) -> bytes:
         return base64.b64decode(data, validate=True)
     except (binascii.Error, ValueError) as exc:
         raise paths.VaultPathError(f"base64 inválido en `data`: {exc}", {"field": "data"}) from None
-
-
-def _destination(output_path: str | None, filename: str | None, digest: str, suffix: str) -> str:
-    """Destino pedido o `00-resources/<slug><suffix>`; sin auto-renombrado (D37/D66).
-
-    Sin `filename`, el slug sale de la MISMA identidad que `source_uri`
-    (`base64-<sha256-8>`): reintentar escribe en el mismo destino y la
-    idempotencia de D66 aplica. El alternativo ante colisión solo se **propone**
-    en el error de `writer.write_atomic`.
-    """
-    slug = paths.slugify_uri(filename) if filename else f"base64-{digest}"
-    candidate = (
-        Path(output_path) if output_path is not None else Path(RESOURCES_DIR) / (slug + suffix)
-    )
-    return str(candidate.with_suffix(suffix))
