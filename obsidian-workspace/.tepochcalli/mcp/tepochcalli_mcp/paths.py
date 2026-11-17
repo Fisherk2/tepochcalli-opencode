@@ -32,6 +32,12 @@ disco, porque el `ValueError` de `walk_dir` del motor saldría como `INTERNAL`
 por una ruta mal escrita (D64). `validate_roots` aplica las mismas reglas a N
 raíces con fail-fast atómico (D65) y `vault_dirs` publica lo que sí existe
 (D67, reutilizado por `rag_status` en T8).
+
+Umbral (docs/CODE_STYLE.md): 545 líneas, tramo 501-700 justificable — el split
+de `validate` por entrada/destino (2026-11-17) añadió ~40 líneas de API por
+claridad; el corte natural a <500 (SSRF/`redact_uri` a `uri_guard.py`) está
+bloqueado: `test_mcp_convert_source_fetch.py` monkeypachea
+`paths._deny_internal_host` y moverlo rompería el fixture W-02.
 """
 
 from __future__ import annotations
