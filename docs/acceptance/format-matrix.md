@@ -138,4 +138,4 @@ TEPOCHCALLI_FORMAT_MATRIX_EVIDENCE="$PWD/docs/acceptance/format-matrix.json" \
   just python-test-file format_matrix        # ~2 min; sin la env var no escribe nada
 ```
 
-El test corre en la suite de módulo **mcp** (`just test-mcp`), sin marcadores `slow`/`heavy` y sin red.
+El test corre en la suite `just test-mcp-wire`, sin marcadores `slow`/`heavy` y sin red.

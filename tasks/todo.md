@@ -30,7 +30,7 @@
 - **`just coverage` solo en el cierre de fase** (T16): ~1 h de suite instrumentada y calienta el
   host hasta apagarlo. **No está en `just ci`** (decisión del dueño 2026-11-12): es una corrida
   local de desarrollo, no un gate. Por tarea basta `just quality`, la suite de su módulo
-  (`just test-mcp`/`test-engine`/`test-converter`) o la receta dirigida (`just python-test-unit`,
+  (`just test-mcp-tools`/`test-mcp-wire`/`test-engine`/`test-converter`) o la receta dirigida (`just python-test-unit`,
   `just python-test-file <patrón>`); la cobertura se reconcilia en T16.
 
 ## Leyenda
@@ -92,7 +92,7 @@
 - [x] `.md`/`.txt` **no** se trazan uno a uno (10 000 notas serían 10 000 líneas de ruido)
 - [x] Tests: `tests/unit/test_progress.py` (3) + `tests/integration/test_mcp_refresh_progress.py` (3) — **6 passed**
 - [x] **C y D no se abren** (ni límite de páginas ni caché de parseo); se reabre con ADR nuevo si hay quejas reales de latencia
-- Deps: T2 · Verificación: `just test-mcp` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
+- Deps: T2 · Verificación: `just test-mcp-tools` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
 
 ### [x] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
 
@@ -159,7 +159,7 @@
 - [x] Publicadas con n, tokenizador y método en `docs/TRD.md` §6
 - [x] Si el total excede 2000 ⇒ el contrato MCP **no se toca** (ADR-005): el ajuste es del techo del server, con decisión explícita del dueño
 - [x] Test e2e que **falla** si el total supera 2000 (guarda viva)
-- Deps: T0 · Verificación: `just test-mcp` verde
+- Deps: T0 · Verificación: `just test-mcp-tools` verde
 - **Hecho (2026-11-13):** medidor `tests/support/token_budget.py` (tokenizador **`cl100k_base` de `tiktoken 0.14.0`**, ya en el venv; `o200k_base` publicado al lado; fuente `github.com/openai/tiktoken`) + guarda viva `tests/integration/test_mcp_token_budget.py` (3 tests, fixture adverso **reusado** de T7, sin marcadores `slow`). **Cifras (n=7 caras, `top_k=5` y `top_k=20`):** (a) payload **1 600 por el estimador** del contrato y **1 789 reales**; (b) **total e2e 1 995 < 2 000** en el peor caso (query 7 + payload 1 789 + respuesta citada 199) y 1 675 en la dorada ⇒ **PASS**, con **5 tokens de margen** (`o200k`: 1 785). La respuesta se modela con el formato que prescribe el payload (`source_path » heading (chars x–y)`, una afirmación por resultado, `(sin heading)` en PDF). Sonda de sensibilidad: 2 frases/resultado ⇒ **2 023** (el guard no es vacío); RED archivado (ModuleNotFoundError primero, luego la aserción disparada). Hallazgo **F-T6-1**: el 1 600 es del estimador (envoltura JSON ≈190 tokens fuera de la fórmula + `chars/4` optimista en ES) — si el payload crece, la decisión (bajar el techo a ~1 500) es **del dueño**; contrato MCP intacto y sin dependencias nuevas. Evidencia: `docs/acceptance/token-budget.{md,json}` + TRD §6.2 + WORKFLOW §6.3
 
 ### [x] T7 — Criterio 5: citas precisas y re-verificación contra el archivo vivo (TD-13)

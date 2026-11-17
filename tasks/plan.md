@@ -311,7 +311,7 @@ respuesta del agente con sus citas. Esa cifra **nunca se ha medido con un tokeni
 - [ ] Si el total **excede** 2000 ⇒ el contrato MCP **no se toca** (ADR-005 congelado): el ajuste es del **techo del server** (p. ej. bajar 1600) y requiere decisión explícita del dueño + ADR si altera el contrato publicado. **Nunca** se maquilla la cifra recortando el corpus.
 - [ ] Test e2e que **falla** si el total supera 2000 con el fixture adverso (guarda viva, no un número en un doc).
 
-**Verificación:** el test corre en `just test-mcp` (es rápido) y la cifra publicada es reproducible.
+**Verificación:** el test corre en `just test-mcp-tools` y la cifra publicada es reproducible.
 
 **Dependencias:** T0 · **Scope:** M (test e2e + medidor + informe)
 

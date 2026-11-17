@@ -178,7 +178,7 @@ real (n = 7 caras, `top_k=5` y `top_k=20`):
   (`source_path » heading (chars x–y)`, una afirmación por resultado).
 * **Margen del peor caso: 5 tokens** ⇒ hallazgo **F-T6-1** (ver abajo). **El criterio se cumple**; el
   contrato MCP y el techo del server **no** se tocan.
-* La guarda es viva: `tests/integration/test_mcp_token_budget.py` corre en `just test-mcp` y se
+* La guarda es viva: `tests/integration/test_mcp_token_budget.py` corre en `just test-mcp-tools` y se
   pone roja si el total llega a 2 000 — con 2 frases por resultado da **2 023** (sonda de
   sensibilidad). Las consultas con error se cuentan (query incluida), nunca se descartan.
 

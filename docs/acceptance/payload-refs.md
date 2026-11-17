@@ -183,7 +183,7 @@ Observaciones de coherencia (sin hallazgo):
 
 ## 5. Verificador reutilizable
 
-`tests/e2e/verify_payload_refs.py` (188 líneas, stdlib) — no es un `test_*`, así que las suites de módulo (`just test-mcp` / `test-engine` / `test-converter`) no lo recolectan;
+`tests/e2e/verify_payload_refs.py` (188 líneas, stdlib) — no es un `test_*`, así que las suites de módulo (`just test-mcp-tools`/`test-mcp-wire` / `test-engine` / `test-converter`) no lo recolectan;
 es un verificador CLI con el mismo patrón que `tests/e2e/verify_payload_install.py`.
 
 ```text

@@ -113,7 +113,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * El portero de comandos es el Justfile (raíz): **lanzar comandos vía recetas `just`, nunca
   crudos** — `just typecheck` es el gate mypy strict sobre `flow/`, `just quality` el gate
   táctico, y `just ci` el gate completo (python-sync → lint → fmt-check → typecheck → suites de
-  módulo `test-mcp`/`test-engine`/`test-converter` → bench-smoke → rust-ci). La cobertura
+  módulo `test-mcp-tools`/`test-mcp-wire`/`test-engine`/`test-converter` → bench-smoke → rust-ci). La cobertura
   (`just coverage`, `fail_under = 95` sobre `flow` + `mcp`) es una **medición local** que no está
   en `ci` y se corre al cierre de fase.
   Las recetas `python-*` / `rust-*` tocan un solo lenguaje; las unprefixed reparten a ambos.

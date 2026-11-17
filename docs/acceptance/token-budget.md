@@ -108,7 +108,7 @@ TEPOCHCALLI_TOKEN_EVIDENCE="$PWD/docs/acceptance/token-budget.json" just python-
 ```
 
 El mismo comando **sin** la variable de entorno ejecuta el test y no escribe nada (es lo que corre la
-suite de módulo `just test-mcp`).
+suite `just test-mcp-tools`).
 
 ## 5. Las dos cifras, sin confundirlas
 
@@ -116,7 +116,7 @@ suite de módulo `just test-mcp`).
 | --- | --- | --- | --- |
 | **(a)** | payload del server **≤ 1600** | 1 600 por el **estimador** `chars/4 + 25` (`budget.apply_budget`, `PAYLOAD_TOKEN_CEILING`) | invariante del contrato, asertado por `test_mcp_budget_adversarial.py` (T7) en las 6 caras |
 | (a′) | el mismo payload con **tokenizador real** | hasta **1 789** (`cl100k`) | medido aquí; **no** es una cota del contrato |
-| **(b)** | **total e2e < 2000** | **1 995** peor caso / 1 675 caso dorado (`cl100k`); 1 801 / 1 536 (`o200k`) | este test, en la suite de módulo `just test-mcp` |
+| **(b)** | **total e2e < 2000** | **1 995** peor caso / 1 675 caso dorado (`cl100k`); 1 801 / 1 536 (`o200k`) | este test, en la suite `just test-mcp-tools` |
 
 ### Hallazgo F-T6-1 — «1600» es del estimador, no del tokenizador: el margen real son 5 tokens
 
@@ -155,7 +155,7 @@ Elegir qué se cuenta es donde un presupuesto se maquilla. Reglas de este medido
 ## 7. Guarda viva en la suite
 
 `tests/integration/test_mcp_token_budget.py` (sin marcadores `slow`/`heavy`, sin aserciones de
-reloj) — corre en `just test-mcp`:
+reloj) — corre en `just test-mcp-tools`:
 
 | Test | Qué afirma |
 | --- | --- |
