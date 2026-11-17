@@ -69,22 +69,35 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 * **`just coverage` NO está en `ci` y SOLO se corre al cierre de fase.** Es la medición más cara
   del repo (medido **50m46s / 97 %** el 2026-11-16 con `-n 3`: suite completa más instrumentación
   de subprocesos) y calienta el host. Decisión del dueño (2026-11-12): es una **corrida local de
-  desarrollo**, no un gate
-  — se ejecuta **una vez** en el cierre de cada fase (FTR/T16), **nunca por tarea, calpulli ni
-  commit**. Para el trabajo diario: `just quality` (lint + fmt-check + typecheck + test) o la
-  receta dirigida (`just python-test-unit`, `just python-test-file <patrón>`); si el cambio toca
-  `flow/` o `mcp/`, `just python-test`. `just ci` = `quality` + `python-sync` + `bench-smoke` +
-  `rust-ci`, sin cobertura: ese es el gate que se puede correr siempre.
-* **Dos reglas exigentes del dueño (2026-11-16):** la **suite completa ≤ 5 min** (300 s) y el
-  **coverage < 30 min**, independientemente del porcentaje de cobertura. Estado medido el
-  2026-11-16 con `pytest-xdist -n 3 --dist loadfile`: suite **27:53** (914 tests; serial 45:25),
-  coverage **50m46s / 97 %** ⇒ **ambas INCUMPLIDAS**. No se maquillan ni se demuecionan tests a
-  `slow` para cumplirlas: `just suite-budget` las mide y **falla** mientras sigan así.
-* **Suite diaria vs cierre (medido 2026-11-16).** `just python-test`: **914 tests / 27:53–36:58**
-  con `-n 3` (serial: 45:25 el mismo día); `just python-test-unit`: **702 / 76 s**. El coste está
-  repartido por integración/e2e, no
-  concentrado en un subconjunto, así que marcar tests no paga: para iterar usa
-  `python-test-unit` o `python-test-file <patrón>`, y deja la suite completa para el gate.
+  desarrollo**, no un gate — se ejecuta **una vez** en el cierre de cada fase (FTR/T16), **nunca
+  por tarea, calpulli ni commit**.
+* **Reglas de tiempo del dueño (esquema 2026-11-17, reemplaza al de 2026-11-16):**
+  1. **Suites de desarrollo por módulo** — `just test-mcp`, `just test-engine`,
+     `just test-converter` — **≤ 10 min (600 s)** cada una; solo **informan** su tiempo al
+     terminar, sin gate que falle. Corren solo los tests de su módulo (listas explícitas en el
+     `Justfile`, no globs: `test_mcp_*.py` arrastraría el conversor).
+  2. **La suite COMPLETA solo corre al cierre de fase**, vía `just coverage`;
+     `python-test-durations` es su auditoría de lentitud, también de cierre.
+  3. **`just coverage` < 30 min** — medido **50m46s / 97 %** el 2026-11-16 con `-n 3` ⇒
+     **INCUMPLIDA**, sin maquillar.
+  El gate de presupuesto de duración de 5 min (regla del dueño 2026-11-16) se **retiró**: su regla
+  fue reemplazada por la de ≤10 min de las suites de módulo.
+* **Qué corre cada gate (medido 2026-11-16/17).** `just quality` = lint + fmt-check + typecheck +
+  **unit** (`python-test-unit`: 702 tests / **52–76 s**) — el gate rápido de iteración. `just ci` =
+  eso + `python-sync` + las **3 suites de módulo** + **`test-acceptance`** (10 tests: la guarda
+  del criterio 6 en `tests/support/` y el verificador T14, que no pertenecen a ningún módulo;
+  **4 s**) + `bench-smoke` + `rust-ci` (323 tests), **sin cobertura**: es el gate que se puede
+  correr siempre; con `quality` suman los 914 tests de la suite completa (**20:58–36:58** con
+  `pytest-xdist -n 3`).
+* **Tiempos medidos de las suites de módulo (2026-11-17) — las tres primeras POR ENCIMA del
+  tope informativo de 10 min:** `test-mcp` **23:17** (109 tests) · `test-engine` **13:53** (80) ·
+  `test-converter` **1:06** (12) · `test-acceptance` **4 s** (10). Causa: el balance de
+  `--dist loadfile` con **pocos ficheros pesados** (los `setup` de índice cuestan 100-155 s
+  cada uno), no un test lento — en la suite completa hay 60+ ficheros para repartir entre 3
+  workers, y por eso un módulo puede tardar **más** que la suite entera. Deuda
+  **TD-38** en `docs/TECH_DEBT.md`. Para un test suelto: `python-test-file <patrón>`. El coste está repartido por
+  integración/e2e, no concentrado en un subconjunto, así que **marcar tests no paga**: usa las
+  suites de módulo, no el marcador `slow`.
 * **Si la ejecución se cancela abruptamente, trocea**: prefiere `python-test-unit` o `python-test-file` a la
   suite entera, y no lances `coverage` fuera del cierre de fase.
 
@@ -95,9 +108,10 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   `.tepochcalli/flow/` y `.tepochcalli/mcp/`; nada de lógica de negocio en `opencode.json`.
 * El portero de comandos es el Justfile (raíz): **lanzar comandos vía recetas `just`, nunca
   crudos** — `just typecheck` es el gate mypy strict sobre `flow/`, `just quality` el gate
-  táctico, y `just ci` el gate completo (python-sync → lint → fmt-check → typecheck → test →
-  bench-smoke → rust-ci). La cobertura (`just coverage`, `fail_under = 95` sobre `flow` + `mcp`)
-  es una **medición local** que no está en `ci` y se corre al cierre de fase.
+  táctico, y `just ci` el gate completo (python-sync → lint → fmt-check → typecheck → suites de
+  módulo `test-mcp`/`test-engine`/`test-converter` → bench-smoke → rust-ci). La cobertura
+  (`just coverage`, `fail_under = 95` sobre `flow` + `mcp`) es una **medición local** que no está
+  en `ci` y se corre al cierre de fase.
   Las recetas `python-*` / `rust-*` tocan un solo lenguaje; las unprefixed reparten a ambos.
 * Rust (wizard): `cargo fmt` + `cargo clippy -D warnings`; fases del instalador como
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).

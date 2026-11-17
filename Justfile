@@ -10,13 +10,14 @@
 # día y coinciden con `.github/workflows/` (que tampoco la ejecuta). GitHub
 # Actions nunca ha corrido en este repo (M6).
 #
-# REGLAS EXIGENTES DEL DUEÑO (2026-11-16):
-#   1. La suite completa (cualquier lenguaje) dura ≤ 5 min.
-#   2. `just coverage` dura < 30 min.
-# Escritas por orden del dueño. El gate automático que las hace fallar NO
-# existe aún: lo añade el orquestador en el paso siguiente con la cifra medida
-# de 2026-11-16 (suite 27:53 con pytest-xdist -n 3; coverage 50m46s / 97 % ⇒
-# la regla 2 todavía NO se cumple — medido honesto, sin maquillar).
+# REGLAS DEL DUEÑO (esquema 2026-11-17; reemplaza al de 2026-11-16):
+#   1. Suites de DESARROLLO por módulo (`test-mcp`/`test-engine`/`test-converter`)
+#      ≤ 10 min (600 s): solo INFORMAN su tiempo, sin gate que falle.
+#   2. La suite COMPLETA solo corre al cierre de fase, vía `just coverage`.
+#   3. `just coverage` dura < 30 min.
+# Medido 2026-11-16 con pytest-xdist -n 3: suite completa 20:58 (914 tests),
+# coverage 50m46s / 97 % ⇒ la regla 3 todavía NO se cumple (sin maquillar).
+# El gate `suite-budget` (regla de 5 min) se retiró: su regla fue reemplazada.
 #
 # Se exporta UV_PROJECT_ENVIRONMENT=venv porque uv 0.12.9 ignora la clave
 # `[tool.uv] project-environment` del pyproject.toml: la única forma de que uv
@@ -86,12 +87,90 @@ python-fmt-check:
 python-typecheck:
     cd {{flow_dir}} && uv run python -m mypy
 
-# Suite de corrección: pytest -m "not slow" (el mismo filtro que usa CI).
-# Medido 2026-11-16: 914 tests en 27:53–36:58 con pytest-xdist -n 3 (misma
-# suite en serial: 45:25 el mismo día). Para iterar: `python-test-unit` /
-# `python-test-file`.
-python-test:
-    cd {{flow_dir}} && uv run python -m pytest -m "not slow"
+# --- Suites por módulo (esquema del dueño 2026-11-17) ---
+# Cada receta corre SOLO los tests de su módulo e INFORMA su tiempo: la regla es
+# ≤ 10 min (600 s) por suite de desarrollo, sin gate que falle. La suite COMPLETA
+# solo corre al cierre de fase, vía `just coverage`.
+# `-c pyproject.toml` es OBLIGATORIO: con args posicionales pytest no lee el
+# pyproject del vault y se perderían `-n 3` y `-m "not slow"` (medido 2026-11-16).
+# Listas EXPLÍCITAS, no globs: `test_mcp_*.py` arrastraría los tests del
+# conversor, que pertenecen a otro módulo.
+# Sin `set -e`: el tiempo se informa aunque la suite salga en rojo, y el exit
+# code se propaga igual.
+
+# mcp: contrato wire y tools del servidor (los handlers unit están en
+# `python-test-unit`).
+test-mcp:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    start="$(date +%s)"
+    status=0
+    cd {{flow_dir}} && uv run python -m pytest -c pyproject.toml \
+        ../../tests/integration/test_mcp_add_source.py \
+        ../../tests/integration/test_mcp_budget_adversarial.py \
+        ../../tests/integration/test_mcp_rag_status.py \
+        ../../tests/integration/test_mcp_refresh.py \
+        ../../tests/integration/test_mcp_refresh_progress.py \
+        ../../tests/integration/test_mcp_search.py \
+        ../../tests/integration/test_mcp_server.py \
+        ../../tests/integration/test_mcp_token_budget.py \
+        ../../tests/e2e/test_mcp_contract.py \
+        ../../tests/e2e/test_mcp_journey.py \
+        ../../tests/e2e/test_mcp_transversal.py \
+        ../../tests/e2e/test_format_matrix.py || status=$?
+    echo "test-mcp: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
+    exit "${status}"
+
+# engine: el motor RAG — walk, indexación, Δ, lectura, verify y relevancia.
+test-engine:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    start="$(date +%s)"
+    status=0
+    cd {{flow_dir}} && uv run python -m pytest -c pyproject.toml \
+        ../../tests/integration/test_app_wiring.py \
+        ../../tests/integration/test_change_detection.py \
+        ../../tests/integration/test_delta.py \
+        ../../tests/integration/test_documents.py \
+        ../../tests/integration/test_model_snapshot.py \
+        ../../tests/integration/test_multi_root_e2e.py \
+        ../../tests/integration/test_pdf.py \
+        ../../tests/integration/test_pipeline_integration.py \
+        ../../tests/integration/test_read_port.py \
+        ../../tests/integration/test_search_relevance.py \
+        ../../tests/integration/test_verify_spot_check.py || status=$?
+    echo "test-engine: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
+    exit "${status}"
+
+# converter: markitdown en proceso — las 3 tools del conversor + su contract e2e.
+test-converter:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    start="$(date +%s)"
+    status=0
+    cd {{flow_dir}} && uv run python -m pytest -c pyproject.toml \
+        ../../tests/integration/test_mcp_convert_base64.py \
+        ../../tests/integration/test_mcp_convert_document.py \
+        ../../tests/integration/test_mcp_list_formats.py \
+        ../../tests/e2e/test_mcp_conversor_contract.py || status=$?
+    echo "test-converter: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
+    exit "${status}"
+
+# Aceptación: los tests que NO pertenecen a ningún módulo — la guarda del
+# criterio 6 (`support/test_corpus_manifest.py`, 5 tests) y el verificador T14
+# (`e2e/test_methodology_evidence.py`, 5 tests). Sin esta receta `ci` saldría
+# verde sin esas dos guardas: brecha detectada al medir los módulos (2026-11-17).
+# Fuera de `ci` siguen solo los 3 tests marcados `slow` (`python-test-slow`).
+test-acceptance:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    start="$(date +%s)"
+    status=0
+    cd {{flow_dir}} && uv run python -m pytest -c pyproject.toml \
+        ../../tests/support/test_corpus_manifest.py \
+        ../../tests/e2e/test_methodology_evidence.py || status=$?
+    echo "test-acceptance: $(( $(date +%s) - start ))s (límite de desarrollo 600s)"
+    exit "${status}"
 
 # Solo tests unitarios: iteración rápida sin integración ni e2e.
 # `-c pyproject.toml` porque con un arg POSICIONAL (`../../tests/unit`) pytest
@@ -109,37 +188,13 @@ python-test-slow:
 python-test-file name:
     cd {{flow_dir}} && uv run python -m pytest -k "{{name}}"
 
-# Duraciones top-40 de la suite CORRECCION (misma suite que `python-test` con
-# `--durations=40 -q`): auditoría de lentitud para la regla "suite completa
-# ≤5 min" del dueño (2026-11-16) — ver qué tests se comen el tiempo.
-# Medición local de desarrollo; NO está en `ci` ni en `quality`.
+# Duraciones top-40 de la suite COMPLETA (`--durations=40 -q`): auditoría de
+# lentitud para la regla "suites de módulo ≤10 min" del dueño (2026-11-17).
+# Corre TODO el repo ⇒ es una medición de CIERRE DE FASE, no del día a día
+# (para el día a día están `test-mcp`/`test-engine`/`test-converter`).
+# NO está en `ci` ni en `quality`.
 python-test-durations *args:
     cd {{flow_dir}} && uv run python -m pytest -m "not slow" --durations=40 -q {{args}}
-
-# Gate de presupuesto de tiempo (regla exigente del dueño 2026-11-16): corre la
-# suite COMPLETA y FALLA si supera los 300 s (5 min). Es el enforcement de la
-# regla, no un comentario: mide, imprime la cifra y sale con 1 si se pasa.
-# Cablearlo a `quality`/`ci` es decisión del hoy — hoy dejaría el gate en rojo
-# (medido 27:53 el 2026-11-16), así que vive como receta propia.
-suite-budget:
-    #!/usr/bin/env bash
-    # Sin `set -e` a propósito: un test en rojo NO debe cortar antes de imprimir
-    # la cifra de presupuesto — es el dato que esta receta existe para dar.
-    set -uo pipefail
-    start="$(date +%s)"
-    status=0
-    cd {{flow_dir}} && uv run python -m pytest -m "not slow" -q || status=$?
-    elapsed="$(( $(date +%s) - start ))"
-    echo "suite-budget: ${elapsed}s de presupuesto 300s (regla del dueño 2026-11-16)"
-    if [ "${status}" -ne 0 ]; then
-        echo "FAIL: la suite está en rojo (exit ${status}); el presupuesto no se evalúa sobre una suite roja" >&2
-        exit "${status}"
-    fi
-    if [ "${elapsed}" -gt 300 ]; then
-        echo "FAIL: la suite completa excede el presupuesto de 300 s" >&2
-        exit 1
-    fi
-    echo "PASS: la suite cabe en el presupuesto"
 
 # Cobertura real con subprocesos (refresh/verify corren en hijos): gate >=95 %.
 # Medido 2026-11-16: 50m46s, 97 % (regla 2 del dueño: <30 min — aún no cumplida).
@@ -324,8 +379,9 @@ fmt-check: python-fmt-check rust-fmt
 # Gate de tipos Python. El de Rust es `rust-lint`: clippy compila todo con `-D warnings`.
 typecheck: python-typecheck
 
-# Tests rápidos de ambos lenguajes.
-test: python-test rust-test
+# Tests rápidos de ambos lenguajes: se sustituyó por las suites por módulo
+# (`test-mcp`/`test-engine`/`test-converter`) + `python-test-unit` (2026-11-17).
+# El alias `test` desapareció con `python-test`: ver cabecera del Justfile.
 
 # Solo unitarios Python: Rust no tiene split unit/integración a este nivel.
 test-unit: python-test-unit
@@ -360,19 +416,27 @@ bench-scale-ratio args="": (python-bench-scale-ratio args)
 md-lint:
     npx --yes markdownlint-cli2 docs specs AGENTS.md SPEC.md
 
-# Gate local: lint → fmt-check → typecheck → test (corta en el primer fallo).
+# Gate local: lint → fmt-check → typecheck → unit (corta en el primer fallo).
 # Cubre los dos lenguajes (Python + wizard Rust): no hay gate parcial de un solo lado.
-quality: lint fmt-check typecheck test
+# La suite de integración/e2e NO entra aquí: es de 76 s de unit para iterar;
+# el módulo que toque se corre aparte (`just test-mcp`, etc.) y la suite
+# completa, al cierre de fase con `coverage` (regla del dueño 2026-11-17).
+quality: lint fmt-check typecheck python-test-unit
 
-# Espejo local del gate de integración: sync → lint → fmt-check → typecheck →
-# test → smoke → rust-ci. La COBERTURA no entra (decisión del dueño 2026-11-12):
-# `just coverage` corre la misma suite instrumentada (50m46s y 97 % medidos el
-# 2026-11-16 con pytest-xdist -n 3 — fuera aún de la regla <30 min del dueño),
-# subprocesos incluidos; es una medición local que se hace al cierre de fase,
-# no en cada gate. `test` y `ci` son por tanto el mismo conjunto que ejecuta CI.
+# Espejo local del gate de integración: sync → quality (lint → fmt-check →
+# typecheck → **unit**) → las 3 suites de módulo → smoke → rust-ci.
+# `quality` entra como dependencia y NO como lista suelta: así el unit no se
+# puede olvidar al cambiar la composición (fallo que tuvo esta receta el
+# 2026-11-17, detectado por la revisión de docs).
+# La COBERTURA no entra (decisión del dueño 2026-11-12): `just coverage` corre la
+# misma suite instrumentada (50m46s y 97 % medidos el 2026-11-16 con pytest-xdist
+# -n 3 — fuera aún de la regla <30 min del dueño), subprocesos incluidos; es una
+# medición local que se hace al cierre de fase, no en cada gate.
 # Rust no tiene coverage: su lado corre `rust-ci` (= fmt + clippy + test).
-# Gate de integración completo: Python (sync…bench-smoke) + rust-ci.
-ci: python-sync lint fmt-check typecheck test bench-smoke rust-ci
+# Las 3 suites de módulo cubren TODO integración/e2e salvo la aceptación (10
+# tests); con el unit de `quality` y `test-acceptance` suman los 914 tests de la
+# suite completa, sin invocarla de golpe.
+ci: python-sync quality test-mcp test-engine test-converter test-acceptance bench-smoke rust-ci
 
 # Cualquier `.venv` accidental lo crea un `uv` invocado a mano sin
 # UV_PROJECT_ENVIRONMENT. No toca fuentes ni `venv/`.
