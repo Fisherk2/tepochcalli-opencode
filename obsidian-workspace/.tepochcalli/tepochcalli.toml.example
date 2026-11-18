@@ -12,10 +12,13 @@
 [embedding]
 provider = "local"            # local | litellm
 model = "paraphrase-multilingual-MiniLM-L12-v2"
-device = "cpu"                # device explícito para SentenceTransformerEmbedder(..., device=...); sobre-escribible por el usuario (ADR-008)
+device = "cpu"                # Solo provider="local": SentenceTransformer(..., device=). Opciones: "cpu" | "cuda" | "cuda:N" (p. ej. "cuda:0") | "mps" | "auto" (delega la detección). Valores de PyTorch/sentence-transformers: el loader no los valida; sin soporte falla al cargar el modelo, no al configurar.
 # provider = "litellm"
-# model = "openai/text-embedding-3-small"
-# api_key_env = "TEPOCHCALLI_EMBED_API_KEY"
+# model = "openai/text-embedding-3-small"   # el prefijo antes de "/" es el proveedor (openai/, cohere/, voyage/, ollama/...); NO es una URL: el loader rechaza "://", "http" y "@"
+# api_key_env = "TEPOCHCALLI_EMBED_API_KEY"  # NOMBRE de la variable de entorno; gana sobre api_key
+# api_key = "sk-..."                         # clave literal alternativa (la escribe el wizard; el fichero real está en .gitignore)
+# No hay campo de endpoint en este TOML: LiteLLM usa el default del proveedor (openai/ → https://api.openai.com/v1).
+# Endpoint custom (Ollama/vLLM/proxy): declarar OPENAI_BASE_URL u OLLAMA_API_BASE en opencode.json → mcp.servers["tepochcalli-rag"].environment. No va en el TOML.
 
 [chunking]
 max_chunk_size = 1536         # unidad: BYTES, no chars (el splitter mide bytes) — ver F4, spec-rag-engine.md §Chunking
