@@ -278,7 +278,7 @@ Como usuario quiero que el wizard me muestre la versión que gestiona, el estado
 
 Como usuario quiero instalar limpiamente el payload en mi workspace de Obsidian destino.
 
-- Tras confirmar el directorio destino, pasar por la fase de instalación del modelo embedding con las opciones ya establecidas (ver H9).
+- Tras confirmar el directorio destino, pasar por la fase de instalación del modelo embedding con las opciones ya establecidas (ver H9), aplicando la extracción de requisitos, la detección de hardware y la advertencia de H9 antes de continuar.
 - Mensaje de confirmación de qué se instala y dónde, incluyendo el runtime `.tepochcalli/` con el motor `cocoindex` y el convertidor `markitdown`.
 - Barra de progreso de descarga e instalación.
 
@@ -305,6 +305,10 @@ Como usuario quiero reinstalar o cambiar el modelo embedder sin reinstalar el wo
 - Al elegir un modelo local, mostrar primero las opciones por defecto ya establecidas en el catálogo del wizard (`presets.toml`, D7.2): `paraphrase-multilingual-MiniLM-L12-v2` (recomendado y preseleccionado, ~470MB) y `BAAI/bge-m3` (alternativa con GPU recomendada, ~2300MB). El usuario elige una de ellas; el catálogo es dato y puede ampliarse sin tocar la UI.
 - Ofrecer también una opción de ID libre de HuggingFace: el usuario inserta el ID del modelo embedder que desea descargar en `.tepochcalli/models/`. El wizard estima el peso vía API y aplica el portero `test-embed` ya establecido (descarga de frase de prueba, validación de respuesta, dimensiones y nombre; rechazo de modelos no-embedding), con campo opcional `HF_TOKEN` para modelos gated.
 - La rama de API externa sigue disponible: API key con su endpoint correspondiente (sin descarga local).
+- Extraer y mostrar, ANTES de que el usuario elija, los requisitos de cada opción local: 💾 disco en MB, 🧠 RAM requerida y 🎮 estado de GPU. Cada cifra se etiqueta con su procedencia — `declarado` (catálogo `presets.toml`), `estimado` (API pública de HuggingFace para IDs libres) o `medido` (pico de RAM muestreado por el portero `test-embed` al ejercitar el modelo) — para no presentar una estimación como promesa.
+- Para un ID libre de HuggingFace, la estimación previa a la descarga consulta la API del modelo (parámetros, tamaño de blobs, campo `gated` y tags de embedding) y calcula la RAM residente como parámetros × 4 bytes × 1,3 (fp32). Si la API no responde, se muestra `sin dato` sin fallar la instalación.
+- Detectar el hardware del dispositivo: RAM total y disco libre, y presencia de GPU por sonda opcional (`nvidia-smi`/`rocm-smi`; ausencia silenciosa = sin GPU). Con eso se calcula un badge por opción: `recomendado` (cabe con ≥50% de margen), `viable` (cabe con margen bajo) o `no recomendado` (excede la RAM disponible o requiere GPU y no hay). Si el sondeo falla, se muestran solo los valores declarados, sin veredicto, y la instalación continúa.
+- Un badge `no recomendado` es una ADVERTENCIA, nunca un bloqueo: antes de continuar se informa al usuario y se le invita a elegir un modelo más apropiado para su hardware; si acepta el riesgo, puede confirmar la instalación del modelo elegido. El resumen previo incluye las cifras de memoria/disco y el badge resultante (D8.1-D8.3).
 - Resumen de las opciones elegidas antes de aplicar.
 - Instalación/reinstalación con barra de progreso.
 
