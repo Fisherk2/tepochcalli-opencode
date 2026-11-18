@@ -62,7 +62,16 @@ def destination_path(output_path: str | None, slug: str, suffix: str) -> str:
     candidate = (
         Path(output_path) if output_path is not None else Path(RESOURCES_DIR) / (slug + suffix)
     )
-    return str(candidate.with_suffix(suffix))
+    try:
+        suffixed = candidate.with_suffix(suffix)
+    except ValueError as exc:
+        # `.` / `/` no tienen nombre ⇒ `ValueError`: destino malformado es una
+        # entrada mal escrita (VALIDATION_ERROR, D64), no INTERNAL.
+        raise paths.VaultPathError(
+            f"output_path malformado: {output_path!r} no acepta el sufijo {suffix!r}",
+            {"requested": output_path, "suffix": suffix},
+        ) from exc
+    return str(suffixed)
 
 
 async def write_converted(
