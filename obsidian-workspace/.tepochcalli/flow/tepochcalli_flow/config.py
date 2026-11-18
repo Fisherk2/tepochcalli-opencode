@@ -354,4 +354,17 @@ def _resolve_embedding(values: dict[str, object], config_path: Path) -> Embeddin
             ", ".join(EMBEDDING_PROVIDERS),
         )
         return replace(embedding, provider=DEFAULT_EMBEDDING_PROVIDER)
+    if embedding.provider == "litellm" and (
+        "://" in embedding.model or "http" in embedding.model or "@" in embedding.model
+    ):
+        # Un `model` con componente de endpoint haría que LiteLLM embediera el
+        # texto del usuario hacia ESA URL — exfiltración por config; el model
+        # válido es un nombre de modelo, nunca una URL ni un canal con credencial.
+        logger.warning(
+            "model con componente de endpoint (://, http o @) en [embedding] de %s con "
+            "provider='litellm'; se usa el default '%s'",
+            config_path,
+            DEFAULT_EMBEDDING_MODEL,
+        )
+        embedding = replace(embedding, model=DEFAULT_EMBEDDING_MODEL)
     return embedding
