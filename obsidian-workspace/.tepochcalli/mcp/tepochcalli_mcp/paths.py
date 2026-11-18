@@ -263,14 +263,14 @@ def _deny_internal_host(uri: str) -> None:
     except ValueError:
         literal = None
     if literal is not None and _is_internal_address(literal):
-        raise ValueError(_SSRF_MESSAGE.format(uri=uri))
+        raise ValueError(_SSRF_MESSAGE.format(uri=redact_uri(uri)))
     if literal is None:
         host_l = host.lower()
         if host_l == "localhost" or host_l.endswith(".local"):
-            raise ValueError(_SSRF_MESSAGE.format(uri=uri))
+            raise ValueError(_SSRF_MESSAGE.format(uri=redact_uri(uri)))
         for resolved in _resolve_addresses(host):
             if _is_internal_address(resolved):
-                raise ValueError(_SSRF_MESSAGE.format(uri=uri))
+                raise ValueError(_SSRF_MESSAGE.format(uri=redact_uri(uri)))
 
 
 def _is_internal_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address) -> bool:
