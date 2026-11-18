@@ -281,6 +281,8 @@ def _is_internal_address(address: ipaddress.IPv4Address | ipaddress.IPv6Address)
         or address.is_link_local
         or address.is_reserved
         or address.is_unspecified
+        or address.is_multicast  # 224.0.0.0/4 y ff00::/8 (CGNAT/Tailscale abajo)
+        or address in ipaddress.ip_network("100.64.0.0/10")  # CGNAT / Tailscale MagicDNS
     )
 
 
