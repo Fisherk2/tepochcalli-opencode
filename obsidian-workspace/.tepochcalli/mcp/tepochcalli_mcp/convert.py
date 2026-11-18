@@ -28,18 +28,22 @@ directo a markitdown (que hoy sigue redirects automáticos a ciegas):
 URI entrante, pero la respuesta de un redirect podía saltar a la red interna.
 Hops: máx 5, esquemas http/s únicamente; aprobado cada hop, el body se baja con
 el cap de bytes (105 MB ≈ el envelope `convert_base64`) y se entrega a
-markitdown como `Response` (`_markitdown.py:311`). Sin dependencia nueva:
+markitdown como `Response` (`_markitdown.py:311`). **S1 (rebinding):** el
+hostname se resuelve UNA vez por hop con el mismo canal del guard y la
+conexión se fija a ESA IP (Host/SNI originales) — la segunda resolución que
+hacía `requests` era la ventana del rebinding. Sin dependencia nueva:
 `requests` YA viaja dentro de markitdown (R1/ADR-011).
 """
 
 from __future__ import annotations
 
 import io
+import ipaddress
 import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Final
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, urlunsplit
 
 import requests
 from markitdown import MarkItDown, StreamInfo
@@ -56,6 +60,87 @@ _MAX_RESPONSE_BYTES: Final = 105_000_000
 
 _FETCH_TIMEOUT: Final = (10.0, 60.0)
 """Timeout del prefetch W-02: (conexión 10 s, lectura entre paquetes 60 s)."""
+
+
+class _PinnedIPAdapter(requests.adapters.HTTPAdapter):
+    """Adapter TLS que verifica contra el hostname original pese a conectar a la IP fija.
+
+    S1 (rebinding): la conexión va a la IP literal del URL; `server_hostname`
+    baja al `HTTPSConnection` de urllib3 (2.8) para que SNI y la verificación
+    del certificado sigan usando el hostname original — sin esto el cert de un
+    https se contrastaría contra la IP y fallaría siempre.
+    """
+
+    def __init__(self, hostname: str) -> None:
+        super().__init__()
+        self.poolmanager.connection_pool_kw["server_hostname"] = hostname
+
+
+def _pin_resolved_ip(url: str) -> tuple[str, str, dict[str, str]] | None:
+    """Resuelve el host UNA vez y devuelve (ip_literal, url_fijo, headers) (S1).
+
+    Rebinding DNS: el guard juzga SU resolución, pero `requests` resolvía DE
+    NUEVO al conectar — una segunda respuesta del DNS podía apuntar a la red
+    interna. Aquí se resuelve con el MISMO canal del guard
+    (`paths._resolve_addresses`), se re-juzga cada IP con
+    `paths._is_internal_address` y la conexión se fija a la primera con el
+    Host original. Host ya-literal, ausente o DNS vacío ⇒ None (requests
+    conecta tal cual, como hoy).
+    """
+    parts = urlsplit(url)
+    host = parts.hostname or ""
+    netloc = parts.netloc
+    idx, width = netloc.rfind(f"[{host}]"), len(host) + 2
+    if idx < 0:
+        idx, width = netloc.rfind(host), len(host)
+    if not host or idx < 0:
+        return None
+    try:
+        ipaddress.ip_address(host)  # ya es literal: el DNS no interviene, no hay rebinding
+        return None
+    except ValueError:
+        pass
+    addresses = paths._resolve_addresses(host)
+    for address in addresses:
+        if paths._is_internal_address(address):
+            raise ValueError(
+                f"URI no aceptable: {redact_uri(url)!r} resuelve a una dirección de red interna"
+            )
+    if not addresses:
+        return None  # sin resolver: requests fallará por su cuenta, como hoy
+    literal = f"[{addresses[0]}]" if addresses[0].version == 6 else str(addresses[0])
+    pinned_url = urlunsplit(
+        (parts.scheme, literal + netloc[idx + width :], parts.path, parts.query, parts.fragment)
+    )
+    return literal, pinned_url, {"Host": netloc[idx:]}
+
+
+def _fetch_via(url: str, pinned: tuple[str, str, dict[str, str]] | None) -> requests.Response:
+    """GET del hop: con `pinned`, conecta a la IP fija con el Host original (S1).
+
+    En https el adapter `_PinnedIPAdapter` restaura el server_hostname del
+    hostname original; en http el header Host basta. Con headers vacío no se
+    pasan: `requests` pone los suyos.
+    """
+    if pinned is None:
+        return requests.get(url, allow_redirects=False, timeout=_FETCH_TIMEOUT, stream=True)
+    literal, pinned_url, headers = pinned
+    if urlsplit(pinned_url).scheme == "https":
+        session = requests.Session()
+        try:
+            session.mount(f"https://{literal}", _PinnedIPAdapter(urlsplit(url).hostname or ""))
+            return session.get(
+                pinned_url,
+                headers=headers,
+                allow_redirects=False,
+                timeout=_FETCH_TIMEOUT,
+                stream=True,
+            )
+        finally:
+            session.close()
+    return requests.get(
+        pinned_url, headers=headers, allow_redirects=False, timeout=_FETCH_TIMEOUT, stream=True
+    )
 
 
 def convert_source(uri: str) -> str:
@@ -93,11 +178,13 @@ def _fetch_http(uri: str) -> requests.Response:
     """
     url: str = uri
     for _hop in range(_MAX_REDIRECT_HOPS + 1):
+        pinned: tuple[str, str, dict[str, str]] | None
         try:
             paths._deny_internal_host(url)
+            pinned = _pin_resolved_ip(url)
         except ValueError as exc:
             raise paths.VaultPathError(str(exc)) from None
-        response = requests.get(url, allow_redirects=False, timeout=_FETCH_TIMEOUT, stream=True)
+        response = _fetch_via(url, pinned)
         location = response.headers.get("location") if 300 <= response.status_code < 400 else None
         if location is None:
             _drain_body(response)
