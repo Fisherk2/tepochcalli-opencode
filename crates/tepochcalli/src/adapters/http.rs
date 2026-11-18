@@ -64,6 +64,9 @@ impl UreqHttpClient {
     }
 
     fn agent(&self) -> ureq::Agent {
+        // timeout_global deliberado aquí: fetch_bytes solo lee respuestas de
+        // KB (sidecar, metadatos HF) donde el budget total no puede abortar
+        // una transferencia legítima a mitad de cuerpo.
         let config = ureq::Agent::config_builder()
             .timeout_global(Some(self.timeout))
             .max_redirects(self.max_redirects)

@@ -120,13 +120,36 @@ fn decode_sha256(hex: &str) -> Result<[u8; 32], FetchError> {
 /// un servidor hostil no dicta la asignación (L2-2).
 pub const MAX_TRANSFER_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
+/// Budget para recibir las cabeceras de respuesta (ureq
+/// `timeout_recv_response`, verificado en ureq-3.5.0 `src/config.rs`). Deja de
+/// aplicarse en cuanto llegan las cabeceras: el body ya no lo acota, así que
+/// enlaces lentos no abortan a mitad de la descarga de decenas de MB.
+const TIMEOUT_RECV_RESPONSE: Duration = Duration::from_secs(60);
+
+/// Watchdog de inactividad por lectura (ureq `timeout_per_read`, verificado en
+/// ureq-3.5.0 `src/config.rs`): se reinicia en cada transporte-read, de modo
+/// que solo corta un stream estancado/infinito (la protección que motivaba el
+/// `timeout_global`), no un cuerpo grande que baja lento pero avanza.
+const TIMEOUT_PER_READ: Duration = Duration::from_secs(120);
+
+/// Budget para establecer la conexión (ureq `timeout_connect`, verificado en
+/// ureq-3.5.0 `src/config.rs`): ni `recv_response` ni `per_read` cubren DNS ni
+/// TCP-connect, y el `timeout_global` retirado sí lo cubría.
+const TIMEOUT_CONNECT: Duration = Duration::from_secs(60);
+
 /// GET `url`, verify SHA-256, then write `dest`. The file is written ONLY
 /// after the hash matches, so a corrupt download never lands on disk.
 /// Redirects follow the client's bounded default; never runs scripts.
 pub fn fetch_verified(url: &str, dest: &Path, expected_sha256_hex: &str) -> Result<(), FetchError> {
     let expected = decode_sha256(expected_sha256_hex)?;
+    // Sin `timeout_global`: ese budget cubría TODO incluido leer el body,
+    // así que un enlace <17 MB/s abortaba a mitad del payload (cap 2 GiB /
+    // 120 s). Los tres budgets de arriba acotan cabeceras, conexión y
+    // estancamiento, no la duración total del cuerpo.
     let config = ureq::Agent::config_builder()
-        .timeout_global(Some(Duration::from_secs(120)))
+        .timeout_recv_response(Some(TIMEOUT_RECV_RESPONSE))
+        .timeout_per_read(Some(TIMEOUT_PER_READ))
+        .timeout_connect(Some(TIMEOUT_CONNECT))
         .build();
     let agent = ureq::Agent::new_with_config(config);
     let mut response = agent.get(url).call()?;
