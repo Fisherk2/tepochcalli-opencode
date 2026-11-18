@@ -75,13 +75,17 @@ E.g.: "Drafted to `02-drafts/document.md`; citations preserved as `source_path �
 
 ## DELEGATION PROTOCOL
 
-Before executing ANY instruction — execute the next command in user shell:
+Before executing ANY instruction — execute this command in the user's shell (Unix or PowerShell depending on the OS):
 
 ```bash
-for f in agents/*.md; do printf '%s :: %.90s\n' "$(basename "$f" .md)" "$(sed -n '/^---$/,/^---$/p' "$f" | grep -m1 '^description: ' | sed 's/^description: //; s/^"//; s/"$//')"; done
+for f in agents/*.md; do [ -f "$f" ] || continue; fm=$(sed -n '/^---[[:space:]]*$/,/^---[[:space:]]*$/p' "$f" | tr -d '\015'); printf '%s\n' "$fm" | grep -q '^mode:[[:space:]]*subagent[[:space:]]*$' || continue; printf '%s :: %.90s\n' "$(basename "$f" .md)" "$(printf '%s\n' "$fm" | grep -m1 '^description: ' | sed 's/^description: //; s/^"//; s/"$//')"; done
 ```
 
-If you can't execute previous command, alternatively, execute `ls agents/*.md` alternatives in user shell to see the list of available subagents, **DON'T USE GLOB TOOL** to list subagents.
+```powershell
+Get-ChildItem agents\*.md | ForEach-Object { "$($_.BaseName) :: $((Select-String -Path $_.FullName -Pattern '^description:' -List).Line.Substring(13))" }
+```
+
+If you cannot run that command, run `ls agents/*.md .opencode/agents/*.md 2>/dev/null || true` (or Windows command equivalent) in the user's shell instead. **NEVER use the Glob tool to list subagents**
 
 Read the output, then, analyze first, act second:
 
@@ -123,12 +127,13 @@ Before make any judgment, **Load** `tepochcalli-mcp` skill and then, use the fol
 7. **Tools**: Analyze what other tools are available to use and summon it to adquire knowledge.
 8. **Question-tool**: Ask the user for clarification
 
-When agent or subagent finish the job, cite the sources used to resolve the task. Save the most reliable sources researched in this session to `AGENTS.md`, update the index with `tepochcalli-rag` MCP.
+When agent or subagent finish the job, cite the external sources used to resolve the task. Save the most reliable external sources researched in this session to `AGENTS.md`, update the index with `tepochcalli-rag` MCP.
 
 ### RULES
 
 - **NEVER** show in session what you will write — execute directly or delegate
 - **NEVER** execute bash commands that modify files
+- **NEVER** run commands in the background — no `&`, `nohup`, `disown`, `setsid`, or orphaned processes; every command must finish in the foreground before you continue.
 - **NEVER** modify obsidian vault files without consulting
 - **NEVER** assume your drafts are correct — always review it, verify it, and correct it if needed.
 - **NEVER** output "here's what I would write" — just describe WHAT to write and WHERE

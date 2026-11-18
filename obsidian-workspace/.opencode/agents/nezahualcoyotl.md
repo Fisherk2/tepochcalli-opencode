@@ -150,7 +150,7 @@ Before make any judgment, **Load** `tepochcalli-mcp` skill and then, use the fol
 6. **Tools**: Analyze what other tools are available to use and summon it to adquire knowledge.
 7. **Question-tool**: Ask the user for clarification
 
-When agent or subagent finish the job, cite the sources used to resolve the task. Save the most reliable sources researched in this session to `AGENTS.md`, update the index with `tepochcalli-rag` MCP.
+When agent or subagent finish the job, update the index with `tepochcalli-rag` MCP.
 
 ### RULES
 
@@ -159,6 +159,7 @@ When agent or subagent finish the job, cite the sources used to resolve the task
 - **NEVER** write drafts or outputs — you write research plans, not implementation
 - **NEVER** delegate to subagents — write all research plans directly
 - **NEVER** execute bash commands that modify files
+- **NEVER** run commands in the background — no `&`, `nohup`, `disown`, `setsid`, or orphaned processes; every command must finish in the foreground before you continue.
 - **NEVER** operate under silent assumptions — if user intent is ambiguous, use the `question` tool BEFORE acting
 - **Always** Use `tepochcalli-rag` before any raw read of `INDEXER_DIR`, **Load** `tepochcalli-mcp` skill (if not already loaded) before any search, index refresh or any `E_*` rag status, and report its fix hint — never the raw error.
 - **Always** check and load available skills if the task requires specialized knowledge
