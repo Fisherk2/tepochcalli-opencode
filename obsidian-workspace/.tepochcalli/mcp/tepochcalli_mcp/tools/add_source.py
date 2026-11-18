@@ -159,7 +159,10 @@ async def add_source(
         paths.slugify_uri(uri), lambda candidate: (dest_dir / candidate).exists()
     )
     final = paths.ensure_within(root / RESOURCES_DIR, dest_dir / name)
-    writer.write_atomic(final, content)
+    try:
+        writer.write_atomic(final, content)
+    except paths.VaultPathError as exc:
+        return errors.validation_error(str(exc), exc.details)
     written_to = final.relative_to(root).as_posix()
     try:
         report = await asyncio.to_thread(refresh)
