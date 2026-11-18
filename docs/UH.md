@@ -302,7 +302,9 @@ Como usuario quiero limpiar el workspace removiendo solo los artefactos del inst
 
 Como usuario quiero reinstalar o cambiar el modelo embedder sin reinstalar el workspace.
 
-- Reutilizar el flujo ya establecido: preguntar modelo local `paraphrase-multilingual-MiniLM-L12-v2` en `.tepochcalli/models/` o API key con su endpoint.
+- Al elegir un modelo local, mostrar primero las opciones por defecto ya establecidas en el catálogo del wizard (`presets.toml`, D7.2): `paraphrase-multilingual-MiniLM-L12-v2` (recomendado y preseleccionado, ~470MB) y `BAAI/bge-m3` (alternativa con GPU recomendada, ~2300MB). El usuario elige una de ellas; el catálogo es dato y puede ampliarse sin tocar la UI.
+- Ofrecer también una opción de ID libre de HuggingFace: el usuario inserta el ID del modelo embedder que desea descargar en `.tepochcalli/models/`. El wizard estima el peso vía API y aplica el portero `test-embed` ya establecido (descarga de frase de prueba, validación de respuesta, dimensiones y nombre; rechazo de modelos no-embedding), con campo opcional `HF_TOKEN` para modelos gated.
+- La rama de API externa sigue disponible: API key con su endpoint correspondiente (sin descarga local).
 - Resumen de las opciones elegidas antes de aplicar.
 - Instalación/reinstalación con barra de progreso.
 
