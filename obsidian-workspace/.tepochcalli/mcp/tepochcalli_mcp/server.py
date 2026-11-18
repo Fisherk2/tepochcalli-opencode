@@ -359,9 +359,10 @@ async def index_refresh() -> CallToolResult:
     `index_refresh`). **No acepta raíces:** el conjunto lo declara el usuario en
     `INDEXER_DIR` (por omisión `00-resources`) y el MCP no lo modifica; `roots`
     repite el conjunto efectivamente indexado. Las raíces se validan ANTES de
-    tocar el motor: una inexistente, de otro tipo o fuera del vault ⇒
+    tocar el motor: una inexistente, fuera del vault o con `..` ⇒
     `VALIDATION_ERROR` con `details.suggestions` y no se indexa NINGUNA
-    (fail-fast atómico). Un directorio vacío no es error: `scanned: 0`.
+    (fail-fast atómico); una raíz SÍ puede ser un fichero suelto (D46). Un
+    directorio vacío no es error: `scanned: 0`.
     """
     payload = await index_refresh_handler.index_refresh(
         vault_root=_vault_root,
