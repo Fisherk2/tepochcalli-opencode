@@ -149,6 +149,17 @@ usuario y se le ofrece el camino manual, nunca una conversión vacía.
 GUIDE_RETRY_SECONDS: Final = "Reintenta en segundos o ejecuta `index_refresh` después."
 """Guía de spec-mcp-server §Manejo de errores para `ENGINE_LOCKED` («reintentar en segundos»)."""
 
+GUIDE_PARSE_TIMEOUT: Final = (
+    "El parse superó el tope de 120 s y se abandonó la espera; el parse en proceso NO se "
+    "cancela: sigue en segundo plano y puede ocupar el server hasta terminar. Reintenta "
+    "después o usa una fuente más pequeña."
+)
+"""Guía de `SOURCE_UNREACHABLE` para la guarda de pared del convert (S4min).
+
+Honestidad sobre el residuo: el hilo del parse no se puede cancelar — se
+avisa que sigue ocupando el server hasta terminar (el lock del refresh solo
+existe dentro del propio `refresh`, no durante el convert)."""
+
 
 def source_unreachable(
     uri: str, cause: str | None = None, *, guide: str | None = None

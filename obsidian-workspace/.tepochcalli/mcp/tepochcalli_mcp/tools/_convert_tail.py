@@ -14,14 +14,22 @@ composition root; este módulo es dominio puro del server igual que sus vecinos.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import Awaitable, Callable
 from pathlib import Path
-from typing import Protocol
+from typing import Final, Protocol
 
 from tepochcalli_flow.citation import RESOURCES_DIR
 
 from tepochcalli_mcp import errors, formats, paths, summary, writer
+
+CONVERT_TIMEOUT: Final = 120.0
+"""Guarda de pared del convert (S4min): tope de espera del parse en proceso.
+
+El hilo del parse NO se cancela al expirar (los threads de
+`asyncio.to_thread` son ininterrumpibles); el timeout solo acota la espera
+del handler y el residuo se declara en la guía (`GUIDE_PARSE_TIMEOUT`)."""
 
 
 class LocalConvert(Protocol):
@@ -90,9 +98,15 @@ async def write_converted(
     `build_summary`); `tool` es solo el prefijo del log stderr.
     """
     try:
-        content = await run_convert()
+        content = await asyncio.wait_for(run_convert(), timeout=CONVERT_TIMEOUT)
     except formats.UnsupportedFormatError as exc:
         return errors.validation_error(str(exc), {"formats": list(formats.SUPPORTED_FORMATS)})
+    except TimeoutError:
+        # S4min: guarda de pared — el parse en proceso no se cancela; el
+        # residuo (hilo vivo) se declara en la guía.
+        return errors.source_unreachable(
+            source_uri, "TimeoutError", guide=errors.GUIDE_PARSE_TIMEOUT
+        )
     except Exception as exc:  # corrupto, cifrado: no es una entrada mal escrita (D39)
         # W-05: el URI fuga tal cual entraba; en log va REDACTADO (review eje 4)
         # y TRUNCADO (log-forge: un URI kilométrico no infla el stderr).

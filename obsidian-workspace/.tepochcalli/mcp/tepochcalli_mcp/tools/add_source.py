@@ -67,6 +67,7 @@ from pathlib import Path, PurePosixPath
 from tepochcalli_flow.citation import RESOURCES_DIR
 
 from tepochcalli_mcp import embedder, errors, paths, writer
+from tepochcalli_mcp.tools._convert_tail import CONVERT_TIMEOUT
 
 logger = logging.getLogger(__name__)
 
@@ -131,12 +132,18 @@ async def add_source(
         # convertir/escribir solo fabricaría huérfanos. Igual que los hermanos.
         return errors.no_embedder()
     try:
-        content = await asyncio.to_thread(convert, uri)
+        content = await asyncio.wait_for(asyncio.to_thread(convert, uri), timeout=CONVERT_TIMEOUT)
     except paths.VaultPathError as exc:
         # W-02: un redirect hacia la red interna sube como `VaultPathError` del
         # guard por hop — entrada mal dirigida que el agente puede corregir
         # (VALIDATION_ERROR), no inalcanzable; `exc.details` viene del guard.
         return errors.validation_error(str(exc), exc.details)
+    except TimeoutError:
+        # S4min: guarda de pared — el parse en proceso no se cancela; el
+        # residuo (hilo vivo) se declara en la guía.
+        return errors.source_unreachable(
+            paths.redact_uri(uri), "TimeoutError", guide=errors.GUIDE_PARSE_TIMEOUT
+        )
     except Exception as exc:  # fetch/convert: cualquier motivo ⇒ SOURCE_UNREACHABLE
         # Review Phase 2 (eje 4): log y payload REDACTAN el URI (userinfo/query
         # secreta); el original solo queda dentro de esta llamada (fetch ya corrió).
