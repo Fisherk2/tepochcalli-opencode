@@ -195,16 +195,13 @@ pub fn is_phase_done(vault: &Path, phase: Phase) -> bool {
     }
 }
 
-/// Offline pre-check, BEFORE the vault is touched: without a local payload
-/// and a usable cache there is nothing to install from, so fail clean with
-/// `E_OFFLINE_NO_CACHE` (exit 21) instead of half-writing the vault.
-/// Offline pre-check (D7.3 + L3-5 OR-arm), BEFORE the vault is touched:
-/// sin nada con que trabajar offline es un fallo limpio
-/// `E_OFFLINE_NO_CACHE` (exit 21), nunca un half-write. Tres brazos válidos:
-/// 1. payload local + cache de modelo (o ruta artificial skip);
-/// 2. un resume cuyo payload ya está local (F3 por artefacto: la descarga
-///    no va a repetirse). El brazo 2 cubre el re-entry de un vault instalado
-///    curse configuration externa/caché fuera de models/.
+/// Offline pre-check (D7.3, brazos OR L3-5), ANTES de tocar el vault: sin
+/// nada con que trabajar offline es un fallo limpio `E_OFFLINE_NO_CACHE`
+/// (exit 21), nunca un half-write. Dos brazos válidos:
+/// 1. payload local + cache de modelo — `(payload_local_ready && cache_ready)`
+///    (o ruta artificial skip);
+/// 2. un resume cuyo payload ya está local — `resume_payload_local` (F3 por
+///    artefacto: la descarga no va a repetirse).
 pub fn guard_offline_before_touch(
     offline: bool,
     payload_local_ready: bool,

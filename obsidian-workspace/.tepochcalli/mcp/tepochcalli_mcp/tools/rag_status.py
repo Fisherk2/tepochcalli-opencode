@@ -11,8 +11,8 @@ validez del toml. **Las decisiones de contrato, documentadas aquí y en la
 descripción de la tool (lo que el agente lee):**
 
 * **`mode`** — fuente única `embedder.mode(config)`: `litellm` ⇒ `api`,
-  `local` ⇒ `local`, `none` ⇒ `none` (inalcanzable vía loader hasta T6/D15;
-  se prueba con un `Config` construido a mano — la costura).
+  `local` ⇒ `local`, `none` ⇒ `none` (alcanzable vía loader desde T6/D15 —
+  el valor del 3.er provider del contrato).
 * **`provider`** — `null` en `local` y `none` (ejemplos LITERALES de la spec
   §rag_status); en `api` = `config.embedding.provider`, hoy solo `litellm`
   (lo único que la config D11 puede nombrar; si nombra el upstream en el

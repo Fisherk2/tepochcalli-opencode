@@ -222,7 +222,7 @@ def _source_slice_ok(vault_root: Path, chunk: CitedChunk) -> bool | None:
     devuelve `False`: la cita no es reproducible y el verificador debe
     decirlo (`_source_identity`).
     """
-    if chunk.offsets_ref != "source":
+    if chunk.offsets_ref != OFFSETS_REF_SOURCE:
         return None
     return _source_identity(vault_root, chunk)
 

@@ -1,5 +1,6 @@
-//! Test fakes for the 5 ports (T4): scripted, in-memory, std-only
-//! (plus `sha2`/`tempfile`, already crate deps — no new dependencies).
+//! Fakes de los 5 ports + fixtures compartidos de runtime: scripted,
+//! in-memory, std-only (más `sha2`/`tempfile`, ya deps del crate — sin
+//! dependencias nuevas).
 //!
 //! `swap_support` es el soporte del contrato del swap D8.4 (T16): fixtures
 //! de vault instalado con caches HF, familias de aserción del GC y el fake

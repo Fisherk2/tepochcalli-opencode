@@ -33,7 +33,7 @@ por una ruta mal escrita (D64). `validate_roots` aplica las mismas reglas a N
 raíces con fail-fast atómico (D65) y `vault_dirs` publica lo que sí existe
 (D67, reutilizado por `rag_status` en T8).
 
-Umbral (docs/CODE_STYLE.md): 545 líneas, tramo 501-700 justificable — el split
+Umbral (docs/CODE_STYLE.md): 553 líneas, tramo 501-700 justificable — el split
 de `validate` por entrada/destino (2026-11-17) añadió ~40 líneas de API por
 claridad; el corte natural a <500 (SSRF/`redact_uri` a `uri_guard.py`) está
 bloqueado: `test_mcp_convert_source_fetch.py` monkeypachea
@@ -533,7 +533,7 @@ def validate_roots(directories: Sequence[str] | None, vault_root: Path) -> tuple
 
     `None` o lista vacía ⇒ `("00-resources",)` (el default del producto, D42 —
     `config.DEFAULT_INDEXER_ROOTS`). Cada raíz pasa las mismas reglas que una
-    entrada (`validate_vault_path`) y
+    entrada (`validate_input_path`) y
     además debe existir: una raíz puede ser un **fichero suelto** (D46). El
     fallo es **atómico**: se lanzan `VaultPathError` —que nombra la raíz mala,
     sus `suggestions` y `vault_dirs`— antes de devolver ninguna, así una raíz
