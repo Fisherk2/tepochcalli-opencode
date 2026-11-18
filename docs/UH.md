@@ -247,3 +247,90 @@ Como agente quiero una skill espejo de `local-doc-to-markdown` para decidir cuá
 - <https://github.com/ofershap/mcp-server-anydoc> (MCP anydoc de referencia/fallback)
 - <https://github.com/microsoft/markitdown> (conversor incumbente)
 - <https://opencode.ai/v2/docs/mcp-servers/> (cómo configurar un MCP en Opencode)
+
+---
+
+### Wizard de instalación: flujo destino (2026-11-18)
+
+Estado objetivo del wizard de instalación (`tepochcalli`), documentado como DESTINO — no como código vigente. Las decisiones de canal, interfaz y alcance que siguen son requisitos de estas HU y quedan pendientes de formalización: no se implementan ni se aprueban aquí.
+
+- **Canal único `uvx` (decisión del dueño, 2026-11-18):** el instalador se publica en PyPI como paquete Python que empaqueta el binario Rust como script (patrón maturin `bindings = "bin"`). El usuario ejecuta `uvx tepochcalli` y se abre el wizard directo: sin binario del proyecto en PATH y sin descargas en runtime. El wheel permanece en la caché de uv hasta su limpieza. Se retira `cargo binstall` / cargo-dist como canal recomendado. El comando de refresco a mostrar en el TUI es `uvx --refresh tepochcalli` (alternativa `uvx tepochcalli@latest`). Inspiración: Codice usa `bunx @fisherk2-dev/codice` y `bunx --fresh @fisherk2-dev/codice`.
+- **ADR-014 futuro (dependencia, NO creado aquí):** este flujo exige un ADR-014 que supere el canal de ADR-013 (que rechazó uv/PyPI) y el backend de ADR-003 (cargo-dist), además de una enmienda de `specs/spec-installer-wizard.md`. Queda escrito como requisito pendiente, no como decisión aprobada.
+- **TUI full-screen (dependencia):** botones reales con estados deshabilitados (p. ej. `ratatui`) sustituyen al `dialoguer` line-based actual (D23). Todo bloqueo se muestra como botón deshabilitado con razón visible. Exige enmienda de spec/ADR futura (no se realiza en este lote).
+- **Versión:** la versión instalada se detecta leyendo `.tepochcalli/pyproject.toml`; la versión del wizard es la del paquete/release publicado (gestionada por `uvx`). Comparación semver. Hoy divergen (`Cargo.toml = 0.1.0-beta.1` frente a `pyproject.toml = 0.1.0`): deben alinearse antes de implementar.
+- **Alcance destino de `Update` / `Desinstall`:** `Update` sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`; `Desinstall` remueve `.opencode/`, `.tepochcalli/` y `opencode.json`. Esto amplía el alcance frente al código vigente (F3 no sobrescribe; uninstall hoy solo `.tepochcalli/`) y exige enmienda futura.
+
+#### H5 — Inicio del wizard: versión, estado y navegación
+
+Como usuario quiero que el wizard me muestre la versión que gestiona, el estado de mi instalación y mis opciones disponibles antes de actuar.
+
+- Mostrar la última versión disponible y que el wizard está gestionando dicha versión.
+- Detectar la versión instalada en `.tepochcalli/pyproject.toml`; detectar cómo está instalado el embedder — API key externa o modelo local en `.tepochcalli/models/` — y mostrarlo en el TUI.
+- Si NO está instalado: mensaje de que el directorio está listo para instalar; botones deshabilitados 🟢Update, 🟣Change Embedder y 🔴Desinstall; único disponible 🔵Install.
+- Si YA está instalado, comparar instalada vs wizard (última release):
+  - iguales ⇒ deshabilitados 🟢Update y 🔵Install;
+  - instalada < wizard ⇒ deshabilitado 🔵Install;
+  - instalada > wizard ⇒ **todos los botones deshabilitados excepto 🟠Exit**, con mensaje indicando al usuario que refresque la caché del comando `uvx` para obtener la última versión y el comando exacto para copiar en el TUI: `uvx --refresh tepochcalli`.
+- Mostrar info de contacto y link del repositorio <https://github.com/Fisherk2/tepochcalli-opencode> y el correo `dev@fisherk2.com` para reportar bugs/issues.
+- Todo bloqueo se presenta como botón deshabilitado con razón visible (TUI full-screen; ver dependencias de spec/ADR en el preámbulo).
+
+#### H6 — 🔵 Install
+
+Como usuario quiero instalar limpiamente el payload en mi workspace de Obsidian destino.
+
+- Tras confirmar el directorio destino, pasar por la fase de instalación del modelo embedding con las opciones ya establecidas (ver H9).
+- Mensaje de confirmación de qué se instala y dónde, incluyendo el runtime `.tepochcalli/` con el motor `cocoindex` y el convertidor `markitdown`.
+- Barra de progreso de descarga e instalación.
+
+#### H7 — 🟢 Update
+
+Como usuario quiero actualizar un workspace que ya tiene una versión anterior.
+
+- Sobrescribir `.opencode/` y `.tepochcalli/`; advertir que también `.gitignore`, `opencode.json` y `AGENTS.md` se sobrescribirán y que el usuario debe respaldarlos si hace falta.
+- Mostrar el directorio objetivo; tras confirmar, actualización con barra de progreso.
+- Alcance destino (amplía el código vigente: F3 no sobrescribe) — requiere enmienda futura (ver preámbulo).
+
+#### H8 — 🔴 Desinstall
+
+Como usuario quiero limpiar el workspace removiendo solo los artefactos del instalador.
+
+- Remover `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más.
+- Advertir antes de continuar y mostrar el directorio objetivo; tras confirmar, desinstalación con barra de progreso.
+- Alcance destino (hoy uninstall solo `.tepochcalli/`) — requiere enmienda futura (ver preámbulo).
+
+#### H9 — 🟣 Change Embedder
+
+Como usuario quiero reinstalar o cambiar el modelo embedder sin reinstalar el workspace.
+
+- Reutilizar el flujo ya establecido: preguntar modelo local `paraphrase-multilingual-MiniLM-L12-v2` en `.tepochcalli/models/` o API key con su endpoint.
+- Resumen de las opciones elegidas antes de aplicar.
+- Instalación/reinstalación con barra de progreso.
+
+#### H10 — 🟠 Exit
+
+Como usuario quiero salir del wizard sin que se realice ningún cambio.
+
+- Salir del wizard sin más; no se materializa ni modifica nada del workspace.
+
+#### H11 — Cierre
+
+Como usuario quiero que el instalador se cierre de forma confirmada y amable tras la operación.
+
+- Tras cualquier opción excepto 🟠Exit, cerrar el instalador previa confirmación del usuario presionando cualquier tecla.
+- Agradecimiento a Tepochcalli en el mensaje de cierre.
+
+#### Anexo — Mapeo de módulos de Codice a Rust (requisito, no implementado)
+
+Requisito de organización de módulos derivado de <https://github.com/Fisherk2/codice-opencode/tree/main/src>, separando lo común de lo propio. Codice organiza `src/cli/` (entrada, flags, versión, contexto), `src/application/` (use-cases, ports, types), `src/domain/` (entities, services — `VersionComparator`/`FileMergeEngine`, ports) y `src/infrastructure/` (adapters: TUI Clack, `GitHubRestClient`, FS atómico). Nuestro `crates/tepochcalli/src/` ya tiene forma similar (`cli/`, `application/`, `adapters/`, `config/`).
+
+Módulos y responsabilidades a cubrir (comunes a Codice):
+
+| Responsabilidad | Referencia en Codice | Destino en Rust |
+| :-------------- | :------------------- | :-------------- |
+| Detección de la versión instalada desde `.tepochcalli/pyproject.toml` | `versionContext.ts` | contexto de `cli/` |
+| Comparador semver | `VersionComparator.ts` | service de `domain/` |
+| Caso de uso de `update` (hoy inexistente) | use-case de `application/` | `application/` |
+| TUI full-screen con estados de botón (reemplaza el `dialoguer` actual) | `ClackPromptsAdapter.ts` | `adapters/` |
+| Cliente de release/versión última | `GitHubRestClient.ts` | `adapters/` |
+
+**Diferencia propia de Tepochcalli (ausente en Codice):** nuestro wizard gestiona el modelo de embeddings — selección, instalación y swap del local `paraphrase-multilingual-MiniLM-L12-v2` en `.tepochcalli/models/`, o API key + endpoint — con resumen de opciones y barra de progreso. Codice no gestiona embeddings, por lo que esta responsabilidad no tiene equivalente en su árbol de módulos y debe añadirse a `application/` + `adapters/` sin forzar un mapeo artificial.
