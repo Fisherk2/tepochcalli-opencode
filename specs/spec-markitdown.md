@@ -122,6 +122,7 @@ flowchart LR
 * markitdown con `file:` puede leer **cualquier archivo accesible al usuario del proceso** — no solo el vault. `paths.py` es la **ÚNICA** puerta que decide qué `file:` y qué ruta llegan al conversor (`validate_source_uri`/`resolve_file_uri` para `add_source`, `validate_vault_path` para las 3 tools), y corre antes de que markitdown toque el disco. Documentado en docs/SECURITY.md §markitdown y en el AGENTS.md del vault.
 * **B′**: la salida también queda dentro del vault; escribir fuera sería *arbitrary file write*. `ensure_within` es la última defensa antes de `os.replace`.
 * `http(s):` descarga contenido no confiable ⇒ riesgo de prompt injection vía material ingerido; mitigación: los chunks viajan como datos citados y la regla de citación exige verificar fuente/autor.
+* **Agotamiento de recursos aceptado (S4min, review 2026-11-17):** los parsers de Office/PDF corren **en proceso** (D-b) sin tope de CPU/RAM — un documento hostil puede monopolizar el server del vault durante la conversión. Se acepta el riesgo con las compensaciones existentes: caps de bytes de entrada (fetch 105 MB, base64 140M chars, ingesta 100 MB), guarda de pared de 120 s sobre el convert en los handlers (el hilo del parse no se cancela y sigue en segundo plano) y el lock del refresh como superficie de retención. **Subproceso + RLIMIT fue rechazado** porque contradice D-b (en proceso deliberado, coste cero adicional sobre D18).
 
 ## Alternatives Considered
 
