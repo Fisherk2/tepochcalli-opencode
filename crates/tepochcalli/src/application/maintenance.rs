@@ -14,19 +14,10 @@ use crate::domain::WizardError;
 use crate::ports::{CommandRunner, Ui};
 
 use super::embedder_menu::config_path;
-use super::flow_cli::run_flow_cli;
+use super::flow_contract::{parse_gate_dims, parse_refresh, spawn_gate, spawn_refresh, Refreshed};
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::{index_meta_path, write_index_meta};
-use super::text::{
-    config_value, json_bool, json_string, json_u32, json_u64, or_fallback, provider_is_none,
-};
-
-/// Flow CLI module invoked through the venv interpreter (D24, T12 contract).
-const FLOW_MODULE: &str = "tepochcalli_flow";
-/// `embed-check` measures the dims of a freshly configured model (T11 gate).
-const GATE_SUBCOMMAND: &str = "embed-check";
-/// `refresh` rebuilds the index and prints its `RefreshReport` (T12 contract).
-const REFRESH_SUBCOMMAND: &str = "refresh";
+use super::text::{config_value, json_string, json_u32, or_fallback, provider_is_none};
 
 /// What the confirmed rebuild established: the counts plus the embedder the
 /// fresh sidecar now describes.
@@ -166,78 +157,33 @@ pub fn run_uninstall(vault: &Path) -> Result<UninstallReport, WizardError> {
     }
 }
 
-/// Gate success payload (T11 programs the flow CLI against this shape):
-/// only the measured dims matter here — the model is the configured one.
+/// Gate success payload of the reindex (variante reducida del contrato
+/// compartido): only the measured dims matter here — the model is the
+/// configured one.
 #[derive(Debug, PartialEq, Eq)]
 struct GateOk {
     dims: u32,
 }
 
-/// `venv python -m tepochcalli_flow embed-check --model <id>` (shared spawn
-/// trunk). `ok:false` is the portero verdict (`E_MODEL_INVALID`); a
-/// crashed/garbled gate is `PhaseFailed`.
+/// Gate del reindex (trunk compartido, T11): sin revisión ni token — las
+/// variantes son parámetros explícitos de `spawn_gate`. `ok:false` is the
+/// portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
+/// `PhaseFailed`.
 fn run_gate(proc: &dyn CommandRunner, vault: &Path, model: &str) -> Result<GateOk, WizardError> {
-    let out = run_flow_cli(
-        proc,
-        vault,
-        &["-m", FLOW_MODULE, GATE_SUBCOMMAND, "--model", model],
-        &[],
-        None,
-        super::flow_cli::GATE_TIMEOUT,
-    )?;
+    let out = spawn_gate(proc, vault, model, None, None)?;
     parse_gate(&out.stdout)
 }
 
-/// Replacement `refresh` (T12 contract). `ok:false` maps to `ModelInvalid`,
-/// matching the F7 portero parity; anything else unparseable is `PhaseFailed`.
-#[derive(Debug, PartialEq, Eq)]
-struct Refreshed {
-    scanned: u64,
-    indexed: u64,
-    skipped: u64,
-    elapsed_ms: u64,
-}
-
+/// Replacement `refresh` (T12 contract, parser compartido). `ok:false` maps
+/// to `ModelInvalid`, matching the F7 portero parity; anything else
+/// unparseable is `PhaseFailed`.
 fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<Refreshed, WizardError> {
-    let out = run_flow_cli(
-        proc,
-        vault,
-        &["-m", FLOW_MODULE, REFRESH_SUBCOMMAND],
-        &[],
-        None,
-        super::flow_cli::REFRESH_TIMEOUT,
-    )?;
+    let out = spawn_refresh(proc, vault)?;
     parse_refresh(&out.stdout)
 }
 
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
-    match json_bool(body, "ok") {
-        Some(true) => Ok(GateOk {
-            dims: json_u32(body, "dims").ok_or(WizardError::Internal)?,
-        }),
-        Some(false) => Err(WizardError::ModelInvalid),
-        None => Err(WizardError::PhaseFailed),
-    }
-}
-
-fn parse_refresh(body: &str) -> Result<Refreshed, WizardError> {
-    if json_bool(body, "ok") == Some(false) {
-        return Err(WizardError::ModelInvalid);
-    }
-    match (
-        json_u64(body, "scanned"),
-        json_u64(body, "indexed"),
-        json_u64(body, "skipped"),
-        json_u64(body, "elapsed_ms"),
-    ) {
-        (Some(scanned), Some(indexed), Some(skipped), Some(elapsed_ms)) => Ok(Refreshed {
-            scanned,
-            indexed,
-            skipped,
-            elapsed_ms,
-        }),
-        _ => Err(WizardError::PhaseFailed),
-    }
+    parse_gate_dims(body).map(|dims| GateOk { dims })
 }
 
 #[cfg(test)]

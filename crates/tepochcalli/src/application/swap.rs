@@ -31,12 +31,12 @@ use super::embedder_menu::{
     ask_non_empty, ask_secret_non_empty, build_options, config_path, external_config, local_config,
     none_config, parse_hf_metadata, write_config, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
+use super::flow_contract::{spawn_gate, spawn_refresh, GateOk};
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
 use super::text::{
-    config_value, is_plausible_hf_id, json_bool, json_escape, json_string, json_u32, json_u64,
-    or_fallback,
+    config_value, is_plausible_hf_id, json_escape, json_string, json_u32, or_fallback,
 };
 
 /// Header lines of the swap-written `[embedding]` configs (D8.4): identical
@@ -50,10 +50,6 @@ const SWAP_NONE_HEADER: &str =
 
 /// Model cache dir, sandboxed under the vault (same dir the F6 gate uses).
 const MODELS_DIR: &str = "models";
-/// Gate + refresh run through the vault venv (T11/T12 contracts, D24/D25).
-const GATE_MODULE: &str = "tepochcalli_flow";
-const GATE_SUBCOMMAND: &str = "embed-check";
-const REFRESH_SUBCOMMAND: &str = "refresh";
 /// HF API base for the free-id pre-check (D8.1; the gate stays ground truth).
 const HF_API_BASE: &str = "https://huggingface.co/api/models/";
 const BYTES_PER_MB: f64 = 1_000_000.0;
@@ -622,16 +618,9 @@ fn cleanup_staged(vault: &Path) {
     let _ = std::fs::remove_file(index_meta_path(vault).with_extension("json.tmp"));
 }
 
-/// Gate success payload (T12 programs the flow CLI against this shape).
-#[derive(Debug, PartialEq, Eq)]
-struct GateOk {
-    model: String,
-    dims: u32,
-    rss_peak_bytes: u64,
-}
-
-/// `venv python -m tepochcalli_flow embed-check --model <id>` (shared spawn
-/// trunk). Gate payload parsing stays local to the swap.
+/// Gate del swap (trunk y parser del contrato compartido, T12). `ok:false`
+/// is the portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
+/// `PhaseFailed`.
 fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
@@ -639,19 +628,7 @@ fn run_gate(
     revision: Option<&str>,
     token: Option<&str>,
 ) -> Result<GateOk, WizardError> {
-    let mut args: Vec<&str> = vec!["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id];
-    if let Some(sha) = revision {
-        args.push("--revision");
-        args.push(sha);
-    }
-    let out = super::flow_cli::run_flow_cli(
-        proc,
-        vault,
-        &args,
-        &[],
-        token,
-        super::flow_cli::GATE_TIMEOUT,
-    )?;
+    let out = spawn_gate(proc, vault, model_id, revision, token)?;
     parse_gate(&out.stdout)
 }
 
@@ -659,42 +636,18 @@ fn run_gate(
 /// replacement `scanned` count. `ok:false` maps to `ModelInvalid`, matching
 /// the F7 portero parity.
 fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<u64, WizardError> {
-    let out = super::flow_cli::run_flow_cli(
-        proc,
-        vault,
-        &["-m", GATE_MODULE, REFRESH_SUBCOMMAND],
-        &[],
-        None,
-        super::flow_cli::REFRESH_TIMEOUT,
-    )?;
+    let out = spawn_refresh(proc, vault)?;
     parse_refresh(&out.stdout)
 }
 
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
-    match json_bool(body, "ok") {
-        Some(true) => Ok(GateOk {
-            model: json_string(body, "model").ok_or(WizardError::Internal)?,
-            dims: json_u32(body, "dims").ok_or(WizardError::Internal)?,
-            rss_peak_bytes: json_u64(body, "rss_peak_bytes").ok_or(WizardError::Internal)?,
-        }),
-        Some(false) => Err(WizardError::ModelInvalid),
-        None => Err(WizardError::PhaseFailed),
-    }
+    super::flow_contract::parse_gate(body)
 }
 
+/// Los otros tres contadores comparten el parser del contrato; al swap solo
+/// le importa el `scanned` del reemplazo.
 fn parse_refresh(body: &str) -> Result<u64, WizardError> {
-    if json_bool(body, "ok") == Some(false) {
-        return Err(WizardError::ModelInvalid);
-    }
-    match (
-        json_u64(body, "scanned"),
-        json_u64(body, "indexed"),
-        json_u64(body, "skipped"),
-        json_u64(body, "elapsed_ms"),
-    ) {
-        (Some(scanned), Some(_), Some(_), Some(_)) => Ok(scanned),
-        _ => Err(WizardError::PhaseFailed),
-    }
+    super::flow_contract::parse_refresh(body).map(|refreshed| refreshed.scanned)
 }
 
 #[cfg(test)]

@@ -9,8 +9,8 @@
 //! (atomically, temp + rename) for the T17 mismatch guard to read back.
 //!
 //! The CLI JSON shapes (`{scanned, indexed, skipped, elapsed_ms}`,
-//! gate-style `{ok: false, …}`) are parsed with the same hand-rolled minimal
-//! readers the F6 gate uses; a refusal maps to the same typed
+//! gate-style `{ok: false, …}`) are parsed by the shared contract parsers
+//! (`application::flow_contract`); a refusal maps to the same typed
 //! `ModelInvalid`, anything else unparseable to `PhaseFailed` — never an
 //! `Ok` report built on garbage.
 
@@ -20,14 +20,10 @@ use crate::domain::WizardError;
 use crate::ports::CommandRunner;
 
 use super::embedder_menu::Phase6Report;
-use super::flow_cli::run_flow_cli;
+use super::flow_contract::spawn_refresh;
 use super::installer::{set_user_private, RUNTIME_DIR};
-use super::text::{json_bool, json_escape, json_u64};
+use super::text::json_escape;
 
-/// Flow CLI module invoked through the venv interpreter (D24).
-const REFRESH_MODULE: &str = "tepochcalli_flow";
-/// `refresh` indexes the vault and prints its `RefreshReport` as one JSON line.
-const REFRESH_SUBCOMMAND: &str = "refresh";
 /// Index dir holding LanceDB plus the metadata sidecar.
 const DB_DIR: &str = "db";
 /// Sidecar with the embedder that produced the index (T17 reads it back).
@@ -67,14 +63,7 @@ pub fn run_phase7(
             dims: None,
         });
     }
-    let out = run_flow_cli(
-        proc,
-        vault,
-        &["-m", REFRESH_MODULE, REFRESH_SUBCOMMAND],
-        &[],
-        None,
-        super::flow_cli::REFRESH_TIMEOUT,
-    )?;
+    let out = spawn_refresh(proc, vault)?;
     match parse_refresh(&out.stdout)? {
         RefreshParsed::Refused => Err(WizardError::ModelInvalid),
         RefreshParsed::Ok {
@@ -110,22 +99,17 @@ enum RefreshParsed {
 }
 
 fn parse_refresh(body: &str) -> Result<RefreshParsed, WizardError> {
-    if json_bool(body, "ok") == Some(false) {
-        return Ok(RefreshParsed::Refused);
-    }
-    match (
-        json_u64(body, "scanned"),
-        json_u64(body, "indexed"),
-        json_u64(body, "skipped"),
-        json_u64(body, "elapsed_ms"),
-    ) {
-        (Some(scanned), Some(indexed), Some(skipped), Some(elapsed_ms)) => Ok(RefreshParsed::Ok {
-            scanned,
-            indexed,
-            skipped,
-            elapsed_ms,
+    match super::flow_contract::parse_refresh(body) {
+        Ok(refreshed) => Ok(RefreshParsed::Ok {
+            scanned: refreshed.scanned,
+            indexed: refreshed.indexed,
+            skipped: refreshed.skipped,
+            elapsed_ms: refreshed.elapsed_ms,
         }),
-        _ => Err(WizardError::PhaseFailed),
+        // Paridad del portero: el `{ok:false}` del contrato compartido llega
+        // aquí como `ModelInvalid`; F7 lo escala como rechazo tipado.
+        Err(WizardError::ModelInvalid) => Ok(RefreshParsed::Refused),
+        Err(err) => Err(err),
     }
 }
 

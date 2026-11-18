@@ -10,25 +10,13 @@ use crate::domain::WizardError;
 use crate::ports::CommandRunner;
 
 use super::flow_cli::MODELS_DIR;
+use super::flow_contract::{spawn_gate, GateOk};
 use super::installer::RUNTIME_DIR;
-use super::text::{json_bool, json_string, json_u32, json_u64};
-
-/// Gate contract is flow-side (T12); el wizard pasa `--model` y, si conoce la
-/// revisión, `--revision <sha>` (el snapshot estable depende de ambos).
-const GATE_MODULE: &str = "tepochcalli_flow";
-const GATE_SUBCOMMAND: &str = "embed-check";
-
-/// Gate success payload (T12 programs the flow CLI against this shape).
-#[derive(Debug)]
-pub(super) struct GateOk {
-    pub(super) model: String,
-    pub(super) dims: u32,
-    pub(super) rss_peak_bytes: u64,
-}
 
 /// Runs `venv python -m tepochcalli_flow embed-check --model <id> [--revision
-/// <sha>]` (shared spawn trunk). `ok:false` is the portero verdict
-/// (`E_MODEL_INVALID`); a crashed/garbled gate is `PhaseFailed`.
+/// <sha>]` (spawn trunk + parser del contrato compartido, T11/S5). `ok:false`
+/// is the portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
+/// `PhaseFailed`.
 pub(super) fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
@@ -36,19 +24,7 @@ pub(super) fn run_gate(
     revision: Option<&str>,
     token: Option<&str>,
 ) -> Result<GateOk, WizardError> {
-    let mut args: Vec<&str> = vec!["-m", GATE_MODULE, GATE_SUBCOMMAND, "--model", model_id];
-    if let Some(sha) = revision {
-        args.push("--revision");
-        args.push(sha);
-    }
-    let out = super::flow_cli::run_flow_cli(
-        proc,
-        vault,
-        &args,
-        &[],
-        token,
-        super::flow_cli::GATE_TIMEOUT,
-    )?;
+    let out = spawn_gate(proc, vault, model_id, revision, token)?;
     parse_gate(&out.stdout)
 }
 
@@ -109,15 +85,7 @@ pub(super) fn verify_materialized(
 }
 
 fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
-    match json_bool(body, "ok") {
-        Some(true) => Ok(GateOk {
-            model: json_string(body, "model").ok_or(WizardError::Internal)?,
-            dims: json_u32(body, "dims").ok_or(WizardError::Internal)?,
-            rss_peak_bytes: json_u64(body, "rss_peak_bytes").ok_or(WizardError::Internal)?,
-        }),
-        Some(false) => Err(WizardError::ModelInvalid),
-        None => Err(WizardError::PhaseFailed),
-    }
+    super::flow_contract::parse_gate(body)
 }
 
 #[cfg(test)]
