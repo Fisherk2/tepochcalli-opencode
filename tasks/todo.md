@@ -1,7 +1,7 @@
 # TODO — Phase 6 (aceptación E2E de los 7 criterios)
 
 > **Fecha:** 2026-11-11 · **Orquestador:** Moctezuma · **Plan:** [tasks/plan.md](plan.md)
-> **Fase:** Phase 6 — E2E Acceptance (los 7 criterios de `docs/UH.md`) · **Gate:** FTR de aceptación + gate v1 release
+> **Fase:** Phase 6 — E2E Acceptance (los 7 criterios de `docs/BACKLOG.md`) · **Gate:** FTR de aceptación + gate v1 release
 > **Decisiones del dueño (2026-11-11):** D-P6-1…D-P6-8 — ver `tasks/plan.md` §2.
 > **Precedente (D-P5-7):** este fichero **sobrescribe** el TODO de Phase 5; el de Phase 5 queda en git (`93d0060`).
 
@@ -46,7 +46,7 @@
 
 - Subagente: `codebase-archaeologist` → `performance-benchmarker` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `planning-and-task-breakdown`, `context-engineering` · Tools: `codebase-memory-mcp`, `vercel-grep`
 - [x] `docs/acceptance/protocol.md`: host de referencia (btrfs/NVMe, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14) y `/mnt/HDDFish` como filesystem de contraste
-- [x] Los 7 criterios de `docs/UH.md` copiados literalmente + el gate D9 marcado como *no criterio 8*
+- [x] Los 7 criterios de `docs/BACKLOG.md` copiados literalmente + el gate D9 marcado como *no criterio 8*
 - [x] Por criterio: bench/test que lo mide hoy (o `no existe`), cifra actual con su método, calpulli que lo cierra
 - [x] Tabla §6.3 copiada con columna `Result` vacía y columna nueva **`origen de la cifra`**
 - [x] **Umbrales fijados ANTES de medir** en `docs/TRD.md` §6.2: recall (propuesta recall@5 = 1.0) y deriva FTS (propuesta: caída de recall ES > 10 % relativo)
@@ -361,4 +361,4 @@
 | Alineación spec↔payload de permisos (hallazgo de T1) | `specs/spec-payload-permissions.md` | T1-bis | Enmendada 2026-11-12 (la política de secretos vive en el global); **856 passed / 0 failed**; GAP declarado: `.tepochcalli/config/**` = `allow` |
 | P-02 · baseline de escala NTFS vs btrfs | `docs/TECH_DEBT.md` §Review 5-ejes | T5 | Convertido en límite documentado |
 | Deriva FTS ES/EN | `docs/TECH_DEBT.md` §Review 5-ejes | T4 | Medida y decidida |
-| Criterios 1-7 de `docs/UH.md` | `docs/WORKFLOW.md` §6.3 | T4-T9 | Con cifra y origen |
+| Criterios 1-7 de `docs/BACKLOG.md` | `docs/WORKFLOW.md` §6.3 | T4-T9 | Con cifra y origen |

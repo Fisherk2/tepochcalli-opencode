@@ -3,7 +3,7 @@
 Este directorio contiene **solo diagnósticos de issues** del proyecto: análisis de causa raíz
 de bugs, incidentes y problemas técnicos, con un formato común para que sean trazables.
 
-La **evidencia de aceptación** (mediciones E2E de los 7 criterios de [UH.md](../UH.md)) **no vive
+La **evidencia de aceptación** (mediciones E2E de los 7 criterios de [BACKLOG.md](../BACKLOG.md)) **no vive
 aquí**: se publica en [`docs/acceptance/`](../acceptance/README.md).
 
 ## Propósito

@@ -118,7 +118,7 @@ legible y mantenible.
 
 | Documento | Umbral |
 | --- | --- |
-| `CHANGELOG.md` · `README.md` (raíz) · `docs/UH.md` | **Sin límite** (historial y fuente de verdad; `UH.md` además es inmutable). |
+| `CHANGELOG.md` · `README.md` (raíz) · `docs/BACKLOG.md` | **Sin límite** (historial y fuente de verdad; todo cambio se registra en §8 del BACKLOG y, si es decisión, exige ADR/enmienda; objetivo <500, ver §7 Split policy). |
 | `tasks/**` · `docs/diagnosis/**` | **< 1000** líneas. |
 | `docs/WORKFLOW.md` · `docs/TECH_DEBT.md` | **< 700** líneas. |
 | El resto de documentación | **< 500** líneas. |
@@ -139,7 +139,7 @@ umbral de su propio tramo**, no a <500:
 | Constructo | Convención | Ejemplo |
 | --- | --- | --- |
 | Specs | `specs/spec-<kebab>.md` | `spec-rag-engine.md` |
-| ADRs | `specs/adr/adr-NNN-<kebab>.md` (3 dígitos, secuencial inmutable) | `adr-001-motor-rag-cocoindex.md` |
+| ADRs | `docs/adr/adr-NNN-<kebab>.md` (3 dígitos, secuencial inmutable) | `adr-001-motor-rag-cocoindex.md` |
 | Docs núcleo | `docs/<MAYUSCULAS>.md` fijos del proyecto | `APPFLOW.md`, `TECH_DEBT.md` |
 | Términos canónicos | exactos, en todo documento (ver checklist AGENTS.md) | `tepochcalli-rag` · `.tepochcalli/` · `00-resources/` · `paraphrase-multilingual-MiniLM-L12-v2` · `cocoindex` · `markitdown` |
 | Branches | `feature/…` `fix/…` `chore/…` (git-workflow skill) | `feature/wizard-phase5` |
@@ -169,7 +169,7 @@ umbral de su propio tramo**, no a <500:
   **Excepción aprobada por el dueño (2026-11-18):** en el flujo destino, **Update (H7)**
   sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`;
   **Desinstall (H8)** remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — **no**
-  `AGENTS.md` (UH:297) —; en ambos, **backup obligatorio del fichero existente antes de
+  `AGENTS.md` (BACKLOG.md §2 / US-H8) —; en ambos, **backup obligatorio del fichero existente antes de
   pisarlo/quitarlo y advertencia
   visible**; la primera Install y las re-entradas `config` siguen con merge conservador
   byte-a-byte salvo los `mcp.servers.*` gestionados. Referencias:
@@ -177,4 +177,4 @@ umbral de su propio tramo**, no a <500:
   (pendiente).
 * Nunca commitear artefactos: `.tepochcalli/{venv,db,models,bin,config}` (gitignore del vault,
   spec-vault-structure).
-* `docs/UH.md` es inmutable: cambio de requisitos ⇒ nueva sección en `docs/PRD.md`/specs, no edición.
+* `docs/BACKLOG.md` es la fuente de verdad: todo cambio se registra en su §8 y, si es decisión, exige ADR/enmienda; el detalle nuevo vive en `docs/PRD.md`/specs.

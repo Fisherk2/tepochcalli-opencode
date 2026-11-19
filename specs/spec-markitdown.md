@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (H1-H2 anexo 2026-10-30; criterio 7) · specs/spec-mcp-server.md (7 tools) · specs/spec-rag-engine.md (whitelist y extracción) · docs/SECURITY.md · ADR-009 (conversor resumen-only) · ADR-010 (índice multi-raíz) · ADR-011 (dieta de dependencias)
+* **Traceability:** docs/BACKLOG.md (H1-H2 anexo 2026-10-30; criterio 7) · specs/spec-mcp-server.md (7 tools) · specs/spec-rag-engine.md (whitelist y extracción) · docs/SECURITY.md · ADR-009 (conversor resumen-only) · ADR-010 (índice multi-raíz) · ADR-011 (dieta de dependencias)
 
 ## Summary
 
@@ -17,7 +17,7 @@ Una sola librería, dos consumidores. El server standalone `markitdown` está **
 
 ## Problem / Motivation
 
-Criterio 7 de UH.md: «Pueda procesar distintos formatos de texto, si no, utilizar el convertidor Markdown». El parser nativo del flow cubre md/txt; la ofimática y el PDF entran por markitdown. El defecto que esta enmienda cierra (H1/H2, anexo 2026-10-30; diagnosis `fix01`): el MCP standalone devolvía el markdown **completo** en `content[0].text`, de modo que el coste de una tool call crecía con el tamaño del documento y saturaba el contexto. La conversión debe ser un artefacto en disco con un resumen constante en el wire.
+Criterio 7 de BACKLOG.md: «Pueda procesar distintos formatos de texto, si no, utilizar el convertidor Markdown». El parser nativo del flow cubre md/txt; la ofimática y el PDF entran por markitdown. El defecto que esta enmienda cierra (H1/H2, anexo 2026-10-30; diagnosis `fix01`): el MCP standalone devolvía el markdown **completo** en `content[0].text`, de modo que el coste de una tool call crecía con el tamaño del documento y saturaba el contexto. La conversión debe ser un artefacto en disco con un resumen constante en el wire.
 
 > Como investigador, quiero convertir un DOCX o un PDF a Markdown sin abrir Word ni copiar/pegar, y que la operación no consuma mi ventana de contexto.
 

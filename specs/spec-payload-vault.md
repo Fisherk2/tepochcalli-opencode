@@ -1,11 +1,11 @@
 # Spec: Blueprint del payload del vault — agentes, comandos y AGENTS.md (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (T2/T8: línea en blanco tras cada `##` por MD022/MD032 y título sin placeholder `<vault name>` por MD033) · **Enmendada 2026-11-11** ([ADR-012](adr/adr-012-formato-payload-revisado.md): AGENTS.md genérico, minúsculas, 41 skills — ver §Enmienda 2026-11-11)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (T2/T8: línea en blanco tras cada `##` por MD022/MD032 y título sin placeholder `<vault name>` por MD033) · **Enmendada 2026-11-11** ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md): AGENTS.md genérico, minúsculas, 41 skills — ver §Enmienda 2026-11-11)
 * **Fase:** Phase 4 (diseño) — lienzo vivo de esta spec; gate: BLUEPRINT APPROVED por el usuario; Phase 5 ejecuta literal (sin reinterpretación)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (blueprint confirmado por el usuario 2026-10-21)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2, desviación Pochteca D9.3, reglas del AGENTS del vault), specs/spec-vault-structure.md (zonas D9.1), specs/spec-mcp-server.md (7 tools + taxonomía `E_*`), docs/UH.md (tabla Agentes Primarios — inmutable), docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución); reglas de formato OpenCode V2 re-verificadas contra docs oficiales v2.1.2 el 2026-11-04
+* **Traceability:** specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2, desviación Pochteca D9.3, reglas del AGENTS del vault), specs/spec-vault-structure.md (zonas D9.1), specs/spec-mcp-server.md (7 tools + taxonomía `E_*`), docs/BACKLOG.md (tabla Agentes Primarios), docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución); reglas de formato OpenCode V2 re-verificadas contra docs oficiales v2.1.2 el 2026-11-04
 
 ## Summary
 
@@ -296,8 +296,8 @@ Movida a [specs/spec-payload-skills.md](spec-payload-skills.md) (inventario defi
   bloque).
 * ⚖️ **Neutral:** los ~165 subagents Códice quedan en disco, no invocables — catálogo inerte.
 * ⚠️ **O-10 — riesgo de traducción (D-P4-6):** el cuerpo inglés del `AGENTS.md` es el bloque
-  congelado; [docs/UH.md](../docs/UH.md) sigue siendo la fuente de verdad en español. Si Phase 5
-  encuentra una divergencia semántica, gana `docs/UH.md` y se abre una enmienda fechada — no se
+  congelado; [docs/BACKLOG.md](../docs/BACKLOG.md) sigue siendo la fuente de verdad en español. Si Phase 5
+  encuentra una divergencia semántica, gana `docs/BACKLOG.md` y se abre una enmienda fechada — no se
   reinterpreta el pipeline ni se "mejora" la traducción en silencio.
 
 ## Decisiones
@@ -349,7 +349,7 @@ ejecutables sobre `obsidian-workspace/` tras la materialización:
   smoke: sesión nueva, `/rubric`, y verificar `opencode agents list` + routing real.
 * Señal de deriva: cualquier diff de `.opencode/agents/*.md` que no cite esta spec en el commit.
 
-## Enmienda 2026-11-11 — formato revisado ([ADR-012](adr/adr-012-formato-payload-revisado.md))
+## Enmienda 2026-11-11 — formato revisado ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md))
 
 El blueprint de arriba queda como **diseño histórico Phase 4**; el payload real
 (`baf2993`..`1c4a90b`) es el formato canónico ongoing:
@@ -386,5 +386,5 @@ El blueprint de arriba queda como **diseño histórico Phase 4**; el payload rea
   [spec-payload-commands.md](spec-payload-commands.md) ·
   [spec-payload-skills.md](spec-payload-skills.md)
 * specs/spec-agent-workflow.md (D9.2/D9.3, Anexo A), specs/spec-vault-structure.md (D9.1),
-  specs/spec-mcp-server.md (contrato 7 tools + `E_*`), docs/UH.md (tabla Agentes Primarios),
+  specs/spec-mcp-server.md (contrato 7 tools + `E_*`), docs/BACKLOG.md (tabla Agentes Primarios),
   docs/WORKFLOW.md Phases 4 (diseño) y 5 (ejecución)

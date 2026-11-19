@@ -1,8 +1,8 @@
 # Architecture — Tepochcalli
 
 > Índice ejecutivo de las decisiones de arquitectura. Cada decisión significativa está
-> registrada como ADR en [`specs/adr/`](../specs/adr/) siguiendo el formato MADR.
-> Requisitos: [docs/UH.md](UH.md) · Especificación: [SPEC.md](../SPEC.md)
+> registrada como ADR en [`docs/adr/`](adr/) siguiendo el formato MADR.
+> Requisitos: [docs/BACKLOG.md](BACKLOG.md) · Especificación: [SPEC.md](../SPEC.md)
 
 ## Sistema en una frase
 
@@ -105,8 +105,8 @@ sequenceDiagram
 
 | Componente | Capa | Ubicación | Spec/ADR |
 | --- | --- | --- | --- |
-| Vault numerado (00-resources, 01-tasks…) + `10-templates/` | Usuario | `obsidian-workspace/` (payload) | spec-vault-structure, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
-| AGENTS.md del vault (guía genérica harness-agnóstica, EN) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
+| Vault numerado (00-resources, 01-tasks…) + `10-templates/` | Usuario | `obsidian-workspace/` (payload) | spec-vault-structure, [ADR-012](adr/adr-012-formato-payload-revisado.md) |
+| AGENTS.md del vault (guía genérica harness-agnóstica, EN) | Usuario/Agente | `<vault>/AGENTS.md` | spec-agent-workflow, [ADR-012](adr/adr-012-formato-payload-revisado.md) |
 | OpenCode V2 + agentes/comandos/skills | Agente | `<vault>/.opencode/` | spec-agent-workflow |
 | `opencode.json` (`mcp.servers`) | Agente | `<vault>/opencode.json` | spec-markitdown §config |
 | `tepochcalli-rag` (**7 tools**: `search`/`index_refresh()`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` — Phase 3.5) | Comunicación | `.tepochcalli/mcp/tepochcalli_mcp/` — 4 tools entregadas en Phase 2 (T1-T8); 3 del conversor en Phase 3.5 (ADR-009) | spec-mcp-server, ADR-005, ADR-009, ADR-010 |
@@ -127,7 +127,7 @@ sequenceDiagram
 | **Suite Phase 3.5 (T1–T16):** **670 passed + 3 `slow`**, cobertura **97 %** (gate 95 %); contract tests e2e de las 7 tools, negativos de B′, multi-raíz y documentos; `bench_delta.py` re-medido (Δ texto p95 **4 299 ms**, n=20 nearest-rank) | Verificación | repo `tests/` | WORKFLOW §Phase 3.5 |
 | **CI Phase 1:** `phase1.yml` (ruff → suite → smoke Δ) | Verificación | `.github/workflows/phase1.yml` — **solo verificación local; nunca corrió en GitHub Actions (M6)** | T11, WORKFLOW §Phase 1 |
 | Wizard TUI Rust + cargo-dist | Distribución | repo `crates/` (Phase 3) + Releases | ADR-003, spec-installer-wizard |
-| **Payload materializado (Phase 5, 2026-11-09; formato revisado 2026-11-11; canónico 2026-11-12):** 15 artefactos de texto (5 agentes con permisos inline + 9 comandos + `AGENTS.md` genérico del vault) + 40 skills (`database-lookup/` retirada `c815eb0`; `ls` 2026-11-12 = 40 dirs) + global 313 reglas + scaffold `00-resources/`/`10-templates/`; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) |
+| **Payload materializado (Phase 5, 2026-11-09; formato revisado 2026-11-11; canónico 2026-11-12):** 15 artefactos de texto (5 agentes con permisos inline + 9 comandos + `AGENTS.md` genérico del vault) + 40 skills (`database-lookup/` retirada `c815eb0`; `ls` 2026-11-12 = 40 dirs) + global 313 reglas + scaffold `00-resources/`/`10-templates/`; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5, [ADR-012](adr/adr-012-formato-payload-revisado.md) |
 
 ## Engine components (hexagonal view)
 
@@ -270,21 +270,21 @@ graph TB
 
 | ADR | Título | Status | Date |
 | --- | --- | --- | --- |
-| [ADR-001](../specs/adr/adr-001-motor-rag-cocoindex.md) | Motor RAG: CocoIndex (vs LEANN/LightRAG/RAG-Anything/PageIndex) | Accepted | 2026-10-21 |
-| [ADR-002](../specs/adr/adr-002-lancedb-embebido.md) | LanceDB embebido (vs pgvector/Qdrant/ChromaDB/SQLite) | Accepted | 2026-10-21 |
-| [ADR-003](../specs/adr/adr-003-distribucion-cargo-dist.md) | Distribución cargo-dist + GitHub Releases (no bunx) | Accepted | 2026-10-21 |
-| [ADR-004](../specs/adr/adr-004-uv-venv-aislado.md) | uv + venv local de proyecto (usuario sin Python) | Accepted | 2026-10-21 |
-| [ADR-005](../specs/adr/adr-005-mcp-ports-adapters.md) | MCP `tepochcalli-rag` como capa ports/adapters | Accepted | 2026-10-21 |
-| [ADR-006](../specs/adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como embedding default (elección del modelo default; el comportamiento del wizard en §4.1 queda reemplazado por ADR-007) | Accepted | 2026-10-21 |
-| [ADR-007](../specs/adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4) | Accepted | 2026-10-21 |
-| [ADR-008](../specs/adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico de modelo (refina ADR-007 capa UX) | Accepted | 2026-10-21 |
-| [ADR-009](../specs/adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Accepted | 2026-11-03 |
-| [ADR-010](../specs/adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` + `source_path` relativo al vault (rev. 2 2026-11-03) | Accepted | 2026-11-03 |
-| [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
-| [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills | Accepted | 2026-11-11 |
-| [ADR-013](../specs/adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003) | Accepted | 2026-11-13 |
-| [ADR-014](../specs/adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003 | Proposed | 2026-11-18 |
-| [ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada (`cpu`/`cuda`/`cuda:N`); refina ADR-007/008 sin reabrir el rechazo de autoselección | Proposed | 2026-11-18 |
+| [ADR-001](adr/adr-001-motor-rag-cocoindex.md) | Motor RAG: CocoIndex (vs LEANN/LightRAG/RAG-Anything/PageIndex) | Accepted | 2026-10-21 |
+| [ADR-002](adr/adr-002-lancedb-embebido.md) | LanceDB embebido (vs pgvector/Qdrant/ChromaDB/SQLite) | Accepted | 2026-10-21 |
+| [ADR-003](adr/adr-003-distribucion-cargo-dist.md) | Distribución cargo-dist + GitHub Releases (no bunx) | Accepted | 2026-10-21 |
+| [ADR-004](adr/adr-004-uv-venv-aislado.md) | uv + venv local de proyecto (usuario sin Python) | Accepted | 2026-10-21 |
+| [ADR-005](adr/adr-005-mcp-ports-adapters.md) | MCP `tepochcalli-rag` como capa ports/adapters | Accepted | 2026-10-21 |
+| [ADR-006](adr/adr-006-minilm-multilingue-default.md) | MiniLM multilingüe como embedding default (elección del modelo default; el comportamiento del wizard en §4.1 queda reemplazado por ADR-007) | Accepted | 2026-10-21 |
+| [ADR-007](adr/adr-007-seleccion-embedder-instalacion.md) | Selección de embedder en instalación (menú D7.1-D7.4) | Accepted | 2026-10-21 |
+| [ADR-008](adr/adr-008-transparencia-hardware-cambio-modelo.md) | Transparencia de hardware y swap atómico de modelo (refina ADR-007 capa UX) | Accepted | 2026-10-21 |
+| [ADR-009](adr/adr-009-conversor-resumen-sin-cuerpo.md) | Conversor summary-only: resumen de 5 claves, markitdown en proceso, frontera B′ | Accepted | 2026-11-03 |
+| [ADR-010](adr/adr-010-indice-multi-raiz-cita-vault.md) | Índice multi-raíz declarado en `INDEXER_DIR` + `source_path` relativo al vault (rev. 2 2026-11-03) | Accepted | 2026-11-03 |
+| [ADR-011](adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
+| [ADR-012](adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills | Accepted | 2026-11-11 |
+| [ADR-013](adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003) | Accepted | 2026-11-13 |
+| [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003 | Proposed | 2026-11-18 |
+| [ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada (`cpu`/`cuda`/`cuda:N`); refina ADR-007/008 sin reabrir el rechazo de autoselección | Proposed | 2026-11-18 |
 
 ## Key decisions summary
 
@@ -308,4 +308,4 @@ Coste conocido: re-index completo y re-validación de los benchmarks <30s/<500ms
 ## References
 
 * [C4 model](https://c4model.com/) · [MADR](https://adr.github.io/) · OpenCode V2 docs (<https://opencode.ai/v2/docs>)
-* Specs: [../specs/](../specs/) · Requisitos: [UH.md](UH.md)
+* Specs: [../specs/](../specs/) · Requisitos: [BACKLOG.md](BACKLOG.md)

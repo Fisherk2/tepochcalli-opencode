@@ -10,7 +10,7 @@ Fuentes de verdad:
 * specs/spec-rag-engine.md §Target LanceDB + índices — la tabla `chunks` con
   ANN sobre `embedding` + FTS sobre `text` (ambos declarados por T6) es el
   almacén detrás del puerto (§Escape hatch de migración de motor).
-* specs/adr/adr-005-mcp-ports-adapters.md — «la cita precisa es estructural,
+* docs/adr/adr-005-mcp-ports-adapters.md — «la cita precisa es estructural,
   no opcional»: el puerto devuelve SIEMPRE los seis campos.
 * tasks/todo.md → T9 AC — protocolo sin deps de LanceDB/CocoIndex, score
   normalizado, `path_filter` glob, verificador CLI, ANN+FTS <500ms p95

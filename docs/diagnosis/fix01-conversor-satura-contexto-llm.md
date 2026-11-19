@@ -17,14 +17,14 @@ agente lo re-escribe a mano sin daño visible, pero con documentos grandes (p. e
 el contexto se satura y la sesión degenera. El conversor es una **herramienta**: debe leer el
 documento, convertirlo y escribirlo a disco él mismo, devolviendo al LLM únicamente un resumen
 de la operación — nunca el contenido convertido. La regla ya está codificada como objetivo en
-las historias H1/H2 de [docs/UH.md](../UH.md) (anexo 2026-10-30) y en el diseño `add_source`
+las historias H1/H2 de [docs/BACKLOG.md](../BACKLOG.md) (anexo 2026-10-30) y en el diseño `add_source`
 (D-b), que hoy es el único camino que la cumple.
 
 ## Symptoms
 
 - Documento de 1 página: conversión funciona; el agente escribe el output a mano — costoso pero invisible.
 - Documento grande (reporte del dueño: «si le paso un documento de 1000 páginas se satura»): la ventana de contexto del LLM se llena con el markdown íntegro devuelto por la tool; el agente intenta re-escribirlo por partes o la sesión se degrada.
-- No hay error ni stack trace: el fallo es de presupuesto, no de excepción — viola directamente el criterio 4 de docs/UH.md (≤2000 tokens/consulta) y la disciplina de token-budget de [spec-mcp-server](../../specs/spec-mcp-server.md).
+- No hay error ni stack trace: el fallo es de presupuesto, no de excepción — viola directamente el criterio 4 de docs/BACKLOG.md (≤2000 tokens/consulta) y la disciplina de token-budget de [spec-mcp-server](../../specs/spec-mcp-server.md).
 - Contradicción de estado en el repo: [spec-markitdown.md:58](../../specs/spec-markitdown.md) declara el standalone «retirado» (2026-10-27), pero el payload lo tiene `disabled: false` (`31cfe34`, testing en vivo autorizado por el dueño, decisión revertir-vs-consolidar explícitamente pendiente).
 
 ## Root Cause
@@ -86,7 +86,7 @@ _Patrón 2/3: si la skill anydoc-fallback se integra sin devolución resumen, ci
 
 ## References
 
-- Anexo H1–H4 (conversor + skill + summary-only): [docs/UH.md](../UH.md) §Historias de conversión
+- Anexo H1–H4 (conversor + skill + summary-only): [docs/BACKLOG.md](../BACKLOG.md) §Historias de conversión
 - Contrato de conversión en proceso (D-b, el camino que ya cumple la regla): [specs/spec-markitdown.md](../../specs/spec-markitdown.md) §Conversión en proceso
 - Retirada original del standalone + config payload: [spec-markitdown.md:58](../../specs/spec-markitdown.md)
 - Entry del payload habilitada para testing (contradicción con la spec): `obsidian-workspace/opencode.json:111-116`, commit `31cfe34`

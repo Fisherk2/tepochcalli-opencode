@@ -5,7 +5,7 @@ Fuentes de verdad:
 * tasks/todo.md T10 — integration con un `.docx` real en base64 ⇒ `.md`
   equivalente al de T9 (mismo texto; mismo resumen salvo `source_uri`/
   `written_to`).
-* specs/adr/adr-009-conversor-resumen-sin-cuerpo.md §D38 (pista de tipo) y §D36
+* docs/adr/adr-009-conversor-resumen-sin-cuerpo.md §D38 (pista de tipo) y §D36
   (mismo resumen de 5 claves).
 
 El `.docx` se genera con `zipfile` de la stdlib (igual que

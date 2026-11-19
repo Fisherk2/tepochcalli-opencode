@@ -2,9 +2,9 @@
 
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T10
 > **Estado:** **medido** y **firmado por el dueño (2026-11-13): se reafirma D54**.
-> **Fuente de verdad:** [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) §4.3
-> (D54) · [spec-rag-engine](../specs/spec-rag-engine.md) §Ruta de documentos ·
-> [TECH_DEBT](../TECH_DEBT.md) TD-27 · [plan](../tasks/plan.md) §Task T10 (D-P6-5).
+> **Fuente de verdad:** [ADR-011](../adr/adr-011-politica-dependencias-dos-librerias.md) §4.3
+> (D54) · [spec-rag-engine](../../specs/spec-rag-engine.md) §Ruta de documentos ·
+> [TECH_DEBT](../TECH_DEBT.md) TD-27 · [plan](../../tasks/plan.md) §Task T10 (D-P6-5).
 > **Jerarquía de evidencia (D8):** `medido > estimado > declarado`. Lo medido lleva su comando;
 > lo que no se pudo medir se escribe como no medido.
 > **Evidencia archivada:** [pdf-heading.json](pdf-heading.json) (11 registros: 9 documentos,
@@ -140,7 +140,7 @@ Se deja como **hallazgo para decisión separada** del dueño.
   `offsets_ref="extract"` + offsets + `text` persistido (F1 5/5, [citations.md](citations.md) 6/6).
 * **Coste de revertir (documentado, no pagado):** reintroducir Docling = **≈225 MB** de
   dependencias (`opencv` 153, `docling_parse` 33, `rapidocr` 32) y **≈2,0 GB de RSS pico** en el
-  ciclo Δ — cifras de [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) §4.3,
+  ciclo Δ — cifras de [ADR-011](../adr/adr-011-politica-dependencias-dos-librerias.md) §4.3,
   **no medidas en T10** — más un re-index completo (índice en frío del corpus 11k: **543 645 ms**
   en btrfs / **944 019 ms** en NTFS, [search-scale.md](search-scale.md) y
   [scale-ratio.md](scale-ratio.md)) y la re-validación de los benchmarks de la fase.
@@ -200,7 +200,7 @@ pipeline, no una regex propia), percentiles no aplican (conteos exactos). Host: 
 
 * **No firma** por sí mismo la decisión (cambia una decisión `Accepted`: es del dueño); la firma
   (2026-11-13) y el cierre de TD-27 viven en `docs/TECH_DEBT.md`.
-* **No** escribe ADR-013 ni toca `specs/adr/`; **no** toca `specs/` (la re-sincronización de las 4
+* **No** escribe ADR-013 ni toca `docs/adr/`; **no** toca `specs/` (la re-sincronización de las 4
   specs es de la vía (b), y solo si se firma).
 * **No** mide Docling (no está instalado) ni afirma que Docling produzca buenos headings.
 * **No** reescribe el payload (D-P6-1) ni el contrato MCP (ADR-005).

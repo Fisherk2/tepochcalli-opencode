@@ -9,7 +9,7 @@ Fuentes de verdad:
 * specs/spec-mcp-server.md §Presupuesto de tokens — techo 1600 sobre la suma
   estimada (chars/4 + 25 por resultado); `rag_status` <200 lo cubre T4
   (`test_mcp_rag_status.py`, ya verde).
-* docs/UH.md criterio 4 — ≤2000 tokens/consulta incluyendo contexto (el techo
+* docs/BACKLOG.md criterio 4 — ≤2000 tokens/consulta incluyendo contexto (el techo
   1600 deja ≥400 de margen para pregunta + respuesta).
 
 Decisiones de test, documentadas a propósito (convención de T2/T6):

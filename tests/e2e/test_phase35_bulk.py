@@ -2,7 +2,7 @@
 
 Fuentes de verdad: `tasks/todo.md` → T13 AC (a)-(i); `docs/TRD.md` §6 (protocolo:
 n=20, nearest-rank, PDFs/binarios aparte); `specs/spec-rag-engine.md` §Presupuesto
-de escala y §Semántica incremental; `specs/adr/adr-010-indice-multi-raiz-cita-vault.md`
+de escala y §Semántica incremental; `docs/adr/adr-010-indice-multi-raiz-cita-vault.md`
 §4.1/§4.6 (D51: los binarios se miden aparte del Δ de 30 s); `docs/WORKFLOW.md`
 §Phase 1 (M1/M5) y §Phase 2 (M2), formato de cifras publicadas.
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Criterio 1 de `docs/UH.md` — el vault funciona sin interferencias (Phase 6 · T9).
+"""Criterio 1 de `docs/BACKLOG.md` — el vault funciona sin interferencias (Phase 6 · T9).
 
 Ejecuta el checklist de `specs/spec-vault-structure.md` §Testing sobre un vault
 **instalado por el wizard** (`install --non-interactive --skip-model`) y publica

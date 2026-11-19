@@ -6,7 +6,7 @@ Fuentes de verdad:
   techo **1600**, corte por score descendente, `truncated: true` al cortar.
 * specs/spec-mcp-server.md §Presupuesto de tokens — el estimador es chars/4
   (aprox ES/EN) y el margen ≥400 tokens deja la pregunta y la respuesta del
-  agente dentro de la cota 2000 de UH.md (criterio 4).
+  agente dentro de la cota 2000 de BACKLOG.md (criterio 4).
 * `top_k` ∈ [1,20] (fuera → `VALIDATION_ERROR`), efectivo `min(solicitado, 8)`.
 
 Dominio puro del server: sin infraestructura — solo `tepochcalli_flow.ports`

@@ -1,11 +1,11 @@
 # Spec: Skills del payload — inventario definitivo y tabla de invocación
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED) · **Enmendada 2026-11-12** (inventario real **39** tras retirar `database-lookup/` en `c815eb0` y `writing-skills/` en `e785072`; tabla 9×4 y frase de subagentes **SUPERSEDED** por la §Enmienda 2026-11-12, generada desde los cuerpos)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md): 41 skills con `math-typesetting-guide`; D-P5-1 SUPERSEDED) · **Enmendada 2026-11-12** (inventario real **39** tras retirar `database-lookup/` en `c815eb0` y `writing-skills/` en `e785072`; tabla 9×4 y frase de subagentes **SUPERSEDED** por la §Enmienda 2026-11-12, generada desde los cuerpos)
 * **Fase:** Phase 4 (diseño) — Phase 5 verifica, no ejecuta cortes
 * **Date:** 2026-11-09 (congela inventario; rev. 2026-11-04 SUPERSEDED, ver §Histórico)
 * **Author:** Arquitecto (calpulli T2b, Phase 4)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** [specs/spec-payload-vault.md](spec-payload-vault.md) (blueprint; la §Tabla de invocación 9×4 es T3), [specs/spec-agent-workflow.md](spec-agent-workflow.md) (Anexo A — auditoría de 208 skills, 2026-10-21), [specs/spec-vault-structure.md](spec-vault-structure.md) (zonas D9.1), [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) TD-7 y TD-22, [docs/UH.md](../docs/UH.md) (áreas de investigación; la fuente no las numera), [docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 4 y Phase 5
+* **Traceability:** [specs/spec-payload-vault.md](spec-payload-vault.md) (blueprint; la §Tabla de invocación 9×4 es T3), [specs/spec-agent-workflow.md](spec-agent-workflow.md) (Anexo A — auditoría de 208 skills, 2026-10-21), [specs/spec-vault-structure.md](spec-vault-structure.md) (zonas D9.1), [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) TD-7 y TD-22, [docs/BACKLOG.md](../docs/BACKLOG.md) (áreas de investigación; la fuente no las numera), [docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 4 y Phase 5
 
 ## Summary
 
@@ -21,7 +21,7 @@ INSTALAR-GAP 0**. Phase 5 **verificó presencia (40 presentes, 0 retiros)** y no
 ninguna matriz de recorte. La matriz de 17 filas de la rev. 2026-11-04 queda **SUPERSEDED**
 y se conserva solo como histórico colapsado (§Histórico) — **no ejecutar**.
 
-**Enmienda 2026-11-11 ([ADR-012](../specs/adr/adr-012-formato-payload-revisado.md)):** el
+**Enmienda 2026-11-11 ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md)):** el
 dueño autorizó la skill 41 (`math-typesetting-guide`, commit `1c4a90b`, invocada desde §3
 del `AGENTS.md` del payload). D-P5-1 (freeze 40) queda **SUPERSEDED**; el inventario pasó
 a **41 dirs**, objetivo <60 seguía cumplido (41 < 60).
@@ -130,7 +130,7 @@ Cobertura del inventario: **39/39** (2026-11-12; toda skill del `ls` está conse
 El objetivo de menos de 60 skills del payload base (métrica heredada de
 [docs/WORKFLOW.md](../docs/WORKFLOW.md) Phase 5 y de TD-7) queda **CUMPLIDO: 39 < 60**
 (40 al congelado 2026-11-09 + `math-typesetting-guide` 2026-11-11 − `database-lookup/`
-retirada 2026-11-12 − `writing-skills/` retirada 2026-11-12, [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md),
+retirada 2026-11-12 − `writing-skills/` retirada 2026-11-12, [ADR-012](../docs/adr/adr-012-formato-payload-revisado.md),
 `c815eb0` y `e785072`).
 **No se ejecuta ningún corte ni consolidación en Phase 5** — el inventario ya está por
 debajo del umbral por decisión del dueño (2026-11-09).
@@ -179,7 +179,7 @@ las dos. Phase 5 debe **renombrar**, no crear, y verificar con `ls` tras el inst
 * [specs/spec-payload-vault.md](spec-payload-vault.md) — blueprint de agentes, permisos y `AGENTS.md`; puntero a esta spec para la tabla 9×4 (D-P4-4)
 * [specs/spec-agent-workflow.md](spec-agent-workflow.md) — Anexo A: auditoría de 208 skills (2026-10-21) y gaps accionables
 * [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) — TD-7 (skills infladas) y TD-22 (OfficeCLI 0.2.0)
-* [docs/UH.md](../docs/UH.md) — áreas de investigación pedidas (sin numeración en la fuente)
+* [docs/BACKLOG.md](../docs/BACKLOG.md) — áreas de investigación pedidas (sin numeración en la fuente)
 * [docs/WORKFLOW.md](../docs/WORKFLOW.md) — Phase 4 (diseño) y Phase 5 (payload + verificación 40, hoy 39)
 * [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md) — capas y contratos que el payload debe respetar
 * `crates/tepochcalli/src/application/installer.rs` (muestras del instalador) y `crates/tepochcalli/assets/ejemplo.pdf`

@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (capa MCP Server; H1-H2 anexo 2026-10-30), ADR-005 (ports/adapters), ADR-007 (tool `rag_status` + dialecto `E_*`, D7.3), ADR-009 (conversor resumen-only), ADR-010 (índice multi-raíz), ADR-011 (dieta de dependencias), specs/spec-rag-engine.md, specs/spec-markitdown.md, specs/spec-embeddings.md, docs/WORKFLOW.md Phase 2
+* **Traceability:** docs/BACKLOG.md (capa MCP Server; H1-H2 anexo 2026-10-30), ADR-005 (ports/adapters), ADR-007 (tool `rag_status` + dialecto `E_*`, D7.3), ADR-009 (conversor resumen-only), ADR-010 (índice multi-raíz), ADR-011 (dieta de dependencias), specs/spec-rag-engine.md, specs/spec-markitdown.md, specs/spec-embeddings.md, docs/WORKFLOW.md Phase 2
 
 ## Summary
 

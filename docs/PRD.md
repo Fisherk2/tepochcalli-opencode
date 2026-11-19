@@ -1,6 +1,6 @@
 # Product Requirements Document — Tepochcalli v1 (MVP)
 
-**Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Approved (requisitos: docs/UH.md)
+**Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Approved (requisitos: docs/BACKLOG.md)
 
 ## 0. General Description
 
@@ -48,11 +48,11 @@ nativas.
 
 ### Nota destino 2026-11-18 (Proposed, sin aprobación)
 
-La evolución `/evolve` sobre [docs/UH.md §"Wizard de instalación: flujo destino"](UH.md) (H5-H11)
+La evolución `/evolve` sobre [docs/BACKLOG.md §"Wizard de instalación: flujo destino"](BACKLOG.md) (H5-H11)
 fija el estado **objetivo** de F5/F6 como **Proposed** — no sustituye nada de lo aprobado:
 
 * **Canal único `uvx tepochcalli`** (rueda de PyPI vía maturin `bindings = "bin"`; refresco
-  `uvx --refresh tepochcalli`) — [ADR-014](../specs/adr/adr-014-distribucion-uvx-pypi.md). Mientras
+  `uvx --refresh tepochcalli`) — [ADR-014](adr/adr-014-distribucion-uvx-pypi.md). Mientras
   no sea *Accepted*, el canal vigente sigue siendo `cargo binstall` + cargo-dist (ADR-013/003).
 * **TUI full-screen con botones por estado** (4 escenarios de versión, H5; bloqueo = botón
   deshabilitado con razón visible) en lugar del `dialoguer` line-based (D23).
@@ -60,7 +60,7 @@ fija el estado **objetivo** de F5/F6 como **Proposed** — no sustituye nada de 
   material del vault **con backup obligatorio y advertencia visible** (excepción del dueño
   2026-11-18 en [docs/CODE_STYLE.md](CODE_STYLE.md)).
 * **Device de inferencia explícito** (`cpu`/`cuda`/`cuda:N`, H9) —
-  [ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md).
+  [ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md).
 
 Implementación y aprobación: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**GATED**).
 
@@ -72,7 +72,7 @@ Implementación y aprobación: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**GATE
 * Indexar `01/02/03` por defecto; OCR de imágenes; plugin OpenCode sustituto del AGENTS.md (futuro).
 * Gestión de referencias tipo Zotero completo (eso lo aporta el flujo `/cite` + skills).
 
-## 6. Acceptance Criteria (textuales de docs/UH.md — contrato de v1)
+## 6. Acceptance Criteria (textuales de docs/BACKLOG.md — contrato de v1)
 
 1. El vault de Obsidian funciona normalmente sin interferencias
 2. Los archivos nuevos se indexan automáticamente en menos de 30 segundos cuando Opencode invoca la función del MCP correspondiente

@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T8
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
-> **Fuente de verdad:** `docs/UH.md` línea 61 (inmutable) — «Pueda procesar distintos formatos de
+> **Fuente de verdad:** `docs/BACKLOG.md §1 / C7` — «Pueda procesar distintos formatos de
 > texto, si no, utilizar el convertidor Markdown para que pueda manipularse adecuadamente» ·
 > `tasks/plan.md` §Task T8 · `specs/spec-rag-engine.md` §Fuentes · `specs/spec-markitdown.md`
 > §Catálogo y §Cadena de fallback · ADR-009 (D28/D36) y ADR-010 (D41/D49).

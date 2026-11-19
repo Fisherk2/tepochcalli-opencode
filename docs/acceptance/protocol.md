@@ -3,7 +3,7 @@
 > **Fecha:** 2026-11-12 · **Fase:** Phase 6 — E2E Acceptance · **Estado:** borrador para CP-0
 > (revisión del dueño; sin aprobación, ningún calpulli mide).
 >
-> **Fuente de verdad de los criterios:** `docs/UH.md` líneas 54-60 (inmutable).
+> **Fuente de verdad de los criterios:** `docs/BACKLOG.md §1 / C1–C7`.
 > **Metodología de la corrida:** `docs/WORKFLOW.md` §Phase 6 (líneas 271-294).
 > **Protocolos numéricos:** `docs/TRD.md` §6.1 (método, líneas 80-97) y §6.2 (umbrales, 99-117).
 > **Jerarquía de evidencia (D8):** `medido > estimado > declarado`. Cada cifra de este
@@ -38,9 +38,9 @@
   registrada para Phase 1 en `docs/WORKFLOW.md:38` y se mantiene por ausencia de VM; el FTR
   debe verla escrita, no silenciada.
 
-## 2. Los 7 criterios de UH.md, literales
+## 2. Los 7 criterios de BACKLOG.md, literales
 
-Copiados **textualmente** de `docs/UH.md` líneas 54-60 (sin parafrasear, sin corregir
+Copiados **textualmente** de `docs/BACKLOG.md §1 / C1–C7` (sin parafrasear, sin corregir
 mayúsculas ni tildes):
 
 1. El vault de Obsidian funciona normalmente sin interferencias
@@ -64,7 +64,7 @@ mayúsculas ni tildes):
 ### Gate adicional D9 — **no es el criterio 8**
 
 `docs/WORKFLOW.md:287` lo dice literalmente: *«Gate adicional (no criterio UH) — no forma parte
-de la tabla de 7 criterios de UH.md (no se renumeran ni se añade un "criterio 8")»*.
+de la tabla de 7 criterios de BACKLOG.md (no se renumeran ni se añade un "criterio 8")»*.
 
 * **Contenido:** methodology e2e de los 9 comandos (`/rubric → /update`) sobre corpus golden,
   con bandejas D9.2, permission fixtures D9.3 y frontmatters assertados (`docs/WORKFLOW.md:266`).
@@ -109,7 +109,7 @@ Rutas verificadas con `ls`/`grep` el 2026-11-12. `n` y método: nearest-rank sob
 Copiada de `docs/WORKFLOW.md:277-285`, con columna nueva al final (convención de T16, D-P6-7).
 `Result` queda **☐** hasta que el calpulli dueño la rellene con una cifra y su origen.
 
-| Criterio UH.md | Test | Result | origen de la cifra |
+| Criterio BACKLOG.md | Test | Result | origen de la cifra |
 | --- | --- | --- | --- |
 | 1. Sin interferencias | checklist Vault-OK post-instalación (0 puertos, `.obsidian/` intacto, UI limpia) | ☐ | T9 → script de checklist + `ss -ltnp` + hash de `.obsidian/` |
 | 2. Δ <30s | bench `index_refresh` 20 corridas típicas | ☐ | T2/T5 → `bench_delta.py` y `bench_delta_scale.py`, p95 n=20 nearest-rank, btrfs |
@@ -188,7 +188,7 @@ Al crearlas, las citas existentes («TRD §6.2») pasan a ser correctas sin edit
 * **No estima cifras nuevas.** Las que aparecen son baselines ya registrados, con su origen.
 * **No ejecuta** ningún bench ni materializa corpus; T0 es lectura del repo.
 * **No toca el payload** `obsidian-workspace/` (ni agentes, ni comandos, ni skills).
-* **No modifica** `docs/UH.md`, `README.md`, `LICENSE` ni `docs/TRD.md` (el §6.1/§6.2 lo escribe
+* **No modifica** `docs/BACKLOG.md`, `README.md`, `LICENSE` ni `docs/TRD.md` (el §6.1/§6.2 lo escribe
   el calpulli siguiente dentro del mismo T0).
 * **No cierra deuda:** §5 re-declara; M6 y TD-32 quedan **abiertas**.
 * **No aprueba nada:** este documento es el objeto de CP-0; sin aprobación, las cifras de §6 son

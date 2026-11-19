@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-013 (canal de instalación), ADR-003 (cargo-dist como backend de release), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), ADR-008 (transparencia de hardware D8.1-D8.3 + swap atómico D8.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
+* **Traceability:** docs/BACKLOG.md (sección "Wizard de instalación" + deuda cognitiva 1-5), ADR-013 (canal de instalación), ADR-003 (cargo-dist como backend de release), ADR-004 (uv/venv), ADR-007 (paso "Embedding provider" D7.1 + re-entrada D7.4), ADR-008 (transparencia de hardware D8.1-D8.3 + swap atómico D8.4), specs/spec-vault-structure.md (payload), specs/spec-embeddings.md (menú y edge cases), docs/APPFLOW.md (journey d)
 
 ## Summary
 
@@ -13,7 +13,7 @@
 
 ## Problem / Motivation
 
-Preguntas abiertas de UH.md: ¿qué gestor de paquetes?, ¿debo registrarme en algún sitio?, ¿puede el usuario final evitar instalar dependencias nativamente? La respuesta de arquitectura: el usuario no instala Python ni Node ni bun; el wizard —un binario único descargado con un oneliner— hace todo dentro de `.tepochcalli/`.
+Preguntas abiertas de BACKLOG.md: ¿qué gestor de paquetes?, ¿debo registrarme en algún sitio?, ¿puede el usuario final evitar instalar dependencias nativamente? La respuesta de arquitectura: el usuario no instala Python ni Node ni bun; el wizard —un binario único descargado con un oneliner— hace todo dentro de `.tepochcalli/`.
 
 > Como investigador sin perfil DevOps, quiero ejecutar un solo comando, responder unas pocas preguntas en una TUI y tener el vault con RAG funcionando.
 
@@ -278,9 +278,9 @@ toolchain**. Reemplaza el **canal** de ADR-003; cargo-dist sigue siendo el backe
 
 ## Enmienda 2026-11-18 — flujo destino (Proposed)
 
-**Status: Proposed** — describe el estado **destino** del wizard según docs/UH.md §"Wizard de
+**Status: Proposed** — describe el estado **destino** del wizard según docs/BACKLOG.md §"Wizard de
 instalación: flujo destino (2026-11-18)" (H5–H11 + anexo Codice): **no se aprueba ni se
-implementa aquí** (UH:255); el código vigente NO cambió y las secciones Accepted de arriba
+implementa aquí** (BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); el código vigente NO cambió y las secciones Accepted de arriba
 siguen describiéndolo. Superará, al aprobarse, D23 (TUI), §Versionado, el canal de la
 §Enmienda canal 2026-11-13 y el alcance de uninstall de §Rollback. Depende de **ADR-014**
 (canal/versión, creado en este lote con Status **Proposed**) y **ADR-015** (embedder; ver
@@ -384,7 +384,7 @@ stateDiagram-v2
 
 ### Anexo — mapeo de módulos Codice → Rust (requisito de organización, no spec nueva)
 
-Derivado de <https://github.com/Fisherk2/codice-opencode/tree/main/src> (docs/UH.md §Anexo).
+Derivado de <https://github.com/Fisherk2/codice-opencode/tree/main/src> (docs/BACKLOG.md §Anexo).
 `crates/tepochcalli/src/` ya tiene forma análoga (`cli/`, `application/`, `adapters/`,
 `config/`, `domain/`); no es un renome sino el destino de cada responsabilidad del flujo nuevo.
 

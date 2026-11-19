@@ -5,7 +5,7 @@
 * **Date:** 2026-11-04
 * **Author:** Technical Writer (calpulli T6, Phase 4)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** [docs/UH.md](../docs/UH.md) líneas 66-76 (tabla de comandos y fases metodológicas, inmutable); [specs/spec-agent-workflow.md](spec-agent-workflow.md) (D9.2 comandos→bandejas, D9.3 desviación de Pochteca, frontmatter de evidencia e informes); [specs/spec-payload-skills.md](spec-payload-skills.md) §Tabla de invocación (qué tools ejecuta cada comando — no se duplica aquí); [specs/spec-payload-permissions.md](spec-payload-permissions.md) (superficie de escritura por agente); [specs/spec-payload-vault.md](spec-payload-vault.md) §Reglas de formato OpenCode V2 (frontmatter permitido, `!`cmd`` y `@paths` prohibidos, D-P4-6 idioma, D-P4-8 guía canónica `command_example.md`)
+* **Traceability:** [docs/BACKLOG.md](../docs/BACKLOG.md) BACKLOG.md §2 / US-008 (tabla de comandos y fases metodológicas); [specs/spec-agent-workflow.md](spec-agent-workflow.md) (D9.2 comandos→bandejas, D9.3 desviación de Pochteca, frontmatter de evidencia e informes); [specs/spec-payload-skills.md](spec-payload-skills.md) §Tabla de invocación (qué tools ejecuta cada comando — no se duplica aquí); [specs/spec-payload-permissions.md](spec-payload-permissions.md) (superficie de escritura por agente); [specs/spec-payload-vault.md](spec-payload-vault.md) §Reglas de formato OpenCode V2 (frontmatter permitido, `!`cmd`` y `@paths` prohibidos, D-P4-6 idioma, D-P4-8 guía canónica `command_example.md`)
 
 ## Summary
 
@@ -481,4 +481,4 @@ default APA).
 * [specs/spec-payload-skills.md](spec-payload-skills.md) — tabla 9×4 (skills, tools y MCPs por comando)
 * [specs/spec-payload-permissions.md](spec-payload-permissions.md) — escritura permitida por agente
 * [specs/spec-agent-workflow.md](spec-agent-workflow.md) — D9.2/D9.3 y contrato de frontmatter
-* [docs/UH.md](../docs/UH.md) líneas 66-76 — fases metodológicas (fuente inmutable)
+* [docs/BACKLOG.md](../docs/BACKLOG.md) BACKLOG.md §2 / US-008 — fases metodológicas (fuente de verdad)

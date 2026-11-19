@@ -4,7 +4,7 @@
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (convención de carpetas, flujo de datos), ADR-002 (db embebida), ADR-004 (venv local), ADR-010 (índice multi-raíz y cita vault-relativa), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2); capa **D9** (zonas de propiedad) confirmada por el usuario vía question tool el 2026-10-21 — sin ADR nuevo, por decisión explícita del usuario (spec-only)
+* **Traceability:** docs/BACKLOG.md (convención de carpetas, flujo de datos), ADR-002 (db embebida), ADR-004 (venv local), ADR-010 (índice multi-raíz y cita vault-relativa), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-agent-workflow.md (mapa comandos→bandejas D9.2); capa **D9** (zonas de propiedad) confirmada por el usuario vía question tool el 2026-10-21 — sin ADR nuevo, por decisión explícita del usuario (spec-only)
 
 ## Summary
 
@@ -168,7 +168,7 @@ El template de `.gitignore` del vault distribuido marca: `.tepochcalli/venv/`, `
 
 ## References
 
-* docs/UH.md — sección organización del vault
+* docs/BACKLOG.md — sección organización del vault
 * ADR-002 (db), ADR-004 (venv), ADR-010 (multi-raíz y cita vault-relativa), specs/spec-rag-engine.md (source rules), specs/spec-installer-wizard.md (payload)
 
 ## Enmienda 2026-11-13 — canónico `00-resources/` (minúsculas)

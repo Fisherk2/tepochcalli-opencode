@@ -1,6 +1,6 @@
 # Technical Requirements Document — Tepochcalli v1 (MVP)
 
-**Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Approved (alineado a docs/UH.md + ADRs)
+**Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Approved (alineado a docs/BACKLOG.md + ADRs)
 
 ## 1. Reference Architecture
 
@@ -88,7 +88,7 @@ Estructura usada por el wizard (fuente: <https://opencode.ai/v2/docs/mcp-servers
 * Regla de la dieta: dos librerías principales (`cocoindex` + `markitdown`) y sus extras
   granulares; `docling`, `torchvision` y `markitdown-mcp` quedan fuera del venv (ADR-011).
 
-## 6. Metodología de performance (criterios numéricos de UH.md)
+## 6. Metodología de performance (criterios numéricos de BACKLOG.md)
 
 ### 6.1 Método
 

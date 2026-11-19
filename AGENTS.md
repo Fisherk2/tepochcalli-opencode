@@ -12,7 +12,7 @@ MCP Server **`tepochcalli-rag`** (comunicación) → OpenCode V2 (agente). El in
 **TUI en Rust** (`tepochcalli`) distribuida vía cargo-dist + GitHub Releases, que materializa
 el payload `obsidian-workspace/` en el vault del usuario.
 
-Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se modifica**.
+Requisitos originales: [docs/BACKLOG.md](docs/BACKLOG.md) — **fuente de verdad; todo cambio se registra en §8 y, si es decisión, exige ADR/enmienda**.
 
 ## Research & Reuse Rules (cero asunción)
 
@@ -24,10 +24,10 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 
 * Cuatro capas con dependencias que apuntan hacia el contrato MCP: `opencode.json/.opencode` →
   (MCP stdio) → `tepochcalli-rag` → flow CocoIndex → LanceDB. El harness NUNCA habla con el
-  motor directamente; el motor NUNCA habla con el harness (ADR-005, `specs/adr/`).
+  motor directamente; el motor NUNCA habla con el harness (ADR-005, `docs/adr/`).
 * **Decisiones D1-D8 confirmadas** (motor, `.tepochcalli/`, LanceDB, MiniLM, wizard, contratos
   MCP, selección de embedder, transparencia hardware/swap): cambiar una exige ADR nuevo en
-  `specs/adr/` que reemplace al anterior — nunca re-editar un ADR Accepted.
+  `docs/adr/` que reemplace al anterior — nunca re-editar un ADR Accepted.
 * Runtime bajo **`.tepochcalli/`** (engine-neutral): `flow/` `mcp/` `db/` `models/` `venv/`
   `bin/` `config/` + `pyproject.toml`. Layout canónico en `specs/spec-vault-structure.md`.
 * **MCP-first en el vault:** toda respuesta sobre `00-resources/` pasa por `search` de
@@ -119,14 +119,14 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
   Las recetas `python-*` / `rust-*` tocan un solo lenguaje; las unprefixed reparten a ambos.
 * Rust (wizard): `cargo fmt` + `cargo clippy -D warnings`; fases del instalador como
   transiciones explícitas con rollback (specs/spec-installer-wizard.md).
-* Nomenclatura: specs `specs/spec-<kebab>.md`; ADRs `specs/adr/adr-NNN-<kebab>.md`; commits
+* Nomenclatura: specs `specs/spec-<kebab>.md`; ADRs `docs/adr/adr-NNN-<kebab>.md`; commits
   Conventional Commits (`type: resumen ≤72 cols`).
 * **Umbral de líneas por fichero de código** (documentación: bullet siguiente): ≤500 conforme;
   501–700 solo si es justificable o necesario; 701–1000 solo si es justificable y **con
   advertencia** de refactorizar lo antes posible; **>1000 obligatorio bajar a <500**. Detalle
   y recuento en [docs/CODE_STYLE.md](docs/CODE_STYLE.md) (§Umbral de líneas por fichero (código)).
 * **Umbral de líneas por documentación (.md)** (fuera `obsidian-workspace/`): sin límite en
-  `CHANGELOG.md`/`README.md` raíz/`docs/UH.md`; **<1000** en `tasks/` y `docs/diagnosis/`;
+  `CHANGELOG.md`/`README.md` raíz/`docs/BACKLOG.md`; **<1000** en `tasks/` y `docs/diagnosis/`;
   **<700** en `docs/WORKFLOW.md`/`docs/TECH_DEBT.md`; **<500** en el resto — al superarlo se
   contrae, simplifica y resume (**dividir en documentos nuevos solo en el tramo <500**).
   Detalle en [docs/CODE_STYLE.md](docs/CODE_STYLE.md) (§Umbral de líneas por documentación).
@@ -156,7 +156,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 
 ## Pre-Commit Checklist
 
-* [ ] Ningún cambio a `docs/UH.md`, `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/` salvo tarea que lo autorice, o salvo orden explícita del dueño del repo (se registra como excepción autorizada en el cuerpo del commit).
+* [ ] Ningún cambio a `README.md`, `LICENSE`, `CODE_OF_CONDUCT.md`, `opencode.json` (raíz) ni `obsidian-workspace/` salvo tarea que lo autorice, o salvo orden explícita del dueño del repo (se registra como excepción autorizada en el cuerpo del commit); en `docs/BACKLOG.md`, todo cambio se registra en §8 y, si es decisión, exige ADR/enmienda.
 
   <!-- markdownlint-disable MD004 -->
 
@@ -176,7 +176,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 
 | Documento | Propósito |
 | --- | --- |
-| [docs/UH.md](docs/UH.md) | Requisitos/historias de usuario (fuente de verdad, inmutable) |
+| [docs/BACKLOG.md](docs/BACKLOG.md) | Requisitos/historias de usuario (fuente de verdad; cambios en §8 + ADR/enmienda si es decisión) |
 | [SPEC.md](SPEC.md) | Índice central de specs + criterios de aceptación |
 | [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Flujo CocoIndex (fuentes, chunking, Δ<30s, escala) |
 | [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | 7 contratos de tools, errores y presupuestos |
@@ -190,7 +190,7 @@ Requisitos originales: [docs/UH.md](docs/UH.md) — **fuente de verdad, no se mo
 | [specs/spec-payload-permissions.md](specs/spec-payload-permissions.md) | 5 bloques `permissions` V2 + nota de fusión |
 | [specs/spec-payload-agents.md](specs/spec-payload-agents.md) | 5 system prompts en inglés (≤60 líneas) |
 | [specs/spec-payload-commands.md](specs/spec-payload-commands.md) | 9 cuerpos de comando en inglés + contrato español |
-| [specs/adr/](specs/adr/) | ADR-001…008 (Accepted, 2026-10-21) + ADR-009…011 (Accepted, 2026-11-03) |
+| [docs/adr/](docs/adr/) | ADR-001…008 (Accepted, 2026-10-21) + ADR-009…011 (Accepted, 2026-11-03) |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Diagramas C4/secuencia + inventario + índice ADR |
 | [docs/PRD.md](docs/PRD.md) · [docs/TRD.md](docs/TRD.md) | Requisitos de producto / técnicos |
 | [docs/APPFLOW.md](docs/APPFLOW.md) | Journeys de usuario (diarios, wizard, fallo) |

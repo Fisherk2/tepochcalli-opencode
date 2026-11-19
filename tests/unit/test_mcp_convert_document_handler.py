@@ -8,7 +8,7 @@ Fuentes de verdad:
   catálogo ⇒ `VALIDATION_ERROR` con la lista; markdown vacío ⇒
   `SOURCE_UNREACHABLE` con la guía de OCR y **sin** parciales; idempotencia
   D66; la respuesta es EXACTAMENTE el resumen de 5 claves.
-* specs/adr/adr-009-conversor-resumen-sin-cuerpo.md §4 (D31/D36/D37/D39/D64/D66).
+* docs/adr/adr-009-conversor-resumen-sin-cuerpo.md §4 (D31/D36/D37/D39/D64/D66).
 * specs/spec-markitdown.md §Contrato, §Catálogo, §Destino/idempotencia.
 
 Se ejercita con costuras FALSAS (patrón T5): `vault_root` y `convert` los

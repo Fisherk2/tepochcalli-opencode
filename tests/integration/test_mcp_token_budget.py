@@ -1,8 +1,8 @@
-"""T6: criterio 4 de UH.md — la consulta COMPLETA < 2000 tokens, con tokenizador real.
+"""T6: criterio 4 de BACKLOG.md — la consulta COMPLETA < 2000 tokens, con tokenizador real.
 
 Fuentes de verdad:
 
-* docs/UH.md criterio 4 (línea 57, inmutable): «el consumo de tokens por
+* docs/BACKLOG.md §1 / C4: «el consumo de tokens por
   consulta es inferior a 2000 tokens (incluyendo contexto)».
 * specs/spec-mcp-server.md §Presupuesto de tokens — el techo **1600** del
   payload es sobre el ESTIMADOR (`chars/4 + 25`), no sobre un tokenizador

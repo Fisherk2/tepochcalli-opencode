@@ -1,11 +1,11 @@
 # Spec: System prompts de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (D-P5-2: skills citadas alineadas al congelado de 40; reglas V2 re-verificadas contra el tag v2.2.6) · **Enmendada 2026-11-09 (T2)** (líneas en blanco MD022/MD032 tras los `###` de los 5 cuerpos; presupuesto ≤60 medido sin frontmatter) · **Enmendada 2026-11-11** ([ADR-012](adr/adr-012-formato-payload-revisado.md): permisos inline, comentario single-source retirado)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-09** (D-P5-2: skills citadas alineadas al congelado de 40; reglas V2 re-verificadas contra el tag v2.2.6) · **Enmendada 2026-11-09 (T2)** (líneas en blanco MD022/MD032 tras los `###` de los 5 cuerpos; presupuesto ≤60 medido sin frontmatter) · **Enmendada 2026-11-11** ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md): permisos inline, comentario single-source retirado)
 * **Fase:** Phase 4 (diseño) — calpulli T5; Phase 5 materializa los 5 cuerpos de forma literal
 * **Date:** 2026-11-04
 * **Author:** prompt-engineer (calpulli T5, Phase 4)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** [docs/UH.md](../docs/UH.md) (tabla «Agentes Primarios», líneas 137-141 — inmutable), [specs/spec-payload-permissions.md](spec-payload-permissions.md) (frontmatter y bloques `permissions`), [specs/spec-agent-workflow.md](spec-agent-workflow.md) (D9.2 bandejas, D9.3 desviación de Pochteca), [specs/spec-payload-vault.md](spec-payload-vault.md) (§Reglas de formato, D-P4-6/D-P4-8); guía canónica de formato: `agent_example.md` (raíz, untracked, D-P4-8)
+* **Traceability:** [docs/BACKLOG.md](../docs/BACKLOG.md) (BACKLOG.md §2 / US-009), [specs/spec-payload-permissions.md](spec-payload-permissions.md) (frontmatter y bloques `permissions`), [specs/spec-agent-workflow.md](spec-agent-workflow.md) (D9.2 bandejas, D9.3 desviación de Pochteca), [specs/spec-payload-vault.md](spec-payload-vault.md) (§Reglas de formato, D-P4-6/D-P4-8); guía canónica de formato: `agent_example.md` (raíz, untracked, D-P4-8)
 
 ## Summary
 
@@ -38,7 +38,7 @@ Reglas comunes del contrato:
 * `mode: primary` explícito en los cinco; sin `model` (vive en `opencode.json`).
 * El comentario `# permissions -> …` del snippet es deliberado: señala la fuente única y evita que
   Phase 5 pegue el bloque YAML en dos sitios.
-* Los cuerpos no heredan nada de los stubs actuales (O-7): se redactan desde `docs/UH.md` y D9.2.
+* Los cuerpos no heredan nada de los stubs actuales (O-7): se redactan desde `docs/BACKLOG.md` y D9.2.
 
 ## Cuerpos congelados
 
@@ -404,7 +404,7 @@ los cinco cuerpos, sin excepciones.
 * **`## COMPOSITION`:** tres balas (direct / via / not from); se elimina «Delegate to subagents
   when», incompatible con NO-DELEGATION.
 
-## Fidelidad de persona (docs/UH.md)
+## Fidelidad de persona (docs/BACKLOG.md)
 
 Traducción literal de la tabla «Agentes Primarios» (mismo rol, mismo alcance, mismo nombre propio):
 
@@ -447,7 +447,7 @@ Pochteca es la desviación D9.3 ya aceptada, no una lectura nueva del UH.
 * `description` ASCII vs. nombre con acento en el `#`: intencional. El ID de agente no lleva
   acento; el nombre propio sí.
 * El cuerpo es el system prompt completo: no hay `system` en el frontmatter (V2).
-* Si Phase 5 detecta una divergencia entre un cuerpo y `docs/UH.md`, gana `docs/UH.md` y se abre
+* Si Phase 5 detecta una divergencia entre un cuerpo y `docs/BACKLOG.md`, gana `docs/BACKLOG.md` y se abre
   enmienda fechada; no se reinterpreta el pipeline.
 
 ## Open Questions
@@ -456,7 +456,7 @@ Pochteca es la desviación D9.3 ya aceptada, no una lectura nueva del UH.
   `permissions` de `opencode.json`) pertenece a [specs/spec-payload-permissions.md](spec-payload-permissions.md)
   §Nota de fusión, no a los cuerpos.
 
-## Enmienda 2026-11-11 — permisos inline ([ADR-012](adr/adr-012-formato-payload-revisado.md))
+## Enmienda 2026-11-11 — permisos inline ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md))
 
 Los 5 cuerpos de arriba siguen vigentes; cambia el frontmatter: el payload real
 (`b4cc8ff`..`38f0248`) lleva el **bloque `permissions` inline verificado** en cada `.md`
@@ -467,7 +467,7 @@ Detalle en [spec-payload-permissions](spec-payload-permissions.md) §Enmienda 20
 
 ## References
 
-* [docs/UH.md](../docs/UH.md) (tabla Agentes Primarios, líneas 137-141)
+* [docs/BACKLOG.md](../docs/BACKLOG.md) (BACKLOG.md §2 / US-009)
 * [specs/spec-payload-permissions.md](spec-payload-permissions.md) · [specs/spec-payload-vault.md](spec-payload-vault.md) · [specs/spec-agent-workflow.md](spec-agent-workflow.md) · [specs/spec-payload-skills.md](spec-payload-skills.md)
 * `agent_example.md` (raíz, untracked, D-P4-8)
 * OpenCode V2 docs (agents/commands/permissions) — verificación 2026-11-04

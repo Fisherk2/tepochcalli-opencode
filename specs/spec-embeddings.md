@@ -4,7 +4,7 @@
 * **Date:** 2026-10-23 (original: 2026-10-21)
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (deuda cognitiva 6), ADR-006 (modelo default), ADR-007 (selección de provider en instalación, D7), ADR-008 (transparencia de hardware y swap atómico, D8), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-mcp-server.md (`rag_status`, códigos `E_*`)
+* **Traceability:** docs/BACKLOG.md (deuda cognitiva 6), ADR-006 (modelo default), ADR-007 (selección de provider en instalación, D7), ADR-008 (transparencia de hardware y swap atómico, D8), specs/spec-rag-engine.md, specs/spec-installer-wizard.md, specs/spec-mcp-server.md (`rag_status`, códigos `E_*`)
 
 ## Summary
 
@@ -12,7 +12,7 @@ Define cómo Tepochcalli genera embeddings: default local con `paraphrase-multil
 
 ## Problem / Motivation
 
-El usuario quiere embebidos locales "donde configure sus modelos" y, a la vez, la opción de claves de APIs externas — preguntas abiertas de UH.md. Además, cambiar de modelo no puede degradar silenciosamente la búsqueda: un índice con dos familias de vectores es peor que un índice viejo.
+El usuario quiere embebidos locales "donde configure sus modelos" y, a la vez, la opción de claves de APIs externas — preguntas abiertas de BACKLOG.md. Además, cambiar de modelo no puede degradar silenciosamente la búsqueda: un índice con dos familias de vectores es peor que un índice viejo.
 
 > Como investigador con laptop sin GPU, quiero búsquedas semánticas decentes en español e inglés sin pagar APIs ni enviar mis PDFs a terceros.
 
@@ -211,7 +211,7 @@ se ignora (el loader nunca lanza).
 * El wizard valida la presencia del modelo post-descarga (peso esperado ≈470MB) y ofrece reintento; la salida 5 del menú D7.1 (o `--skip-model`) la omite: el vault se instala COMPLETO (todas las demás fases del wizard corren), la indexación inicial se omite, RAG queda en estado `degraded`, y el wizard muestra el checklist final de re-entrada sin escribir half-config — `search` responderá `E_NO_EMBEDDER` hasta `tepochcalli config embedder`.
 * `models/` es eliminable en cualquier momento: se regenera (provenance HuggingFace documentada en docs/SECURITY.md).
 
-### Requisitos mínimos (TRD §hardware, respuesta a UH.md 6)
+### Requisitos mínimos (TRD §hardware, respuesta a BACKLOG.md §3 / Q-006)
 
 * CPU 4 núcleos modernos; 8GB RAM; 3-4GB libres para `.tepochcalli/` completo (venv 1-2GB + modelo 470MB + LanceDB inicial); disco SSD recomendado.
 * Sin GPU obligatoria para el default. Si RAM <8GB: el wizard aborta con mensaje y requisitos (no instala "mitad").
@@ -227,7 +227,7 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 
 ## Alternatives Considered
 
-* **Hardcodear un modelo sin config:** *rechazado:* responde NO a las preguntas de deuda cognitiva de UH.md (modelos locales configurables + API key externa).
+* **Hardcodear un modelo sin config:** *rechazado:* responde NO a las preguntas de deuda cognitiva de BACKLOG.md (modelos locales configurables + API key externa).
 * **Detección automática de GPU y selección de modelo en runtime:** *rechazado:* no-determinismo de índices (un mismo vault cambiaría de espacio vectorial según hardware) → viola el principio "un índice, un modelo".
 * **Compartir cache de modelos global (`~/.cache/huggingface`):** *rechazado:* el vault debe ser autocontenido (criterio portabilidad) y `models/` bajo `.tepochcalli/` es parte de D2.
 
@@ -259,9 +259,9 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 
 ## Enmienda 2026-11-18 — flujo destino (Proposed)
 
-**Status: Proposed** — describe el destino del paso embedder del wizard según docs/UH.md
+**Status: Proposed** — describe el destino del paso embedder del wizard según docs/BACKLOG.md
 §"Wizard de instalación: flujo destino (2026-11-18)" (H9): **no se aprueba ni se implementa
-aquí** (UH:255); las secciones Accepted de arriba siguen describiendo el comportamiento
+aquí** (BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); las secciones Accepted de arriba siguen describiendo el comportamiento
 vigente. Depende de **ADR-015** (hermano, creado en este lote con Status **Proposed**) y de la enmienda coetánea en
 specs/spec-installer-wizard.md.
 
@@ -270,7 +270,7 @@ specs/spec-installer-wizard.md.
 * El catálogo `Preset` (`crates/tepochcalli/src/config/presets.rs:10-33`) hoy **no** tiene
   campo `device`: el contrato destino lo añade, y el wizard escribe la elección explícita del
   usuario en `[embedding].device` de `tepochcalli.toml` — valores aceptados `cpu`
-  (preseleccionado) | `cuda` | `cuda:N` (UH:311; la clave ya existe en §Estructura; `mps`/otros
+  (preseleccionado) | `cuda` | `cuda:N` (BACKLOG.md §2 / US-H9; la clave ya existe en §Estructura; `mps`/otros
   → futuro, trigger ADR-015 §8). La
   elección aplica por igual a indexación y búsquedas: comparten el mismo embedder.
 * La re-entrada `tepochcalli config embedder` **preserva el valor `device` existente** como
@@ -288,7 +288,7 @@ specs/spec-installer-wizard.md.
 
 ### Catálogo local ACTIVO (aclaración de `all-MiniLM-L6-v2`)
 
-* Contradicción documentada y resuelta: docs/UH.md §H9 lista MiniLM (recomendado) y `BAAI/bge-m3`
+* Contradicción documentada y resuelta: docs/BACKLOG.md §H9 lista MiniLM (recomendado) y `BAAI/bge-m3`
   (GPU), mientras la tabla D7.1 de arriba (salida 2, `:75`) menciona históricamente también
   `all-MiniLM-L6-v2`. El **catálogo ACTIVO real es `presets.toml`**: exactamente dos presets —
   `paraphrase-multilingual-MiniLM-L12-v2` (recomendado/preseleccionado, ~470MB) y `BAAI/bge-m3`

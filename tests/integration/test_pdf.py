@@ -5,7 +5,7 @@ Fuentes de verdad:
 * specs/spec-rag-engine.md §Ruta de documentos — `markitdown==0.1.9` extrae el
   texto de `pdf/docx/pptx/xlsx/xls`; los offsets citan el texto EXTRAÍDO
   (`offsets_ref="extract"`), nunca el binario.
-* specs/adr/adr-011-politica-dependencias-dos-librerias.md §4.3 (D53/D54):
+* docs/adr/adr-011-politica-dependencias-dos-librerias.md §4.3 (D53/D54):
   Docling fuera y **el PDF pierde la jerarquía de headings** ⇒ `heading` nulo.
 * tasks/todo.md → T3 AC (d): el PDF produce `heading is None`; no se disimula
   con el título del fichero.

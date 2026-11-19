@@ -7,7 +7,7 @@ Fuentes de verdad:
   inválido ⇒ `VALIDATION_ERROR` (nunca `INTERNAL`); `output_path` con la
   frontera B′; `source_uri` = `filename` o `base64:<sha256-8>`; el mismo
   resumen de 5 claves e idempotencia de T9 (D66).
-* specs/adr/adr-009-conversor-resumen-sin-cuerpo.md §D37/D38, §D39, §D66.
+* docs/adr/adr-009-conversor-resumen-sin-cuerpo.md §D37/D38, §D39, §D66.
 * specs/spec-markitdown.md §Contrato, §Destino/idempotencia.
 
 Costuras FALSAS (patrón T9): la conversión real vive en

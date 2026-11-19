@@ -179,7 +179,7 @@ cd obsidian-workspace/.tepochcalli && uv run python ../../tests/benchmarks/bench
 
 * No indexa el corpus (eso es T4/T5): aquí solo se materializa y se verifica.
 * No publica cifras de Δ ni de `search` (criterios 2 y 3): esos números son de otros calpullis.
-* No toca `docs/TRD.md`, `docs/UH.md`, `README.md` ni el payload de contenido.
+* No toca `docs/TRD.md`, `docs/BACKLOG.md`, `README.md` ni el payload de contenido.
 * No commitea: deja 4 ficheros de código/config para el orquestador
   (`tests/support/corpus.py`, `tests/support/test_corpus_manifest.py`,
   `tests/benchmarks/bench_delta_scale.py` y la línea de `testpaths` en

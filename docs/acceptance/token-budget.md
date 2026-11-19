@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T6
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
-> **Fuente de verdad:** `docs/UH.md` línea 57 (inmutable) — «el consumo de tokens por consulta es
+> **Fuente de verdad:** `docs/BACKLOG.md §1 / C4` — «el consumo de tokens por consulta es
 > inferior a 2000 tokens (incluyendo contexto)» · `tasks/plan.md` §Task T6 · `docs/TRD.md` §6.1
 > (fila 4) y §6.2.
 > **Jerarquía de evidencia (D8):** todo lo de aquí es **`medido`** con `tiktoken` en el host de
@@ -47,7 +47,7 @@ sonda de sensibilidad (§4).
 
 **No se mide** (declarado, fuera de la cota de una consulta): definiciones de tools (esquema del
 MCP), system prompt del agente, historial de turnos previos, ni el `reasoning` del modelo. Si
-alguna de esas piezas creciera, el criterio se leería distinto — y no es lo que `docs/UH.md` pide.
+alguna de esas piezas creciera, el criterio se leería distinto — y no es lo que `docs/BACKLOG.md` pide.
 
 ## 3. Tokenizador: cuál, versión y fuente
 

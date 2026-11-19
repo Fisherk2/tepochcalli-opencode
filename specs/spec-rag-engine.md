@@ -4,11 +4,11 @@
 * **Date:** 2026-10-23 (original: 2026-10-21)
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** docs/UH.md (capa RAG Engine), ADR-001 (motor), ADR-002 (almacén), ADR-006 (embeddings), ADR-009 (conversor separado del índice), ADR-010 (multi-raíz y cita vault-relativa), ADR-011 (dieta de dependencias y embedder único), docs/ARCHITECTURE.md, docs/WORKFLOW.md Phase 1
+* **Traceability:** docs/BACKLOG.md (capa RAG Engine), ADR-001 (motor), ADR-002 (almacén), ADR-006 (embeddings), ADR-009 (conversor separado del índice), ADR-010 (multi-raíz y cita vault-relativa), ADR-011 (dieta de dependencias y embedder único), docs/ARCHITECTURE.md, docs/WORKFLOW.md Phase 1
 
 ## Summary
 
-Define el flujo de indexación declarativo de CocoIndex que vive en `.tepochcalli/flow/`: recibe el **conjunto de raíces que declara el usuario** (`INDEXER_DIR`) cada vez que el agente llama `index_refresh()`, extrae texto con markitdown de ocho formatos (texto plano y ofimáticos; Docling ya no participa), particiona con `RecursiveSplitter`, genera embeddings locales (`paraphrase-multilingual-MiniLM-L12-v2`) y materializa un índice LanceDB embebido en `.tepochcalli/db/` con índices vectorial (ANN) y full-text. `00-resources/` es el valor de omisión de esa variable, no una imposición (D32, ADR-010). Es la Capa de Procesamiento del sistema y garantiza la semántica incremental "solo delta" exigida por UH.md.
+Define el flujo de indexación declarativo de CocoIndex que vive en `.tepochcalli/flow/`: recibe el **conjunto de raíces que declara el usuario** (`INDEXER_DIR`) cada vez que el agente llama `index_refresh()`, extrae texto con markitdown de ocho formatos (texto plano y ofimáticos; Docling ya no participa), particiona con `RecursiveSplitter`, genera embeddings locales (`paraphrase-multilingual-MiniLM-L12-v2`) y materializa un índice LanceDB embebido en `.tepochcalli/db/` con índices vectorial (ANN) y full-text. `00-resources/` es el valor de omisión de esa variable, no una imposición (D32, ADR-010). Es la Capa de Procesamiento del sistema y garantiza la semántica incremental "solo delta" exigida por BACKLOG.md.
 
 ## Problem / Motivation
 
@@ -345,7 +345,7 @@ flowchart LR
 * **Alternative A:** LEANN como motor — *Reason for rejection:* latencia de recomputación en CPU con riesgo >500ms y metadatos de cita delgados (ADR-001).
 * **Alternative B:** LightRAG/RAG-Anything — *Reason for rejection:* LLM obligatorio por chunk indexado (viola presupuesto de tokens) + daemon en puerto.
 * **Alternative C:** PageIndex — *Reason for rejection:* LLM por consulta y falla de escala multi-documento.
-* **Alternative D:** RAG propio con LangChain/LlamaIndex — *Reason for rejection:* UH.md pide explícitamente incorporar un motor comunitario, no construir uno.
+* **Alternative D:** RAG propio con LangChain/LlamaIndex — *Reason for rejection:* BACKLOG.md pide explícitamente incorporar un motor comunitario, no construir uno.
 * **Alternative E:** Docling como extractor de PDF (mantener el stack anterior) — *Reason for rejection:*
   cuesta **≈225 MB** (`opencv` 153, `docling_parse` 33, `rapidocr` 32) y **≈2,0 GB de RSS pico** en el
   ciclo Δ (medido en ADR-011 §4.3) para una jerarquía de headings que el criterio 5 **no exige**; y
@@ -406,7 +406,7 @@ flowchart LR
 * CocoIndex docs — <https://cocoindex.io/docs/>
 * markitdown — <https://github.com/microsoft/markitdown>
 * LanceDB — <https://lancedb.github.io/lancedb/>
-* ADR-001 / ADR-002 / ADR-004 / ADR-006 / ADR-009 / ADR-010 / ADR-011 (specs/adr/)
+* ADR-001 / ADR-002 / ADR-004 / ADR-006 / ADR-009 / ADR-010 / ADR-011 (docs/adr/)
 
 ## Anexo A — Alternativas externas consultadas (2026-10-28)
 
@@ -415,7 +415,7 @@ flowchart LR
 ### A) opendataloader-pdf — <https://github.com/opendataloader-project/opendataloader-pdf>
 
 * **Qué es:** parser PDF→Markdown/JSON/HTML (motor local Java, orden de lectura XY-Cut++, bounding boxes por elemento) + modo `hybrid` cuyo backend **es literalmente Docling** (`docling-fast`; el extra `[hybrid]` instala docling + docling-serve; el OCR — EasyOCR/Tesseract/RapidOCR — corre vía ese backend, no en el modo local).
-* **Veredicto: VIGILAR — no adoptar.** Desde ADR-011 el PDF **sí** pasa por markitdown, así que su ventaja teórica (headings, 0.824 vs 0.821 sobre Docling) sería real; pero adoptarlo exige **Java 11+ en el host** (viola ADR-003/ADR-004: el investigador no instala nada) y un **servidor en el puerto 5002** (viola la regla sin demonios/puertos de ADR-002/ADR-005), paga un stack completo para una jerarquía que el criterio 5 no exige, y sus ventajas reales (bounding boxes, anti prompt-injection) no las consume ningún requisito de docs/UH.md.
+* **Veredicto: VIGILAR — no adoptar.** Desde ADR-011 el PDF **sí** pasa por markitdown, así que su ventaja teórica (headings, 0.824 vs 0.821 sobre Docling) sería real; pero adoptarlo exige **Java 11+ en el host** (viola ADR-003/ADR-004: el investigador no instala nada) y un **servidor en el puerto 5002** (viola la regla sin demonios/puertos de ADR-002/ADR-005), paga un stack completo para una jerarquía que el criterio 5 no exige, y sus ventajas reales (bounding boxes, anti prompt-injection) no las consume ningún requisito de docs/BACKLOG.md.
 * **Revisit trigger:** si el criterio 5 pasa a exigir headings en PDFs (hoy D54 los declara nulos) o se activa OCR v1; benchmark replicado por terceros.
 * **Coste de adopción registrado:** ADR nuevo + cambio de §Ruta de documentos + reindex completo (los offsets F1 cambian) + revalidación de benches M1/M2 y golden-vault.
 
@@ -428,7 +428,7 @@ flowchart LR
 ### C) book-to-skill — <https://github.com/virgiliojr94/book-to-skill>
 
 * **Qué es:** skill instalable (`~/.agents/skills/`) que destila libros → skill (`SKILL.md` + `chapters/`): extracción determinista (modo *technical* → **Docling**, que ya no es nuestro extractor desde ADR-011) + síntesis con LLM (~$1/libro); filosofía *"extract structure, never raw text"* — **tira el texto crudo**, sin índice vectorial ni citas offset-level.
-* **Veredicto: NO INSTALAR.** (1) Gate: `obsidian-workspace/.opencode/` congelado hasta el blueprint de Phase 4 (spec-payload-vault). (2) Redundante: el vault ya tiene el skill `markitdown/` y el producto convierte vía `add_source`. (3) Choca con el criterio 5 de docs/UH.md: la destilación elimina el original y produce síntesis sin citas verificables.
+* **Veredicto: NO INSTALAR.** (1) Gate: `obsidian-workspace/.opencode/` congelado hasta el blueprint de Phase 4 (spec-payload-vault). (2) Redundante: el vault ya tiene el skill `markitdown/` y el producto convierte vía `add_source`. (3) Choca con el criterio 5 de docs/BACKLOG.md: la destilación elimina el original y produce síntesis sin citas verificables.
 * **Revisit trigger:** si el usuario pide un workflow de "destilación de libros en síntesis reutilizables" → decisión de blueprint en Phase 4, no instalación casual.
 
 ### D) Cross-reference — opendraft

@@ -1,11 +1,11 @@
 # Spec: Permisos de los 5 agentes del payload (OpenCode V2)
 
-* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](adr-012-formato-payload-revisado.md): bloques inline + global 313 reglas; D-P4-2 SUPERSEDED — ver §Enmienda 2026-11-11 al final) · **Enmendada 2026-11-12** (alineación con el bloque global — ver §Enmienda 2026-11-12)
+* **Status:** Approved (BLUEPRINT APPROVED 2026-11-09 — gate concedido por congelamiento del dueño: 40 skills definitivas, `cf17f31`/`2e62e60`) · **Enmendada 2026-11-11** ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md): bloques inline + global 313 reglas; D-P4-2 SUPERSEDED — ver §Enmienda 2026-11-11 al final) · **Enmendada 2026-11-12** (alineación con el bloque global — ver §Enmienda 2026-11-12)
 * **Fase:** Phase 4 (diseño) — especificación hermana de [specs/spec-payload-vault.md](spec-payload-vault.md) (D-P4-4/D-P4-11); Phase 5 ejecuta literal
 * **Date:** 2026-11-04
 * **Author:** Arquitecto (calpulli T4, Phase 4)
 * **Reviewers:** Product Owner (usuario)
-* **Traceability:** [specs/spec-payload-vault.md](spec-payload-vault.md) (§Reglas de formato y §Semántica de `permissions`, verificadas v2.1.2 el 2026-11-04), [specs/spec-payload-skills.md](spec-payload-skills.md) (§Tabla de invocación 9×4 — fija qué edita cada comando), [specs/spec-agent-workflow.md](spec-agent-workflow.md) (D9.2 bandejas, D9.3 desviación de Pochteca), [docs/UH.md](../docs/UH.md) (tabla Agentes Primarios — inmutable), [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
+* **Traceability:** [specs/spec-payload-vault.md](spec-payload-vault.md) (§Reglas de formato y §Semántica de `permissions`, verificadas v2.1.2 el 2026-11-04), [specs/spec-payload-skills.md](spec-payload-skills.md) (§Tabla de invocación 9×4 — fija qué edita cada comando), [specs/spec-agent-workflow.md](spec-agent-workflow.md) (D9.2 bandejas, D9.3 desviación de Pochteca), [docs/BACKLOG.md](../docs/BACKLOG.md) (tabla Agentes Primarios), [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md)
 
 ## Summary
 
@@ -438,7 +438,7 @@ cruza `/`, `?` = un carácter, sin coincidencia ⇒ `ask`). 42 probes, 42/42 esp
 Lectura de secretos en los 5: `.env`, `sub/.env`, `.env.local`, `config/.env`, `secrets.env` →
 `deny`; `.tepochcalli/config/tepochcalli.toml` → `deny`. Sin reglas muertas.
 
-## Enmienda 2026-11-11 — formato revisado ([ADR-012](adr-012-formato-payload-revisado.md))
+## Enmienda 2026-11-11 — formato revisado ([ADR-012](../docs/adr/adr-012-formato-payload-revisado.md))
 
 Los bloques de arriba quedan como **diseño histórico Phase 4**: el payload real
 (`b4cc8ff`..`1ce44ca`) lleva **permisos inline verificados por agente** (edit acotado por
@@ -490,6 +490,6 @@ casa con cualquier ruta es el global `* allow` (1506) o un `deny` posterior más
 | `.ssh/*`, `.aws/credentials`, `.kube/config`, `.netrc`, `.pgpass`, `.git-credentials`, `.s3cfg`, `.cargo/credentials`, `.docker/config.json`, `.config/gh/hosts.yml` | deny | listado (1562–1712) |
 | **`.tepochcalli/config/**`** (p. ej. `tepochcalli.toml`) | **allow — GAP** | sin regla específica ⇒ `* allow` (1506) |
 
-**SUPERSEDED.** Las reglas inline `read *.env deny`, `read *.env.* deny` y `read .tepochcalli/config/** deny` de los §Blueprint y los probes de §Verificación que las usaban quedan **SUPERSEDED** por esta enmienda. El diseño Phase 4 se conserva como historia; la política vigente es la de arriba (mismo patrón que [ADR-012](adr-012-formato-payload-revisado.md)).
+**SUPERSEDED.** Las reglas inline `read *.env deny`, `read *.env.* deny` y `read .tepochcalli/config/** deny` de los §Blueprint y los probes de §Verificación que las usaban quedan **SUPERSEDED** por esta enmienda. El diseño Phase 4 se conserva como historia; la política vigente es la de arriba (mismo patrón que [ADR-012](../docs/adr/adr-012-formato-payload-revisado.md)).
 
 **GAP declarado: `.tepochcalli/config/**` ⇒ `allow`.** El global no incluye esa ruta y el último `read` que casa es `* allow` (1506) — **no** `ask`, como se creía antes de medir. Consecuencia: un agente puede leer `tepochcalli.toml` (claves del embedder) sin confirmación. Cerrarlo exige **una regla global nueva** (`{action: read, resource: ".tepochcalli/config/**", effect: deny}`) después de `read * allow` y antes de `*.env.example`: cambio de payload, no autorizado en Phase 6. El test lo declara como GAP (`test_tepochcalli_config_is_a_declared_gap`), no como fallo.

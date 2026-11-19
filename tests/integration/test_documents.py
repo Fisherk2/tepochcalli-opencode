@@ -5,7 +5,7 @@ Fuentes de verdad:
 * specs/spec-rag-engine.md §Ruta de documentos — `docx/pptx/xlsx/xls/pdf` se
   extraen con `markitdown` **en su forma original** (D49: sin convertir a `.md`
   antes); los offsets citan el texto extraído (`offsets_ref="extract"`).
-* specs/adr/adr-011-*.md §4.3 (D54): todo documento binario pierde la jerarquía
+* docs/adr/adr-011-*.md §4.3 (D54): todo documento binario pierde la jerarquía
   de headings ⇒ `heading` nulo aunque markitdown emita `#` para un `.docx`.
 * tasks/todo.md → T3 AC (e): un extractor que falla no aborta el pase; el
   documento queda en `skipped` y NUNCA produce una fila vacía.

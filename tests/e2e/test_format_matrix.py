@@ -2,7 +2,7 @@
 
 Fuentes de verdad:
 
-* docs/UH.md criterio 7 (línea 61, inmutable): «Pueda procesar distintos formatos
+* docs/BACKLOG.md §1 / C7: «Pueda procesar distintos formatos
   de texto, si no, utilizar el convertidor Markdown para que pueda manipularse
   adecuadamente».
 * specs/spec-rag-engine.md §Fuentes — la whitelist del índice son **8**
@@ -10,9 +10,9 @@ Fuentes de verdad:
 * specs/spec-markitdown.md §Catálogo + §Cadena de fallback — el conversor cubre 13
   extensiones; `.doc`/`.ppt` NO tienen convertidor en `markitdown==0.1.9`; sin OCR,
   un PDF escaneado es `SOURCE_UNREACHABLE` con `GUIDE_OCR`.
-* specs/adr/adr-009-*.md (D28/D36) — el conversor devuelve SOLO el resumen de 5
+* docs/adr/adr-009-*.md (D28/D36) — el conversor devuelve SOLO el resumen de 5
   claves: el `.md` escrito es un artefacto en disco, **no** una cita.
-* specs/adr/adr-010-*.md (D41/D49) — se indexan los ORIGINALES: `convert_*` no
+* docs/adr/adr-010-*.md (D41/D49) — se indexan los ORIGINALES: `convert_*` no
   indexa; la cita de un binario apunta al binario con `offsets_ref="extract"`.
 * tasks/plan.md §Task T8 — la matriz de 9 entradas, por celda: resultado,
   `doc_kind`, `offsets_ref`, indexabilidad y `source_path` resultante.

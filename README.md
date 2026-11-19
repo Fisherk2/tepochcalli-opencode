@@ -2,7 +2,7 @@
 
 > Vault de Obsidian distribuible con búsqueda semántica **citada** sobre tus notas y PDFs,
 > servida por OpenCode V2 + un motor RAG local (CocoIndex + LanceDB, embeddings en CPU).
-> Requisitos: [docs/UH.md](docs/UH.md) · Especificación: [SPEC.md](SPEC.md) ·
+> Requisitos: [docs/BACKLOG.md](docs/BACKLOG.md) · Especificación: [SPEC.md](SPEC.md) ·
 > Arquitectura: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
 ## Rendimiento de ingesta (medido)

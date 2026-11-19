@@ -3,13 +3,13 @@
 <!-- markdownlint-disable MD036 -->
 
 > **Fecha:** 2026-11-11 · **Autor:** Moctezuma (orquestador) · **Modo:** solo planificación (cero código)
-> **Fase:** Phase 6 — E2E Acceptance (los 7 criterios de `docs/UH.md`) · **Gate de fase:** FTR de aceptación + gate v1 release
-> **Fuente de verdad:** `docs/WORKFLOW.md` §Phase 6 (tabla §6.3) + `docs/TRD.md` §6 + `docs/UH.md` §criterios
+> **Fase:** Phase 6 — E2E Acceptance (los 7 criterios de `docs/BACKLOG.md`) · **Gate de fase:** FTR de aceptación + gate v1 release
+> **Fuente de verdad:** `docs/WORKFLOW.md` §Phase 6 (tabla §6.3) + `docs/TRD.md` §6 + `docs/BACKLOG.md` §criterios
 > **Precedente:** D-P5-7 — `tasks/plan.md` y `tasks/todo.md` **se sobrescriben**; el plan de Phase 5 queda en el historial de git (`93d0060`). Los protocolos de Phase 5 sobreviven en `tasks/phase5-baseline.md` y `tasks/phase5-methodology-e2e.md`.
 
 ## 1. Objetivo y no-objetivos
 
-**Objetivo:** cerrar la fase de aceptación: **medir** los 7 criterios de `docs/UH.md` contra el
+**Objetivo:** cerrar la fase de aceptación: **medir** los 7 criterios de `docs/BACKLOG.md` contra el
 sistema completo tal como lo tendría un usuario (vault instalado por el wizard + MCP `tepochcalli-rag`
 real por stdio), **remediar** lo que impida un criterio o un gate, **cerrar** la deuda que esta fase
 es dueña, y dejar la **evidencia medida** con la que se firma el gate de v1 release.
@@ -55,7 +55,7 @@ Cada línea está **medida**, no supuesta; el comando que la evidencia va en el 
 
 | Hecho | Valor medido | Dónde |
 | --- | --- | --- |
-| Criterios de aceptación | **7**, textuales en `docs/UH.md` (líneas 55-60) + **1 gate adicional** (D9) que **no** es criterio 8 | `docs/UH.md` · `docs/WORKFLOW.md` §Phase 6 |
+| Criterios de aceptación | **7**, textuales en `docs/BACKLOG.md` (BACKLOG.md §1 / C1–C7) + **1 gate adicional** (D9) que **no** es criterio 8 | `docs/BACKLOG.md` · `docs/WORKFLOW.md` §Phase 6 |
 | Host de desarrollo | i7-8750H, **12 vCPU**, **15,5 GiB RAM** (≈8 GB disponibles), CPython 3.12.14, zram 7,9 GB | `free -g` · `nproc` |
 | Filesystems | repo = **fuseblk/NTFS-3G** (`/mnt/HDDFish`) · `/tmp` = **btrfs/NVMe** | `df -T` |
 | Baseline de escala (P-02) | btrfs **26 967 ms** (PASS, 90 % del budget) · NTFS-3G **39 501 ms** (FAIL) · walk-only 7,2 s (btrfs) vs **17,6 s** (NTFS) | `docs/TECH_DEBT.md` §Review 5-ejes Phase 3.5 |
@@ -156,7 +156,7 @@ existe hoy, qué falta, qué calpulli lo cierra) y **fija los umbrales** de reca
 **Criterios de aceptación:**
 
 - [ ] `docs/acceptance/protocol.md` declara el **host de referencia**: btrfs/NVMe en `/tmp/opencode`, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14, y declara `/mnt/HDDFish` (fuseblk/NTFS-3G) como **filesystem de contraste** (D-P6-3).
-- [ ] Los **7 criterios** de `docs/UH.md` copiados literalmente con su cota exacta, más el **gate adicional D9** marcado como *no criterio 8*.
+- [ ] Los **7 criterios** de `docs/BACKLOG.md` copiados literalmente con su cota exacta, más el **gate adicional D9** marcado como *no criterio 8*.
 - [ ] Por cada criterio: el bench o test que lo mide hoy (o `no existe`), la **cifra actual** si existe con su método, y el calpulli que lo cierra. La tabla §6.3 de `docs/WORKFLOW.md` aparece copiada con la columna `Result` vacía y una columna nueva **`origen de la cifra`** (convención de T16).
 - [ ] **Umbrales fijados ANTES de medir** y escritos en `docs/TRD.md` §6.2: umbral de recall (propuesta: recall@5 = 1.0 sobre el golden vault) y umbral de deriva FTS (propuesta: caída de recall ES > 10 % relativo al detectar la pierna FTS).
 - [ ] **Conflicto de numeración detectado y declarado**: `docs/TRD.md` §6 no tiene subsecciones; la casa cita «TRD §6.2» (TD-15) ⇒ se crean §6.1 «método» y §6.2 «umbrales» con este plan.
@@ -248,7 +248,7 @@ calpulli cierra TD-15 con un golden etiquetado y un recall medido.
 ### Task T4: Criterio 3 a escala (10k/1k) y deriva del índice FTS ES/EN
 
 **Descripción:** el criterio 3 se ha medido **siempre** contra un corpus de 100 ficheros (p95 52 ms).
-UH.md no pone tamaño al corpus, pero `docs/TRD.md` §6 sí: *«100 queries muestreadas del corpus
+BACKLOG.md no pone tamaño al corpus, pero `docs/TRD.md` §6 sí: *«100 queries muestreadas del corpus
 10k/1k»*. Además, el review 5-ejes de Phase 3.5 dejó un hallazgo **abierto**: el índice FTS se declara
 sin `language` ⇒ stemming y stopwords **solo en inglés** sobre un corpus ES+EN. Ese es un mecanismo
 concreto de deriva en la relevancia en español.
@@ -298,7 +298,7 @@ medición en el filesystem de contraste con su etiqueta de límite.
 ### Task T6: Criterio 4 — tokens por consulta (<2000 con contexto)
 
 **Descripción:** el server **garantiza** ≤1600 tokens por la fórmula `chars/4 + 25` (spec-mcp-server), y
-eso ya está testeado. Lo que UH.md pide es otra cosa: *«el consumo de tokens por consulta es inferior a
+eso ya está testeado. Lo que BACKLOG.md pide es otra cosa: *«el consumo de tokens por consulta es inferior a
 2000 tokens (incluyendo contexto)»* — la consulta completa vista por el LLM: query + payload + la
 respuesta del agente con sus citas. Esa cifra **nunca se ha medido con un tokenizador real**.
 
@@ -373,7 +373,7 @@ también hay que afirmarlo.
 
 ### Task T9: Criterio 1 — no-interferencia con Obsidian
 
-**Descripción:** el primer criterio de UH.md es *«el vault de Obsidian funciona normalmente sin
+**Descripción:** el primer criterio de BACKLOG.md es *«el vault de Obsidian funciona normalmente sin
 interferencias»*. `specs/spec-vault-structure.md` §Testing lo describe en prosa («`.obsidian/`
 byte-idéntico, 0 procesos escuchando puertos nuevos, 0 archivos `.`-prefijados listados») pero **no
 hay un checklist ejecutable**. Se ejecuta sobre un vault **instalado de verdad** por el wizard, no
@@ -550,7 +550,7 @@ Es el calpulli que convierte 16 resultados dispersos en **una tabla de 7 filas c
 - [ ] `docs/WORKFLOW.md` §Phase 6: **tabla §6.3 rellena** — cada fila con su cifra medida, su **origen** (bench + n + método) y su veredicto; el **gate adicional D9** con su estado real; sección mantenida **< 700 líneas** (CODE_STYLE).
 - [ ] `docs/TRD.md` §6: protocolo, **umbrales** y cifras de la fase publicados (§6.1 método, §6.2 umbrales).
 - [ ] `docs/TECH_DEBT.md`: **re-revisión formal** — TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34 y D-b con su estado medido; **M6** y **TD-32** **siguen abiertas** con su motivo (D-P6-4); ninguna deuda cerrada sin evidencia.
-- [ ] `SPEC.md`: los 7 criterios de `docs/UH.md` pasan a **verificados** con fecha y enlace a la evidencia; el estado de las specs no cambia salvo enmienda autorizada.
+- [ ] `SPEC.md`: los 7 criterios de `docs/BACKLOG.md` pasan a **verificados** con fecha y enlace a la evidencia; el estado de las specs no cambia salvo enmienda autorizada.
 - [ ] `CHANGELOG.md`: entrada de Phase 6.
 - [ ] `docs/ARCHITECTURE.md`: **sin** diagrama nuevo salvo que T10 o T13 alteren el inventario (una línea si hace falta).
 - [ ] **FTR de aceptación**: checklist de los 7 criterios + el gate D9, cada fila con su cifra y su comando reproducible.
@@ -749,10 +749,10 @@ re-declara en T16 con su motivo: no se firmará «CI verde» ni «release public
 
 ## 11. Referencias
 
-- `docs/WORKFLOW.md` §Phase 6 (objetivo, tabla §6.3, gate v1 release) y §4 (FTRs) · `docs/TRD.md` §6 (protocolos) · `docs/UH.md` (los 7 criterios)
+- `docs/WORKFLOW.md` §Phase 6 (objetivo, tabla §6.3, gate v1 release) y §4 (FTRs) · `docs/TRD.md` §6 (protocolos) · `docs/BACKLOG.md` (los 7 criterios)
 - `docs/TECH_DEBT.md` (TD-2, TD-13, TD-15, TD-27, TD-28, TD-29, TD-34, D-b, M6, TD-32) · `docs/ARCHITECTURE.md` · `docs/CODE_STYLE.md` (umbrales de líneas) · `docs/SECURITY.md`
 - `specs/spec-mcp-server.md` (presupuesto de latencia y de tokens) · `specs/spec-rag-engine.md` (escala) · `specs/spec-vault-structure.md` §Testing (criterio 1) · `specs/spec-markitdown.md` (formatos) · `specs/spec-embeddings.md`
-- `specs/adr/adr-009-*.md` (conversor summary-only) · `adr-010` (multi-raíz) · `adr-011` (dos librerías + D54) · `adr-005` (frontera MCP) · `adr-002` (sin daemon)
+- `docs/adr/adr-009-*.md` (conversor summary-only) · `adr-010` (multi-raíz) · `adr-011` (dos librerías + D54) · `adr-005` (frontera MCP) · `adr-002` (sin daemon)
 - `tests/benchmarks/bench_delta.py` · `bench_delta_scale.py` · `bench_search.py` · `tests/support/mcp_server.py` · `tests/e2e/test_mcp_journey.py` · `tests/e2e/verify_payload_install.py` · `tests/phase5-methodology-runbook.md`
 - `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/{verify.py,citation.py,app.py,model_store.py}` · `crates/tepochcalli/src/application/embedder_menu.rs` · `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/embedder.py`
 - Plan de Phase 5 (histórico): commit `93d0060`

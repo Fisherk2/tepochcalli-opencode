@@ -1,6 +1,6 @@
 # Evidencia de aceptación (Phase 6 — E2E Acceptance)
 
-Evidencia **medida** de la aceptación E2E de los 7 criterios de [UH.md](../UH.md): qué se midió,
+Evidencia **medida** de la aceptación E2E de los 7 criterios de [BACKLOG.md](../BACKLOG.md): qué se midió,
 con qué método, sobre qué host y con qué resultado. Cada cifra lleva su comando; la que no se
 midió se declara como tal.
 
@@ -11,7 +11,7 @@ hallazgo que acabe como deuda.
 **Jerarquía de evidencia (D8):** `medido > estimado > declarado`. Se publica lo medido con su
 método; lo estimado y lo declarado se etiquetan y nunca se presentan como medición.
 
-| Fichero | Qué contiene | Criterios de UH.md |
+| Fichero | Qué contiene | Criterios de BACKLOG.md |
 | --- | --- | --- |
 | [protocol.md](protocol.md) | Protocolo y umbrales: host de referencia, filesystem de contraste, huecos por criterio, gate D9 | 1-7 (base de todos) + gate D9 |
 | [corpus.md](corpus.md) | Corpus de escala 10 000 notas + 1 000 PDFs, con manifiesto de hashes reproducible | 6 |
@@ -29,7 +29,7 @@ Las corridas de aceptación son **evidencia medida**: los `.json` y las tablas d
 registran las rutas tal como estaban en disco al medir (el alias histórico `00-Resources/` en
 varias de ellas) y **no se reescriben**. El canónico desde el 2026-11-13 es `00-resources/`
 (mayúsculas y minúsculas eran carpetas distintas en el vault medido); ver
-[spec-vault-structure](../specs/spec-vault-structure.md) §Enmienda 2026-11-13.
+[spec-vault-structure](../../specs/spec-vault-structure.md) §Enmienda 2026-11-13.
 
 Si llega otra fase de aceptación, este directorio se parte en subcarpetas `acceptance/phaseN/` para no mezclar evidencias.
 

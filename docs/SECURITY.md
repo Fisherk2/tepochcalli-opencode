@@ -125,12 +125,12 @@ requeriría rewiring del conector, fuera del scope v1):
 Excepción aprobada por el dueño (2026-11-18, [docs/CODE_STYLE.md](CODE_STYLE.md) §Reglas
 específicas del payload): en el flujo destino, **Update (H7)** sobrescribe `.opencode/`,
 `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`; **Desinstall (H8)** remueve
-`.opencode/`, `.tepochcalli/` y `opencode.json` — **no** `AGENTS.md` (UH:297) —, ambos con
+`.opencode/`, `.tepochcalli/` y `opencode.json` — **no** `AGENTS.md` (BACKLOG.md §2 / US-H8) —, ambos con
 backup obligatorio antes de pisar/quitar y advertencia visible — amplían el alcance
 vigente (no existe `update`; `uninstall` hoy solo borra `.tepochcalli/`). La primera Install y las
 re-entradas `config` siguen con merge conservador byte-a-byte salvo los `mcp.servers.*` gestionados.
-Estado: [ADR-014](../specs/adr/adr-014-distribucion-uvx-pypi.md) /
-[ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) **Proposed**, Phase 6.5 **GATED**
+Estado: [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) /
+[ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) **Proposed**, Phase 6.5 **GATED**
 en [WORKFLOW.md](WORKFLOW.md). Reglas:
 
 * **Backup obligatorio antes de pisar + advertencia visible** con el directorio objetivo. El `.bak`
@@ -187,5 +187,5 @@ todo egress y exige caché previa.
 ## Contactos y enlaces
 
 * `CONTRIBUTING.md` (raíz del repo) es placeholder: completar junto con Phase 1.
-* Requisitos: [UH.md](UH.md) · Specs afectadas: spec-markitdown (§seguridad del canal),
+* Requisitos: [BACKLOG.md](BACKLOG.md) · Specs afectadas: spec-markitdown (§seguridad del canal),
   spec-mcp-server (§validaciones), spec-embeddings (§claves), spec-vault-structure (§gitignore).

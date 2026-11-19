@@ -2,7 +2,7 @@
 
 Fuentes de verdad: `specs/spec-rag-engine.md` §Ruta de documentos (un fallo del
 extractor no aborta el pase; un documento sin texto nunca produce una fila
-vacía) y `specs/adr/adr-011-*.md` §4.3.
+vacía) y `docs/adr/adr-011-*.md` §4.3.
 
 Sin dependencias nuevas: el PDF en blanco es un PDF mínimo sintético y el
 corrupto son bytes no decodificables por ningún convertidor de markitdown.

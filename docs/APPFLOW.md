@@ -113,10 +113,10 @@ reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedde
 
 ### Journey destino (Proposed 2026-11-18 — Phase 6.5 **GATED**; no es el estado vigente)
 
-Requisito: [docs/UH.md §"Wizard de instalación: flujo destino"](UH.md) (H5-H11); diseño:
+Requisito: [docs/BACKLOG.md §"Wizard de instalación: flujo destino"](BACKLOG.md) (H5-H11); diseño:
 [../specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-18 —
-flujo destino (Proposed) y [../specs/adr/adr-014-distribucion-uvx-pypi.md](../specs/adr/adr-014-distribucion-uvx-pypi.md) /
-[adr-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) (Proposed). El journey (d) de
+flujo destino (Proposed) y [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) /
+[adr-015](adr/adr-015-dispositivo-inferencia-wizard.md) (Proposed). El journey (d) de
 arriba sigue siendo lo que el wizard hace hoy.
 
 1. **Arranque:** `uvx tepochcalli` — un solo comando, sin binario del proyecto en PATH y sin
@@ -147,7 +147,7 @@ arriba sigue siendo lo que el wizard hace hoy.
    bloqueo**; **device explícito** `cpu` (preseleccionado) / `cuda`/`cuda:N` — GPU sin sonda ⇒ botón
    deshabilitado con la razón `GPU no detectada`; forzarlo solo advierte con procedencia `medido`
    (autoselección en runtime: rechazada). La re-entrada `tepochcalli config embedder` **preserva**
-   el device existente como preselección ([ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) Proposed).
+   el device existente como preselección ([ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) Proposed).
 7. **🟠 Exit (H10):** sale sin materializar ni modificar nada.
 8. **Cierre (H11):** tras cualquier opción salvo Exit, cualquier tecla confirma y el mensaje de
    agradecimiento despide el instalador.

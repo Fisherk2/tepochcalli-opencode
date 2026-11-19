@@ -1,6 +1,6 @@
 """Contabilidad de tokens de UNA consulta e2e con tokenizador REAL (T6, criterio 4).
 
-Fuente de verdad: docs/UH.md criterio 4 (línea 57) — «el consumo de tokens
+Fuente de verdad: docs/BACKLOG.md §1 / C4 — «el consumo de tokens
 por consulta es inferior a 2000 tokens (incluyendo contexto)».
 
 Qué cuenta una consulta (y qué no)
@@ -49,7 +49,7 @@ import tiktoken
 from tepochcalli_mcp.tools import json_result
 
 QUERY_TOKEN_CEILING: Final = 2000
-"""Cota de docs/UH.md criterio 4: «inferior a 2000» ⇒ la aserción es `< 2000`."""
+"""Cota de docs/BACKLOG.md criterio 4: «inferior a 2000» ⇒ la aserción es `< 2000`."""
 
 TOKENIZER_ENCODING: Final = "cl100k_base"
 """Tokenizador de REFERENCIA del guard: el más caro de los dos BPE públicos (ver módulo)."""
