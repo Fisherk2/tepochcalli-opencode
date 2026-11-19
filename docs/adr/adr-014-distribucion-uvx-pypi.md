@@ -1,18 +1,21 @@
 # ADR-014: Publicar el binario del wizard como rueda de PyPI y hacer de `uvx` el único canal recomendado
 
-* **Status:** Proposed
+* **Status:** Accepted 2026-11-19
 * **Date:** 2026-11-18
-* **Decision Makers:** Dueño del repo (orden del flujo destino, 2026-11-18, docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); Arquitecto (redacción)
+* **Decision Makers:** Fisherk2 (dueño del repo; aprobación del FTR 2026-11-19, docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); Arquitecto (redacción)
 * **Consulted:** [ADR-013](adr-013-distribucion-cargo-binstall.md) (canal vigente), [ADR-003](adr-003-distribucion-cargo-dist.md) (backend), [ADR-004](adr-004-uv-venv-aislado.md), [ADR-011](adr-011-politica-dependencias-dos-librerias.md); documentación de maturin (`bindings = "bin"`) y de `uv tool run` (`uvx`)
 * **Informed:** Usuarios finales (investigadores), CI de release, docs/ARCHITECTURE.md §Key decisions (4)
 * **Traceability:** docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)» (flujo destino; «no se implementan ni se aprueban aquí»), docs/BACKLOG.md §4 / D-005 («este flujo exige un ADR-014 que supere el canal de ADR-013 (que rechazó uv/PyPI) y el backend de ADR-003»), [spec-installer-wizard](../../specs/spec-installer-wizard.md):181 (one-version rule), [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md):294
 
-> **Nota de alcance:** este ADR está **Proposed**: no entra en vigor hasta la aprobación
-> explícita del usuario (AGENTS.md:205 — «Decisiones D1-D6: NO se re-litigan en código —
-> requieren ADR nuevo aprobado por el usuario», aplicable a D1-D8). Los ADRs citados son
-> *Accepted* y **no se re-editan ni se borran**: este documento registra la sustitución del
-> canal y la intención de retiro del backend; la materialización (tocar `dist.toml`,
-> `release.yml`, `crates/`) es tarea futura fuera del alcance de este ADR.
+> **Nota de alcance:** este ADR **nació Proposed** el 2026-11-18 y pasa a **Accepted** con el FTR
+> del dueño del **2026-11-19** (docs/BACKLOG.md §2 «Wizard de instalación: flujo destino
+> (2026-11-18)»), tras recorrer lo que exige AGENTS.md §Delegation Patterns `:204-205` — «Decisiones
+> D1-D6: NO se re-litigan en código — requieren ADR nuevo aprobado por el usuario», aplicable a
+> D1-D8. Los ADRs citados son *Accepted* y **no se re-editan ni se borran**: este documento
+> registra la sustitución del canal y la intención de retiro del backend; la materialización
+> (tocar `dist.toml`, `release.yml`, `crates/`) es **tarea futura** (TD-51), fuera del alcance de
+> este ADR. **Aceptar este ADR no publica nada**: la publicación en PyPI es un acto futuro que la
+> Phase 6.5 no ejecuta.
 
 ## 1. Context and Problem Statement
 
@@ -89,20 +92,25 @@ versión instalada supera a la del wizard (docs/BACKLOG.md §2 / US-H5).
 ### 4.2 Versión canónica (one-version rule)
 
 La versión canónica la fija `.tepochcalli/pyproject.toml` (`:3` — hoy `0.1.0`);
-`crates/tepochcalli/Cargo.toml` (`:3` — hoy `0.1.0-beta.1`) **se alinea detrás** de ella.
-Esto resuelve la contradicción actual: [spec-installer-wizard](../../specs/spec-installer-wizard.md):181
-exige la one-version rule («wizard y vault versionan juntos»), pero las dos versiones medidas
-hoy divergen (docs/BACKLOG.md §4 / D-007 lo constata: «deben alinearse antes de implementar»). Con `uvx`
+`crates/tepochcalli/Cargo.toml` (`:3`) **se alinea detrás** de ella — hecho el 2026-11-19
+(`0.1.0-beta.1` → `0.1.0`, TD-45 cerrada).
+Esto resuelve la contradicción: [spec-installer-wizard](../../specs/spec-installer-wizard.md):181
+exige la one-version rule («wizard y vault versionan juntos»), y las dos versiones medidas
+el 2026-11-18 divergían (docs/BACKLOG.md §4 / D-007 lo constataba: «deben alinearse antes de
+implementar»). Con `uvx`
 la versión del wizard la gestiona el **paquete publicado en PyPI** y la instalada se detecta
 leyendo `.tepochcalli/pyproject.toml` (docs/BACKLOG.md §4 / D-007); wizard y payload viajan en la misma
 rueda, que es la satisfacción mecánica de la regla.
 
-### 4.3 Dependencias de release — PENDIENTES de visto bueno
+### 4.3 Dependencias de release — aprobadas, publicación no ejecutada
 
-`maturin` + cuenta/publicación en **PyPI** constituyen una **toolchain de release NUEVA**.
-Quedan listados aquí pero **NO fijados**: añadir capacidad de distribución fuera de lo
-transitivo exige el visto bueno del dueño (R1 en AGENTS.md §Research & Reuse; "Ask first" en
-[SPEC.md](../../SPEC.md):97). Este ADR los propone; la aprobación del Status cierra la puerta.
+`maturin` + cuenta/publicación en **PyPI** constituyen una **toolchain de release NUEVA**, y
+`ratatui` + `crossterm` la **librería TUI** del menú full-screen (ADR-015 §6). Las tres quedan
+**APROBADAS como dependencias por el dueño el 2026-11-19** (FTR del flujo destino), que es lo que
+exige añadir capacidad de distribución fuera de lo transitivo (R1 en AGENTS.md §Research &
+Reuse; "Ask first" en [SPEC.md](../../SPEC.md):97). **La publicación sigue NO ejecutada**: la
+Phase 6.5 prepara y verifica el canal con una **rueda local** (`maturin build` + `uvx --from`), sin
+subir nada a PyPI. Aceptar este ADR decide el canal; publicar es un acto futuro.
 
 ### 4.4 Confirmation
 
@@ -110,8 +118,9 @@ transitivo exige el visto bueno del dueño (R1 en AGENTS.md §Research & Reuse; 
   solo paso; `uvx --refresh tepochcalli` levanta la última release.
 * La rueda para los targets de la matriz actual (x86_64/aarch64 Linux, x86_64/aarch64 macOS,
   x86_64 Windows) se resuelve e instala sin compilar en el host.
-* **Estado de la evidencia: `declarado`.** Nada de esto está implementado (el ADR es
-  *Proposed*); ver §4.5 sobre M6.
+* **Estado de la evidencia: `declarado`.** Aprobado el 2026-11-19; la implementación corre en
+  Phase 6.5 (canal preparado y verificado con rueda local, sin publicar) y M6 sigue abierto (0
+  releases), así que nada está medido contra una release real (§4.5).
 
 ### 4.5 Cero herencia rota
 
@@ -171,8 +180,8 @@ ha corrido»). Migrar el canal hoy cuesta cero instalaciones huérfanas.
 * ⚖️ **Paradigm shifts:** la distribución del binario Rust pasa del ecosistema Rust
   (crates.io/cargo-dist) al ecosistema Python (PyPI/uv) sin que el wizard deje de ser Rust;
   `docs/ARCHITECTURE.md` §Key decisions 4 (`:294`) y `spec-installer-wizard.md` §Versionado y
-  release describen el canal viejo — se actualizan cuando este ADR pase a *Accepted*
-  (enmienda hermana), no antes.
+  release describen el canal viejo — actualización fechada al 2026-11-19 (enmienda hermana
+  Accepted + §Key decisions 6), y no antes.
 
 ## 7. Related Decisions
 
@@ -191,9 +200,11 @@ ha corrido»). Migrar el canal hoy cuesta cero instalaciones huérfanas.
 
 ## 8. Compliance and Review
 
-* **Success metrics:** tras la aprobación, `uvx tepochcalli` abre el wizard en VM limpia (sin
-  `cargo`, sin binario previo) y completa las 8 fases; `uvx --refresh tepochcalli` actualiza
-  en una release real. Hoy todo es `declarado` (M6 abierto, ADR-013 §4.1 `:73-75`).
+* **Success metrics:** aprobado el 2026-11-19, la Phase 6.5 implementa el canal y lo verifica con
+  una **rueda local** (`maturin build` + `uvx --from`, sin publicar); la métrica plena —`uvx
+  tepochcalli` abre el wizard en VM limpia sin `cargo` ni binario previo, completa las 8 fases y
+  `uvx --refresh tepochcalli` actualiza— sigue `declarado` hasta que exista una release real (M6
+  abierto, ADR-013 §4.1 `:73-75`).
 * **Next review date:** 2027-05-18
 * **Revisit triggers:** PyPI indisponible o el nombre del paquete en disputa → reevaluar canal
   espejo (TestPyPI primero); targets de rueda insuficientes que fuercen compilación en host →

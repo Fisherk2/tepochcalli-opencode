@@ -1,6 +1,6 @@
 # Spec: Wizard de instalación (TUI Rust atomico y versionado)
 
-* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal) · **Enmienda 2026-11-18 — flujo destino (Proposed)** (§Enmienda 2026-11-18; el código vigente no cambia)
+* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal) · **Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19)** (§Enmienda 2026-11-18)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -276,15 +276,16 @@ toolchain**. Reemplaza el **canal** de ADR-003; cargo-dist sigue siendo el backe
 * **npm/homebrew/msi** quedan fuera de v1: cargo-dist los soporta y activarlos exige su token,
   no un ADR nuevo.
 
-## Enmienda 2026-11-18 — flujo destino (Proposed)
+## Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19)
 
-**Status: Proposed** — describe el estado **destino** del wizard según docs/BACKLOG.md §"Wizard de
-instalación: flujo destino (2026-11-18)" (H5–H11 + anexo Codice): **no se aprueba ni se
-implementa aquí** (BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); el código vigente NO cambió y las secciones Accepted de arriba
-siguen describiéndolo. Superará, al aprobarse, D23 (TUI), §Versionado, el canal de la
-§Enmienda canal 2026-11-13 y el alcance de uninstall de §Rollback. Depende de **ADR-014**
-(canal/versión, creado en este lote con Status **Proposed**) y **ADR-015** (embedder; ver
-specs/spec-embeddings.md §Enmienda 2026-11-18).
+**Status: Accepted 2026-11-19** — aprobada por el FTR del dueño el 2026-11-19 y es el **contrato
+que gobierna la Phase 6.5** (docs/WORKFLOW.md §Phase 6.5). Describe el estado **destino** del
+wizard según docs/BACKLOG.md §"Wizard de instalación: flujo destino (2026-11-18)" (H5–H11 + anexo
+Codice). Lo implementado hasta la fecha sigue siendo el **código vigente** descrito en las
+secciones Accepted de arriba; la fase materializa el destino. **Supera** D23 (TUI), §Versionado,
+el canal de la §Enmienda canal 2026-11-13 y el alcance de uninstall de §Rollback. Depende de
+**ADR-014** (canal/versión, *Accepted* 2026-11-19) y **ADR-015** (embedder, *Accepted*
+2026-11-19; ver specs/spec-embeddings.md §Enmienda 2026-11-18).
 
 ### Canal `uvx` (ref ADR-014)
 
@@ -308,14 +309,14 @@ specs/spec-embeddings.md §Enmienda 2026-11-18).
 * Versión **del wizard**: la del paquete PyPI/release publicado (la que gestiona `uvx`).
 * Comparación entre ambas: semver mediante un comparador como service de `domain/`
   (anexo Codice abajo).
-* Drift conocido a corregir **antes de implementar** (no en esta enmienda):
-  `crates/tepochcalli/Cargo.toml` = `0.1.0-beta.1` vs
-  `obsidian-workspace/.tepochcalli/pyproject.toml` = `0.1.0`; deben alinearse.
+* Drift resuelto el 2026-11-19 (TD-45): `crates/tepochcalli/Cargo.toml` estaba en
+  `0.1.0-beta.1` frente a `obsidian-workspace/.tepochcalli/pyproject.toml` = `0.1.0`; alineado
+  a `0.1.0` antes de implementar.
 
 ### TUI full-screen y menú H5 (supera D23 `dialoguer`)
 
-Botones **reales** con estado deshabilitado y razón visible (librería: *p. ej.* `ratatui` —
-PENDIENTE de visto bueno del dueño, no fijada aquí). El H5 muestra la versión que gestiona el
+Botones **reales** con estado deshabilitado y razón visible (librería: **`ratatui` + `crossterm`**,
+fijadas por aprobación del dueño el 2026-11-19). El H5 muestra la versión que gestiona el
 wizard, detecta cómo está instalado el embedder (API key externa o modelo local en
 `.tepochcalli/models/`) y ofrece cinco botones: 🟢 Update · 🟣 Change Embedder · 🔴 Desinstall ·
 🔵 Install · 🟠 Exit.
@@ -365,8 +366,8 @@ stateDiagram-v2
   runtime `.tepochcalli/` con el motor `cocoindex` y el convertidor `markitdown`) y barra de
   progreso de descarga e instalación.
 * **H7 🟢 Update (use-case NUEVO, hoy inexistente).** Sobrescribe `.opencode/`,
-  `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`. **Superará, al aprobarse, F3**
-  ("merge sin sobreescribir") en el camino Update: **backup obligatorio** de los ficheros
+  `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`. **Supera F3** ("merge sin
+  sobreescribir") en el camino Update: **backup obligatorio** de los ficheros
   existentes antes de pisarlos + advertencia visible (regla fijada en docs/CODE_STYLE.md
   §Reglas específicas del payload, enmendada 2026-11-18). Muestra el directorio objetivo y
   barra de progreso.

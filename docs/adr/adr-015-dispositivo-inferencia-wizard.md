@@ -1,19 +1,20 @@
 # ADR-015: Elección explícita de dispositivo de inferencia y catálogo de embedder en el wizard
 
-* **Status:** Proposed
+* **Status:** Accepted 2026-11-19
 * **Date:** 2026-11-18
-* **Decision Makers:** Dueño del repo (requisito H9 del flujo destino, docs/BACKLOG.md §2 / US-H9, 2026-11-18); Arquitecto (redacción)
+* **Decision Makers:** Fisherk2 (dueño del repo; aprobación del FTR 2026-11-19, requisito H9 del flujo destino, docs/BACKLOG.md §2 / US-H9); Arquitecto (redacción)
 * **Consulted:** [ADR-007](adr-007-seleccion-embedder-instalacion.md) (D7.1/D7.4), [ADR-008](adr-008-transparencia-hardware-cambio-modelo.md) (D8.1-D8.3), [spec-embeddings](../../specs/spec-embeddings.md):231 (autoselección rechazada); código vigente del wizard y del flow (`presets.rs`, `embedder_config.rs`, `swap.rs`, `config.py`)
 * **Informed:** Autor del wizard (Rust), mantenedores de specs/spec-embeddings.md y specs/spec-installer-wizard.md, usuarios del vault
 * **Traceability:** docs/BACKLOG.md §2 / US-H9 — «Change Embedder»; docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)» («no se implementan ni se aprueban aquí»); [spec-embeddings](../../specs/spec-embeddings.md); [spec-installer-wizard](../../specs/spec-installer-wizard.md)
 
-> **Nota de alcance:** este ADR está **Proposed**: no entra en vigor hasta la aprobación
-> explícita del usuario (AGENTS.md:205 — «Decisiones D1-D6: NO se re-litigan en código —
-> requieren ADR nuevo aprobado por el usuario», aplicable a D1-D8). **REFINE** ADR-007 y
-> ADR-008 — no los sustituye en su conjunto, no los borra, no los re-edita (son *Accepted*;
-> precedente de esta redacción: el propio ADR-008 Traceability `:8`, «refina (no reemplaza)
-> ADR-007»). Los drifts de código detectados se listan como implementación futura: aquí no se
-> toca ningún `.rs`/`.py`.
+> **Nota de alcance:** este ADR **nació Proposed** el 2026-11-18 y pasa a **Accepted** con el FTR
+> del dueño del **2026-11-19** (docs/BACKLOG.md §2 «Wizard de instalación: flujo destino
+> (2026-11-18)»), tras recorrer lo que exige AGENTS.md §Delegation Patterns `:204-205` — «Decisiones
+> D1-D6: NO se re-litigan en código — requieren ADR nuevo aprobado por el usuario», aplicable a
+> D1-D8. **REFINE** ADR-007 y ADR-008 — no los sustituye en su conjunto, no los borra, no los
+> re-edita (son *Accepted*; precedente de esta redacción: el propio ADR-008 Traceability `:8`,
+> «refina (no reemplaza) ADR-007»). Los drifts de código detectados (§1) se materializan en la
+> Phase 6.5: este ADR no toca ningún `.rs`/`.py`.
 
 ## 1. Context and Problem Statement
 
@@ -120,8 +121,8 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
   default con warning (guarda implementada en `config.py:357-369`; **sin test específico en la
   suite — TD-50**).
 * **Estado de la evidencia: `declarado`** para (a)/(b)/(c) — el campo `device` en `Preset` y la
-  preservación en re-entrada NO existen en el código hoy (ver §1); *medible* solo la guarda del
-  loader.
+  preservación en re-entrada no existen en el código todavía (§1); la Phase 6.5 los materializa
+  (T4) y entonces pasarán a `medido`. *Medible* hoy solo la guarda del loader.
 
 ## 5. Pros and Cons of the Options
 
@@ -159,13 +160,14 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
 * ⚠️ **Negatives / Risks:** se registran como **deuda de implementación** los tres drifts del
   código vigente (`Preset` sin campo, `embedder_config.rs:42` hardcodeado, `swap.rs:422`
   pisoteando); hasta que se materialicen, el wizard sigue escribiendo `cpu` — este ADR no lo
-  cambia. Riesgo de lectura: confundir el flujo destino con el vigente; acotado por el Status
-  *Proposed* y la nota de alcance.
+  cambia. Riesgo de lectura: confundir el flujo destino con el vigente; acotado por la fecha de
+  aprobación (2026-11-19) y la nota de alcance, que separa lo aprobado de lo implementado.
 * ⚖️ **Paradigm shifts / Dependencias:** la UX de botones deshabilitados con razón exige la
-  **TUI full-screen** que reemplaza al `dialoguer` line-based actual (D23; docs/BACKLOG.md §4 / D-006, «p.
-  ej. `ratatui`») — mencionada como herramienta de UI **PENDIENTE de visto bueno** (R1,
-  [SPEC.md](../../SPEC.md):97); **su especificación de UX vive en
-  [spec-installer-wizard](../../specs/spec-installer-wizard.md)** (enmienda hermana) y no se fija aquí.
+  **TUI full-screen** que reemplaza al `dialoguer` line-based actual (D23; docs/BACKLOG.md §4 / D-006,
+  «p. ej. `ratatui`») — **fijada como `ratatui` + `crossterm` por aprobación del dueño el
+  2026-11-19** (R1 / [SPEC.md](../../SPEC.md):97 cumplido); **su especificación de UX vive en
+  [spec-installer-wizard](../../specs/spec-installer-wizard.md)** (enmienda hermana Accepted) y no
+  se fija aquí.
 
 ## 7. Related Decisions
 

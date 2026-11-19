@@ -429,8 +429,13 @@ Todo el contenido migrado cabe en un solo fichero (por debajo del umbral de ~500
 | ----- | ------- | ------- | ------------ |
 | 2026-11-19 | Migración de docs/UH.md al formato BACKLOG; UH.md se elimina y BACKLOG.md pasa a ser fuente de verdad | Fisherk2 (orden) + docs-writer (redacción) | Fisherk2 |
 | 2026-11-19 | Sustitución del rol anónimo por el usuario del remoto Fisherk2 en atribuciones | docs-writer (redacción) | Fisherk2 |
+| 2026-11-19 | FTR del flujo destino firmado: **ADR-014 y ADR-015 pasan de Proposed a Accepted** (§2 US-H5..H11, §4 D-005..D-008); las decisiones de fondo quedan aprobadas y los ADR citados intactos | docs-writer (redacción) | Fisherk2 (FTR) |
+| 2026-11-19 | Enmiendas «2026-11-18 — flujo destino» de `spec-installer-wizard` y `spec-embeddings` pasan a **Accepted**; `[embedding].device` queda electivo y la autoselección en runtime sigue rechazada | docs-writer (redacción) | Fisherk2 (FTR) |
+| 2026-11-19 | Versión alineada a `0.1.0` en `crates/tepochcalli/Cargo.toml` + `Cargo.lock` detrás de la canónica `.tepochcalli/pyproject.toml` (one-version rule, D-007; cierra TD-45) | docs-writer (redacción) | Fisherk2 (FTR) |
+| 2026-11-19 | Phase 6.5 **desbloqueada** en `docs/WORKFLOW.md`: las 4 precondiciones del gate de entrada quedan resueltas (§2 «Wizard de instalación: flujo destino») | docs-writer (redacción) | Fisherk2 (FTR) |
+| 2026-11-19 | Librería TUI **fijada** en `ratatui` + `crossterm` (ADR-014 §4.3, ADR-015 §6); `maturin`+PyPI aprobadas como toolchain de release, sin publicar nada | docs-writer (redacción) | Fisherk2 (FTR) |
 
-Estado `frozen`: el contenido se migra como instantánea congelada de `docs/UH.md` (345 líneas) por orden de Fisherk2. Los requisitos del flujo destino siguen marcados explícitamente como pendientes de formalización, no como aprobados.
+Estado `frozen`: el contenido se migra como instantánea congelada de `docs/UH.md` (345 líneas) por orden de Fisherk2. Los requisitos del flujo destino se escribieron como destino **pendiente de formalización**; desde el **2026-11-19** esa formalización existe — [ADR-014](adr/adr-014-distribucion-uvx-pypi.md)/[ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) *Accepted* y las enmiendas *Accepted* de `spec-installer-wizard`/`spec-embeddings` (filas de arriba). El texto de §2 y §4 no se reescribe: es la instantánea de la orden.
 
 Las citas con número de línea del documento migrado se retiran a anclas de este fichero; el contenido es el mismo, solo cambia el contenedor.
 

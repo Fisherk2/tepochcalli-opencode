@@ -1,6 +1,6 @@
 # Spec: Estratégia de embeddings (modelo default, cache y proveedores)
 
-* **Status:** Approved 2026-10-23 (FTR Phase 0→1, docs/WORKFLOW.md §4) · **Enmienda 2026-11-18 — flujo destino (Proposed)** (§Enmienda 2026-11-18; el código vigente no cambia)
+* **Status:** Approved 2026-10-23 (FTR Phase 0→1, docs/WORKFLOW.md §4) · **Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19)** (§Enmienda 2026-11-18)
 * **Date:** 2026-10-23 (original: 2026-10-21)
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -257,21 +257,22 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 
 * ¿Exponer batch-size/threads de inferencia en config v1? (propuesto: no, heurística del engine)
 
-## Enmienda 2026-11-18 — flujo destino (Proposed)
+## Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19)
 
-**Status: Proposed** — describe el destino del paso embedder del wizard según docs/BACKLOG.md
-§"Wizard de instalación: flujo destino (2026-11-18)" (H9): **no se aprueba ni se implementa
-aquí** (BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); las secciones Accepted de arriba siguen describiendo el comportamiento
-vigente. Depende de **ADR-015** (hermano, creado en este lote con Status **Proposed**) y de la enmienda coetánea en
-specs/spec-installer-wizard.md.
+**Status: Accepted 2026-11-19** — aprobada por el FTR del dueño el 2026-11-19 y **gobierna el
+paso embedder de la Phase 6.5** (docs/WORKFLOW.md §Phase 6.5). Describe el destino del paso
+embedder del wizard según docs/BACKLOG.md §"Wizard de instalación: flujo destino (2026-11-18)"
+(H9); las secciones Accepted de arriba siguen describiendo el comportamiento vigente, que la
+fase sustituye. Depende de **ADR-015** (*Accepted* 2026-11-19) y de la enmienda coetánea
+(*Accepted*) en specs/spec-installer-wizard.md.
 
 ### `device` en el contrato del wizard (ref ADR-015)
 
 * El catálogo `Preset` (`crates/tepochcalli/src/config/presets.rs:10-33`) hoy **no** tiene
   campo `device`: el contrato destino lo añade, y el wizard escribe la elección explícita del
-  usuario en `[embedding].device` de `tepochcalli.toml` — valores aceptados `cpu`
-  (preseleccionado) | `cuda` | `cuda:N` (BACKLOG.md §2 / US-H9; la clave ya existe en §Estructura; `mps`/otros
-  → futuro, trigger ADR-015 §8). La
+  usuario en `[embedding].device` de `tepochcalli.toml` — la clave es **electiva**: valores
+  aceptados `cpu` (preseleccionado) | `cuda` | `cuda:N` (BACKLOG.md §2 / US-H9; la clave ya existe
+  en §Estructura; `mps`/otros → futuro, trigger ADR-015 §8). La
   elección aplica por igual a indexación y búsquedas: comparten el mismo embedder.
 * La re-entrada `tepochcalli config embedder` **preserva el valor `device` existente** como
   preselección, para no sobrescribir una elección manual.
@@ -281,8 +282,9 @@ specs/spec-installer-wizard.md.
   pisa el valor del usuario con `cpu`.
 * **Reafirma el rechazo a la autoselección en runtime** (§Alternatives Considered,
   "Detección automática de GPU y selección de modelo en runtime" — no-determinismo del índice):
-  NO se reabre. La opción GPU se presenta como **botón deshabilitado con la razón "GPU no
-  detectada"** cuando la sonda no la encuentra; si el usuario la fuerza sobre un dispositivo no
+  NO se reabre y sigue **RECHAZADA** también con esta enmienda Accepted. La opción GPU se
+  presenta como **botón deshabilitado con la razón "GPU no detectada"** cuando la sonda no la
+  encuentra; si el usuario la fuerza sobre un dispositivo no
   disponible, se advierte con la cifra de procedencia `medido` y **nunca se bloquea** — el fallo
   efectivo ocurriría al cargar el modelo, no al configurar (UH §H9).
 
