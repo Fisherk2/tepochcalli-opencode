@@ -166,6 +166,15 @@ umbral de su propio tramo**, no a <500:
 
 * `obsidian-workspace/opencode.json`: el wizard solo puede tocar `mcp.servers.*` de las
   entradas gestionadas; el resto del JSON se preserva byte-a-byte (merge conservador).
+  **Excepción aprobada por el dueño (2026-11-18):** en el flujo destino, **Update (H7)**
+  sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`;
+  **Desinstall (H8)** remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — **no**
+  `AGENTS.md` (UH:297) —; en ambos, **backup obligatorio del fichero existente antes de
+  pisarlo/quitarlo y advertencia
+  visible**; la primera Install y las re-entradas `config` siguen con merge conservador
+  byte-a-byte salvo los `mcp.servers.*` gestionados. Referencias:
+  specs/spec-installer-wizard.md §Enmienda 2026-11-18 — flujo destino (Proposed) y ADR-014
+  (pendiente).
 * Nunca commitear artefactos: `.tepochcalli/{venv,db,models,bin,config}` (gitignore del vault,
   spec-vault-structure).
 * `docs/UH.md` es inmutable: cambio de requisitos ⇒ nueva sección en `docs/PRD.md`/specs, no edición.

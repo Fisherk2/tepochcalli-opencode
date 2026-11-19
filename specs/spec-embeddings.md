@@ -1,6 +1,6 @@
 # Spec: Estratégia de embeddings (modelo default, cache y proveedores)
 
-* **Status:** Approved 2026-10-23 (FTR Phase 0→1, docs/WORKFLOW.md §4)
+* **Status:** Approved 2026-10-23 (FTR Phase 0→1, docs/WORKFLOW.md §4) · **Enmienda 2026-11-18 — flujo destino (Proposed)** (§Enmienda 2026-11-18; el código vigente no cambia)
 * **Date:** 2026-10-23 (original: 2026-10-21)
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -256,6 +256,68 @@ Camino recomendado (D8.4/ADR-008): `tepochcalli config embedder` ejecuta el swap
 ## Open Questions
 
 * ¿Exponer batch-size/threads de inferencia en config v1? (propuesto: no, heurística del engine)
+
+## Enmienda 2026-11-18 — flujo destino (Proposed)
+
+**Status: Proposed** — describe el destino del paso embedder del wizard según docs/UH.md
+§"Wizard de instalación: flujo destino (2026-11-18)" (H9): **no se aprueba ni se implementa
+aquí** (UH:255); las secciones Accepted de arriba siguen describiendo el comportamiento
+vigente. Depende de **ADR-015** (hermano, creado en este lote con Status **Proposed**) y de la enmienda coetánea en
+specs/spec-installer-wizard.md.
+
+### `device` en el contrato del wizard (ref ADR-015)
+
+* El catálogo `Preset` (`crates/tepochcalli/src/config/presets.rs:10-33`) hoy **no** tiene
+  campo `device`: el contrato destino lo añade, y el wizard escribe la elección explícita del
+  usuario en `[embedding].device` de `tepochcalli.toml` — valores aceptados `cpu`
+  (preseleccionado) | `cuda` | `cuda:N` (UH:311; la clave ya existe en §Estructura; `mps`/otros
+  → futuro, trigger ADR-015 §8). La
+  elección aplica por igual a indexación y búsquedas: comparten el mismo embedder.
+* La re-entrada `tepochcalli config embedder` **preserva el valor `device` existente** como
+  preselección, para no sobrescribir una elección manual.
+* Drift conocido (a corregir en la implementación FUTURA, no en esta enmienda):
+  `local_config()` hardcodea `device = "cpu"` (`application/embedder_config.rs:42`) y
+  `picked_config_body()` del swap (`application/swap.rs:422`) la reutiliza — hoy la re-entrada
+  pisa el valor del usuario con `cpu`.
+* **Reafirma el rechazo a la autoselección en runtime** (§Alternatives Considered,
+  "Detección automática de GPU y selección de modelo en runtime" — no-determinismo del índice):
+  NO se reabre. La opción GPU se presenta como **botón deshabilitado con la razón "GPU no
+  detectada"** cuando la sonda no la encuentra; si el usuario la fuerza sobre un dispositivo no
+  disponible, se advierte con la cifra de procedencia `medido` y **nunca se bloquea** — el fallo
+  efectivo ocurriría al cargar el modelo, no al configurar (UH §H9).
+
+### Catálogo local ACTIVO (aclaración de `all-MiniLM-L6-v2`)
+
+* Contradicción documentada y resuelta: docs/UH.md §H9 lista MiniLM (recomendado) y `BAAI/bge-m3`
+  (GPU), mientras la tabla D7.1 de arriba (salida 2, `:75`) menciona históricamente también
+  `all-MiniLM-L6-v2`. El **catálogo ACTIVO real es `presets.toml`**: exactamente dos presets —
+  `paraphrase-multilingual-MiniLM-L12-v2` (recomendado/preseleccionado, ~470MB) y `BAAI/bge-m3`
+  (GPU recomendada, ~2300MB) — como refleja `crates/tepochcalli/src/config/presets.toml`.
+  `all-MiniLM-L6-v2` queda **solo como ejemplo de la guarda `test-embed`**, no como preset
+  instalado.
+* La opción de **ID libre de HuggingFace** sigue vigente como salida del menú: descarga a
+  `.tepochcalli/models/`, portero **test-embed** (§Gate test-embed: frase de prueba, dims,
+  nombre real, rechazo de no-embeddings) y campo opcional `HF_TOKEN` para modelos gated.
+* Procedencia de las cifras (`declarado` catálogo / `estimado` fórmula `params × 4 bytes × 1.3`
+  / `medido` RSS del gate) y badges del host: véase §Tres fuentes de verdad y
+  spec-installer-wizard.md §D8.2 — no se duplican aquí.
+
+### Sin campo `endpoint` + guarda anti-exfiltración (LAG de documentación, comportamiento YA implementado)
+
+* `[embedding]` **NO tiene campo `endpoint`**: LiteLLM deriva proveedor y endpoint por defecto
+  del prefijo de `model` (p. ej. `openai/` → `https://api.openai.com/v1`). La API key de la
+  salida externa corresponde al endpoint **preestablecido** del proveedor; ni el wizard lo pide
+  ni el TOML lo escribe.
+* `api_key_env` es el **NOMBRE** de la variable de entorno y gana sobre `api_key` literal
+  (§Upgrade path: precedencia env-var > fichero, ya documentada).
+* El loader del flow **rechaza `://`, `http` o `@` dentro de `model`** con `provider =
+  "litellm"` (avisa y cae al default): un `model` con componente de endpoint haría que LiteLLM
+  enviara el texto del usuario a ESA URL — exfiltración por config. Está **ya implementado** en
+  `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/config.py:357-369`; esta enmienda lo
+  eleva a contrato documentado, sin cambiar el código.
+* Endpoint custom (Ollama/vLLM/proxy): se declara como **variable de entorno de LiteLLM**
+  (`OPENAI_BASE_URL`, `OLLAMA_API_BASE`) en `opencode.json` — fuera del TOML y del wizard, y no
+  es contrato de Tepochcalli sino de LiteLLM.
 
 ## References
 

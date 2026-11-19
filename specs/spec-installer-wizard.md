@@ -1,6 +1,6 @@
 # Spec: Wizard de instalación (TUI Rust atomico y versionado)
 
-* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal)
+* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal) · **Enmienda 2026-11-18 — flujo destino (Proposed)** (§Enmienda 2026-11-18; el código vigente no cambia)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -275,6 +275,127 @@ toolchain**. Reemplaza el **canal** de ADR-003; cargo-dist sigue siendo el backe
   se retira con `cargo uninstall tepochcalli`.
 * **npm/homebrew/msi** quedan fuera de v1: cargo-dist los soporta y activarlos exige su token,
   no un ADR nuevo.
+
+## Enmienda 2026-11-18 — flujo destino (Proposed)
+
+**Status: Proposed** — describe el estado **destino** del wizard según docs/UH.md §"Wizard de
+instalación: flujo destino (2026-11-18)" (H5–H11 + anexo Codice): **no se aprueba ni se
+implementa aquí** (UH:255); el código vigente NO cambió y las secciones Accepted de arriba
+siguen describiéndolo. Superará, al aprobarse, D23 (TUI), §Versionado, el canal de la
+§Enmienda canal 2026-11-13 y el alcance de uninstall de §Rollback. Depende de **ADR-014**
+(canal/versión, creado en este lote con Status **Proposed**) y **ADR-015** (embedder; ver
+specs/spec-embeddings.md §Enmienda 2026-11-18).
+
+### Canal `uvx` (ref ADR-014)
+
+* El instalador se publica en **PyPI** como paquete que empaqueta el binario Rust (patrón
+  maturin `bindings = "bin"`). Un solo paso: `uvx tepochcalli` abre el wizard directo — sin
+  binario del proyecto en PATH y sin descargas en runtime; el wheel queda en la **caché de uv**
+  hasta su limpieza. Esto reemplaza conceptualmente el "dos pasos" (binstall + `tepochcalli
+  install`) de Goals/§Enmienda canal y el §Versionado: la versión del binario la gestiona esa
+  caché, no el host.
+* `cargo binstall` / assets cargo-dist (ADR-013/003) quedan como canal heredado/fallback; la
+  superación formal del canal y del backend la fija ADR-014.
+* Comando de refresco a mostrar en el TUI: `uvx --refresh tepochcalli` (alternativa `uvx
+  tepochcalli@latest`). Inspiración: Codice (`bunx @fisherk2-dev/codice`, `bunx --fresh`).
+* Flags: `--offline`, `--skip-model`, `--vault`, `--non-interactive` conservan su semántica y
+  viajan en el mismo comando `uvx tepochcalli …` (a diferencia de binstall, que no reenvía).
+
+### Versionado (destino)
+
+* Versión **instalada**: se lee de `.tepochcalli/pyproject.toml` (fuente canónica del destino,
+  ref ADR-014).
+* Versión **del wizard**: la del paquete PyPI/release publicado (la que gestiona `uvx`).
+* Comparación entre ambas: semver mediante un comparador como service de `domain/`
+  (anexo Codice abajo).
+* Drift conocido a corregir **antes de implementar** (no en esta enmienda):
+  `crates/tepochcalli/Cargo.toml` = `0.1.0-beta.1` vs
+  `obsidian-workspace/.tepochcalli/pyproject.toml` = `0.1.0`; deben alinearse.
+
+### TUI full-screen y menú H5 (supera D23 `dialoguer`)
+
+Botones **reales** con estado deshabilitado y razón visible (librería: *p. ej.* `ratatui` —
+PENDIENTE de visto bueno del dueño, no fijada aquí). El H5 muestra la versión que gestiona el
+wizard, detecta cómo está instalado el embedder (API key externa o modelo local en
+`.tepochcalli/models/`) y ofrece cinco botones: 🟢 Update · 🟣 Change Embedder · 🔴 Desinstall ·
+🔵 Install · 🟠 Exit.
+
+| Estado (instalada vs wizard) | Habilitados | Deshabilitados (con razón visible) |
+| --- | --- | --- |
+| No instalado | 🔵 Install | 🟢, 🟣, 🔴 — "no hay instalación aún"; mensaje: directorio listo para instalar |
+| instalada == wizard | 🟣, 🔴, 🟠 | 🔵 Install y 🟢 Update — "versión al día" |
+| instalada < wizard | 🟢, 🟣, 🔴, 🟠 | 🔵 Install — "ya existe instalación" |
+| instalada > wizard | solo 🟠 Exit | todo lo demás — mensaje "refresca la caché de uvx" con el comando exacto a copiar: `uvx --refresh tepochcalli` |
+
+El TUI muestra además el link del repositorio <https://github.com/Fisherk2/tepochcalli-opencode>
+y el correo `dev@fisherk2.com` para reportar bugs/issues.
+
+```mermaid
+stateDiagram-v2
+    [*] --> H5
+    H5: detecta versión en .tepochcalli/pyproject.toml
+    H5 --> SinInstalar: no hay pyproject en el destino
+    H5 --> Igual: instalada e igual a la del wizard
+    H5 --> Atrasada: instalada anterior a la del wizard
+    H5 --> Adelantada: instalada posterior a la del wizard
+    SinInstalar: solo Install habilitado
+    SinInstalar --> H6: Install
+    Igual: Install y Update deshabilitados
+    Igual --> H9: Change Embedder
+    Igual --> H8: Desinstall
+    Atrasada: Install deshabilitado
+    Atrasada --> H7: Update
+    Adelantada: solo Exit habilitado y mensaje de refrescar caché uvx
+    Adelantada --> [*]: Exit
+    H6 --> H11
+    H7 --> H11
+    H8 --> H11
+    H9 --> H11
+    H11: cerrar con cualquier tecla y agradecimiento
+    H11 --> [*]
+```
+
+### Casos de uso destino (H6–H11)
+
+* **H6 🔵 Install.** Tras confirmar el directorio destino, pasa por la fase de embedder según
+  H9 (spec-embeddings.md §Enmienda 2026-11-18, ref ADR-015) con extracción de requisitos,
+  detección de hardware y advertencia previas. Si se elige API key, la clave corresponde al
+  endpoint **PREESTABLECIDO** del proveedor que LiteLLM deriva del prefijo de `model` — el TOML
+  no tiene campo de endpoint. Mensaje de confirmación de qué y dónde se instala (incluido el
+  runtime `.tepochcalli/` con el motor `cocoindex` y el convertidor `markitdown`) y barra de
+  progreso de descarga e instalación.
+* **H7 🟢 Update (use-case NUEVO, hoy inexistente).** Sobrescribe `.opencode/`,
+  `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`. **Superará, al aprobarse, F3**
+  ("merge sin sobreescribir") en el camino Update: **backup obligatorio** de los ficheros
+  existentes antes de pisarlos + advertencia visible (regla fijada en docs/CODE_STYLE.md
+  §Reglas específicas del payload, enmendada 2026-11-18). Muestra el directorio objetivo y
+  barra de progreso.
+* **H8 🔴 Desinstall.** Remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más.
+  **Amplía el alcance del uninstall actual** (§Rollback: hoy solo `.tepochcalli/`). El binario no
+  se desinstala del host: el wheel vive en la caché de uv y se retira limpiando dicha caché.
+  Advertencia:
+  * directorio objetivo + backup y barra de progreso.
+* **H9 🟣 Change Embedder:** remite a specs/spec-embeddings.md §Enmienda 2026-11-18 (device,
+  presets, badges, gate test-embed — ref ADR-015). El menú D7.1, la transparencia D8.1-D8.3 y
+  el swap D8.4 siguen vigentes presentados en la TUI full-screen.
+* **H10 🟠 Exit.** Sin cambios: salir sin materializar ni modificar nada.
+* **H11 Cierre.** Tras cualquier opción salvo Exit, el instalador se cierra previa
+  confirmación pulsando cualquier tecla, con mensaje de agradecimiento a Tepochcalli.
+
+### Anexo — mapeo de módulos Codice → Rust (requisito de organización, no spec nueva)
+
+Derivado de <https://github.com/Fisherk2/codice-opencode/tree/main/src> (docs/UH.md §Anexo).
+`crates/tepochcalli/src/` ya tiene forma análoga (`cli/`, `application/`, `adapters/`,
+`config/`, `domain/`); no es un renome sino el destino de cada responsabilidad del flujo nuevo.
+
+| Responsabilidad | Referencia en Codice | Destino en Rust |
+| --- | --- | --- |
+| Detección de la versión instalada desde `.tepochcalli/pyproject.toml` | `versionContext.ts` | contexto de `cli/` |
+| Comparador semver | `VersionComparator.ts` | service de `domain/` |
+| Use-case `update` (H7, hoy inexistente) | use-case de `application/` | `application/` |
+| TUI full-screen con estados de botón | `ClackPromptsAdapter.ts` | `adapters/` |
+| Cliente de release/última versión | `GitHubRestClient.ts` | `adapters/` |
+| **Diferencia propia:** gestión del modelo de embeddings (selección, instalación y swap, con resumen y barra de progreso) — sin equivalente en Codice | — | `application/` + `adapters/`, sin forzar el mapeo |
 
 ## References
 
