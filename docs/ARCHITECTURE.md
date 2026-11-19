@@ -283,6 +283,8 @@ graph TB
 | [ADR-011](../specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Dos librerías (cocoindex + markitdown) y ledger de no-reinvención | Accepted | 2026-11-03 |
 | [ADR-012](../specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills | Accepted | 2026-11-11 |
 | [ADR-013](../specs/adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003) | Accepted | 2026-11-13 |
+| [ADR-014](../specs/adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003 | Proposed | 2026-11-18 |
+| [ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada (`cpu`/`cuda`/`cuda:N`); refina ADR-007/008 sin reabrir el rechazo de autoselección | Proposed | 2026-11-18 |
 
 ## Key decisions summary
 
@@ -291,6 +293,7 @@ graph TB
 3. **stdio MCP = frontera** (ADR-005) — contratos `search/index_refresh/add_source` congelados; motor y almacén intercambiables sin tocar el harness.
 4. **Distribución Rust one-liner + segundo paso** (ADR-013/003/004) — el binario se instala con `cargo binstall tepochcalli` (fallback sin toolchain: `curl | sh` / `install.ps1`) y el vault se configura con `tepochcalli install`: binstall no reenvía flags. El wizard hace bootstrap de `uv`, que a su vez instala un CPython gestionado: el investigador no instala Python ni Node.
 5. **MiniLM local default** (ADR-006) — ES+EN, CPU, 8GB, $0; upgrades bge-m3/LiteLLM por config.
+6. **Destino del wizard (ADR-014/015, Proposed 2026-11-18)** — canal único `uvx tepochcalli`, TUI full-screen con botones y device explícito en wizard/re-entrada; **PENDIENTE de FTR** (Phase 6.5 GATED en `docs/WORKFLOW.md`). Mientras no sean Accepted, el estado operativo sigue siendo ADR-013/003 (`cargo binstall` + cargo-dist) con dialoguer.
 
 ## Engine-migration contingency
 

@@ -120,6 +120,39 @@ requeriría rewiring del conector, fuera del scope v1):
   arrastrar el traceback, y el fallo de credencial sale como `E_API_AUTH` con `fix_hint` que
   nombra la variable — jamás su contenido.
 
+## Wizard sobre el vault: sobrescritura, backup y endpoint (destino Proposed 2026-11-18)
+
+Excepción aprobada por el dueño (2026-11-18, [docs/CODE_STYLE.md](CODE_STYLE.md) §Reglas
+específicas del payload): en el flujo destino, **Update (H7)** sobrescribe `.opencode/`,
+`.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`; **Desinstall (H8)** remueve
+`.opencode/`, `.tepochcalli/` y `opencode.json` — **no** `AGENTS.md` (UH:297) —, ambos con
+backup obligatorio antes de pisar/quitar y advertencia visible — amplían el alcance
+vigente (no existe `update`; `uninstall` hoy solo borra `.tepochcalli/`). La primera Install y las
+re-entradas `config` siguen con merge conservador byte-a-byte salvo los `mcp.servers.*` gestionados.
+Estado: [ADR-014](../specs/adr/adr-014-distribucion-uvx-pypi.md) /
+[ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) **Proposed**, Phase 6.5 **GATED**
+en [WORKFLOW.md](WORKFLOW.md). Reglas:
+
+* **Backup obligatorio antes de pisar + advertencia visible** con el directorio objetivo. El `.bak`
+  vive en el vault del usuario: no introduce secretos nuevos, pero **hereda el contenido** del
+  fichero respaldado — si el usuario puso claves literales en `opencode.json` (la política manda
+  `{env:VAR}`, §MCP arriba), esas claves quedan también en el `.bak` y le aplica §Nunca se commitea.
+* **Desinstall** remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más; notas y
+  `00-resources/` intocados (regla maestra de APPFLOW §e: ningún fallo ni operación pierde datos
+  del usuario).
+* **Clave literal del wizard:** el `api_key` de `[embedding]` sigue viviendo **solo** en
+  `.tepochcalli/config/tepochcalli.toml` (gitignored, §Nunca se commitea); en `opencode.json` solo
+  `{env:VAR}` o `api_key_env` con el **nombre** de la variable, nunca el valor.
+* **Anti-exfiltración en `model` (cross-ref):** la guarda que rechaza `://`, `http` y `@` dentro del
+  `model` de LiteLLM está **implementada** (`.tepochcalli/flow/tepochcalli_flow/config.py:357-369`) y se
+  documenta en la Enmienda 2026-11-18 de
+  [../specs/spec-embeddings.md](../specs/spec-embeddings.md) / ADR-015 (Proposed).
+* **Endpoint custom = riesgo declarado, no contrato:** el TOML **no** tiene campo de endpoint;
+  LiteLLM lo deriva del prefijo de `model` (`openai/` → `https://api.openai.com/v1`). Un endpoint
+  propio (Ollama/vLLM/proxy) se declara por **env var de LiteLLM** (`OPENAI_BASE_URL`,
+  `OLLAMA_API_BASE`) en `opencode.json`: queda fuera del contrato de Tepochcalli, de sus
+  validaciones y de la §Provenance de abajo — el usuario responde del destino de sus claves.
+
 ## Provenance de descargas (primer arranque requiere internet)
 
 | Artefacto | Origen verificado | Integridad |

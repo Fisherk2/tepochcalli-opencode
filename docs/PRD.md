@@ -46,6 +46,24 @@ nativas.
 | F6 | Distribución versionada | cargo-dist + GitHub Releases; canal recomendado `cargo binstall tepochcalli` (crates.io), con `shell`/`powershell` como fallback sin toolchain; instalación en dos pasos (`cargo binstall` + `tepochcalli install`); payload y wizard versionan juntos | ADR-013, ADR-003 |
 | F7 | Metodología de investigación | `/rubric /research /validate /synthesize /cite /draft /review /transform /update` con agentes Itzamná/Nezahualcóyotl/Pochteca/Chilam/Tlacuilo | spec-agent-workflow |
 
+### Nota destino 2026-11-18 (Proposed, sin aprobación)
+
+La evolución `/evolve` sobre [docs/UH.md §"Wizard de instalación: flujo destino"](UH.md) (H5-H11)
+fija el estado **objetivo** de F5/F6 como **Proposed** — no sustituye nada de lo aprobado:
+
+* **Canal único `uvx tepochcalli`** (rueda de PyPI vía maturin `bindings = "bin"`; refresco
+  `uvx --refresh tepochcalli`) — [ADR-014](../specs/adr/adr-014-distribucion-uvx-pypi.md). Mientras
+  no sea *Accepted*, el canal vigente sigue siendo `cargo binstall` + cargo-dist (ADR-013/003).
+* **TUI full-screen con botones por estado** (4 escenarios de versión, H5; bloqueo = botón
+  deshabilitado con razón visible) en lugar del `dialoguer` line-based (D23).
+* **Update (H7) y Desinstall (H8)**: operaciones nuevas/ampliadas que sobrescriben o remueven
+  material del vault **con backup obligatorio y advertencia visible** (excepción del dueño
+  2026-11-18 en [docs/CODE_STYLE.md](CODE_STYLE.md)).
+* **Device de inferencia explícito** (`cpu`/`cuda`/`cuda:N`, H9) —
+  [ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md).
+
+Implementación y aprobación: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**GATED**).
+
 ## 5. Out of scope (v1)
 
 * **Implementar un motor RAG propio** — se incorpora CocoIndex (decisión D1/ADR-001).

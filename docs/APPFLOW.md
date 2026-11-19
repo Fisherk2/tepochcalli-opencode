@@ -111,6 +111,47 @@ indexación inicial se omite y el RAG queda en estado `degraded`;
 `search`/`index_refresh`/`add_source` devuelven `E_NO_EMBEDDER` con `fix_hint`, y `rag_status()`
 reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedder` (flujo D8.4).
 
+### Journey destino (Proposed 2026-11-18 — Phase 6.5 **GATED**; no es el estado vigente)
+
+Requisito: [docs/UH.md §"Wizard de instalación: flujo destino"](UH.md) (H5-H11); diseño:
+[../specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-18 —
+flujo destino (Proposed) y [../specs/adr/adr-014-distribucion-uvx-pypi.md](../specs/adr/adr-014-distribucion-uvx-pypi.md) /
+[adr-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) (Proposed). El journey (d) de
+arriba sigue siendo lo que el wizard hace hoy.
+
+1. **Arranque:** `uvx tepochcalli` — un solo comando, sin binario del proyecto en PATH y sin
+   descargas en runtime (canal único, ADR-014 Proposed). Refresco: `uvx --refresh tepochcalli`.
+2. **Menú con botones según la versión (H5, TUI full-screen):** muestra la versión que gestiona,
+   la instalada (leída de `.tepochcalli/pyproject.toml`) y cómo está configurado el embedder (API
+   key externa o modelo local en `.tepochcalli/models/`). Todo bloqueo es un botón deshabilitado
+   con razón visible:
+   * **no instalado** → único disponible 🔵Install (🟢Update, 🟣Change Embedder, 🔴Desinstall
+     deshabilitados);
+   * **instalada == wizard** → deshabilitados 🟢Update y 🔵Install;
+   * **instalada < wizard** → deshabilitado 🔵Install;
+   * **instalada > wizard** → todos deshabilitados **salvo 🟠Exit**, con el comando exacto a
+     copiar para refrescar la caché de `uvx`: `uvx --refresh tepochcalli`.
+3. **🔵 Install (H6):** confirma qué y dónde (incluido el runtime `.tepochcalli/` con `cocoindex`
+   y `markitdown`) → fase del embedder con extracción de requisitos y detección de hardware →
+   barra de progreso.
+4. **🟢 Update (H7):** sobrescribe `.opencode/` y `.tepochcalli/` y **advierte** que también se
+   pisarán `.gitignore`, `opencode.json` y `AGENTS.md`; **backup obligatorio antes de escribir**
+   (excepción del dueño 2026-11-18, [docs/CODE_STYLE.md](CODE_STYLE.md)); muestra el directorio
+   objetivo y progresa.
+5. **🔴 Desinstall (H8):** remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más —
+   tras advertencia y confirmación (hoy `uninstall` solo borra `.tepochcalli/`).
+6. **🟣 Change Embedder (H9):** catálogo **activo** de `presets.toml`
+   (`paraphrase-multilingual-MiniLM-L12-v2` preseleccionado + `BAAI/bge-m3`) e ID libre de
+   HuggingFace con gate `test-embed` y `HF_TOKEN` opcional; requisitos 💾/🧠/🎮 etiquetados
+   `declarado`/`estimado`/`medido` antes de elegir; badge `no recomendado` es **advertencia, nunca
+   bloqueo**; **device explícito** `cpu` (preseleccionado) / `cuda`/`cuda:N` — GPU sin sonda ⇒ botón
+   deshabilitado con la razón `GPU no detectada`; forzarlo solo advierte con procedencia `medido`
+   (autoselección en runtime: rechazada). La re-entrada `tepochcalli config embedder` **preserva**
+   el device existente como preselección ([ADR-015](../specs/adr/adr-015-dispositivo-inferencia-wizard.md) Proposed).
+7. **🟠 Exit (H10):** sale sin materializar ni modificar nada.
+8. **Cierre (H11):** tras cualquier opción salvo Exit, cualquier tecla confirma y el mensaje de
+   agradecimiento despide el instalador.
+
 ## 6. Journey (e) — fallo y recuperación
 
 1. Caída de red durante fase 5 (venv sync): el wizard detecta fallo, **rollback compensado**

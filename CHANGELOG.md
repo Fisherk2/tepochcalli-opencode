@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added (flujo destino del wizard — documentación, 2026-11-18)
+
+- **ADR-014 (Proposed)** — [canal de distribución `uvx` + PyPI](specs/adr/adr-014-distribucion-uvx-pypi.md):
+  wheel vía maturin (`bindings = "bin"`), instalación `uvx tepochcalli` y refresco
+  `uvx --refresh tepochcalli`. Sustituye el **canal** de ADR-013 y **declara** el retiro del
+  backend de ADR-003 (`dist.toml` + `release.yml`) como decisión del dueño — la materialización
+  del retiro queda como tarea futura. ADR-004 intacto. Versión canónica =
+  `.tepochcalli/pyproject.toml` (0.1.0) frente a `Cargo.toml` (0.1.0-beta.1) → alineación
+  one-version pendiente; deps maturin/PyPI pendientes de visto bueno del dueño.
+- **ADR-015 (Proposed)** — [elección explícita de device en wizard y re-entrada](specs/adr/adr-015-dispositivo-inferencia-wizard.md):
+  campo `device` en `Preset`, el wizard escribe `[embedding].device` (destino
+  `cpu`/`cuda`/`cuda:N` — UH:311 —; los valores sin soporte fallan al cargar el modelo, no al
+  configurar; `mps` queda como trigger futuro ADR-015 §8) y la re-entrada `config embedder`
+  **preserva** el valor (drift futuro a corregir en `presets.rs`,
+  `embedder_config.rs:42`, `swap.rs:422`). **Refina** ADR-007/008 sin sustituirlos; la
+  autoselección en runtime sigue rechazada; GPU sin sonda = botón deshabilitado con razón.
+- **Enmiendas a las specs**: `specs/spec-installer-wizard.md` y `specs/spec-embeddings.md`
+  reciben la sección "Enmienda 2026-11-18 — flujo destino (Proposed)".
+- **`docs/CODE_STYLE.md`**: excepción del dueño (2026-11-18) a la regla byte-a-byte — Update
+  (H7) y Desinstall (H8) sobrescriben/remueven `opencode.json` y `AGENTS.md` del vault con
+  **backup obligatorio + advertencia visible**; primera Install y re-entradas `config` siguen
+  con merge conservador.
+- **`docs/WORKFLOW.md`**: nueva **Phase 6.5 — Wizard flujo destino (H5-H11)**, GATED / no
+  ejecutable (precondiciones: ADR-014/015 Accepted + deps aprobadas + one-version alineada +
+  enmiendas Accepted); ola **D68** registrada en §8.
+
+  *Documentación solo — cero implementación, cero ADR Accepted.* Contexto: 0 tags publicados y
+  M6 abierto (`cargo binstall` nunca corrió en producción) ⇒ no hay usuarios que migrar.
+
 ### Changed (canal de instalación `cargo binstall`, 2026-11-13)
 
 - **El canal recomendado de instalación del wizard pasa a `cargo binstall tepochcalli`**

@@ -55,7 +55,7 @@ repo                                # este repositorio (producto + plantilla)
 ├── SPEC.md                         # este índice central
 ├── specs/                          # especificación modular + ADRs
 │   ├── spec-*.md                   #   12 specs (motor, MCP, vault, embeddings, wizard… + 5 del payload)
-│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03 + ADR-012 (2026-11-11) + ADR-013 (2026-11-13)
+│   └── adr/adr-NNN-*.md            #   8 ADRs Accepted 2026-10-21 + 3 Accepted 2026-11-03 + ADR-012 (2026-11-11) + ADR-013 (2026-11-13) + ADR-014/015 (Proposed, 2026-11-18)
 ├── docs/                           # UH.md (requisitos), ARCHITECTURE, PRD, TRD, APPFLOW…
 └── obsidian-workspace/             # PAYLOAD instalable (vault plantillado) → template/
     ├── 00-resources/ · 01-tasks/…05-outputs/ (bandejas del agente) · 10-templates/ · 10+ biblioteca personal
@@ -72,9 +72,9 @@ repo                                # este repositorio (producto + plantilla)
 | Motor RAG | **CocoIndex** (`pip install cocoindex`; flow `@coco.fn(memo=True)`; runner-up LEANN) | [ADR-001](specs/adr/adr-001-motor-rag-cocoindex.md) |
 | Runtime dir | **`.tepochcalli/`** engine-neutral (flow/mcp/db/models/venv/bin/config) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) (db) + layout D2 |
 | Vector store | **LanceDB embebido** (file-based, sin daemon/puerto) | [ADR-002](specs/adr/adr-002-lancedb-embebido.md) |
-| Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
+| Embeddings | **paraphrase-multilingual-MiniLM-L12-v2** (384d, ~470MB, CPU); upgrade bge-m3/LiteLLM; device explícito en wizard: [ADR-015](specs/adr/adr-015-dispositivo-inferencia-wizard.md) (Proposed) | [ADR-006](specs/adr/adr-006-minilm-multilingue-default.md) |
 | Selección de embedder (wizard) | **menú "Embedding provider"** con default preseleccionado; `presets.toml` como datos; modo `degraded` + `rag_status` (D7) | [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md) |
-| Instalador | **TUI Rust + cargo-dist + GitHub Releases**; canal recomendado **`cargo binstall tepochcalli`**, `shell`/`powershell` como fallback sin toolchain; NO bunx | [ADR-013](specs/adr/adr-013-distribucion-cargo-binstall.md) (canal) + [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) (backend) |
+| Instalador | **TUI Rust + cargo-dist + GitHub Releases**; canal recomendado **`cargo binstall tepochcalli`**, `shell`/`powershell` como fallback sin toolchain; NO bunx. Destino pendiente: canal `uvx` vía [ADR-014](specs/adr/adr-014-distribucion-uvx-pypi.md) (Proposed) — mientras no sea Accepted el canal aprobado sigue siendo el de ADR-013/003 | [ADR-013](specs/adr/adr-013-distribucion-cargo-binstall.md) (canal) + [ADR-003](specs/adr/adr-003-distribucion-cargo-dist.md) (backend) |
 | Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` (Phase 3.5); el conjunto de raíces del índice es solo `INDEXER_DIR` | [ADR-005](specs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](specs/adr/adr-007-seleccion-embedder-instalacion.md), [ADR-009](specs/adr/adr-009-conversor-resumen-sin-cuerpo.md), [ADR-010](specs/adr/adr-010-indice-multi-raiz-cita-vault.md) |
 | Conversor soporte | **markitdown** como librería **en proceso** en el venv (el server standalone `markitdown-mcp` se retira del payload) | specs/spec-markitdown.md, [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) |
 | Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](specs/adr/adr-004-uv-venv-aislado.md) |
@@ -106,8 +106,8 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [specs/spec-rag-engine.md](specs/spec-rag-engine.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | Flujo CocoIndex: N raíces declaradas en `INDEXER_DIR`, extracción markitdown (8 formatos, sin Docling), Δ<30s de texto y documentos aparte, escala |
 | [specs/spec-mcp-server.md](specs/spec-mcp-server.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | 7 contratos de tools, errores `E_*`, frontera B′, latencia/token budget, config |
 | [specs/spec-vault-structure.md](specs/spec-vault-structure.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-010 Accepted 2026-11-03) | Carpetas numeradas, layout `.tepochcalli/`, gitignore, no-interferencia, raíces indexables |
-| [specs/spec-embeddings.md](specs/spec-embeddings.md) | Approved | Modelo default, matriz local/externo, cache, swap+re-index |
-| [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Approved (FTR Phase 3→4, 2026-10-28) | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
+| [specs/spec-embeddings.md](specs/spec-embeddings.md) | Approved · **Enmienda 2026-11-18 (Proposed) — flujo destino** | Modelo default, matriz local/externo, cache, swap+re-index |
+| [specs/spec-installer-wizard.md](specs/spec-installer-wizard.md) | Approved (FTR Phase 3→4, 2026-10-28) · **Enmienda 2026-11-18 (Proposed) — flujo destino** | TUI Rust, 8 fases atómicas, cargo-dist, flags, UX de fallo |
 | [specs/spec-markitdown.md](specs/spec-markitdown.md) | Approved; Amended 2026-11-02 (Phase 3.5; ADR-009/010/011 Accepted 2026-11-03) | markitdown en proceso: 3 tools del conversor summary-only, frontera B′, fallback `anydoc`, seguridad |
 | [specs/spec-agent-workflow.md](specs/spec-agent-workflow.md) | Proposed | 9 comandos + 5 agentes, AGENTS.md del vault, anexo auditoría skills |
 | [specs/spec-payload-vault.md](specs/spec-payload-vault.md) | Approved (BLUEPRINT APPROVED 2026-11-09, freeze 40; materializado en Phase 5, amended 2026-11-09 — D-P5-2/T2/T8) · **Enmendada 2026-11-11 ([ADR-012](specs/adr/adr-012-formato-payload-revisado.md))** | spec padre: reglas de formato V2, blueprint del AGENTS.md del vault, testing ejecutable y decisiones Phase 4 |
@@ -147,6 +147,11 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 > borrada (83 ficheros, cero refs; 40 skills). **PHASE 5 COMPLETADA 2026-11-12** con la
 > salvedad D-P5-10 intacta (TD-31 diferida); **PHASE 6 (aceptación E2E) LISTA para
 > planificarse** (runbook `tests/phase5-methodology-runbook.md`).
+>
+> **Evolución 2026-11-18 (/evolve sobre `docs/UH.md`:252-345):** ADR-014/015 **Proposed** (canal
+> `uvx` único + device explícito en wizard), enmiendas "Enmienda 2026-11-18 — flujo destino
+> (Proposed)" en `spec-installer-wizard.md` y `spec-embeddings.md`, y Phase 6.5 **GATED** en
+> `docs/WORKFLOW.md` (ola D68). Nada Accepted aún; cero código.
 
 ## Log de decisiones
 
@@ -165,6 +170,8 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-011](specs/adr/adr-011-politica-dependencias-dos-librerias.md) | Política de dependencias: dos librerías (cocoindex + markitdown) y ledger de no-reinvención (D52/D63) | Accepted 2026-11-03 |
 | [ADR-012](specs/adr/adr-012-formato-payload-revisado.md) | Formato revisado del payload: AGENTS.md genérico, permisos inline + global 313, minúsculas, 41 skills (supersede D-P4-2/D-P5-1/D-P5-4) | Accepted 2026-11-11 |
 | [ADR-013](specs/adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003, no su backend cargo-dist) | Accepted 2026-11-13 |
+| [ADR-014](specs/adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003; ADR-004 intacto | Proposed 2026-11-18 |
+| [ADR-015](specs/adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada; refina ADR-007/008 sin reabrir el rechazo de autoselección | Proposed 2026-11-18 |
 
 ## Referencias
 
