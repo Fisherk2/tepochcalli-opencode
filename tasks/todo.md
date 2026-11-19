@@ -1,364 +1,255 @@
-# TODO — Phase 6 (aceptación E2E de los 7 criterios)
+# TODO — Phase 6.5 (wizard, flujo destino H5-H11)
 
-> **Fecha:** 2026-11-11 · **Orquestador:** Moctezuma · **Plan:** [tasks/plan.md](plan.md)
-> **Fase:** Phase 6 — E2E Acceptance (los 7 criterios de `docs/BACKLOG.md`) · **Gate:** FTR de aceptación + gate v1 release
-> **Decisiones del dueño (2026-11-11):** D-P6-1…D-P6-8 — ver `tasks/plan.md` §2.
-> **Precedente (D-P5-7):** este fichero **sobrescribe** el TODO de Phase 5; el de Phase 5 queda en git (`93d0060`).
+> Checklist operativo del plan: [tasks/plan.md](./plan.md). Fuente de verdad del requisito:
+> [docs/BACKLOG.md](../docs/BACKLOG.md) §2 «Wizard de instalación: flujo destino (2026-11-18)».
+> Actualizado el 2026-11-19 por Moctezuma. **Sin publicar en ningún gestor de paquetes.**
 
-## Reglas de la fase
-
-- **Se mide, no se estima.** Toda cifra de esta fase lleva **n, método, host y comando**. La jerarquía
-  de D8 manda: `medido > estimado > declarado`. Un número sin su comando no entra en `docs/`.
-- **La frontera de escritura (D-P6-1):**
-  - **CONGELADO (solo lectura):** `obsidian-workspace/.opencode/` (5 agentes, 9 comandos, 40 skills),
-    `obsidian-workspace/AGENTS.md`, `obsidian-workspace/opencode.json`.
-  - **EDITABLE:** `obsidian-workspace/.tepochcalli/flow/`, `obsidian-workspace/.tepochcalli/mcp/`,
-    `crates/`, `tests/`, `docs/`, `specs/`, `SPEC.md`, `CHANGELOG.md`, `tasks/`.
-  - Si una referencia del payload está **errónea**: se reporta y se corrige **en la spec** con
-    enmienda fechada — **nunca** se reescribe el fichero del payload.
-- **Referencia de medición = btrfs** (`/tmp/opencode`, NVMe). fuseblk/NTFS-3G (`/mnt/HDDFish`) se mide
-  igual y se documenta como **límite conocido** con su cifra (D-P6-3).
-- **Los umbrales se fijan antes de medir** (D-P6-8): recall y deriva FTS se escriben en
-  `docs/TRD.md` §6.2 en T0 y no se ajustan después.
-- **Remediar es permitido** cuando un criterio o un gate sale rojo — pero un contrato `Accepted`
-  (ADR-001/002/005/010/011) exige **ADR nuevo**, nunca una edición (regla §8 de `docs/WORKFLOW.md`).
-- **La corrida D9 la ejecuta el QA humano** (D-P6-2): los comandos se activan por input del usuario.
-  Ningún subagente la simula.
-- **Commits atómicos:** uno por calpulli, Conventional Commits ≤ 72 cols, trailer `Co-Authored-By`.
-- **Benchmarks fuera del gate:** los benches de la fase **no** entran en `just ci` (regla anti-flake
-  y coste deminutes-to-hours); se corren a mano y su JSON se archiva como evidencia.
-- **`just coverage` solo en el cierre de fase** (T16): ~1 h de suite instrumentada y calienta el
-  host hasta apagarlo. **No está en `just ci`** (decisión del dueño 2026-11-12): es una corrida
-  local de desarrollo, no un gate. Por tarea basta `just quality`, la suite de su módulo
-  (`just test-mcp-tools`/`test-mcp-wire`/`test-engine`/`test-converter`) o la receta dirigida (`just python-test-unit`,
-  `just python-test-file <patrón>`); la cobertura se reconcilia en T16.
-
-## Leyenda
-
-- `[ ]` pendiente · `[~]` en curso · `[x]` hecho y verificado · `[!]` bloqueado (motivo en la línea)
-- **No se avanza al siguiente checkpoint en rojo.**
+**Leyenda:** `[ ]` pendiente · `[~]` en curso · `[x]` hecho · `[!]` bloqueado (motivo en la línea) · `[!]` ⇒ exige decisión del dueño.
 
 ---
 
-## Ola 0 — Fundaciones de medición
+## 🔒 Guardarraíles (aplican a TODA la fase)
 
-### [x] T0 — Protocolo de aceptación, umbrales y auditoría de huecos
-
-- Subagente: `codebase-archaeologist` → `performance-benchmarker` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `planning-and-task-breakdown`, `context-engineering` · Tools: `codebase-memory-mcp`, `vercel-grep`
-- [x] `docs/acceptance/protocol.md`: host de referencia (btrfs/NVMe, 12 vCPU, 15,5 GiB RAM, CPython 3.12.14) y `/mnt/HDDFish` como filesystem de contraste
-- [x] Los 7 criterios de `docs/BACKLOG.md` copiados literalmente + el gate D9 marcado como *no criterio 8*
-- [x] Por criterio: bench/test que lo mide hoy (o `no existe`), cifra actual con su método, calpulli que lo cierra
-- [x] Tabla §6.3 copiada con columna `Result` vacía y columna nueva **`origen de la cifra`**
-- [x] **Umbrales fijados ANTES de medir** en `docs/TRD.md` §6.2: recall (propuesta recall@5 = 1.0) y deriva FTS (propuesta: caída de recall ES > 10 % relativo)
-- [x] `docs/TRD.md` §6 gana las subsecciones §6.1 (método) y §6.2 (umbrales) — la casa ya cita «TRD §6.2»
-- [x] Deuda re-declarada: en alcance TD-2/13/15/27/28/29/34 + D-b · fuera M6 y TD-32, con su motivo
-- [x] `git status --short` solo muestra `docs/acceptance/protocol.md`, `docs/TRD.md`, `tasks/`
-- Deps: — · Verificación: cada afirmación lleva su comando · **revisión del dueño (CP-0)**
-- **Hecho (2026-11-12):** `docs/acceptance/protocol.md` (193 líneas, §1-§8) + `docs/TRD.md` §6.1/§6.2 (umbrales recall@5 = 1.0 y deriva FTS > 10 % relativo, `md-lint` 0). Cero mediciones.
-
-### [x] T1 — Corpus de escala reutilizable con manifiesto
-
-- Subagente: `performance-benchmarker` · Skills: `performance-analysis`, `bash-defensive-patterns`, `test-driven-development`, `design-patterns` · Tools: —
-- [x] Corpus de **10 000 md** (10 subdirs) + **1 000 PDF** de 1 página válidos, determinista, en `--dir` (btrfs)
-- [x] `corpus-manifest.json`: por fichero → ruta relativa, sha256, bytes, tipo + seed + versión del generador + totales
-- [x] **Reproducibilidad**: dos materializaciones → manifiesto **idéntico** (hash del árbol, no comparación de carpetas)
-- [x] Reutilizable sin reindexar: el manifiesto verificado salta la materialización
-- [x] `obsidian-workspace/.tepochcalli/{db,models}` **nunca** tocados (verificado al terminar)
-- [x] Tamaño en disco y **tiempo de materialización** publicados
-- [x] Sigue fuera del gate de `just ci` (no es `test_*`)
-- Deps: T0 · Verificación: `sha256sum` del árbol == manifiesto · `just ci` verde
-- **Hecho (2026-11-12):** `tests/support/corpus.py` + manifiesto canónico; 3 materializaciones con `tree_sha256 27a20c05…3ecd2` idéntico y 11 000 hashes iguales al generador de `HEAD`; **2 677 ms** / **45 M** / 11 001 ficheros en `/tmp/opencode/phase6-corpus` (btrfs); reutilización verificada (`reused: true`, `mtime_ns` intactos). Informe: `docs/acceptance/corpus.md`.
-
-### [x] T2 — Coste real de un PDF de 30 páginas con markitdown (TD-2)
-
-- Subagente: `performance-benchmarker` · Skills: `performance-analysis`, `observability-and-instrumentation`, `bash-defensive-patterns` · Tools: —
-- [x] Fixture **PDF de 30 páginas** válido (xref correcto, texto extraíble) **extendiendo** `tests/fixtures/pdf/gen_fixture_pdf.py` — sin dependencia nueva
-- [x] Medición con **n ≥ 3**: extracción + indexación, con **RSS pico** (`VmHWM`) al lado; n, método y host publicados
-- [x] Cifra **separada** del Δ de texto (D51): no cuenta contra el presupuesto de 30 s
-- [x] **Coste por página** publicado y contrastado con los PDF de 1 página (la extrapolación se declara como derivación)
-- [x] Etiqueta **`medido`** (D8)
-- [x] **Condición de TD-2 resuelva con dato**: si rompe la percepción del Δ ⇒ se abre tarea de remediación (límite de tamaño / caché de parseo) con su ADR; si no ⇒ TD-2 se cierra con la cifra
-- [x] El fixture de 30 págs no entra en `just ci`
-- Deps: T0 · Verificación: JSON del bench archivado + cifra en `docs/TRD.md` §6
-- **Hecho (2026-11-12):** `bench_documents.py` + `gen_fixture_pdf.py --pages`; PDF de 30 págs **3 144 ms** p50 (n=3), 335 págs **50 557 ms**, 1313 págs **128 015 ms**; RSS pico 191-255 MiB; ms/página **no** monótono (221 → 97,5) ⇒ extrapolar es inválido. Propuesta de remediación A-D redactada; **decisión del dueño 2026-11-12: opción A+B** (ver T2-bis; C y D no se abren). Informe: `docs/acceptance/documents.md`.
-
-### [x] T2-bis — Traza de progreso en `index_refresh` (TD-2 opción **A+B**, firmada 2026-11-12)
-
-- Subagente: `rag-pipeline-engineer` · Skills: `test-driven-development`, `observability-and-instrumentation`, `clean-code`, `source-driven-development` · Tools: `read`/`grep`, `codebase-memory-mcp`
-- [x] **A**: D51 se queda — los documentos binarios siguen **fuera** del Δ de 30 s y se publican aparte
-- [x] **B**: `progress.py` traza por **documento binario** (inicio, `extraído en N ms` real), inicio del ciclo con las raíces, `candado retenido` honesto y cierre con las cuentas del reporte
-- [x] Contrato MCP **intacto**: el JSON conserva exactamente `{scanned, indexed, skipped, elapsed_ms, locked, roots}`
-- [x] Progreso **solo por `stderr`** (`logging`); `stdout` sigue siendo el canal JSON-RPC — test que lo afirma
-- [x] `.md`/`.txt` **no** se trazan uno a uno (10 000 notas serían 10 000 líneas de ruido)
-- [x] Tests: `tests/unit/test_progress.py` (3) + `tests/integration/test_mcp_refresh_progress.py` (3) — **6 passed**
-- [x] **C y D no se abren** (ni límite de páginas ni caché de parseo); se reabre con ADR nuevo si hay quejas reales de latencia
-- Deps: T2 · Verificación: `just test-mcp-tools` verde + `spec-mcp-server` §`index_refresh` enmendada + TD-2 cerrada en `docs/TECH_DEBT.md`
-
-### [x] T3 — Eval de relevancia con consultas etiquetadas (TD-15)
-
-- Subagente: `search-relevance-engineer` · Skills: `test-driven-development`, `source-driven-development`, `clean-code` · Tools: `tepochcalli-rag` (payload, stdio)
-- [x] **10 consultas etiquetadas** (query → `source_path` esperado + `heading` cuando aplique) en mix ES/EN, como **datos** en `tests/fixtures/`
-- [x] Test de integración **en subproceso** (patrón `index_vault` de `tests/support/mcp_server.py`): `search(top_k=5)` → **recall@5 = 1.0**
-- [x] **Sin** aserciones de latencia (regla anti-flake)
-- [x] Umbral (1.0) y método publicados en `docs/TRD.md` §6.2 — **el de T0**, sin ajustar
-- [x] **RED demostrado** antes de implementar
-- [x] El test **falla** si el golden vault se vacía o si una etiqueta cambia (no es tautología)
-- Deps: T0 · Verificación: `just test-engine` verde · recall publicado con n = 10
-- **Hecho (2026-11-12):** fixture propio `tests/fixtures/relevance_vault/` (**20 notas ES/EN**, 5 familias de 4 con distractores cercanos) + `tests/fixtures/relevance_queries.json` (n = 10, 5 ES/5 EN, 10 ficheros distintos) + `tests/integration/test_search_relevance.py` (**5 tests**, subproceso, sin latencia). **recall@5 = 1.00 (10/10)**, todas en el puesto 1; etiquetas desplazadas ⇒ **0.00** (la métrica discrimina); vault vacío ⇒ `INDEX_EMPTY` y 0.00 (el gate cae, no `skip`). Comando: `just python-test-file relevance` (5 passed, 83,6 s). Umbral de §6.2 intacto (D-P6-8); RED archivado en el informe del calpulli
-
-### [x] Checkpoint CP-0 — Protocolo y umbrales aprobados
-
-- [x] Protocolo publicado con host, FS de referencia, n y método por criterio
-- [x] **umbrales de recall y deriva FTS escritos en `docs/TRD.md` §6.2 y aprobados por el dueño** (CP-0, 2026-11-12: recall@5 = 1.0 · deriva FTS > 10 % relativo, sin cambios)
-- [x] Tabla de huecos completa: cada criterio tiene su calpulli
-- [x] Tabla §6.3 copiada con la columna `origen de la cifra`
-
-### [x] Checkpoint CP-1 — Fundaciones de medición (tras T1, T2, T3)
-
-- [x] Corpus de 11 000 entradas reproducible **byte a byte** (manifiesto verificado 2×)
-- [x] Coste del PDF de 30 páginas **medido** (n ≥ 3, RSS pico, `medido`) y la condición de TD-2 resuelta
-- [x] Recall@5 = 1.0 con el **umbral de T0**
-- [x] `just ci` verde (ya **sin** cobertura: `python-sync → lint → fmt-check → typecheck → suites de módulo → bench-smoke → rust-ci`; la cobertura es medición local y se reconcilia en T16)
-- **Hecho (2026-11-12):** `just ci` **verde en 31:54** (`CARGO_TARGET_DIR=/tmp/opencode/cargo-target`): 872 passed + 3 deselected, smoke Δ **850 ms** < 10 000 ms, `rust-ci` verde. La cobertura sale de `ci` por decisión del dueño (2026-11-12) y pasa a corrida local en T16.
+- [ ] **Ningún publish.** Ni `twine upload`, ni `pypi` auth, ni `maturin publish`, ni un job de
+      upload en CI. `just rust-publish-dry-run` (crates.io) tampoco se ejecuta: es otro registro.
+- [ ] **Ningún binario ni rueda versionado.** `.whl` y `target/` fuera de git.
+- [ ] **Ningún cambio en el payload** `obsidian-workspace/` salvo orden explícita del dueño.
+- [ ] **Ninguna decisión D1-D8 re-litigada** en código. ADR nuevo solo con aprobación.
+- [ ] **Un dueño por fichero** en cada momento: `lib.rs` y `cli/commands.rs` los escribe un solo frente.
+- [ ] **`CARGO_TARGET_DIR` siempre bajo `/tmp/opencode/`** → `just rust-ci /tmp/opencode/cargo-target`.
+- [ ] **Comandos vía `just`**, nunca `cargo`/`uv`/`pytest` crudos.
 
 ---
 
-## Ola 1 — Los 7 criterios, medidos
+## 🔄 Ronda 0 — Formalización (secuencial, 1 frente)
 
-### [x] T4 — Criterio 3 a escala (10k/1k) y deriva del índice FTS ES/EN
+### T0 · Aceptar ADR-014 y ADR-015
 
-- Subagente: `performance-benchmarker` → `search-relevance-engineer` (secuencial) · Skills: `performance-analysis`, `observability-and-instrumentation`, `source-driven-development` · Tools: `tepochcalli-rag` (payload, stdio), `context7`
-- [x] `search` sobre el corpus **10 000 md + 1 000 PDF** con **n = 100 queries** muestreadas, `top_k=5`, nearest-rank declarado
-- [x] Publicadas **las dos** cifras: `p95_client_ms` (puerta de gate) y `p95_server_took_ms` (punto de la spec)
-- [x] Tabla **por etapa** (embed / ANN+FTS / ensamblado / IPC) con su margen
-- [x] **Deriva FTS medida**: recall ES con FTS activa vs **solo ANN**, mismo corpus y mismas queries
-- [x] Si supera el umbral de T0 ⇒ config bilingüe del FTS evaluada contra la **doc de la versión pineada** (R3) e implementada **o** límite documentado con su cifra
-- [x] Decisión escrita en `docs/TRD.md` §6.2 y `docs/TECH_DEBT.md`
-- Deps: T0, T1, T3 · Verificación: JSON del bench archivado como evidencia
-- **Hecho (2026-11-12):** corpus de T1 verificado + copiado (`tree_sha256 27a20c05…`), índice **11 006 chunks** en **543 645 ms** (`VmHWM` 3,78 GiB), **p95 cliente 97 ms / server 94 ms** (n=100, nearest-rank 95.º, 500 ms ⇒ **PASS**); etapas p95 embed 27,0 · ANN+FTS 24,5 · ensamblado 4,6 · IPC 3,0 (+ `index_state` 36,5, fuera de la tabla de la spec) → suma 95,6 ≈ 97 ms. Deriva: recall@5 híbrido **0,19** vs solo ANN **0,15** ⇒ **−26,7 %** (umbral >10 %, **no se dispara**; pierna FTS sola: 19/100 en top-5, 75/100 fuera del top-50); PDF 14/14 vs md 5/86 (corpus de vocabulario fijo: mide el signo, no la calidad). Sonda ES/EN medida: índice inglés **4/7** pares flexivos ES vs español **6/7** y controles EN **2/2 → 0/2** ⇒ v1 mantiene `language="English"` y el límite queda como **TD-35** (ADR nuevo para cualquier cambio). JSON: `docs/acceptance/search-scale.json`; informe: `docs/acceptance/search-scale.md`; bench por fases: `just python-bench-search-scale --phase prepare|index|queries|stages|legs|probe|report`.
+*Dueño: `docs-writer` · Revisión: `code-reviewer`*
 
-### [x] T5 — Criterio 6: escala 10k/1k y comparación 10 % vs 100 %
+- [ ] `Status: Accepted` + fecha de aprobación 2026-11-19 en `docs/adr/adr-014-distribucion-uvx-pypi.md`
+- [ ] `Status: Accepted` + fecha de aprobación 2026-11-19 en `docs/adr/adr-015-dispositivo-inferencia-wizard.md`
+- [ ] Nota de «no entra en vigor hasta la aprobación del usuario» → constancia de aprobación (sin borrar el historial *Proposed*)
+- [ ] §4.3 de ADR-014: `maturin`/PyPI/`ratatui`/`crossterm` quedan **aprobadas como deps**; la publicación sigue **no ejecutada**
+- [ ] `Decision Makers`: «Dueño del repo» → «Fisherk2» en ambos ADR
+- [ ] **ADR-003, ADR-004, ADR-007, ADR-008, ADR-011, ADR-013 byte-idénticos** (`git diff --exit-code`)
+- [ ] `grep -rn 'Status: Proposed' docs/adr/` → vacío
+- [ ] `just md-lint` → 0 issues
 
-- Subagente: `performance-benchmarker` · Skills: `performance-analysis`, `observability-and-instrumentation`, `documentation-and-adrs` · Tools: `tepochcalli-rag` (payload, stdio)
-- [x] **Δ p95** (n=20, nearest-rank) sobre 11 000 entradas en **btrfs (referencia)** + diferencia declarada frente a la baseline P-02 (26 967 ms)
-- [x] **Comparación 10 % vs 100 %**: Δ **y** latencia de `search` en ambos brazos; regresión publicada como **ratio**; PASS = ratio ≤ 2×
-- [x] **Walk-only** medido aparte (sin embed, sin Δ)
-- [x] **fuseblk/NTFS-3G**: medición repetida y publicada como **límite conocido**, con la causa (walk de 11k entradas) y la recomendación al usuario
-- [x] La cifra que decide el criterio es la de **btrfs**; NTFS va a la columna de límites — **no** se maquilla el FAIL
-- [x] Costes de documentos (D51) aparte (T2 aporta la cifra)
-- [x] El bench sigue **fuera** del gate de pytest
-- Deps: T0, T1, T4 · Verificación: JSON con ambos FS y los dos brazos
-- **Hecho (2026-11-13):** `tests/benchmarks/bench_scale_ratio.py` (por fases y por tramos: `prepare|index10|search|walk|delta|ntfs|report`). Brazo 10 % **derivado del manifiesto de T1** (1 de cada 10 por tipo ⇒ 1 000 md + 100 PDF, `tree_sha256 66a194d5…701d65a`, índice propio en frío **60 716 ms**, 1 101 chunks). **Δ p95 btrfs: 15 695 ms (100 %, 11k) vs 2 543 ms (10 %, 1,1k) ⇒ ratio 6,17× = FAIL** de la cota 2× (el 100 % sí cabe en 30 s al 52 %; **−41,8 % frente a P-02 26 967 ms**); **`search` p95 cliente 87 ms vs 51 ms ⇒ ratio 1,71× = PASS** (n=100, las 100 consultas de T4, 500 ms); **walk-only 6 115 ms vs 555 ms ⇒ 11,0×** (n=5) = mecanismo: walk lineal sin watcher (ADR-002) ⇒ **TD-36**. **fuseblk/NTFS-3G: Δ p95 52 996 ms = FAIL** (1,77× el presupuesto; walk 22 945 ms; índice en frío 944 019 ms), publicado como **límite conocido** D-P6-3 con causa y recomendación; **descartado** copiar el índice de btrfs al FS (el memo no cruza la ruta ⇒ re-embed completo, 96-204 s por ciclo). JSON: `docs/acceptance/scale-ratio.json`; informe: `docs/acceptance/scale-ratio.md`; bench: `just python-bench-scale-ratio --phase …`.
+### T1 · Enmiendas Accepted + versión alineada + des-GATE
 
-### [x] T6 — Criterio 4: tokens por consulta (<2000 con contexto)
+*Dueño: `docs-writer` · Revisión: `code-reviewer` · Depende de: T0*
 
-- Subagente: `llm-architect` → `test-engineer` (secuencial) · Skills: `source-driven-development`, `test-driven-development`, `error-handling-patterns` · Tools: `tepochcalli-rag` (payload, stdio), `context7`
-- [x] Medición e2e: `search` real (`top_k=5`) + query + esqueleto de respuesta con citas, con **tokenizador real** nombrado con versión y fuente
-- [x] Fixture **adverso** (unicode, CJK, emoji, tablas, listas largas) reusando `tests/integration/test_mcp_budget_adversarial.py`
-- [x] **Dos cifras** con desglose: (a) payload del server ≤1600 (invariante del contrato) y (b) **total e2e < 2000** (criterio UH)
-- [x] Publicadas con n, tokenizador y método en `docs/TRD.md` §6
-- [x] Si el total excede 2000 ⇒ el contrato MCP **no se toca** (ADR-005): el ajuste es del techo del server, con decisión explícita del dueño
-- [x] Test e2e que **falla** si el total supera 2000 (guarda viva)
-- Deps: T0 · Verificación: `just test-mcp-tools` verde
-- **Hecho (2026-11-13):** medidor `tests/support/token_budget.py` (tokenizador **`cl100k_base` de `tiktoken 0.14.0`**, ya en el venv; `o200k_base` publicado al lado; fuente `github.com/openai/tiktoken`) + guarda viva `tests/integration/test_mcp_token_budget.py` (3 tests, fixture adverso **reusado** de T7, sin marcadores `slow`). **Cifras (n=7 caras, `top_k=5` y `top_k=20`):** (a) payload **1 600 por el estimador** del contrato y **1 789 reales**; (b) **total e2e 1 995 < 2 000** en el peor caso (query 7 + payload 1 789 + respuesta citada 199) y 1 675 en la dorada ⇒ **PASS**, con **5 tokens de margen** (`o200k`: 1 785). La respuesta se modela con el formato que prescribe el payload (`source_path » heading (chars x–y)`, una afirmación por resultado, `(sin heading)` en PDF). Sonda de sensibilidad: 2 frases/resultado ⇒ **2 023** (el guard no es vacío); RED archivado (ModuleNotFoundError primero, luego la aserción disparada). Hallazgo **F-T6-1**: el 1 600 es del estimador (envoltura JSON ≈190 tokens fuera de la fórmula + `chars/4` optimista en ES) — si el payload crece, la decisión (bajar el techo a ~1 500) es **del dueño**; contrato MCP intacto y sin dependencias nuevas. Evidencia: `docs/acceptance/token-budget.{md,json}` + TRD §6.2 + WORKFLOW §6.3
+- [ ] `specs/spec-installer-wizard.md`: enmienda 2026-11-18 → **Accepted**; deja de decir «no se aprueba ni se implementa aquí»
+- [ ] `specs/spec-embeddings.md`: enmienda 2026-11-18 → **Accepted**; formaliza `[embedding].device` electivo
+- [ ] `crates/tepochcalli/Cargo.toml` → `version = "0.1.0"` (detrás de la canónica `0.1.0` del payload) → **cierra TD-45**
+- [ ] `docs/WORKFLOW.md` §Phase 6.5: «GATED, no ejecutable» → desbloqueada, con las 4 precondiciones resueltas
+- [ ] `docs/TECH_DEBT.md`: TD-46 cerrada, TD-45 cerrada, **TD-51** nueva (retiro de cargo-dist diferido)
+- [ ] `docs/BACKLOG.md` §8: filas de los cambios estructurales
+- [ ] `SPEC.md` §Boundaries: `maturin`/PyPI y `ratatui`/`crossterm` registradas como **aprobadas** con fecha
+- [ ] `grep -rn 'Proposed' specs/spec-installer-wizard.md specs/spec-embeddings.md` → vacío
+- [ ] `just md-lint` → 0 issues
 
-### [x] T7 — Criterio 5: citas precisas y re-verificación contra el archivo vivo (TD-13)
+### 🛑 Checkpoint 0 — el FTR está registrado
 
-- Subagente: `rag-pipeline-engineer` → `test-engineer` (secuencial) · Skills: `test-driven-development`, `incremental-implementation`, `debugging-and-error-recovery`, `clean-code` · Tools: `tepochcalli-rag` (payload, stdio), `codebase-memory-mcp`
-- [x] `verify.py --spot-check N`: relee el `source_path` y afirma la identidad F1 **reusando** `citation.verify_slice_identity` (no se duplica)
-- [x] `offsets_ref` respetado: `source` ⇒ slice contra el archivo original; `extract` ⇒ contra el texto extraído
-- [x] **Solo lectura conservada**: snapshot de `(mtime_ns, size)` de `db/` antes/después ⇒ **0** cambios
-- [x] **Golden answers ampliado**: md, txt y pdf con `source_path` real + `heading` (nullable) + offsets **reproducibles**
-- [x] Para **pdf**, `heading is None` (D54) afirmado explícitamente: el golden **no** exige heading en PDF
-- [x] Cobertura del gate: el código nuevo del CLI entra en la superficie medida ⇒ se reconcilia con `just coverage` **en el cierre de fase (T16)**; en T7 basta `just test-engine`
-- [x] Si el spot-check encuentra citas rotas ⇒ la **tasa** se documenta (no se maquilla) y se abre la remediación si > 0 (TD-4)
-- Deps: T0, T3 · Verificación: test que **edita** el archivo post-indexación y espera **exit ≠ 0**
-- **Hecho (2026-11-13):** `verify.py --spot-check N` (`LanceDBChunkReader.sample_rows` → `table.head`) re-verifica la identidad F1 **reutilizando `citation.verify_slice_identity`**; `source` corta el original, `extract` re-extrae con markitdown (D50); severidades `OK`/`BROKEN`/`MISSING` y **exit 1** si hay roturas. **Medido** (golden md + txt + pdf indexado en subproceso): **6/6 (100 %), 0 rotas, exit 0**; **edición externa tras indexar ⇒ 3/6 (50 %), exit 1**; txt borrado ⇒ `MISSING`, exit 1; snapshot de `db/` sin cambios en las 3 corridas. Golden ampliado a md + txt + pdf en el e2e del wire (txt y pdf con `heading is None`; refresh `(3,0,3)`). **Tasa de citas rotas publicada: 0 %** (el caso que debe fallar falla ⇒ el 0 no es tautología). RED archivado (argparse `unrecognized arguments: --spot-check`). Evidencia: `docs/acceptance/citations.{md,json}` + TRD §6.2 + README de aceptación; TD-13 cerrada. `coverage` **no** ejecutado (T16).
-
-### [x] T8 — Criterio 7: matriz de conversión multi-formato
-
-- Subagente: `test-engineer` · Skills: `test-driven-development`, `api-and-interface-design`, `documentation-and-adrs` · Tools: `tepochcalli-rag` (payload, stdio)
-- [x] Matriz de **9 entradas**: md, txt, pdf, docx, pptx, xlsx, xls (índice) + html, url (convertidor)
-- [x] Por celda: resultado, `doc_kind`, `offsets_ref`, indexabilidad, `source_path` resultante
-- [x] La matriz se ejecuta como **test**, no como tabla escrita a mano
-- [x] Los formatos no soportados (`.doc`, `.ppt`, PDF escaneado) se declaran **GAP** con mensaje accionable — **no** se simulan
-- [x] `html` y `url`: se afirma que el `.md` **convertido no es la fuente citable** y que el original indexado sí
-- [x] Matriz publicada en `docs/TRD.md` §6, coincidente con la salida del test
-- [x] Sin dependencias nuevas (R1)
-- Deps: T0 · Verificación: test e2e verde
-- **Hecho (2026-11-13):** `tests/e2e/test_format_matrix.py` (16 tests, ~2 min, sin `slow`): vault temporal con los 7 formatos del índice + PDF escaneado + fuentes del conversor, medido en **un** servidor por stdio (wire real). **8/9 celdas PASS medidas** — `md/txt` `offsets_ref=source`; `pdf/docx/pptx/xlsx/xls` `extract` con `heading` nulo (D54) y `source_path` = **el original**; `html` entra por el conversor, su `.html` **nunca** es citable y el artefacto `00-resources/pagina.md` lo es **solo tras `index_refresh`** (refresh medido: `scanned 10, indexed 2, skipped 8`). **Celda `url` = GAP declarado**, no PASS: la suite corre con `nonet` y el guard SSRF rechaza loopback por diseño (el positivo con servidor local se retiró en Phase 2); lo ejecutado es el rechazo `VALIDATION_ERROR` «red interna» sin escritura, y el método que haría falta (host con red o allowlist, ADR) queda escrito. **3 GAP ejecutados** con mensaje literal del wire: `.doc`/`.ppt` ⇒ `VALIDATION_ERROR` «formato no soportado» + catálogo (el borde corta antes de markitdown) y PDF escaneado ⇒ `SOURCE_UNREACHABLE` + `GUIDE_OCR`, sin fila vacía al indexar (OM-11). `.xls` se **ejecuta de verdad** con un BIFF2 mínimo escrito con `struct` (`xlwt` no está): sin dependencias nuevas (R1). La tabla se **imprime desde el test** y `test_published_matrix_matches_docs_trd` pone el gate rojo si `docs/TRD.md` §6.3 diverge (RED archivado: 15 passed / 1 failed antes de publicar). Evidencia: `docs/acceptance/format-matrix.{md,json}` + TRD §6.3 + README de aceptación. Contrato de las 3 tools y payload intactos; `coverage` no ejecutado (T16).
-
-### [x] T9 — Criterio 1: no-interferencia con Obsidian
-
-- Subagente: `test-engineer` → `security-architect` (secuencial) · Skills: `test-driven-development`, `bash-defensive-patterns`, `security-and-hardening`, `observability-and-instrumentation` · Tools: `tepochcalli-rag` (payload, stdio)
-- [x] Script sobre un vault **instalado de verdad** por el wizard (`install --non-interactive --skip-model`)
-- [x] (a) `.obsidian/` **byte-idéntico** antes/después de `index_refresh()` + `search` (hash de árbol)
-- [x] (b) **0** puertos nuevos escuchando; la lista `ss -ltnp` antes/después se **publica y archiva**
-- [x] (c) **0** ficheros con prefijo punto en el árbol visible (`.tepochcalli/`, `.obsidian/`, `.git/`)
-- [x] (d) el vault sigue siendo válido (`opencode.json` parseable + `AGENTS.md` + bandejas)
-- [x] El script **falla** (exit ≠ 0) si `.obsidian/` cambia o aparece un puerto
-- [x] Checklist de `spec-vault-structure.md` §Testing **ejecutado** y referenciado
-- Deps: T0 · Verificación: salida archivada como evidencia del criterio 1
-- **Hecho (2026-11-13):** `tests/e2e/verify_no_interference.py` + recetas `rust-build` / `python-no-interference`. Instala un vault con el binario (`install --non-interactive --skip-model --vault <tmp> --payload <template completo>`; el flag es `--vault`, no `--dir`), ejecuta la re-entrada que el wizard imprime (`config embedder --confirm`, snapshot del modelo enlazado del cache HF: `dims 384`), siembra `.obsidian/{app,workspace}.json` y mide entre capturas con el server spawneado **como el harness** (command/cwd/environment leídos de `opencode.json`). **PASS en las 4 caras** con trabajo real: `index_refresh scanned=1 indexed=1` (13 281 ms) + `search` con 1 cita `00-resources/nota-t9-no-interferencia.md`; `.obsidian/` `sha256 751186fc…` idéntico; **0 puertos nuevos** con las dos listas `ss -ltnp` archivadas (12 listeners del host, ninguno del motor ⇒ stdio ADR-002/005); 0 basura oculta; vault válido. **RED archivado**: `--fault obsidian` ⇒ `obsidian_identical=false`, exit 1; `--fault port` ⇒ `puertos nuevos: 127.0.0.1:47923`, exit 1 (mismo montaje, solo la interrupción inyectada ⇒ la guarda no es decorativa). Interpretación de (c) declarada (Sección 3 de la evidencia): allowlist `.tepochcalli`/`.opencode`/`.obsidian`/`.git`/`.trash`/`.gitignore` + `.gitkeep` del payload; el resto es violación. **Hallazgo colateral publicado, no arreglado (fuera de alcance):** el wizard crea `00-resources/` (D22) y el payload trae `00-resources/`, y `index_refresh` reporta `roots=["00-resources"]` ⇒ lo escrito en la carpeta que anuncia D9.1 no se indexa (Open Question de `spec-vault-structure`; deuda candidata). Evidencia: `docs/acceptance/no-interference.{md,json}` + README de aceptación + WORKFLOW §6.3. `coverage` no ejecutado (T16).
-
-### [x] Checkpoint CP-2 — Criterios 3 y 6 a escala (tras T4, T5)
-
-- [x] `search` p95 sobre 10k/1k con n = 100 nearest-rank; gate = `p95_client_ms`
-- [x] Deriva FTS ES/EN medida contra el umbral de T0; decisión escrita
-- [x] Δ p95 a escala + **ratio 10 % vs 100 %** ≤ 2× + walk-only
-- [x] NTFS-3G medido y **declarado límite** con cifra y causa
-- [x] Cifras de los dos criterios en §6.3 con su origen
-- **Hecho (2026-11-12):** `p95_client_ms` **97 ms** (T4) y **87 ms** (T5, n=100, 11k) ⇒ criterio 3 **PASS**. Deriva FTS **no se dispara** (−26,7 % a favor del híbrido; mecanismo probado con sonda, TD-35). Criterio 6: Δ **15 695 ms** vs **2 543 ms** = **6,17×** > 2× ⇒ **FAIL medido** (TD-36), Δ absoluto dentro de 30 s; NTFS **52 996 ms** como límite. Ningún umbral se tocó.
-
-### [x] Checkpoint CP-3 — Los 7 criterios con evidencia medida (tras T6, T7, T8, T9)
-
-- [x] Tokens: payload ≤1600 y **total e2e < 2000** con tokenizador real nombrado
-- [x] Citas: 100 % con `source_path` real + offsets reproducibles; `--spot-check` exit 0 / ≠ 0
-- [x] Matriz de 9 formatos con resultado por celda y GAP declarados
-- [x] No-interferencia: `.obsidian/` byte-idéntico, **0** puertos nuevos (lista archivada)
-- [x] Las **7 filas** de §6.3 tienen cifra y origen
-- **Hecho (2026-11-13):** las 7 filas de `docs/WORKFLOW.md` §6.3 quedan con cifra y origen. Resultados: **1 PASS**, **2 PASS** (Δ p95 15 695 ms = 52 % de 30 s), **3 PASS** (97 ms), **4 PASS por 5 tokens** (1 995/2 000, TD-37), **5 PASS** (6/6, sabe fallar), **6 FAIL de la cota 2×** (6,17×, TD-36; el Δ absoluto sí cabe), **7 8/9 celdas + GAP declarado** (`url` sin egress, `.doc`/`.ppt`/escaneado). Ningún umbral se ajustó tras medir.
+- [ ] Las 4 precondiciones de `docs/WORKFLOW.md:299` están marcadas como resueltas
+- [ ] Revisión de `code-reviewer` con contexto limpio: **APROBAR**
+- [ ] Commit único (documental): `docs: acepta ADR-014/015 y abre Phase 6.5`
 
 ---
 
-## Ola 2 — Deuda y decisiones
+## ⚡ Ronda 1 — Paralela (3 frentes simultáneos)
 
-### [x] T10 — TD-27: el fate de la cita PDF sin heading (D54)
+### T2 · Sondas de viabilidad del empaquetado 🚦 PUERTA DE PARADA
 
-- Subagente: `rag-pipeline-engineer` → `software-architect` (secuencial) · Skills: `documentation-and-adrs`, `source-driven-development`, `performance-analysis`, `doubt-driven-development` · Tools: `tepochcalli-rag` (payload, stdio), `codebase-memory-mcp`
-- [x] **Medición del impacto**: fracción de citas de PDF en top-5 **sin** `heading` sobre el corpus de T1, y qué pasa con una query cuyo único material es un PDF
-- [x] **Decisión con dato**: (a) reafirmar D54 con la cifra y el coste de revertir documentados, o (b) revertir ADR-011 ⇒ **ADR-013** que reemplace §4.3 + re-sincronización de las 4 specs
-- [x] La decisión queda **escrita con fecha**; TD-27 **cerrada con evidencia**
-- [x] **No reescribe el payload** (D-P6-1) ni toca el contrato MCP sin ADR
-- [x] La **firma es del dueño** (cambia una decisión `Accepted`): firmada el 2026-11-13
-- Deps: T0, T1 · Verificación: cifra reproducible con su comando
-- **Hecho (2026-11-13) — medido.** `tests/benchmarks/bench_pdf_heading.py` + receta `just python-bench-pdf-heading` (fases `extract|corpus-sample|query|report`). El corpus de T1 **no permite medir**: sus PDF son stubs de 54 caracteres y 1 chunk (n=20, 0 líneas ATX) ⇒ el 100 % sería por diseño del fixture; se mide sobre **8 PDF reales** (1–1 313 págs, los 5 libros de T2 + 3 fixtures). **Citas de PDF sin `heading`: 0/6 303 (100 %) — por construcción**, y si la política no lo forzara **7 de 8 PDF seguirían sin él** (0 líneas ATX); en CLRS hay 2 artefactos que darían heading falso al **79,0 %** del documento. **El nulo es del extractor, no de D54.** Caso «solo un PDF»: vault de 1 fichero, query ES → **5/5 citas del mismo `source_path`, 0 con heading, F1 5/5**; campos reales `text`·`source_path`·`heading null`·`char_start`·`char_end`·`score`·`offsets_ref="extract"` (`doc_kind` no viaja) y **sin número de página**. Hallazgo separado: el `.docx` **sí** trae ATX (3/4 chunks ganarían heading sin Docling) ⇒ decisión aparte. Recomendación **(a) reafirmar D54**. Cero payload, cero contrato MCP, cero ADR. Evidencia: `docs/acceptance/pdf-heading.{md,json}` + README.
-- **Hecho (2026-11-13):** D54 **reafirmada** por el dueño con la cifra delante — **0/6 303 citas de PDF con `heading`** (100 %, por construcción), **7 de 8 PDF seguirían sin él** sin la política y el octavo ganaría **un** heading basura al **79,0 %** de sus chunks ⇒ el nulo es del extractor, no de D54; revertir exigiría ADR-013 + 4 specs sin beneficio medido. TD-27 **cerrada y firmada** en `docs/TECH_DEBT.md`; `docs/acceptance/pdf-heading.md` sustituye el hueco de firma por la decisión y su fecha. Cero payload, cero contrato MCP, cero ADR.
+*Dueño: `build-engineer` · Si falla: `debugger` · Depende de: T1*
 
-### [x] T11 — TD-28 + TD-29: hygiene del wizard y del modelo local
+> Ejecutar **antes** que T3. Sin veredicto, T3 no se escribe.
 
-- Subagentes: `rust-refactoring-specialist` **∥** `python-pro` (paralelo — ficheros, lenguajes y suites distintos, cero estado compartido) · Skills: `refactoring-patterns`, `clean-code`, `design-patterns`, `test-driven-development`, `incremental-implementation` · Tools: —
-- [x] **(a)** `embedder_menu.rs` de 894 → **<500** líneas, partiendo por responsabilidad, **sin cambiar ni un mensaje** pinneado por `e2e_cli_help`/`int_*`
-- [x] **(a)** `cargo fmt` limpio, `clippy -D warnings` limpio, `cargo test` verde con el **mismo número de tests**
-- [x] **(b)** `require_local_model` valida el snapshot **real** (`config.json` + pesos), no «el directorio no está vacío» ⇒ `E_MODEL_INVALID` donde hoy no se emite
-- [x] **(b)** Test que falla con snapshot a medias y con snapshot de otra revisión (RED demostrado)
-- [x] `just coverage` ≥ 95 % **se verifica en el cierre de fase (T16)**, no en este calpulli; aquí basta `just python-test-unit`
-- [x] `wc -l` de ambos ficheros y recuento de tests publicados (TD-28 y TD-29 **cerradas**)
-- Deps: T0 · Verificación: `just rust-ci` verde · `just python-test-unit` verde (cobertura en el cierre)
+- [ ] **Sonda A:** crate de prueba con `lib.rs` + `main.rs` y `bindings = "bin"` → `maturin build` sin error
+- [ ] Sonda A (cont.): `unzip -l` de la rueda → **no** arrastra el rlib
+- [ ] **Sonda B:** `uvx --from <rueda local> <cmd>` ejecuta el binario desde la rueda
+- [ ] Sonda B (cont.): si `--from` no acepta ruta local → probar `uv tool install <rueda>` + `uv tool run --from` y documentar el camino válido
+- [ ] **Sonda C:** `maturin build` sobre el crate real → nombre de rueda con la convención esperada
+- [ ] Informe en el cuerpo del commit: veredicto por sonda + comando exacto + salida cruda
+- [ ] `git status --short` sin binarios ni ruedas
 
-- **Hecho (2026-11-13), parte (a) TD-28:** `embedder_menu.rs` **894 → 298** líneas partido por responsabilidad en 4 módulos hermanos planos (no en un subdirectorio: `int_architecture.rs` escanea `application/*.rs` con `read_dir` y un `embedder_menu/` habría escapado del gate): `embedder_config.rs` 218, `embedder_gate.rs` 202, `embedder_estimate.rs` 155, `embedder_options.rs` 102. **178 literales byte-idénticos** (multiset igual), `rust-test` **323 passed** (mismo número que antes), clippy `-D warnings` limpio. Visibilidad: solo `pub(super)` interno, superficie pública intacta.
-- **Hecho (2026-11-13), parte (b) TD-29:** `snapshot_defect(path, revision)` valida el snapshot **real** (`config.json` + `model.safetensors`/`pytorch_model.bin` + revisión cuando el layout HF la declara) sin cargar el modelo; `require_local_model` pasa a `E_MODEL_INVALID` diciendo **qué falta**. RED archivado: solo-config, solo-pesos y revisión distinta ⇒ `DID NOT RAISE EmbedderModelError`; verde tras el fix. Suite **898 → 902 passed**. `model_store.py` 93→125, `embedder.py` 235→237.
+### T4 · H9 — dispositivo de inferencia electivo (TD-47)
 
-### [x] T12 — TD-34: refs a skills/subagentes del payload (solo lectura)
+*Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T1*
 
-- Subagente: `codebase-archaeologist` · Skills: `codebase-memory`, `documentation-and-adrs`, `context-engineering` · Tools: `vercel-grep`, `codebase-memory-mcp`
-- [x] `ls .opencode/skills` (39) cotejado con **todos** los nombres citados en los **9 comandos** y los **5 agentes** ⇒ **0 huérfanos**
-- [x] Tabla nombre → fichero → línea → presente
-- [x] `grep` de carga por comando: cada skill se carga **en el comando que la cita**; cada `agent:` resuelve a un primario existente
-- [x] `git diff --stat -- obsidian-workspace` **vacío** antes y después (D-P6-1)
-- [ ] Si hay un nombre equivocado ⇒ **no se reescribe el payload**: se reporta y se corrige en la spec con enmienda fechada **o** se acepta como GAP declarado
-- [x] El informe desbloquea el gate de T15
-- Deps: T0 · Verificación: tabla nombre→fichero→presente · `git diff --stat` vacío
+- [ ] `config/presets.rs`: `Preset` gana `device`; `presets.toml` lo declara en las 2 entradas
+- [ ] `application/embedder_menu.rs`: pregunta explícita de dispositivo (`cpu` preseleccionado)
+- [ ] Sin GPU ⇒ `cuda` **deshabilitada con razón visible** «GPU no detectada» (nunca oculta)
+- [ ] `application/embedder_config.rs`: `local_config()` escribe el dispositivo **elegido** (fin del hardcode `device = "cpu"`)
+- [ ] `application/swap.rs`: `picked_config_body()` **preserva** el `device` existente en `config embedder`
+- [ ] Autoselección en runtime **sigue rechazada** (sin `device` ⇒ default `cpu`, sin tocar GPU)
+- [ ] Dispositivo forzado no disponible ⇒ **advertencia** `medido`, nunca bloqueo
+- [ ] Tests nuevos: `int_embedder_menu.rs` (pregunta + GPU ausente) y `int_presets.rs` (parseo de `device`)
+- [ ] Test de no-destructividad: TOML con `device = "cuda:0"` sobrevive a `config embedder`
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
 
-- **Hecho (2026-11-12, re-verificado 2026-11-13):** `tests/e2e/verify_payload_refs.py` ⇒ **0 failure(s); 111 reference(s) checked against 39 skill(s) and 170 agent(s)**. 9 comandos y 5 agentes cotejados contra `ls .opencode/skills` (39 tras los retiros `c815eb0` y `e785072`); `git diff --stat -- obsidian-workspace` vacío en la verificación. Sin payload reescrito.
+### T6 · TD-50 — test de la guarda anti-exfiltración
 
-### [x] T13 — D-b: estado de soporte de Windows en v1
+*Dueño: `python-pro` · Revisión: `test-engineer` · Depende de: T1 · **Pythón, no Rust: no choca con T2/T4***
 
-- Subagente: `technical-writer` · Skills: `documentation-and-adrs`, `changelog-generate`, `technical-writer` · Tools: `gitmcp`
-- [x] Estado **verificado / no verificado** enumerado (target compilable, `install.ps1`, layout `Scripts/`, D20) y **nunca ejecutado** (instalador, smoke, CI) — tabla de 6 artefactos en `docs/TECH_DEBT.md` §D-b
-- [x] **Decisión de soporte v1** escrita y firmada con fecha: *soportado con verificación pendiente* (2026-11-13, `declarado`), con la **consecuencia para el usuario** y qué quita la coletilla
-- [x] Propagación a `docs/TRD.md` §2, `specs/spec-installer-wizard.md` (§Enmienda D-b), `docs/APPFLOW.md` §5, `CHANGELOG.md`
-- [x] **No** se toca `README.md` ni `LICENSE` (lista de «nunca» del `AGENTS.md`)
-- [x] `docs/TECH_DEBT.md` §D-b **cerrada** con la decisión y su fecha — estado `CERRADA 2026-11-13 — soportado con verificación pendiente`
-- [x] `just md-lint` 0
-- Deps: T0 · Verificación: decisión citada en TRD §2 y APPFLOW · enlaces resuelven
+- [ ] Test unitario que ejercita `flow/tepochcalli_flow/config.py:357-369` con `://`, `http` y `@` en `model`
+- [ ] Afirma el fallback al modelo default **con warning**
+- [ ] El test **falla** si se desactiva la guarda (mutación verificada y revertida)
+- [ ] Vive en el módulo `test-unit` (≤10 min), no en la suite pesada
+- [ ] `just python-test-unit` y `just typecheck` verdes
 
-### [x] Checkpoint CP-4 — Deuda y decisiones cerradas (tras T10, T11, T12, T13)
+### 🛑 Checkpoint 1 — veredicto de viabilidad (tras T2)
 
-- [x] TD-27 decidido **con el dato** (ADR-013 o nota de cierre con la cifra)
-- [x] `embedder_menu.rs` **<500** con el mismo número de tests; `require_local_model` valida el snapshot
-- [x] TD-34: **0** skills huérfanas; `git diff --stat -- obsidian-workspace` vacío
-- [x] D-b: decisión escrita y propagada; `just md-lint` 0
-- [x] M6 y TD-32 **siguen abiertas** y declaradas
+- [ ] Veredicto por sonda con comando y salida cruda
+- [ ] **Si alguna sonda es inviable sin workaround ⇒ PARAR y consultar al dueño antes de T3**
 
 ---
 
-- **Hecho (2026-11-13):** las cuatro deudas de la ola cerradas con evidencia: **TD-27** reafirmada con el dato y firmada (6 303/6 303 sin heading; el nulo es de markitdown), **TD-28** `embedder_menu.rs` 894→298 con 323 tests idénticos, **TD-29** `snapshot_defect` con su RED (solo-config / solo-pesos / revisión distinta), **TD-34** 0 huérfanas sobre 111 refs/39 skills/170 agentes, **D-b** «soportado con verificación pendiente» firmada y propagada a 4 sitios. `md-lint` 0. **M6** (GitHub Actions nunca ha corrido) y **TD-32** siguen abiertas y declaradas, como manda el gate.
+## 🔀 Ronda 2 — Paralela (2 frentes simultáneos)
 
-## Ola 3 — Gate del agente y cierre
+### T3 · Canal `uvx`: rueda preparada y verificada en local
 
-> **Bloqueo de cierre (decisión del dueño, 2026-11-16):** T15, T16, CP-5 y CP-6 quedan **en espera**
-> hasta el **lanzamiento de `0.1.0-beta.1`** y el flujo de despliegue por fases que definirá el dueño.
-> Phase 6 **no se cierra antes del lanzamiento**: el gate de aceptación se reanuda después, con el
-> artefacto publicado y el `cargo binstall` e2e ya validado (M6 cerrado).
+*Dueño: `build-engineer` · Revisión: `deployment-engineer` · Depende de: T2*
 
-### [x] T14 — Scaffolding de la corrida D9 (TD-31): evidencia verificable
+- [ ] `crates/tepochcalli/pyproject.toml` nuevo: `[build-system] maturin`, `[project]` name `tepochcalli` v `0.1.0`, `[project.scripts] tepochcalli = "tepochcalli:main"`, `[tool.maturin] bindings = "bin"`
+- [ ] Receta `just rust-wheel` (build + lista la rueda)
+- [ ] Receta `just rust-wheel-verify` (contenido, versión, script y **ejecución real**)
+- [ ] `uvx --from <rueda local> tepochcalli --help` imprime la ayuda ⇒ el canal sirve el binario
+- [ ] CI: el workflow **construye** ruedas para la matriz de targets y las sube como artefactos
+- [ ] CI: **no existe paso de publicación**; comentario que lo declara explícitamente
+- [ ] `dist.toml` **NO se borra** en esta fase (TD-51) — si se reescribe `release.yml`, los dos workflows conviven sin colisionar nombres
+- [ ] `grep -rn 'twine\|pypi upload\|maturin publish' .github/` → solo comentarios que declaran que **no** se publica
+- [ ] `git status --short` sin ninguna `.whl`
 
-- Subagente: `technical-writer` → `test-engineer` (secuencial) · Skills: `documentation-and-adrs`, `test-driven-development`, `bash-defensive-patterns`, `doubt-driven-development` · Tools: `vercel-grep`
-- [x] Runbook **nuevo** `tests/phase6-methodology-runbook.md` con los **9 comandos** en su formato vigente (Pre-Flight, `procedencia` de 4 estados, `/validate` en 4 fases, `/transform` A-G con `list_formats` antes de prometer, `/update` quirúrgico, `chilam` sin bandejas)
-- [x] El runbook de Phase 5 se conserva como histórico (no se sobrescribe)
-- [x] Script `tests/e2e/verify_methodology_evidence.py`: (a) cada artefacto en **su** bandeja y ninguna bandeja ajena con ficheros, (b) frontmatter con los campos del formato vigente, (c) transcripción de los **9** comandos, (d) regla **MCP-first** (`search` antes de leer crudo `00-resources/`); exit ≠ 0 + informe por punto
-- [x] El script **no juzga la prosa** (solo lo mecánico)
-- [x] **Evidencia sintética de ejemplo** en `tests/fixtures/`: verde en la forma buena y **exit ≠ 0** ante cada defecto (bandeja ajena, frontmatter ausente, transcript faltante, MCP-first no observado)
-- [x] Plantilla de checklist con las columnas del formato vigente + columna de evidencia
-- [x] La corrida **no** se ejecuta aquí (D-P6-2)
-- Deps: T0, T12 · Verificación: el script verde en la forma buena y ≠ 0 en cada defecto
+### T5 · H7 Update + H8 Desinstall (TD-48)
 
-### [ ] T15 — Corrida D9 ejecutada por el QA + evidencia verificada
+*Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T4 (exclusividad de `lib.rs`)*
 
-- Subagentes: `testing-evidence-collector` → `testing-reality-checker` (secuencial: recoger → juzgar) · Skills: `doubt-driven-development`, `document-verification`, `testing-evidence-collector` · Tools: `tepochcalli-rag` (payload, stdio)
-- [ ] **El QA ejecuta** los 9 comandos en el harness sobre un vault instalado, con el corpus de fotosíntesis del runbook
-- [ ] Evidencia archivada en `tests/evidence/phase6/`: `<NN>-<comando>-transcript.txt` + `<NN>-<comando>-artifact.md` + `vault-tree.txt` + `checklist.md` (transcript **crudo**)
-- [ ] `python3 tests/e2e/verify_methodology_evidence.py tests/evidence/phase6` ⇒ **exit 0**
-- [ ] Checklist del runbook **relleno** con evidencia enlazada; puntos no mecánicos con veredicto del QA
-- [ ] Lo no verificado se escribe como **no verificado** (lección de Phase 3.5 (b))
-- [ ] Si la corrida **no** se ejecuta ⇒ §6.3 marca el gate como `NO EJECUTADO` con motivo y TD-31 **sigue abierta**
-- Deps: T14 · Verificación: script verde sobre la evidencia real · 45/45 puntos con evidencia
+- [ ] `application/update.rs` nuevo: sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json`, `AGENTS.md` — **y solo eso**
+- [ ] **Backup `.bak` obligatorio** de cada fichero existente antes de pisar
+- [ ] **Advertencia visible** con el directorio objetivo
+- [ ] Rollback por compensación: un fallo restaura el estado previo desde los `.bak`
+- [ ] `run_uninstall()` amplía su alcance a `.opencode/`, `.tepochcalli/` y `opencode.json`
+- [ ] `AGENTS.md` **NO** se borra en `uninstall` (lo fija US-H8) → test explícito
+- [ ] `00-resources/` intacto tras `uninstall` → test explícito
+- [ ] Subcomando `update` en `cli/commands.rs` + entrada en `print_help()` + código de salida
+- [ ] Idempotencia: `update` x2 ⇒ el segundo es no-op; `uninstall` sobre vault vacío ⇒ no-op
+- [ ] La **primera Install** y la re-entrada `config` **siguen** con merge conservador byte-a-byte
+- [ ] Tests: `tests/e2e_update.rs` nuevo + ampliación de `tests/e2e_maintenance.rs`
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
 
-### [ ] T16 — Cierre documental + FTR de aceptación
+### 🛑 Checkpoint 2 — corte 1 cerrado
 
-- Subagentes: `docs-writer` → `code-reviewer` (secuencial: cierre → revisión cruzada) · Skills: `documentation-and-adrs`, `changelog-generate`, `code-review-and-quality`, `git-workflow-and-versioning` · Tools: `vercel-grep`, `codebase-memory-mcp`
-- [ ] `docs/WORKFLOW.md` §Phase 6: **tabla §6.3 rellena** (cifra medida + origen + veredicto) + gate D9 con su estado real; sección **< 700 líneas**
-- [ ] `docs/TRD.md` §6: protocolo, **umbrales** y cifras de la fase publicados
-- [ ] `docs/TECH_DEBT.md`: **re-revisión formal** — TD-2/13/15/27/28/29/34 y D-b con su estado medido; **M6** y **TD-32 siguen abiertas** con su motivo
-- [ ] `SPEC.md`: los 7 criterios pasan a **verificados** con fecha y enlace a la evidencia
-- [ ] `CHANGELOG.md`: entrada de Phase 6
-- [ ] `docs/ARCHITECTURE.md`: **sin** diagrama nuevo salvo que T10/T13 alteren el inventario
-- [ ] **FTR de aceptación**: checklist de los 7 criterios + el gate D9, cada fila con cifra y comando reproducible
-- [ ] `just ci` verde (suite + cobertura ≥ 95 % + bench-smoke + rust-ci) y `just md-lint` 0
-- [ ] **Revisión cruzada**: cada número en WORKFLOW/TRD/TECH_DEBT/SPEC es el **mismo** y su comando está a mano
-- Deps: T2, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T15 · Verificación: segundo par de ojos · gates verdes
-
-### [ ] Checkpoint CP-5 — Gate del agente (tras T14, T15)
-
-- [ ] El verificador de evidencia pasa en la forma buena y **falla** en cada defecto
-- [ ] Corrida D9: **9/9** con transcript archivado y checklist firmado, **o** `NO EJECUTADO` con motivo
-
-### [ ] Checkpoint CP-6 — FTR de aceptación (tras T16)
-
-- [ ] Checklist de los 7 criterios + el gate D9 con **cifra y comando** en cada fila
-- [ ] WORKFLOW, TRD, TECH_DEBT, SPEC y CHANGELOG con **cifras medidas**; cada número, un valor
-- [ ] `just ci` verde + `just md-lint` 0
-- [ ] Decisión del dueño sobre el **gate de v1 release** (release o rollback con nota en `docs/WORKFLOW.md`)
+- [ ] `just quality` verde
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
+- [ ] La rueda se construye y `uvx` la ejecuta
+- [ ] TD-47, TD-48 y TD-50 cerrados
+- [ ] Revisión de `code-reviewer` con contexto limpio: **APROBAR**
+- [ ] Commits atómicos (uno por tarea), con trailer `Co-Authored-By`
 
 ---
 
-## Trazabilidad con la deuda y los gates heredados
+## ➡️ Ronda 3 — Secuencial (1 frente)
 
-| Ítem | Origen | Calpulli | Estado al cerrar |
-| --- | --- | --- | --- |
-| TD-2 · coste del PDF de 30 págs | `docs/TECH_DEBT.md` | T2 | Cerrada con cifra o con remediación abierta (condición resuelta) |
-| TD-13 · `verify.py --spot-check` | `docs/TECH_DEBT.md` | T7 | Cerrada con test e2e |
-| TD-15 · eval de relevancia (recall@5) | `docs/TECH_DEBT.md` | T3 | Cerrada con n = 10 y umbral publicado |
-| TD-27 · PDF sin heading (D54) | `docs/TECH_DEBT.md` | T10 | Cerrada con decisión firmada (ADR-013 o nota) |
-| TD-28 · `embedder_menu.rs` <500 | `docs/TECH_DEBT.md` | T11 | Cerrada con `wc -l` |
-| TD-29 · `require_local_model` | `docs/TECH_DEBT.md` | T11 | Cerrada con test |
-| TD-34 · refs de skills del payload | `docs/TECH_DEBT.md` | T12 | Cerrada con tabla |
-| D-b · Windows | `docs/TECH_DEBT.md` | T13 | Cerrada con decisión escrita |
-| TD-31 · corrida D9 (D-P5-10) | `docs/TECH_DEBT.md` | T14, T15 | Cerrada con evidencia, o **NO EJECUTADO** declarado |
-| M6 · CI y release | `docs/TECH_DEBT.md` | — | **Sigue abierta** (fuera de alcance, D-P6-4) |
-| TD-32 · `installer.rs` / `int_phase_f8_mcp_merge.rs` | `docs/TECH_DEBT.md` | — | **Sigue abierta** (fuera de alcance, D-P6-4) |
-| Alineación spec↔payload de permisos (hallazgo de T1) | `specs/spec-payload-permissions.md` | T1-bis | Enmendada 2026-11-12 (la política de secretos vive en el global); **856 passed / 0 failed**; GAP declarado: `.tepochcalli/config/**` = `allow` |
-| P-02 · baseline de escala NTFS vs btrfs | `docs/TECH_DEBT.md` §Review 5-ejes | T5 | Convertido en límite documentado |
-| Deriva FTS ES/EN | `docs/TECH_DEBT.md` §Review 5-ejes | T4 | Medida y decidida |
-| Criterios 1-7 de `docs/BACKLOG.md` | `docs/WORKFLOW.md` §6.3 | T4-T9 | Con cifra y origen |
+### T7 · Dominio H5 puro: menú, botones y comparador semver
+
+*Dueño: `rust-engineer` · Revisión: `software-architect` · Depende de: T5*
+
+- [ ] `domain/menu.rs` nuevo: `MenuSpec` (botón: etiqueta, habilitada, razón) + 4 escenarios (`NoInstalado`, `Igual`, `Atrasada`, `Adelantada`)
+- [ ] Matriz de habilitación **exactamente** la de la spec (4 escenarios × botones + razón)
+- [ ] `domain/version.rs` nuevo: comparador semver **propio** (sin dep nueva) + lector de `.tepochcalli/pyproject.toml`
+- [ ] Semver: `0.1.0-beta.1 < 0.1.0 < 0.2.0` ordenado correctamente
+- [ ] Estado del embedder (API key externa o modelo local) calculado como dato de dominio
+- [ ] `domain/` sin imports de `adapters/`, `ports/` ni crates externos (test de arquitectura)
+- [ ] `tests/int_domain.rs` ampliado: matriz de los 4 escenarios + casos semver
+
+### T8 · Puerto `Ui` ampliado + adapter ratatui
+
+*Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T7, T3*
+
+- [ ] `ports/ui.rs`: **un** método nuevo (`menu`); los 4 actuales no cambian de firma
+- [ ] `adapters/ui_ratatui.rs` nuevo: full-screen, botones reales, deshabilitado visible + **razón visible**, navegación por teclado
+- [ ] Repo + `dev@fisherk2.com` siempre visibles (H5)
+- [ ] `TtyUi` (dialoguer) pasa a **fallback** line-based con la misma información
+- [ ] `HeadlessUi` responde al `menu` por índice
+- [ ] `Cargo.toml`: `ratatui` 0.30 + `crossterm` 0.29 (únicas deps nuevas) + `Cargo.lock` actualizado
+- [ ] Fakes de test del puerto actualizados en el mismo commit
+- [ ] `--non-interactive` sin regresión (CI idéntica)
+- [ ] Los 33 call sites del puerto siguen funcionando
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
+
+### T9 · Cableado CLI: `tepochcalli` → H5 → H6..H11
+
+*Dueño: `cli-developer` · Revisión: `code-reviewer` · Depende de: T8*
+
+- [ ] `tepochcalli` sin subcomando ⇒ menú H5
+- [ ] Subcomandos existentes (`install`, `config embedder`, `reindex`, `uninstall`) siguen funcionando
+- [ ] 🟢 Update → T5 · 🔴 Desinstall → T5 · 🟣 Change Embedder → swap existente · 🔵 Install → 8 fases · 🟠 Exit → **cero cambios**
+- [ ] H11: cierre pulsando cualquier tecla + agradecimiento a Tepochcalli
+- [ ] H5 muestra versión del wizard, versión instalada, estado del embedder, repo y contacto
+- [ ] Escenario «instalada > wizard» ⇒ comando copiable `uvx --refresh tepochcalli`
+- [ ] `tests/e2e_cli_help.rs` ampliado con el menú y los 4 escenarios
+- [ ] Recorrido manual e2e en un vault temporal de los 4 escenarios
+
+### 🛑 Checkpoint 3 — corte 2 cerrado
+
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
+- [ ] Matriz de los 4 escenarios de H5 verificada
+- [ ] Fallback line-based y `--non-interactive` sin regresión
+- [ ] Revisión de `code-reviewer` con contexto limpio: **APROBAR**
+
+---
+
+## 🏁 Ronda 4 — Secuencial (1 frente)
+
+### T10 · Verificación e2e del canal (sin publicar)
+
+*Dueño: `test-automation-engineer` · Apoyo: `testing-reality-checker` · Depende de: T3, T6, T9*
+
+- [ ] Build de la rueda desde árbol limpio
+- [ ] `uvx --from <rueda local> tepochcalli` abre el wizard y el menú H5 (transcript/captura)
+- [ ] Recorrido Install → Update → Change Embedder → Desinstall con backup verificado
+- [ ] `just ci` verde (suite completa + módulos + bench-smoke + rust-ci)
+- [ ] `just md-lint` → 0 issues
+- [ ] **Prueba negativa:** ninguna ruta de publicación activa (ni upload, ni credencial, ni auth)
+- [ ] Transcript en el cuerpo del commit; `git status --short` limpio
+
+### T11 · Cierre documental
+
+*Dueño: `docs-writer` · Revisión: `technical-writer` · Depende de: T10*
+
+- [ ] `docs/WORKFLOW.md` §Phase 6.5 → completada, con métricas **medidas** y salvedad de lo no verificado (TTY Windows, VM limpia real, publicación)
+- [ ] `docs/TECH_DEBT.md`: TD-45/46/47/48/50 cerradas · **TD-51** (retiro de cargo-dist) abierta con plan de pago · **TD-52** si el smoke de TTY en Windows sigue sin ejercitarse
+- [ ] `docs/ARCHITECTURE.md` §Key decisions: canal vigente `uvx`; ADR-003 como backend retirado
+- [ ] `SPEC.md` §Índice: las 2 specs con enmienda Accepted
+- [ ] `CHANGELOG.md`: entrada de la fase
+- [ ] `docs/BACKLOG.md` §8: filas de todos los cambios estructurales
+- [ ] `docs/APPFLOW.md`: journeys d/e/f al flujo destino (menú H5)
+- [ ] `AGENTS.md`: sin cambios — verificado y declarado
+- [ ] `grep -rn 'cargo binstall' docs/ SPEC.md README.md` → solo como canal **heredado**
+- [ ] `just md-lint` → 0 issues
+
+### 🛑 Checkpoint 4 — fase cerrada
+
+- [ ] `just ci` verde · `just md-lint` 0
+- [ ] Recorrido e2e con transcript en el commit
+- [ ] **Cero rutas de publicación activas**
+- [ ] Revisión final de `code-reviewer`: **APROBAR**
+- [ ] `git-workflow-manager`: commits atómicos por corte, sin push
+
+---
+
+## 📌 Deuda abierta al cierre (esperado)
+
+| ID | Deuda | Por qué no se cierra aquí |
+| --- | --- | --- |
+| **TD-51** | Retiro materializado de cargo-dist (`dist.toml` + `release.yml` heredado) | Decisión del dueño: la preparación del canal nuevo no incluye el borrado del backend viejo |
+| **TD-52** | Smoke de TTY/interacción bajo `uvx` en Windows | Requiere un runner `windows-latest`; en este entorno no hay Windows → queda `declarado`, no `medido` |
+| **M6** | CI y release nunca ejecutados en GitHub Actions | 0 releases publicadas; sin `cargo-dist` instalado no se puede regenerar el backend viejo |
+| — | Publicación real a PyPI | Fuera de alcance por orden explícita del dueño (2026-11-19) |
+
+---
+
+*Redactado por Moctezuma (tlatoani) el 2026-11-19. Plan: [tasks/plan.md](./plan.md). Ningún cambio
+de código implementado en esta sesión.*
