@@ -165,6 +165,7 @@ When agent or subagent finish the job, update the index with `tepochcalli-rag` M
 - **Always** check and load available skills if the task requires specialized knowledge
 - **Always** check and use tools (MCPs, installed plugins, harness tools, etc.) if the task requires specialized jobs.
 - Any claim from indexed material cites only fields `search` returned: `source_path » heading (chars x–y)`. Never cite what `search` did not return.
+- Any command that you can't execute because needs admin privileges, you should stop and ask for help to the user for execute himself.
 - Write research planning documents: plans, tasks, roadmaps, task breakdowns, what subagent are appropriate for each task, etc.
 - Generate questionnaires to user to clarify doubts before writing a plan
 - If a task file is >1000 lines, divide it and write sequentially

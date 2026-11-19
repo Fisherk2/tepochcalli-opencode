@@ -22,7 +22,7 @@
       "steps": 50
     },
     "nezahualcoyotl": {
-      "model": "opencode/minimax-m3.1-flash-free",
+      "model": "opencode/nemotron-3.5-lightning-free",
       "color": "#502f01",
       "request": {
         "body": {
@@ -42,7 +42,7 @@
       "steps": 100
     },
     "chilam": {
-      "model": "opencode/glm-5.3-flash-free",
+      "model": "opencode/hy4-flash-free",
       "color": "#ff0000",
       "request": {
         "body": {
@@ -97,6 +97,14 @@
       "description": "Official OpenCode repository - CLI, API, and configuration reference"
     }
   },
+  "plugins": [
+    "opencode-rpc@latest",
+    "opencode-navigator@latest",
+    "opencode-skills-collection@latest",
+    "opencode-skill-creator@latest",
+    "opencode-search-plugin@latest",
+    "opencode-parser@latest"
+  ],
   "mcp": {
     "servers": {
       "tepochcalli-rag": {
@@ -133,14 +141,6 @@
       }
     }
   },
-  "plugins": [
-    "opencode-rpc@latest",
-    "opencode-navigator@latest",
-    "opencode-skills-collection@latest",
-    "opencode-skill-creator@latest",
-    "opencode-search-plugin@latest",
-    "opencode-parser@latest"
-  ],
 "permissions": [
   {
     "action": "subagent",
