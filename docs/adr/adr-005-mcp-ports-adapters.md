@@ -5,7 +5,7 @@
 * **Decision Makers:** Arquitecto (entrevista /spec), Product Owner (usuario)
 * **Consulted:** Documentación OpenCode V2 de MCP servers; patrón hexagonal ports/adapters
 * **Informed:** Autores de agentes/comandos del vault, usuarios del harness
-* **Traceability:** docs/UH.md (capa "MCP Server"), specs/spec-mcp-server.md, specs/spec-agent-workflow.md, ADR-001/002
+* **Traceability:** docs/BACKLOG.md (capa "MCP Server"), specs/spec-mcp-server.md, specs/spec-agent-workflow.md, ADR-001/002
 
 ## 1. Context and Problem Statement
 
@@ -22,7 +22,7 @@ OpenCode V2 (capa de agente) necesita consultar el índice vectorial construido 
 ## 3. Considered Options
 
 * **MCP server dedicado `tepochcalli-rag`** (capa adapter): tres herramientas con contrato fijo — `search(query, top_k=5, path_filter?)`, `index_refresh()`, `add_source(uri, subdir?)` — sobre transporte stdio local.
-* **Plugin de OpenCode V2** que inyecte contexto RAG automáticamente: acopla el ciclo de vida del harness al motor; la documentación de UH.md lo prevé solo como evolución futura (el AGENTS.md quedaría como placeholder entonces).
+* **Plugin de OpenCode V2** que inyecte contexto RAG automáticamente: acopla el ciclo de vida del harness al motor; la documentación de BACKLOG.md lo prevé solo como evolución futura (el AGENTS.md quedaría como placeholder entonces).
 * **Herramienta CLI invocada por el agente vía bash** (ej. `tepochcalli search --json`): funciona, pero sin schema de herramientas el modelo reinventa flags y parsea texto; peor garantías de presupuesto/citas.
 * **Servidor HTTP local con REST**: expone un puerto y un daemon — contradice Obsidian-safe (ADR-002) y añade ciclo de vida de servicio.
 
@@ -47,7 +47,7 @@ OpenCode V2 (capa de agente) necesita consultar el índice vectorial construido 
 
 * ✅ **Pros:** Integración más profunda (auto-injection de contexto, menos instrucciones en AGENTS.md).
 * ⚠️ **Cons:** Acopla el producto a un harness específico en fase temprana; API de plugins V2 aún moviéndose.
-* ⚖️ **Neutral:** Decidido como evolución post-v1 (UH.md lo anticipa).
+* ⚖️ **Neutral:** Decidido como evolución post-v1 (BACKLOG.md lo anticipa).
 
 ### CLI por bash
 

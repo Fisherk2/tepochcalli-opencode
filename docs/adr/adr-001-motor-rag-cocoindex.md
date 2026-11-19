@@ -5,11 +5,11 @@
 * **Decision Makers:** Arquitecto (entrevista /spec), Product Owner (usuario)
 * **Consulted:** Documentación oficial de CocoIndex (cocoindex.io/docs), repositorios de las alternativas evaluadas
 * **Informed:** Futuros mantenedores del flujo de indexación, agente de instalación (wizard)
-* **Traceability:** docs/UH.md (historias de usuario), docs/PRD.md, specs/spec-rag-engine.md, ADR-002 (almacén vectorial)
+* **Traceability:** docs/BACKLOG.md (historias de usuario), docs/PRD.md, specs/spec-rag-engine.md, ADR-002 (almacén vectorial)
 
 ## 1. Context and Problem Statement
 
-Tepochcalli necesita un motor RAG que monitoree `00-resources/` de un vault de Obsidian, extraiga texto de Markdown y PDFs, genere embeddings locales y los almacene en una base vectorial embebida, cumpliendo: indexación incremental del delta en <30s, búsquedas <500ms, y **cero consumo de tokens LLM durante la indexación** (criterio de presupuesto de tokens del usuario). El requerimiento explícito de UH.md es incorporar un motor ya construido por la comunidad, fácil de instalar y bien documentado — no implementar un RAG desde cero.
+Tepochcalli necesita un motor RAG que monitoree `00-resources/` de un vault de Obsidian, extraiga texto de Markdown y PDFs, genere embeddings locales y los almacene en una base vectorial embebida, cumpliendo: indexación incremental del delta en <30s, búsquedas <500ms, y **cero consumo de tokens LLM durante la indexación** (criterio de presupuesto de tokens del usuario). El requerimiento explícito de BACKLOG.md es incorporar un motor ya construido por la comunidad, fácil de instalar y bien documentado — no implementar un RAG desde cero.
 
 ## 2. Decision Drivers
 

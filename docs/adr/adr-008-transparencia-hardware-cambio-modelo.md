@@ -5,7 +5,7 @@
 * **Decision Makers:** Arquitecto (follow-up entrevista /spec), Product Owner (usuario — aprobó las cuatro opciones "Recommended" del layer D8 vía question tool, 2026-10-21)
 * **Consulted:** API pública de HuggingFace (verificado en vivo 2026-10-21 contra `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2`); crate `sysinfo`; ADR-006 §6 (consecuencia de re-index)
 * **Informed:** Autor del wizard (Rust), mantenedores de specs/spec-embeddings.md y specs/spec-installer-wizard.md, usuarios del vault
-* **Traceability:** solicitud del usuario 2026-10-21 (NFR "cero-sorpresas" de hardware + UX de "cambié de opinión / elegí mal"); **refina (no reemplaza) ADR-007** D7.1 (menú "Embedding provider") y D7.4 (comandos de re-entrada `tepochcalli config embedder` / `tepochcalli reindex --confirm`); se apoya en ADR-006 §6 (LanceDB no puede mezclar dims → re-index completo) y ADR-004 (venv donde corre el embedder); docs/UH.md (requisitos, inmutable)
+* **Traceability:** solicitud del usuario 2026-10-21 (NFR "cero-sorpresas" de hardware + UX de "cambié de opinión / elegí mal"); **refina (no reemplaza) ADR-007** D7.1 (menú "Embedding provider") y D7.4 (comandos de re-entrada `tepochcalli config embedder` / `tepochcalli reindex --confirm`); se apoya en ADR-006 §6 (LanceDB no puede mezclar dims → re-index completo) y ADR-004 (venv donde corre el embedder); docs/BACKLOG.md (requisitos, fuente de verdad; cambios en §8 + ADR/enmienda si es decisión)
 
 ## 1. Context and Problem Statement
 

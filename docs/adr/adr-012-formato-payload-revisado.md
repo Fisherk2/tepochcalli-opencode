@@ -73,7 +73,7 @@ payload. En Linux ambas rutas son directorios distintos (sensible a case); el in
 debe materializar el case exacto de `INDEXER_DIR` (vecino de TD-8).
 
 **Actualización 2026-11-13:** el fallback de código también pasa a `00-resources` (minúsculas) —
-ver [spec-vault-structure](../spec-vault-structure.md) §Enmienda 2026-11-13. Este apartado se
+ver [spec-vault-structure](../../specs/spec-vault-structure.md) §Enmienda 2026-11-13. Este apartado se
 conserva como registro de la revisión de 2026-11-11.
 
 ### Revisión (d) — skill 41 `math-typesetting-guide`

@@ -5,7 +5,7 @@
 * **Decision Makers:** Dueño del repo (decisión directa, 2026-11-13); Arquitecto (redacción)
 * **Consulted:** Documentación oficial de `cargo-binstall` (README/SUPPORT) y de cargo-dist (config reference, installers)
 * **Informed:** Usuarios finales (investigadores), CI de release, docs/APPFLOW.md §journey (d)
-* **Traceability:** [ADR-003](adr-003-distribucion-cargo-dist.md) (reemplazado en su **canal**, no en sus fundamentos), [spec-installer-wizard](../spec-installer-wizard.md), [docs/PRD.md](../../docs/PRD.md) F6, [docs/APPFLOW.md](../../docs/APPFLOW.md) §5, `crates/tepochcalli/dist.toml`
+* **Traceability:** [ADR-003](adr-003-distribucion-cargo-dist.md) (reemplazado en su **canal**, no en sus fundamentos), [spec-installer-wizard](../../specs/spec-installer-wizard.md), [docs/PRD.md](../../docs/PRD.md) F6, [docs/APPFLOW.md](../../docs/APPFLOW.md) §5, `crates/tepochcalli/dist.toml`
 
 > **Nota de alcance:** esta decisión la tomó el dueño del repo. **Reemplaza el canal de
 > ADR-003, no sus fundamentos**: cargo-dist sigue siendo el backend de release (matriz de
@@ -154,7 +154,7 @@ Lo que cambia, sin maquillar:
   artefactos y los installers `shell`/`powershell`. Esta ADR cambia **qué canal se recomienda**.
 * [ADR-004](adr-004-uv-venv-aislado.md) — el wizard sigue booteando `uv`; instalar el wizard
   con cargo no cambia nada del runtime del vault.
-* [spec-installer-wizard](../spec-installer-wizard.md) §Enmienda 2026-11-13 — fases, flags y
+* [spec-installer-wizard](../../specs/spec-installer-wizard.md) §Enmienda 2026-11-13 — fases, flags y
   orden de los dos pasos.
 
 ## 8. Compliance and Review

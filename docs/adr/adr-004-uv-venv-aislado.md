@@ -5,11 +5,11 @@
 * **Decision Makers:** Arquitecto (entrevista /spec), Product Owner (usuario)
 * **Consulted:** Capacidades de uv (bootstrap de CPython gestionado, `uv venv`, `uv sync`)
 * **Informed:** Autor del wizard (ADR-003), mantenedores del flow/MCP
-* **Traceability:** docs/UH.md (deuda cognitiva 3-4), specs/spec-vault-structure.md (layout `.tepochcalli/`), specs/spec-installer-wizard.md
+* **Traceability:** docs/BACKLOG.md (deuda cognitiva 3-4), specs/spec-vault-structure.md (layout `.tepochcalli/`), specs/spec-installer-wizard.md
 
 ## 1. Context and Problem Statement
 
-El stack de procesamiento (CocoIndex + sentence-transformers + Docling + markitdown-mcp + LanceDB) es Python, con dependencias pesadas y nativas (pyarrow, torch). El usuario objetivo es investigador, no desarrollador Python: no debe instalar Python en su host, no debe gestionar entornos, y el vault debe seguir siendo portable. La pregunta de UH.md: ¿puede el wizard instalar todo automáticamente en un entorno seguro, tipo `.venv`, sin comandos extra?
+El stack de procesamiento (CocoIndex + sentence-transformers + Docling + markitdown-mcp + LanceDB) es Python, con dependencias pesadas y nativas (pyarrow, torch). El usuario objetivo es investigador, no desarrollador Python: no debe instalar Python en su host, no debe gestionar entornos, y el vault debe seguir siendo portable. La pregunta de BACKLOG.md: ¿puede el wizard instalar todo automáticamente en un entorno seguro, tipo `.venv`, sin comandos extra?
 
 ## 2. Decision Drivers
 
@@ -29,7 +29,7 @@ El stack de procesamiento (CocoIndex + sentence-transformers + Docling + markitd
 
 ## 4. Decision Outcome
 
-**Chosen option: uv + venv local del proyecto.** El wizard bootea el binario `uv` en `.tepochcalli/bin/`; uv instala su propio CPython gestionado (el usuario no necesita Python); `uv venv` + `uv sync` materializan `.tepochcalli/venv/` con las dependencias pineadas de `.tepochcalli/pyproject.toml` (`cocoindex[lancedb]`, `sentence-transformers`, `docling`, `markitdown-mcp`). Se obtiene exactamente la semántica de ".venv seguro" que pidió UH.md, con cero fricción para el usuario.
+**Chosen option: uv + venv local del proyecto.** El wizard bootea el binario `uv` en `.tepochcalli/bin/`; uv instala su propio CPython gestionado (el usuario no necesita Python); `uv venv` + `uv sync` materializan `.tepochcalli/venv/` con las dependencias pineadas de `.tepochcalli/pyproject.toml` (`cocoindex[lancedb]`, `sentence-transformers`, `docling`, `markitdown-mcp`). Se obtiene exactamente la semántica de ".venv seguro" que pidió BACKLOG.md, con cero fricción para el usuario.
 
 ### 4.1 Confirmation
 

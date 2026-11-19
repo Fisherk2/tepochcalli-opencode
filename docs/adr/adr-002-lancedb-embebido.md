@@ -5,11 +5,11 @@
 * **Decision Makers:** Arquitecto (entrevista /spec), Product Owner (usuario)
 * **Consulted:** Soporte oficial de targets de CocoIndex
 * **Informed:** Usuario final (investigador), autor del wizard de instalación
-* **Traceability:** docs/UH.md, specs/spec-rag-engine.md, specs/spec-vault-structure.md, ADR-001
+* **Traceability:** docs/BACKLOG.md, specs/spec-rag-engine.md, specs/spec-vault-structure.md, ADR-001
 
 ## 1. Context and Problem Statement
 
-El flujo RAG necesita persistir ~100k vectores de 384 dimensiones con búsqueda ANN + FTS dentro de un vault de Obsidian que el usuario abre, mueve y sincroniza (git/Dropbox/OneDrive). Cualquier base con servidor, puerto o demonio choca con la regla de no interferencia (criterio 1 de UH.md) y con la premisa de que el workspace sea una carpeta autocontenida.
+El flujo RAG necesita persistir ~100k vectores de 384 dimensiones con búsqueda ANN + FTS dentro de un vault de Obsidian que el usuario abre, mueve y sincroniza (git/Dropbox/OneDrive). Cualquier base con servidor, puerto o demonio choca con la regla de no interferencia (criterio 1 de BACKLOG.md) y con la premisa de que el workspace sea una carpeta autocontenida.
 
 ## 2. Decision Drivers
 

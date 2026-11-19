@@ -2,10 +2,10 @@
 
 * **Status:** Proposed
 * **Date:** 2026-11-18
-* **Decision Makers:** Dueño del repo (orden del flujo destino, 2026-11-18, docs/UH.md §"Wizard de instalación: flujo destino"); Arquitecto (redacción)
+* **Decision Makers:** Dueño del repo (orden del flujo destino, 2026-11-18, docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»); Arquitecto (redacción)
 * **Consulted:** [ADR-013](adr-013-distribucion-cargo-binstall.md) (canal vigente), [ADR-003](adr-003-distribucion-cargo-dist.md) (backend), [ADR-004](adr-004-uv-venv-aislado.md), [ADR-011](adr-011-politica-dependencias-dos-librerias.md); documentación de maturin (`bindings = "bin"`) y de `uv tool run` (`uvx`)
 * **Informed:** Usuarios finales (investigadores), CI de release, docs/ARCHITECTURE.md §Key decisions (4)
-* **Traceability:** docs/UH.md:253-261 (flujo destino; `:255` «no se implementan ni se aprueban aquí»), docs/UH.md:258 («este flujo exige un ADR-014 que supere el canal de ADR-013 (que rechazó uv/PyPI) y el backend de ADR-003»), [spec-installer-wizard](../spec-installer-wizard.md):181 (one-version rule), [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md):294
+* **Traceability:** docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)» (flujo destino; «no se implementan ni se aprueban aquí»), docs/BACKLOG.md §4 / D-005 («este flujo exige un ADR-014 que supere el canal de ADR-013 (que rechazó uv/PyPI) y el backend de ADR-003»), [spec-installer-wizard](../../specs/spec-installer-wizard.md):181 (one-version rule), [docs/ARCHITECTURE.md](../../docs/ARCHITECTURE.md):294
 
 > **Nota de alcance:** este ADR está **Proposed**: no entra en vigor hasta la aprobación
 > explícita del usuario (AGENTS.md:205 — «Decisiones D1-D6: NO se re-litigan en código —
@@ -16,7 +16,7 @@
 
 ## 1. Context and Problem Statement
 
-El flujo destino del wizard ordenado por el dueño (docs/UH.md:253-261, 2026-11-18) exige un
+El flujo destino del wizard ordenado por el dueño (docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)», 2026-11-18) exige un
 **comando único** que abra el wizard Rust sin binario instalado en PATH y sin descargas en
 runtime: `uvx tepochcalli`. El canal vigente (ADR-013, *Accepted*) son **dos pasos** —
 `cargo binstall tepochcalli` instala y termina; `tepochcalli install --vault <ruta>` configura
@@ -29,14 +29,14 @@ ADR-013 evaluó y **descartó** explícitamente uv/PyPI, premisa que el dueño i
 
 * **One-liner real:** un solo comando abre el wizard; nada de «instalar el instalador» como
   paso previo (débacle de los dos pasos de ADR-013 §6(a)).
-* **Sin binario en PATH y sin descargas en runtime** (docs/UH.md:257): la rueda queda en la
+* **Sin binario en PATH y sin descargas en runtime** (docs/BACKLOG.md §4 / D-005): la rueda queda en la
   caché de `uv` hasta su limpieza.
 * **Reutilizar la toolchain que el producto ya trae:** el wizard bootea `uv` en
   `.tepochcalli/bin/` (ADR-004 §4, `:32`); `uvx` es el mismo `uv` — cero gestor nuevo para el
   usuario.
 * **Cero herencia de usuarios rota:** hoy no hay nada que migrar (ver §6).
 * **Refresco determinista:** el TUI debe poder mostrar un comando exacto de refresco
-  (`uvx --refresh tepochcalli`, docs/UH.md:257 y `:273`).
+  (`uvx --refresh tepochcalli`, docs/BACKLOG.md §4 / D-005 y docs/BACKLOG.md §2 / US-H5).
 
 ## 3. Considered Options
 
@@ -54,9 +54,9 @@ ADR-013 evaluó y **descartó** explícitamente uv/PyPI, premisa que el dueño i
 **Chosen option: Option A — `uvx tepochcalli` como ÚNICO canal recomendado.** El crate se
 publica en PyPI como rueda generada con **maturin `bindings = "bin"`**: empaqueta el binario
 Rust como script ejecutable sin escribir código Python. El usuario ejecuta `uvx tepochcalli`
-y el wizard se abre directo (docs/UH.md:257). Refresco: `uvx --refresh tepochcalli`
+y el wizard se abre directo (docs/BACKLOG.md §4 / D-005). Refresco: `uvx --refresh tepochcalli`
 (alternativa `uvx tepochcalli@latest`); ese es el comando que el TUI muestra cuando la
-versión instalada supera a la del wizard (docs/UH.md:273).
+versión instalada supera a la del wizard (docs/BACKLOG.md §2 / US-H5).
 
 ### 4.1 Relación con los ADRs existentes (sin editarlos)
 
@@ -71,8 +71,7 @@ versión instalada supera a la del wizard (docs/UH.md:273).
   Registrada la inversión, no queda drift de trazabilidad: ADR-013 queda desplazado en su
   canal al aprobarse este ADR; no se re-edita (es *Accepted*).
 * **Declara el RETIRO del backend de ADR-003 (cargo-dist).** Por decisión EXPLÍCITA del dueño
-  (2026-11-18, docs/UH.md:257 «Se retira `cargo binstall` / cargo-dist como canal recomendado»
-  y `:258`), ADR-014 decreta retirar `crates/tepochcalli/dist.toml` y
+  (2026-11-18, docs/BACKLOG.md §4 / D-005 «Se retira `cargo binstall` / cargo-dist como canal recomendado»), ADR-014 decreta retirar `crates/tepochcalli/dist.toml` y
   `.github/workflows/release.yml` (ambos existen hoy). **La MATERIALIZACIÓN del retiro (borrar
   esos ficheros, reescribir la CI) es TAREA FUTURA** fuera del alcance de `/evolve`; este ADR
   solo documenta la intención. ADR-003 **no se re-edita** (es *Accepted*); su driver «Cero
@@ -91,11 +90,11 @@ versión instalada supera a la del wizard (docs/UH.md:273).
 
 La versión canónica la fija `.tepochcalli/pyproject.toml` (`:3` — hoy `0.1.0`);
 `crates/tepochcalli/Cargo.toml` (`:3` — hoy `0.1.0-beta.1`) **se alinea detrás** de ella.
-Esto resuelve la contradicción actual: [spec-installer-wizard](../spec-installer-wizard.md):181
+Esto resuelve la contradicción actual: [spec-installer-wizard](../../specs/spec-installer-wizard.md):181
 exige la one-version rule («wizard y vault versionan juntos»), pero las dos versiones medidas
-hoy divergen (docs/UH.md:260 lo constata: «deben alinearse antes de implementar»). Con `uvx`
+hoy divergen (docs/BACKLOG.md §4 / D-007 lo constata: «deben alinearse antes de implementar»). Con `uvx`
 la versión del wizard la gestiona el **paquete publicado en PyPI** y la instalada se detecta
-leyendo `.tepochcalli/pyproject.toml` (docs/UH.md:260); wizard y payload viajan en la misma
+leyendo `.tepochcalli/pyproject.toml` (docs/BACKLOG.md §4 / D-007); wizard y payload viajan en la misma
 rueda, que es la satisfacción mecánica de la regla.
 
 ### 4.3 Dependencias de release — PENDIENTES de visto bueno
@@ -144,7 +143,7 @@ ha corrido»). Migrar el canal hoy cuesta cero instalaciones huérfanas.
 * ✅ **Pros:** verificabilidad crates.io + checksums; ya especificado y *Accepted*.
 * ⚠️ **Cons:** dos pasos obligatorios; toolchain Rust en el host del investigador; sin assets
   para targets fuera de la lista cae a `cargo install` y compila (ADR-013 §5 `:84-86`).
-  Descartado por este ADR por orden del dueño (docs/UH.md:257).
+  Descartado por este ADR por orden del dueño (docs/BACKLOG.md §4 / D-005).
 
 ### Option C — `shell`/`powershell` (`curl | sh`)
 
@@ -160,7 +159,7 @@ ha corrido»). Migrar el canal hoy cuesta cero instalaciones huérfanas.
 
 ## 6. Consequences
 
-* ✅ **Positives:** el flujo destino de docs/UH.md:257 queda con canal documentado y con el
+* ✅ **Positives:** el flujo destino de docs/BACKLOG.md §4 / D-005 queda con canal documentado y con el
   descarte previo de ADR-013 explícitamente invertido (trazabilidad cerrada); la one-version
   rule pasa a tener dueño de versión único (PyPI + `pyproject.toml` canónico); cero usuarios
   que migrar (§4.5).
@@ -187,7 +186,7 @@ ha corrido»). Migrar el canal hoy cuesta cero instalaciones huérfanas.
   declaración en ADR-013 §7 `:155`.
 * [ADR-011](adr-011-politica-dependencias-dos-librerias.md) — **INTACTO**: maturin/PyPI no son
   deps del ledger Python de runtime.
-* [spec-installer-wizard](../spec-installer-wizard.md) §Versionado y release (`:179-186`) —
+* [spec-installer-wizard](../../specs/spec-installer-wizard.md) §Versionado y release (`:179-186`) —
   exige enmienda al aprobarse (flags del one-liner, orden de release, refresco).
 
 ## 8. Compliance and Review
@@ -202,7 +201,7 @@ ha corrido»). Migrar el canal hoy cuesta cero instalaciones huérfanas.
 
 ## References
 
-* docs/UH.md:253-261 — «Wizard de instalación: flujo destino (2026-11-18)» (requisito del dueño; `:255`: «no se implementan ni se aprueban aquí»)
+* docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)» (requisito del dueño; «no se implementan ni se aprueban aquí»)
 * maturin — `bindings = "bin"` (mixed Rust-binary packaging): <https://www.maturin.rs/project_layout.html>
 * uv — `uv tool run` (`uvx`) y `--refresh`: <https://docs.astral.sh/uv/concepts/tools/>
 * [ADR-013](adr-013-distribucion-cargo-binstall.md) · [ADR-003](adr-003-distribucion-cargo-dist.md) · [ADR-004](adr-004-uv-venv-aislado.md) · [ADR-011](adr-011-politica-dependencias-dos-librerias.md)

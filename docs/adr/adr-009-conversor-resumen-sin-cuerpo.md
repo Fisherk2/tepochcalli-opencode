@@ -5,13 +5,13 @@
 * **Decision Makers:** Dueño del repo, Arquitecto
 * **Consulted:** `docs/diagnosis/fix01-conversor-satura-contexto-llm.md` (defecto reproducido), `markitdown==0.1.9` instalado y `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/convert.py` (API real: `MarkItDown().convert(source).markdown`), `tasks/plan.md` §2.1/§2.2 (D28-D67) y §5.5-§5.9
 * **Informed:** Autor de la skill `tepochcalli-mcp` (H4), mantenedores de `spec-markitdown.md` y `spec-mcp-server.md`, usuarios del vault
-* **Traceability:** `tasks/plan.md` D28 · D31 · D36 · D37 · D38 · D39 · D49 · D64 · D66 · D35; `docs/UH.md` H1-H2 (anexo 2026-10-30); diagnosis `fix01`; `specs/spec-markitdown.md` (contrato que este ADR amplía); `docs/SECURITY.md`
+* **Traceability:** `tasks/plan.md` D28 · D31 · D36 · D37 · D38 · D39 · D49 · D64 · D66 · D35; `docs/BACKLOG.md` H1-H2 (anexo 2026-10-30); diagnosis `fix01`; `specs/spec-markitdown.md` (contrato que este ADR amplía); `docs/SECURITY.md`
 
 ## 1. Context and Problem Statement
 
 La tool `convert_to_markdown` del MCP standalone `markitdown` devuelve el markdown **completo**
 como `content[0].text`: con un documento grande el artefacto entero entra en la ventana de
-contexto, la sesión degenera y se viola el criterio 4 de `docs/UH.md` (≤2000 tokens por consulta).
+contexto, la sesión degenera y se viola el criterio 4 de `docs/BACKLOG.md` (≤2000 tokens por consulta).
 El defecto es de presupuesto, no de excepción: no hay error, solo un agente que intenta
 re-escribir por partes un documento que ya viajó por el wire dos veces
 (`docs/diagnosis/fix01-conversor-satura-contexto-llm.md` §Root Cause).

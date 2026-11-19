@@ -5,7 +5,7 @@
 * **Decision Makers:** Product Owner (dueño del repo), Arquitecto
 * **Consulted:** Backend instalado (`cocoindex==1.0.25`, `markitdown==0.1.9`), tasks/plan.md §2.1-§2.2 y §5.6
 * **Informed:** Mantenedores del flow y del MCP `tepochcalli-rag`, autor del wizard (ADR-003/004)
-* **Traceability:** docs/UH.md (criterios 1-7), tasks/plan.md D52-D56/D58-D63, specs/spec-rag-engine.md, specs/spec-mcp-server.md, specs/spec-embeddings.md, docs/TECH_DEBT.md TD-16
+* **Traceability:** docs/BACKLOG.md (criterios 1-7), tasks/plan.md D52-D56/D58-D63, specs/spec-rag-engine.md, specs/spec-mcp-server.md, specs/spec-embeddings.md, docs/TECH_DEBT.md TD-16
 
 ## 1. Context and Problem Statement
 

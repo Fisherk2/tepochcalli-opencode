@@ -5,7 +5,7 @@
 * **Decision Makers:** Arquitecto (entrevista /spec), Product Owner (usuario)
 * **Consulted:** Referencia de arquitectura de instalación del proyecto hermano Fisherk2/codice-opencode
 * **Informed:** Usuarios finales (investigadores sin toolchain garantizada), CI
-* **Traceability:** docs/UH.md (sección "Wizard de instalación"), specs/spec-installer-wizard.md, ADR-004
+* **Traceability:** docs/BACKLOG.md (sección "Wizard de instalación"), specs/spec-installer-wizard.md, ADR-004
 
 ## 1. Context and Problem Statement
 
@@ -28,7 +28,7 @@ El instalador de Tepochcalli es un TUI nativo en Rust que debe ejecutarse en má
 
 ## 4. Decision Outcome
 
-**Chosen option: cargo-dist + GitHub Releases**, porque cumple el driver principal — instalación con `curl -L <install.sh> | sh` o `cargo binstall tepochcalli` **sin toolchain ni runtime previo** — usando únicamente el repositorio GitHub existente como registro. Publicar en crates.io queda como paso opcional posterior, no bloqueante. Se descarta bunx explícitamente: introducir Node/bun en hosts de investigadores contradice el objetivo de "el usuario no instala dependencias nativas" (UH.md, deuda cognitiva 3-4).
+**Chosen option: cargo-dist + GitHub Releases**, porque cumple el driver principal — instalación con `curl -L <install.sh> | sh` o `cargo binstall tepochcalli` **sin toolchain ni runtime previo** — usando únicamente el repositorio GitHub existente como registro. Publicar en crates.io queda como paso opcional posterior, no bloqueante. Se descarta bunx explícitamente: introducir Node/bun en hosts de investigadores contradice el objetivo de "el usuario no instala dependencias nativas" (BACKLOG.md, deuda cognitiva 3-4).
 
 ### 4.1 Confirmation
 

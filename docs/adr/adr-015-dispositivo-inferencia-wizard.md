@@ -2,10 +2,10 @@
 
 * **Status:** Proposed
 * **Date:** 2026-11-18
-* **Decision Makers:** Dueño del repo (requisito H9 del flujo destino, docs/UH.md:301-316, 2026-11-18); Arquitecto (redacción)
-* **Consulted:** [ADR-007](adr-007-seleccion-embedder-instalacion.md) (D7.1/D7.4), [ADR-008](adr-008-transparencia-hardware-cambio-modelo.md) (D8.1-D8.3), [spec-embeddings](../spec-embeddings.md):231 (autoselección rechazada); código vigente del wizard y del flow (`presets.rs`, `embedder_config.rs`, `swap.rs`, `config.py`)
+* **Decision Makers:** Dueño del repo (requisito H9 del flujo destino, docs/BACKLOG.md §2 / US-H9, 2026-11-18); Arquitecto (redacción)
+* **Consulted:** [ADR-007](adr-007-seleccion-embedder-instalacion.md) (D7.1/D7.4), [ADR-008](adr-008-transparencia-hardware-cambio-modelo.md) (D8.1-D8.3), [spec-embeddings](../../specs/spec-embeddings.md):231 (autoselección rechazada); código vigente del wizard y del flow (`presets.rs`, `embedder_config.rs`, `swap.rs`, `config.py`)
 * **Informed:** Autor del wizard (Rust), mantenedores de specs/spec-embeddings.md y specs/spec-installer-wizard.md, usuarios del vault
-* **Traceability:** docs/UH.md H9 (`:301-316`) — «Change Embedder»; docs/UH.md:255 («no se implementan ni se aprueban aquí»); [spec-embeddings](../spec-embeddings.md); [spec-installer-wizard](../spec-installer-wizard.md)
+* **Traceability:** docs/BACKLOG.md §2 / US-H9 — «Change Embedder»; docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)» («no se implementan ni se aprueban aquí»); [spec-embeddings](../../specs/spec-embeddings.md); [spec-installer-wizard](../../specs/spec-installer-wizard.md)
 
 > **Nota de alcance:** este ADR está **Proposed**: no entra en vigor hasta la aprobación
 > explícita del usuario (AGENTS.md:205 — «Decisiones D1-D6: NO se re-litigan en código —
@@ -17,13 +17,13 @@
 
 ## 1. Context and Problem Statement
 
-El requisito H9 del flujo destino (docs/UH.md:301-316) ordena que el wizard pregunte
+El requisito H9 del flujo destino (docs/BACKLOG.md §2 / US-H9) ordena que el wizard pregunte
 **explícitamente** el dispositivo de inferencia a los modelos locales — `cpu` preseleccionado;
-`cuda`/`cuda:N` solo cuando la sonda detecta GPU (docs/UH.md:311) —, ofrezca el catálogo local
+`cuda`/`cuda:N` solo cuando la sonda detecta GPU (docs/BACKLOG.md §2 / US-H9) —, ofrezca el catálogo local
 (MiniLM recomendado y preseleccionado, `BAAI/bge-m3` con GPU recomendada, más ID libre de
-HuggingFace con gate `test-embed` y `HF_TOKEN` opcional — docs/UH.md:305-306) y aclare la rama
+HuggingFace con gate `test-embed` y `HF_TOKEN` opcional — docs/BACKLOG.md §2 / US-H9) y aclare la rama
 de API externa (LiteLLM deriva el endpoint del prefijo de `model`; **no existe campo de
-endpoint** — docs/UH.md:307). El contrato actual del wizard no lo cubre: el catálogo `Preset`
+endpoint** — docs/BACKLOG.md §2 / US-H9). El contrato actual del wizard no lo cubre: el catálogo `Preset`
 no tiene campo `device` (`crates/tepochcalli/src/config/presets.rs:10-33`), la config generada
 hardcodea `device = "cpu"` (`crates/tepochcalli/src/application/embedder_config.rs:42`) y la
 re-entrada `config embedder` lo reescribe vía `picked_config_body()`
@@ -32,16 +32,16 @@ re-entrada `config embedder` lo reescribe vía `picked_config_body()`
 ## 2. Decision Drivers
 
 * **Determinismo del índice:** «un índice, un modelo» — la autoselección de dispositivo en
-  runtime está RECHAZADA en [spec-embeddings](../spec-embeddings.md):231 (un mismo vault
+  runtime está RECHAZADA en [spec-embeddings](../../specs/spec-embeddings.md):231 (un mismo vault
   cambiaría de espacio vectorial según hardware).
 * **NFR cero-sorpresas (D8.1-D8.3):** cada cifra con su procedencia y cada badge como
-  ADVERTENCIA, nunca bloqueo (ADR-008 §4.1-4.3, docs/UH.md:308-310 y `:314`).
+  ADVERTENCIA, nunca bloqueo (ADR-008 §4.1-4.3, docs/BACKLOG.md §2 / US-H9).
 * **No-destructividad de la re-entrada:** `tepochcalli config embedder` debe preservar la
-  elección existente como preselección (docs/UH.md:313), hoy la sobreescribe a `cpu`.
+  elección existente como preselección (docs/BACKLOG.md §2 / US-H9), hoy la sobreescribe a `cpu`.
 * **Catálogo como datos, no UI (D7.2, ADR-007 §4.2 `:52-57`):** lo que se añada al contrato
   viaja en `presets.toml`, no hardcodeado en la UI.
 * **Libertad con verdad:** el usuario puede forzar GPU sin detección, pero debe verlo apagado
-  con la razón antes de decidir (docs/UH.md:312).
+  con la razón antes de decidir (docs/BACKLOG.md §2 / US-H9).
 
 ## 3. Considered Options
 
@@ -63,23 +63,23 @@ y ADR-008 D8.x, sin sustituirlos en su conjunto):
   `gpu_recommended`, `recommended_flag`— y `embedder_config.rs:42` hardcodea
   `device = "cpu"`. El catálogo (`presets.toml`, D7.2) gana el campo como dato.
 * **(b) `device` se escribe en `[embedding].device` de `tepochcalli.toml`** y aplica **tanto a
-  la indexación como a las búsquedas**, que comparten el mismo embedder (docs/UH.md:311). El
+  la indexación como a las búsquedas**, que comparten el mismo embedder (docs/BACKLOG.md §2 / US-H9). El
   flow ya consume la clave: `config.py:121` (`device: str = DEFAULT_EMBEDDING_DEVICE`, E1/D11)
   — el hueco está solo en el lado del wizard.
 * **(c) La re-entrada `tepochcalli config embedder` PRESERVA el valor existente como
-  preselección** (docs/UH.md:313) para no sobrescribir una elección manual. Hoy
+  preselección** (docs/BACKLOG.md §2 / US-H9) para no sobrescribir una elección manual. Hoy
   `swap.rs:422` `picked_config_body()` reconstruye el cuerpo completo y pisa `device` a `cpu`;
   es **drift a corregir en implementación futura, NO en este ADR**.
 
 ### 4.1 Reafirmado (NO reabierto)
 
 * La **autoselección de dispositivo en runtime sigue RECHAZADA** por no-determinismo del
-  índice ([spec-embeddings](../spec-embeddings.md):231; ADR-008 §2-4, capas declarado→estimado→
+  índice ([spec-embeddings](../../specs/spec-embeddings.md):231; ADR-008 §2-4, capas declarado→estimado→
   medido). GPU **NO se autoelige**: sin detección por la sonda (`nvidia-smi`/`rocm-smi`,
   ADR-008 §4.2 `:58-60`), la opción GPU se muestra como **botón deshabilitado con la razón
-  `GPU no detectada`** (docs/UH.md:312).
+  `GPU no detectada`** (docs/BACKLOG.md §2 / US-H9).
 * Si el usuario **fuerza** el dispositivo y no está disponible, se **advierte con procedencia
-  `medido`, nunca se bloquea** (docs/UH.md:312 y `:314`; coherente con D8.3 «Advertir, nunca
+  `medido`, nunca se bloquea** (docs/BACKLOG.md §2 / US-H9; coherente con D8.3 «Advertir, nunca
   bloquear (locked)», ADR-008 §4.3 `:68-70`); el fallo efectivo se produciría al cargar el
   modelo, no al configurar.
 
@@ -87,18 +87,18 @@ y ADR-008 D8.x, sin sustituirlos en su conjunto):
 
 Cada número mostrado lleva su etiqueta: **`declarado`** (campos curados de `presets.toml`) ·
 **`estimado`** (API pública de HuggingFace para IDs libres: RAM residente = parámetros × 4
-bytes × 1,3, fp32 — docs/UH.md:309; si la API no responde, `sin dato` sin fallar) · **`medido`**
-(pico de RAM muestreado por el portero `test-embed` al ejercitar el modelo — docs/UH.md:308).
-Los badges `recomendado` / `viable` / `no recomendado` (docs/UH.md:310) son **ADVERTENCIA, no
+bytes × 1,3, fp32 — docs/BACKLOG.md §2 / US-H9; si la API no responde, `sin dato` sin fallar) · **`medido`**
+(pico de RAM muestreado por el portero `test-embed` al ejercitar el modelo — docs/BACKLOG.md §2 / US-H9).
+Los badges `recomendado` / `viable` / `no recomendado` (docs/BACKLOG.md §2 / US-H9) son **ADVERTENCIA, no
 bloqueo** (D8.1-D8.3). MiniLM `paraphrase-multilingual-MiniLM-L12-v2` (~470MB) se mantiene
 recomendado y preseleccionado; `BAAI/bge-m3` (~2300MB) figura con GPU recomendada
-(docs/UH.md:305); el ID libre de HuggingFace pasa por el gate `test-embed` con `HF_TOKEN`
-opcional para modelos gated (ADR-007 D7.1 salida 3, `:48`; docs/UH.md:306).
+(docs/BACKLOG.md §2 / US-H9); el ID libre de HuggingFace pasa por el gate `test-embed` con `HF_TOKEN`
+opcional para modelos gated (ADR-007 D7.1 salida 3, `:48`; docs/BACKLOG.md §2 / US-H9).
 
 ### 4.3 Endpoint de API externa — documentación de conducta VIGENTE (referencia, no nuevo diseño)
 
 **NO existe campo `endpoint` en `[embedding]`**: LiteLLM deriva proveedor y endpoint por defecto
-del **prefijo de `model`** (p. ej. `openai/` → `https://api.openai.com/v1`) (docs/UH.md:307 y
+del **prefijo de `model`** (p. ej. `openai/` → `https://api.openai.com/v1`) (docs/BACKLOG.md §2 / US-H9 y
 `:281`). `api_key_env` es el **NOMBRE** de la variable de entorno y gana sobre `api_key`
 literal. El loader del flow **BLOQUEA URLs dentro de `model`** (`://`, `http` o `@` con
 provider `litellm` → se cae al modelo default con warning), porque un `model` con componente de
@@ -107,7 +107,7 @@ config**. Este comportamiento **YA está implementado** y este ADR solo lo docum
 documentación, no diseño nuevo):
 `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/config.py:357-369` (guarda) con el
 comentario de rationale en `:360-362`. Un endpoint custom (Ollama/vLLM/proxy) se declara como
-variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (docs/UH.md:307).
+variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (docs/BACKLOG.md §2 / US-H9).
 
 ### 4.4 Confirmation
 
@@ -133,9 +133,9 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
 * ⚠️ **Cons:** amplía el contrato `Preset`/`presets.toml` y el cuerpo de config que escriben
   `local_config()` y `picked_config_body()` — deriva en tareas de implementación Rust + tests
   (fuera de este ADR); `device` incorrecto elegido a mano pospone el fallo a la carga del
-  modelo (mitigado: advertencia `medido`, docs/UH.md:312).
-* ⚖️ **Neutral:** exige enmienda de [spec-embeddings](../spec-embeddings.md) (el propio H9 lo
-  declara, docs/UH.md:313) — tarea documental hermana.
+  modelo (mitigado: advertencia `medido`, docs/BACKLOG.md §2 / US-H9).
+* ⚖️ **Neutral:** exige enmienda de [spec-embeddings](../../specs/spec-embeddings.md) (el propio H9 lo
+  declara, docs/BACKLOG.md §2 / US-H9) — tarea documental hermana.
 
 ### Option B — autoselección en runtime
 
@@ -162,10 +162,10 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
   cambia. Riesgo de lectura: confundir el flujo destino con el vigente; acotado por el Status
   *Proposed* y la nota de alcance.
 * ⚖️ **Paradigm shifts / Dependencias:** la UX de botones deshabilitados con razón exige la
-  **TUI full-screen** que reemplaza al `dialoguer` line-based actual (D23; docs/UH.md:259, «p.
+  **TUI full-screen** que reemplaza al `dialoguer` line-based actual (D23; docs/BACKLOG.md §4 / D-006, «p.
   ej. `ratatui`») — mencionada como herramienta de UI **PENDIENTE de visto bueno** (R1,
   [SPEC.md](../../SPEC.md):97); **su especificación de UX vive en
-  [spec-installer-wizard](../spec-installer-wizard.md)** (enmienda hermana) y no se fija aquí.
+  [spec-installer-wizard](../../specs/spec-installer-wizard.md)** (enmienda hermana) y no se fija aquí.
 
 ## 7. Related Decisions
 
@@ -174,8 +174,8 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
 * [ADR-008](adr-008-transparencia-hardware-cambio-modelo.md) — **refinado** (D8.1-D8.3 aplican
   a la fila `device`: badge por GPU detectada, advertencia nunca bloqueo). No sustituido; su
   precedente de redacción «refina (no reemplaza)» (`:8`) es el que copia este ADR.
-* [spec-embeddings](../spec-embeddings.md):231 — la autoselección rechazada queda reafirmada;
-  enmienda exigida por docs/UH.md:313 para formalizar `[embedding].device` electivo.
+* [spec-embeddings](../../specs/spec-embeddings.md):231 — la autoselección rechazada queda reafirmada;
+  enmienda exigida por docs/BACKLOG.md §2 / US-H9 para formalizar `[embedding].device` electivo.
 * [ADR-014](adr-014-distribucion-uvx-pypi.md) — hermano del mismo lote (flujo destino
   2026-11-18); independiente en su decisión (canal vs dispositivo).
 
@@ -192,9 +192,9 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
 
 ## References
 
-* docs/UH.md:301-316 — H9 «🟣 Change Embedder» (fuente del requisito; inmutable)
-* docs/UH.md:259 — dependencia TUI full-screen (`ratatui` p. ej.) sobre `dialoguer` (D23)
-* [spec-embeddings](../spec-embeddings.md):231 — «Detección automática de GPU y selección de modelo en runtime: rechazado»
+* docs/BACKLOG.md §2 / US-H9 — H9 «🟣 Change Embedder» (fuente del requisito)
+* docs/BACKLOG.md §4 / D-006 — dependencia TUI full-screen (`ratatui` p. ej.) sobre `dialoguer` (D23)
+* [spec-embeddings](../../specs/spec-embeddings.md):231 — «Detección automática de GPU y selección de modelo en runtime: rechazado»
 * [ADR-007](adr-007-seleccion-embedder-instalacion.md) D7.1/D7.2/D7.4 · [ADR-008](adr-008-transparencia-hardware-cambio-modelo.md) D8.1-D8.4
 * Código vigente citado: `crates/tepochcalli/src/config/presets.rs:10-33` · `crates/tepochcalli/src/application/embedder_config.rs:34-44` · `crates/tepochcalli/src/application/swap.rs:164,422` · `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/config.py:105-121,357-369`
 

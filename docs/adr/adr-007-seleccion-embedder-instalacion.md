@@ -3,15 +3,15 @@
 * **Status:** Accepted
 * **Date:** 2026-10-21
 * **Decision Makers:** Arquitecto (follow-up entrevista /spec), Product Owner (usuario — aprobó D7.1-D7.4)
-* **Consulted:** Catálogo de SentenceTransformers/HuggingFace; contratos de specs/spec-mcp-server.md; requisitos de hardware UH.md
+* **Consulted:** Catálogo de SentenceTransformers/HuggingFace; contratos de specs/spec-mcp-server.md; requisitos de hardware BACKLOG.md
 * **Informed:** Autor del wizard (Rust), mantenedores de specs/spec-embeddings.md y specs/spec-installer-wizard.md, usuarios del vault
-* **Traceability:** docs/UH.md (deuda cognitiva Q6 — "¿dónde configure sus modelos locales… API key de embebidos externos?") + follow-up de entrevista /spec aprobado por el usuario el 2026-10-21; **reemplaza parcialmente ADR-006 §4.1** (la descarga obligatoria del modelo en el wizard); relacionado con ADR-004 (venv donde corre el embedder y viven los artefactos) y ADR-005 (la frontera MCP donde vive `rag_status`)
+* **Traceability:** docs/BACKLOG.md (deuda cognitiva Q6 — "¿dónde configure sus modelos locales… API key de embebidos externos?") + follow-up de entrevista /spec aprobado por el usuario el 2026-10-21; **reemplaza parcialmente ADR-006 §4.1** (la descarga obligatoria del modelo en el wizard); relacionado con ADR-004 (venv donde corre el embedder y viven los artefactos) y ADR-005 (la frontera MCP donde vive `rag_status`)
 
 ## 1. Context and Problem Statement
 
 ADR-006 eligió el modelo default y, en su §4.1, convirtió esa elección en un comportamiento del
 wizard: descarga obligatoria e incondicional de `paraphrase-multilingual-MiniLM-L12-v2` en la
-fase de modelos. La deuda cognitiva Q6 de UH.md pregunta además dónde configura el usuario *sus*
+fase de modelos. La deuda cognitiva Q6 de BACKLOG.md pregunta además dónde configura el usuario *sus*
 modelos locales y cómo añadir una API key externa. El wizard actual no tiene respuesta para
 ninguna de las dos; y un modelo HF mal elegido (no-embedding) puede cargarse en silencio por
 `sentence-transformers`, degradando la búsqueda sin ningún síntoma. Hace falta libertad de elección
@@ -85,7 +85,7 @@ alineado con specs/spec-embeddings.md §Procedimiento de swap de modelo).
 ### Option B — Elección obligatoria
 
 * ✅ **Pros:** obliga a decisión consciente; cero riesgo de default inapropiado.
-* ⚠️ **Cons:** rompe ready-to-use; re-crea exactamente la deuda cognitiva que UH.md pide eliminar; fricción inaceptable para el perfil "investigador sin DevOps".
+* ⚠️ **Cons:** rompe ready-to-use; re-crea exactamente la deuda cognitiva que BACKLOG.md pide eliminar; fricción inaceptable para el perfil "investigador sin DevOps".
 * ⚖️ **Neutral:** —
 
 ### Option C — Estatus quo (descarga incondicional)

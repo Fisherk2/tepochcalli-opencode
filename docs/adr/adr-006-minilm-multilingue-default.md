@@ -3,13 +3,13 @@
 * **Status:** Accepted
 * **Date:** 2026-10-21
 * **Decision Makers:** Arquitecto (entrevista /spec), Product Owner (usuario)
-* **Consulted:** Catálogo de SentenceTransformers (org HuggingFace `sentence-transformers`); requisitos de hardware UH.md
+* **Consulted:** Catálogo de SentenceTransformers (org HuggingFace `sentence-transformers`); requisitos de hardware BACKLOG.md
 * **Informed:** Usuario final, autor del wizard (descarga del modelo), mantenedores de spec-embeddings
-* **Traceability:** docs/UH.md (deuda cognitiva 6), specs/spec-embeddings.md, specs/spec-installer-wizard.md, ADR-001/004
+* **Traceability:** docs/BACKLOG.md (deuda cognitiva 6), specs/spec-embeddings.md, specs/spec-installer-wizard.md, ADR-001/004
 
 ## 1. Context and Problem Statement
 
-El pipeline de indexación necesita un modelo de embeddings que corra **localmente, en CPU, con 8GB de RAM**, sobre contenido mayormente bilingüe español-inglés (notas de investigación hispanohablantes + literatura académica en inglés), con descarga única en el wizard y coste $0 por consulta. La pregunta abierta de UH.md: ¿dónde configuran los usuarios sus modelos locales y cuáles son los requisitos mínimos?
+El pipeline de indexación necesita un modelo de embeddings que corra **localmente, en CPU, con 8GB de RAM**, sobre contenido mayormente bilingüe español-inglés (notas de investigación hispanohablantes + literatura académica en inglés), con descarga única en el wizard y coste $0 por consulta. La pregunta abierta de BACKLOG.md: ¿dónde configuran los usuarios sus modelos locales y cuáles son los requisitos mínimos?
 
 ## 2. Decision Drivers
 
@@ -60,7 +60,7 @@ El pipeline de indexación necesita un modelo de embeddings que corra **localmen
 
 * ✅ **Pros:** Mejor calidad con modelos de frontier; cero hardware.
 * ⚠️ **Cons:** Coste por token continuo, gestión de claves, privacidad (material de investigación sale del host), dependencia de red en la indexación.
-* ⚖️ **Neutral:** Soportado como opción de configuración, no default (UH.md: minimizar consumo de tokens).
+* ⚖️ **Neutral:** Soportado como opción de configuración, no default (BACKLOG.md: minimizar consumo de tokens).
 
 ### multilingual-e5-*
 
