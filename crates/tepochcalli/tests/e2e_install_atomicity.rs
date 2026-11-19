@@ -261,7 +261,7 @@ fn f6_failure_compensates_to_degraded_path5() {
     venv_python(vault.path());
     // Path 1 gate crashes ⇒ run_phase6 fails ⇒ compensation writes path-5 config.
     let ui = ScriptedUi::new(FakeUiScript {
-        selects: [0_usize].into_iter().collect(),
+        selects: [0_usize, 0].into_iter().collect(),
         ..FakeUiScript::default()
     });
     let proc = FakeProc::scripted([Err(WizardError::PhaseFailed)]);
@@ -304,6 +304,7 @@ fn f7_failure_leaves_no_index_and_keeps_placeholders() {
         provider: "local".to_string(),
         model: Some("paraphrase-multilingual-MiniLM-L12-v2".to_string()),
         revision: Some("e8f8c211226b894fcb81acc59f3b34ba3efd5f42".to_string()),
+        device: Some("cpu".to_string()),
         dims: Some(384),
         rss_peak_bytes: Some(1),
     };

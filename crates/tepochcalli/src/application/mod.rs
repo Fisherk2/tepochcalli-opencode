@@ -6,11 +6,13 @@
 mod embedder_config;
 mod embedder_estimate;
 mod embedder_gate;
+mod embedder_gc;
 pub mod embedder_menu;
 mod embedder_options;
 pub mod failure;
 pub(crate) mod flow_cli;
 mod flow_contract;
+mod installed;
 pub mod installer;
 pub mod maintenance;
 pub mod phase7;
@@ -19,10 +21,12 @@ mod prereqs;
 mod resume;
 pub mod swap;
 pub mod text;
+pub mod update;
 pub use embedder_menu::{
     compensate_phase6, config_path, litellm_config_present, read_completed_report, run_phase6,
     Phase6Deps, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
+pub use installed::{embedder_presence, installed_version, wizard_version, EmbedderPresence};
 pub use installer::{
     check_prereqs_on, compensate_phase1, compensate_phase2, compensate_phase3, compensate_phase4,
     compensate_phase5, completed_phases, ensure_vault_dir, guard_offline_before_touch,
@@ -33,10 +37,14 @@ pub use installer::{
     PLACEHOLDER_PDF_NAME, RESOURCES_DIR, RUNTIME_DIR, SUPPORTED_OS, UV_BIN_DIR, UV_MANAGED_PYTHON,
     UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR, VENV_DIR_NAME,
 };
-pub use maintenance::{run_reindex, run_uninstall, ReindexReport, UninstallReport};
+pub use maintenance::{
+    run_reindex, run_uninstall, ReindexReport, UninstallReport, UNINSTALL_BACKUP_SCOPES,
+    UNINSTALL_SCOPES,
+};
 pub use phase7::{compensate_phase7, index_meta_path, run_phase7, Phase7Report};
 pub use phase8::{
     compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
     RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
 };
 pub use swap::{run_swap, SwapDeps, SwapOptions, SwapReport};
+pub use update::{run_update, UpdateReport, UPDATE_SCOPES};

@@ -30,6 +30,9 @@ pub struct Preset {
     pub gpu_recommended: bool,
     /// Exactly one preset carries the RECOMENDADO pre-select (D7.2).
     pub recommended_flag: bool,
+    /// Dispositivo sugerido por el catálogo (H9, ADR-015 (a)): **dato**, no
+    /// decisión — la elección es del usuario y la re-entrada la preserva.
+    pub device: String,
 }
 
 /// Typed parse failures — a malformed preset never degrades silently.
@@ -154,6 +157,7 @@ fn finish_block(fields: &[(&str, &str)]) -> Result<Preset, PresetError> {
         rec_ram_gb: parse_num("rec_ram_gb", get("rec_ram_gb")?)?,
         gpu_recommended: parse_bool("gpu_recommended", get("gpu_recommended")?)?,
         recommended_flag: parse_bool("recommended_flag", get("recommended_flag")?)?,
+        device: unquote_value("device", get("device")?)?.to_string(),
     })
 }
 

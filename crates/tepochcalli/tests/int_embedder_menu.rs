@@ -13,10 +13,10 @@ mod common;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use common::{gate_ok, host_16gb, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi};
+use common::{gate_ok, host_16gb, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::embedder_menu::{Phase6Deps, EMBEDDER_PATHS};
 use tepochcalli::domain::{EmbedderChoice, WizardError};
-use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
+use tepochcalli::ports::{CommandOutput, CommandRunner, GpuInfo, Ui};
 
 /// Los dos presets embebidos y su SHA pineada (espejo de `presets.toml`).
 const MINILM: &str = "paraphrase-multilingual-MiniLM-L12-v2";
@@ -104,6 +104,28 @@ fn empty_http() -> FakeHttp {
     FakeHttp::new(HashMap::new())
 }
 
+/// El host de los tests de swap/menú: 16 GB y **sin** GPU (`cuda` no se
+/// ofrece) — el caso del dueño sin acelerador.
+fn host_without_gpu() -> FakeHost {
+    FakeHost::new(Some(16.0), Some(16.0), Some(100.0), None)
+}
+
+/// El evento del menú de dispositivo (H9) y sus filas, para asertar el
+/// contrato de opciones/preselección sin mirar el string de captura.
+fn device_select(ui: &TapUi) -> (Vec<String>, usize) {
+    ui.events()
+        .into_iter()
+        .find_map(|event| match event {
+            UiEvent::Select {
+                prompt,
+                options,
+                default,
+            } if prompt.contains("Dispositivo") => Some((options, default)),
+            _ => None,
+        })
+        .expect("el menú de dispositivo debe preguntarse")
+}
+
 #[test]
 fn menu_offers_five_paths_with_minilm_default_first() {
     // Index contract: 0 = MiniLM preselect, 4 = "configure later" (mirrors
@@ -147,7 +169,7 @@ fn menu_offers_five_paths_with_minilm_default_first() {
 
 #[test]
 fn path1_ok_writes_local_config_after_gate() {
-    let ui = TapUi::new(vec![0], vec![]);
+    let ui = TapUi::new(vec![0, 0], vec![]);
     let host = host_16gb();
     let proc = RecordingProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
     let http = empty_http();
@@ -205,6 +227,9 @@ fn path1_ok_writes_local_config_after_gate() {
         body.contains(&format!("revision = \"{MINILM_SHA}\"")),
         "la config debe pinear la misma revisión que el snapshot, got:\n{body}"
     );
+    // H9: sin GPU la preselección es `cpu` y el artefacto la registra.
+    assert_eq!(report.device.as_deref(), Some("cpu"));
+    assert!(body.contains("device = \"cpu\""), "got:\n{body}");
     assert!(
         !vault
             .path()
@@ -226,7 +251,7 @@ fn path1_ok_writes_local_config_after_gate() {
 /// no queda config escrita (ni siquiera la degradada: esa la escribe `main`).
 #[test]
 fn gate_ok_without_materialized_snapshot_fails_without_config() {
-    let ui = TapUi::new(vec![0], vec![]);
+    let ui = TapUi::new(vec![0, 0], vec![]);
     let host = host_16gb();
     let proc = RecordingProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
     let http = empty_http();
@@ -254,7 +279,7 @@ fn gate_ok_without_materialized_snapshot_fails_without_config() {
 
 #[test]
 fn path2_ok_writes_large_preset() {
-    let ui = TapUi::new(vec![1], vec![]);
+    let ui = TapUi::new(vec![1, 0], vec![]);
     let host = host_16gb();
     let proc = FakeProc::scripted([gate_ok(BGE, 1024, 3_000_000_000)]);
     let http = empty_http();
@@ -290,7 +315,7 @@ fn path3_free_id_estimates_then_gates_ok() {
             117_600_000,
         ),
     );
-    let ui = TapUi::new(vec![2], vec![id.to_string()]);
+    let ui = TapUi::new(vec![2, 0], vec![id.to_string()]);
     let host = host_16gb();
     let proc = RecordingProc::scripted([gate_ok(id, 384, 650_000_000)]);
     let http = FakeHttp::new(files);
@@ -374,7 +399,7 @@ fn path3_gate_invalid_returns_to_menu_without_config() {
     // HF metadata unreachable (offline) so the gate decides: ok:false with
     // E_MODEL_INVALID sends the user back to the menu, writing nothing until
     // the second choice (path 5) lands.
-    let ui = TapUi::new(vec![2, 4], vec!["org/mystery-model".to_string()]);
+    let ui = TapUi::new(vec![2, 0, 4], vec!["org/mystery-model".to_string()]);
     let host = host_16gb();
     let proc = FakeProc::scripted([gate_invalid()]);
     let http = empty_http();
@@ -404,7 +429,7 @@ fn path3_gated_repo_asks_token_and_passes_it_to_gate_env() {
         ),
     );
     let token = "hf-test-token-never-logged";
-    let ui = TapUi::new(vec![2], vec![id.to_string(), token.to_string()]);
+    let ui = TapUi::new(vec![2, 0], vec![id.to_string(), token.to_string()]);
     let host = host_16gb();
     let proc = RecordingProc::scripted([gate_ok(id, 384, 300_000_000)]);
     let http = FakeHttp::new(files);
@@ -504,7 +529,7 @@ fn failed_gate_leaves_preexisting_config_byte_identical() {
     std::fs::create_dir_all(&dir).expect("config dir fixture");
     std::fs::write(dir.join("tepochcalli.toml"), before).expect("preexisting config");
     create_venv_python(vault.path());
-    let ui = TapUi::new(vec![0], vec![]);
+    let ui = TapUi::new(vec![0, 0], vec![]);
     let host = host_16gb();
     let proc = FakeProc::scripted([Err(WizardError::PhaseFailed)]);
     let http = empty_http();
@@ -523,4 +548,79 @@ fn failed_gate_leaves_preexisting_config_byte_identical() {
         !dir.join("tepochcalli.toml.tmp").exists(),
         "no temp file may leak after a failed write"
     );
+}
+
+/// H9 / ADR-015 §4.1: sin GPU el menú de dispositivo no ofrece `cuda`, dice
+/// por qué (razón visible, nunca oculta) y la preselección es `cpu`.
+#[test]
+fn device_without_gpu_offers_only_cpu_and_shows_the_reason() {
+    let ui = TapUi::new(vec![0, 0], vec![]);
+    let host = host_without_gpu();
+    let proc = FakeProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
+    let http = empty_http();
+    let vault = tmp();
+    create_venv_python(vault.path());
+    materialize(vault.path(), MINILM, MINILM_SHA);
+    let report = tepochcalli::application::embedder_menu::run_phase6(
+        &deps(&ui, &host, &proc, &http),
+        vault.path(),
+    )
+    .expect("sin GPU el camino 1 sigue siendo válido con cpu");
+
+    assert_eq!(report.device.as_deref(), Some("cpu"));
+    let (options, default) = device_select(&ui);
+    assert_eq!(options, vec!["cpu".to_string()], "sin GPU: solo cpu");
+    assert_eq!(default, 0, "cpu va preseleccionado");
+    assert!(
+        ui.captured().iter().any(|line| line
+            == "PANEL Dispositivo de inferencia :: \
+                GPU no detectada: la opción cuda está deshabilitada para este equipo."),
+        "la razón debe ser visible antes de elegir: {:?}",
+        ui.captured()
+    );
+    let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
+    assert!(body.contains("device = \"cpu\""), "got:\n{body}");
+}
+
+/// H9 / ADR-015 §4.1: con GPU la fila `cuda` existe y la elección llega al
+/// TOML. La sonda NO autoselecciona: MiniLM sugiere `cpu` y esa es la fila
+/// preseleccionada.
+#[test]
+fn device_with_gpu_offers_cuda_and_writes_the_choice() {
+    let ui = TapUi::new(vec![0, 1], vec![]);
+    let host = FakeHost::new(
+        Some(16.0),
+        Some(16.0),
+        Some(100.0),
+        Some(GpuInfo {
+            name: "nvidia".to_string(),
+        }),
+    );
+    let proc = FakeProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
+    let http = empty_http();
+    let vault = tmp();
+    create_venv_python(vault.path());
+    materialize(vault.path(), MINILM, MINILM_SHA);
+    let report = tepochcalli::application::embedder_menu::run_phase6(
+        &deps(&ui, &host, &proc, &http),
+        vault.path(),
+    )
+    .expect("con GPU el camino 1 acepta cuda");
+
+    assert_eq!(report.device.as_deref(), Some("cuda"));
+    let (options, default) = device_select(&ui);
+    assert_eq!(options, vec!["cpu".to_string(), "cuda".to_string()]);
+    assert_eq!(
+        default, 0,
+        "el catálogo sugiere cpu para MiniLM: sin autoselección de GPU"
+    );
+    assert!(
+        !ui.captured()
+            .iter()
+            .any(|line| line.contains("GPU no detectada")),
+        "con GPU no hay razón que mostrar: {:?}",
+        ui.captured()
+    );
+    let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
+    assert!(body.contains("device = \"cuda\""), "got:\n{body}");
 }

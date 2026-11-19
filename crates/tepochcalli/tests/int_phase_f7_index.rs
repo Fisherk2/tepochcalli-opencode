@@ -51,6 +51,7 @@ fn path1_report() -> Phase6Report {
         provider: "local".to_string(),
         model: Some("paraphrase-multilingual-MiniLM-L12-v2".to_string()),
         revision: Some("e8f8c211226b894fcb81acc59f3b34ba3efd5f42".to_string()),
+        device: Some("cpu".to_string()),
         dims: Some(384),
         rss_peak_bytes: Some(650_000_000),
     }
@@ -61,6 +62,7 @@ fn path5_report() -> Phase6Report {
         provider: "none".to_string(),
         model: None,
         revision: None,
+        device: None,
         dims: None,
         rss_peak_bytes: None,
     }
@@ -275,6 +277,7 @@ fn f7_external_provider_persists_model_with_null_dims() {
         provider: "litellm".to_string(),
         model: Some("openai/text-embedding-3-small".to_string()),
         revision: None,
+        device: None,
         dims: None,
         rss_peak_bytes: None,
     };

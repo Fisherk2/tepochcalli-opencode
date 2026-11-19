@@ -170,6 +170,17 @@ impl PayloadSource for FakePayload {
             skipped: Vec::new(),
         })
     }
+
+    // El fake no reimplementa la semántica de sobrescritura: delega en el
+    // adaptador real (los tests de H7 ejercitan el camino de producción).
+    fn materialize_overwrite(
+        &self,
+        dest: &Path,
+        scopes: &[&str],
+        journal: &mut tepochcalli::ports::OverwriteJournal,
+    ) -> Result<(), WizardError> {
+        tepochcalli::adapters::payload::overwrite_tree(&self.src, dest, scopes, journal)
+    }
 }
 
 /// Canned answers for `ScriptedUi`, consumed in call order.

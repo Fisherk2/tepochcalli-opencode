@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::adapters::archive::extract_tar_gz;
 use crate::domain::WizardError;
-use crate::ports::{HttpClient, MergeReport, PayloadSource};
+use crate::ports::{HttpClient, MergeReport, OverwriteJournal, PayloadSource};
 
 use super::http::UreqHttpClient;
 
@@ -163,6 +163,15 @@ impl PayloadSource for LocalPayload {
     fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError> {
         merge_tree(&self.src, dest)
     }
+
+    fn materialize_overwrite(
+        &self,
+        dest: &Path,
+        scopes: &[&str],
+        journal: &mut OverwriteJournal,
+    ) -> Result<(), WizardError> {
+        overwrite_tree(&self.src, dest, scopes, journal)
+    }
 }
 
 /// Fetches `tepochcalli-workspace-<ver>.tar.gz` with SHA-256 verification
@@ -217,6 +226,25 @@ impl ReleasePayload {
         let _ = fs::remove_dir_all(stage);
         Ok(report)
     }
+
+    fn stage_and_overwrite(
+        &self,
+        stage: &Path,
+        dest: &Path,
+        scopes: &[&str],
+        journal: &mut OverwriteJournal,
+    ) -> Result<(), WizardError> {
+        let asset = stage.join("asset.tar.gz");
+        UreqHttpClient::new().download(&self.url, &asset, &self.expected_sha256)?;
+        let file = fs::File::open(&asset).map_err(|_| WizardError::PayloadCorrupt)?;
+        let extract_outcome = extract_tar_gz(file, stage).map_err(|_| WizardError::PayloadCorrupt);
+        let _ = fs::remove_file(&asset);
+        extract_outcome?;
+        overwrite_tree(stage, dest, scopes, journal)?;
+        // Best-effort: residue is harmless (T14 resume clears it).
+        let _ = fs::remove_dir_all(stage);
+        Ok(())
+    }
 }
 
 impl PayloadSource for ReleasePayload {
@@ -232,6 +260,24 @@ impl PayloadSource for ReleasePayload {
             let _ = fs::remove_dir_all(&stage);
             // Drop the runtime dir too if nothing else claimed it
             // (`remove_dir` only succeeds when empty — user files are safe).
+            if let Some(parent) = stage.parent() {
+                let _ = fs::remove_dir(parent);
+            }
+        }
+        outcome
+    }
+
+    fn materialize_overwrite(
+        &self,
+        dest: &Path,
+        scopes: &[&str],
+        journal: &mut OverwriteJournal,
+    ) -> Result<(), WizardError> {
+        let stage = dest.join(STAGE_DIR);
+        reset_dir(&stage)?;
+        let outcome = self.stage_and_overwrite(&stage, dest, scopes, journal);
+        if outcome.is_err() {
+            let _ = fs::remove_dir_all(&stage);
             if let Some(parent) = stage.parent() {
                 let _ = fs::remove_dir(parent);
             }
@@ -387,6 +433,125 @@ pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
     Ok(report)
 }
 
+/// `<ruta>.bak`: the byte backup taken before an overwrite (H7).
+fn backup_path(target: &Path) -> PathBuf {
+    let mut name = target.as_os_str().to_os_string();
+    name.push(".bak");
+    PathBuf::from(name)
+}
+
+/// `true` when both files hold the same bytes (idempotent update: an
+/// unchanged file is neither rewritten nor backed up).
+fn same_bytes(left: &Path, right: &Path) -> bool {
+    match (fs::read(left), fs::read(right)) {
+        (Ok(left), Ok(right)) => left == right,
+        _ => false,
+    }
+}
+
+/// Copy `src` over `root/rel`, saving the previous bytes as `<ruta>.bak`
+/// and journaling both halves. Identical content is a no-op.
+fn overwrite_file(
+    src: &Path,
+    root: &Path,
+    rel: &Path,
+    journal: &mut OverwriteJournal,
+) -> Result<(), WizardError> {
+    let target = join_checked(root, rel)?;
+    if let Some(parent) = target.parent() {
+        fs::create_dir_all(parent).map_err(map_io)?;
+    }
+    if target.exists() {
+        if same_bytes(src, &target) {
+            return Ok(());
+        }
+        let backup = backup_path(&target);
+        fs::copy(&target, &backup).map_err(map_io)?;
+        journal.backed_up.push(target.clone());
+    }
+    fs::copy(src, &target).map_err(map_io)?;
+    journal.written.push(target);
+    Ok(())
+}
+
+/// Overwrite ONLY the entries under `scopes` (H7 `update`): every replaced
+/// file is backed up as `<ruta>.bak` first, identical content is a no-op,
+/// and nothing outside the scopes is even visited. Same defenses as
+/// [`merge_tree`] (join-checked against the canonical `dest`, symlinks never
+/// followed, `.obsidian/` never crossed). An error leaves `journal` with
+/// what was already done, for [`rollback_overwrite`].
+pub fn overwrite_tree(
+    src: &Path,
+    dest: &Path,
+    scopes: &[&str],
+    journal: &mut OverwriteJournal,
+) -> Result<(), WizardError> {
+    fs::create_dir_all(dest).map_err(map_io)?;
+    let root = dest
+        .canonicalize()
+        .map_err(|_| WizardError::PermissionDenied)?;
+    let mut stack = vec![src.to_path_buf()];
+    while let Some(dir) = stack.pop() {
+        let entries = fs::read_dir(&dir).map_err(|_| WizardError::PayloadCorrupt)?;
+        for entry in entries {
+            let entry = entry.map_err(|_| WizardError::PayloadCorrupt)?;
+            let rel = entry
+                .path()
+                .strip_prefix(src)
+                .map_err(|_| WizardError::PayloadCorrupt)?
+                .to_path_buf();
+            // Scope is the FIRST component, compared whole: `.opencode-evil/`
+            // is not `.opencode/`, and everything else is ignored silently.
+            let Some(Component::Normal(first)) = rel.components().next() else {
+                continue;
+            };
+            if first == std::ffi::OsStr::new(OBSIDIAN_DIR)
+                || !scopes
+                    .iter()
+                    .any(|scope| first == std::ffi::OsStr::new(scope))
+            {
+                continue;
+            }
+            let kind = fs::symlink_metadata(entry.path())
+                .map_err(|_| WizardError::PayloadCorrupt)?
+                .file_type();
+            if kind.is_symlink() {
+                continue; // never followed, never materialized
+            }
+            if kind.is_dir() {
+                let target = join_checked(&root, &rel)?;
+                fs::create_dir_all(&target).map_err(map_io)?;
+                stack.push(entry.path());
+                continue;
+            }
+            if kind.is_file() {
+                overwrite_file(&entry.path(), &root, &rel, journal)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Undo [`overwrite_tree`]: restore every `<ruta>.bak` over its original and
+/// delete every written file that had no backup. Best-effort — a rollback
+/// never panics on a vanished temp file.
+// shortcut: directories created for new files stay (possibly empty) — the
+// journal is file-scoped; upgrade only if an empty-dir residue ever matters.
+pub fn rollback_overwrite(_dest: &Path, journal: &OverwriteJournal) {
+    for original in &journal.backed_up {
+        let backup = backup_path(original);
+        // Keep the .bak when the restore failed: it is the last good copy.
+        if fs::copy(&backup, original).is_ok() {
+            let _ = fs::remove_file(&backup);
+        }
+    }
+    for written in &journal.written {
+        if !journal.backed_up.contains(written) {
+            let _ = fs::remove_file(written);
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     //! Tier 1: the asset names are the wire contract with `release.yml`, and
@@ -394,8 +559,9 @@ mod tests {
     //! vault — both are unreachable or redundant from `tests/`.
 
     use super::{
-        join_checked, parse_sha256_sidecar, payload_asset_name, payload_asset_url_from,
-        payload_checksum_name, payload_release_tag, release_base_url_from, PAYLOAD_RELEASE_REPO,
+        join_checked, overwrite_file, parse_sha256_sidecar, payload_asset_name,
+        payload_asset_url_from, payload_checksum_name, payload_release_tag, release_base_url_from,
+        PAYLOAD_RELEASE_REPO,
     };
     use crate::domain::WizardError;
     use std::path::{Path, PathBuf};
@@ -521,5 +687,28 @@ mod tests {
                 "{escape} escapes the root"
             );
         }
+    }
+
+    #[test]
+    fn overwrite_file_rejects_escape_entries() {
+        // Escritura: un `rel` con `..` (inalcanzable desde un walk real, pero
+        // defensa en profundidad) jamás escribe fuera del vault.
+        let src = std::env::temp_dir().join("tepochcalli-overwrite-escape");
+        let _ = std::fs::remove_dir_all(&src);
+        std::fs::create_dir_all(&src).expect("src fixture");
+        std::fs::write(src.join("evil.md"), b"x").expect("fixture write");
+        let root = std::env::temp_dir().join("tepochcalli-overwrite-root");
+        std::fs::create_dir_all(&root).expect("root fixture");
+        let mut journal = crate::ports::OverwriteJournal::default();
+        for rel in ["../evil.md", "/etc/passwd"] {
+            assert_eq!(
+                overwrite_file(&src.join("evil.md"), &root, Path::new(rel), &mut journal),
+                Err(WizardError::PayloadCorrupt),
+                "{rel} escapes the vault"
+            );
+        }
+        assert!(journal.written.is_empty() && journal.backed_up.is_empty());
+        let _ = std::fs::remove_dir_all(&src);
+        let _ = std::fs::remove_dir_all(&root);
     }
 }

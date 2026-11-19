@@ -21,7 +21,7 @@ fn top_level_help_mentions_all_subcommands() {
     let out = bin().arg("--help").output().expect("spawn binary");
     assert_eq!(out.status.code(), Some(0));
     let text = stdout_text(&out);
-    for sub in ["install", "config", "reindex", "uninstall"] {
+    for sub in ["install", "update", "config", "reindex", "uninstall"] {
         assert!(text.contains(sub), "help must mention `{sub}`:\n{text}");
     }
 }
@@ -41,10 +41,12 @@ fn top_level_version_reports_crate_version() {
 fn each_subcommand_supports_help_and_version() {
     for args in [
         vec!["install", "--help"],
+        vec!["update", "--help"],
         vec!["config", "--help"],
         vec!["reindex", "--help"],
         vec!["uninstall", "--help"],
         vec!["install", "--version"],
+        vec!["update", "--version"],
         vec!["config", "--version"],
         vec!["reindex", "--version"],
         vec!["uninstall", "--version"],

@@ -58,6 +58,33 @@ fn installed_vault_with(config_model: &str, meta_model: &str) -> tempfile::TempD
         "{\"mcp\": {\"servers\": {\"tepochcalli-rag\": {}}}}\n",
     )
     .expect("opencode.json fixture");
+    // Payload del harness (H8: `.opencode/` + `AGENTS.md`) y una plantilla:
+    // el uninstall borra el primero, jamás los segundos.
+    std::fs::create_dir_all(vault.path().join(".opencode").join("agents"))
+        .expect("opencode payload fixture");
+    std::fs::write(
+        vault
+            .path()
+            .join(".opencode")
+            .join("agents")
+            .join("itzamna.md"),
+        "# agente\n",
+    )
+    .expect("agent fixture");
+    std::fs::write(vault.path().join("AGENTS.md"), "# AGENTS del usuario\n")
+        .expect("AGENTS fixture");
+    // Manifest del runtime: también es irreemplazable (versión canónica, D-007).
+    std::fs::write(
+        vault.path().join(".tepochcalli").join("pyproject.toml"),
+        "version = \"0.1.0\"\n",
+    )
+    .expect("pyproject fixture");
+    std::fs::create_dir_all(vault.path().join("10-templates")).expect("templates fixture");
+    std::fs::write(
+        vault.path().join("10-templates").join("mia.md"),
+        "# plantilla\n",
+    )
+    .expect("template fixture");
     std::fs::create_dir_all(vault.path().join(".obsidian")).expect("obsidian fixture");
     std::fs::write(vault.path().join(".obsidian").join("app.json"), "{}\n")
         .expect("obsidian fixture");
@@ -461,50 +488,150 @@ fn reindex_external_provider_writes_null_dims_without_gate() {
 }
 
 #[test]
-fn uninstall_removes_only_the_runtime() {
+fn uninstall_removes_the_three_scopes_and_keeps_the_notes() {
     let vault = installed_vault();
-    let before: Vec<(String, Vec<u8>)> = tree_snapshot(vault.path())
-        .into_iter()
-        .filter(|(rel, _)| !rel.starts_with(".tepochcalli/"))
-        .collect();
+    let user_files = |root: &Path| -> Vec<(String, Vec<u8>)> {
+        tree_snapshot(root)
+            .into_iter()
+            .filter(|(rel, _)| {
+                !rel.starts_with(".tepochcalli/")
+                    && !rel.starts_with(".opencode/")
+                    && !rel.starts_with(".tepochcalli-backup-")
+                    && rel != "opencode.json"
+            })
+            .collect()
+    };
+    let before = user_files(vault.path());
     assert!(!before.is_empty(), "el fixture trae ficheros de usuario");
 
-    let report = run_uninstall(vault.path()).expect("uninstall debe triunfar");
-    assert!(report.removed, "había runtime que quitar");
+    let ui = TapUi::new(vec![], vec![]);
+    let report = run_uninstall(&ui, vault.path()).expect("uninstall debe triunfar");
+    assert!(report.removed, "había scopes que quitar");
 
-    assert!(
-        !vault.path().join(".tepochcalli").exists(),
-        "el runtime desaparece entero"
-    );
-    let after = tree_snapshot(vault.path());
-    assert_eq!(
-        after, before,
-        "notas, payload, opencode.json y 00-resources intactos"
-    );
-    // Cinturón y tirantes: los testigos individuales.
-    for witness in [
-        "00-resources/ejemplo.md",
-        "notes/diaria.md",
-        "opencode.json",
-        ".obsidian/app.json",
-    ] {
+    // Las 3 rutas del alcance desaparecen.
+    for removed in [".tepochcalli", ".opencode", "opencode.json"] {
         assert!(
-            vault.path().join(witness).is_file(),
-            "{witness} debe sobrevivir al uninstall"
+            !vault.path().join(removed).exists(),
+            "{removed} es parte del alcance del uninstall"
         );
     }
+    // `AGENTS.md` NO está en el alcance (US-H8) y sobrevive con sus bytes.
+    assert_eq!(
+        std::fs::read_to_string(vault.path().join("AGENTS.md")).expect("AGENTS intacto"),
+        "# AGENTS del usuario\n"
+    );
+    assert_eq!(
+        user_files(vault.path()),
+        before,
+        "notas, AGENTS.md, 10-templates/ y .obsidian/ intactos"
+    );
+    // Backup obligatorio: solo lo irreemplazable (decisión del dueño,
+    // 2026-11-19), preservando su ruta relativa.
+    let backup = report.backup_dir.expect("uninstall crea backup");
+    assert!(
+        backup.starts_with(vault.path()),
+        "el backup vive junto al vault: {}",
+        backup.display()
+    );
+    for kept in [
+        ".opencode/agents/itzamna.md",
+        "opencode.json",
+        ".tepochcalli/config/tepochcalli.toml",
+        ".tepochcalli/pyproject.toml",
+    ] {
+        assert!(
+            backup.join(kept).is_file(),
+            "{kept} es irreemplazable y debe estar en el backup"
+        );
+    }
+    // venv/db/models/bin son regenerables (re-sync / re-index / re-descarga):
+    // NO se copian — es la decisión explícita del dueño.
+    for skipped in [
+        ".tepochcalli/venv",
+        ".tepochcalli/db",
+        ".tepochcalli/models",
+        ".tepochcalli/bin",
+    ] {
+        assert!(
+            !backup.join(skipped).exists(),
+            "{skipped} es regenerable: no viaja al backup"
+        );
+    }
+    // Fuga de secreto cerrada: el directorio se auto-ignora sea cual sea el
+    // .gitignore del vault.
+    assert_eq!(
+        std::fs::read_to_string(backup.join(".gitignore")).expect(".gitignore del backup"),
+        "*\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(backup.join("opencode.json")).expect("backup json"),
+        "{\"mcp\": {\"servers\": {\"tepochcalli-rag\": {}}}}\n"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn uninstall_backup_dir_is_private_to_the_user() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let vault = installed_vault();
+    let ui = TapUi::new(vec![], vec![]);
+    let report = run_uninstall(&ui, vault.path()).expect("uninstall");
+    let backup = report.backup_dir.expect("backup");
+
+    let mode = std::fs::metadata(&backup)
+        .expect("backup metadata")
+        .permissions()
+        .mode();
+    assert_eq!(
+        mode & 0o077,
+        0,
+        "0700: ni grupo ni otros pueden leer el config (posible API key), got {mode:o}"
+    );
+    let marker = std::fs::metadata(backup.join(".gitignore"))
+        .expect("marker metadata")
+        .permissions()
+        .mode();
+    assert_eq!(marker & 0o077, 0, "el marker nace 0600, got {marker:o}");
 }
 
 #[test]
-fn uninstall_without_runtime_is_noop_ok() {
+fn uninstall_without_scopes_is_noop_ok() {
     let vault = tmp();
     std::fs::write(vault.path().join("nota.md"), "# mía\n").expect("note fixture");
+    std::fs::write(vault.path().join("AGENTS.md"), "# AGENTS\n").expect("AGENTS fixture");
 
-    let report = run_uninstall(vault.path()).expect("sin runtime es no-op, no error");
+    let ui = TapUi::new(vec![], vec![]);
+    let report = run_uninstall(&ui, vault.path()).expect("sin scopes es no-op, no error");
     assert!(!report.removed);
+    assert!(report.backup_dir.is_none(), "un no-op no crea backup vacío");
     assert_eq!(
         std::fs::read(vault.path().join("nota.md")).expect("note survives"),
         "# mía\n".as_bytes()
+    );
+    assert_eq!(
+        std::fs::read(vault.path().join("AGENTS.md")).expect("AGENTS survives"),
+        "# AGENTS\n".as_bytes()
+    );
+}
+
+#[test]
+fn second_uninstall_is_a_noop() {
+    let vault = installed_vault();
+    let ui = TapUi::new(vec![], vec![]);
+    assert!(
+        run_uninstall(&ui, vault.path())
+            .expect("primer uninstall")
+            .removed
+    );
+    let after_first = tree_snapshot(vault.path());
+
+    let second = run_uninstall(&ui, vault.path()).expect("segundo uninstall");
+    assert!(!second.removed, "ya no hay nada que quitar");
+    assert!(second.backup_dir.is_none());
+    assert_eq!(
+        tree_snapshot(vault.path()),
+        after_first,
+        "el segundo uninstall no crea backup ni toca nada"
     );
 }
 
@@ -596,14 +723,17 @@ fn uninstall_vault_forms_remove_runtime_and_keep_user_files() {
             "args {args:?}: {:?}",
             stderr_text(&out)
         );
-        assert!(
-            !vault.path().join(".tepochcalli").exists(),
-            "args {args:?}: el runtime desaparece"
-        );
+        for removed in [".tepochcalli", ".opencode", "opencode.json"] {
+            assert!(
+                !vault.path().join(removed).exists(),
+                "args {args:?}: {removed} desaparece"
+            );
+        }
         for witness in [
             "00-resources/ejemplo.md",
             "notes/diaria.md",
-            "opencode.json",
+            "AGENTS.md",
+            "10-templates/mia.md",
             ".obsidian/app.json",
         ] {
             assert!(

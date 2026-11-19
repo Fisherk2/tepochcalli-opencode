@@ -1,18 +1,23 @@
-//! `config embedder` (T16), `reindex` (T17) and `uninstall` (T17): the three
-//! non-install commands, flag parsing and typed exits byte-identical.
+//! `config embedder` (T16), `reindex` (T17), `uninstall` (T17/H8) and
+//! `update` (H7): the non-install commands, flag parsing and typed exits.
 
 use std::path::Path;
 
-use tepochcalli::adapters::{HeadlessUi, StdCommandRunner, SysHostProbe, TtyUi, UreqHttpClient};
+use tepochcalli::adapters::{
+    fetch_release_payload, HeadlessUi, LocalPayload, ReleasePayload, StdCommandRunner,
+    SysHostProbe, TtyUi, UreqHttpClient,
+};
 use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
-    resolve_vault_dir, run_reindex, run_swap, run_uninstall, SwapDeps, SwapOptions,
+    resolve_vault_dir, run_reindex, run_swap, run_uninstall, run_update, SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::WizardError;
-use tepochcalli::ports::Ui;
+use tepochcalli::ports::{PayloadSource, Ui};
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
+use super::install::validate_payload_flags;
 use super::report::{report_failure, report_maintenance_failure};
+use super::usage::VERSION;
 
 const SWAP_SPEC: FlagSpec = FlagSpec {
     prefix: "config embedder",
@@ -33,6 +38,13 @@ const UNINSTALL_SPEC: FlagSpec = FlagSpec {
     help_command: "uninstall",
     takes_value: &["--vault"],
     boolean: &["--non-interactive", "--confirm"],
+};
+
+const UPDATE_SPEC: FlagSpec = FlagSpec {
+    prefix: "update",
+    help_command: "update",
+    takes_value: &["--vault", "--payload", "--payload-url", "--payload-sha256"],
+    boolean: &["--non-interactive"],
 };
 
 /// `config embedder` (T16, D8.4): six-step atomic swap on an installed vault —
@@ -57,10 +69,11 @@ pub(crate) fn run_config_embedder(
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
-        // Non-interactive answers: MiniLM row (same default as the TUI) and
-        // no scripted vault (must come from `--vault`, never a guess).
+        // Non-interactive answers: MiniLM row (same default as the TUI) más
+        // la fila del dispositivo (`0` = cpu, H9); no scripted vault (must
+        // come from `--vault`, never a guess).
         Box::new(HeadlessUi::new(
-            vec![0].into(),
+            vec![0, 0].into(),
             std::collections::VecDeque::new(),
         ))
     } else {
@@ -170,10 +183,10 @@ pub(crate) fn run_reindex_cmd(
     }
 }
 
-/// `uninstall` (T17): remove `.tepochcalli/` only. Notes, payload,
-/// `opencode.json`, `00-resources/` and `.obsidian/` survive by construction
-/// (the orchestrator never enumerates them). Idempotent: a missing runtime is
-/// a no-op `Ok`, never an error.
+/// `uninstall` (H8): remove `.opencode/`, `.tepochcalli/` and
+/// `opencode.json` — nothing else (`AGENTS.md`, the notes, the trays,
+/// `10-templates/` and `.obsidian/` survive by construction). Each removed
+/// scope is backed up first. Idempotent: missing scopes are a no-op `Ok`.
 pub(crate) fn run_uninstall_cmd(
     args: Vec<&str>,
     stdout: &mut dyn std::io::Write,
@@ -188,13 +201,13 @@ pub(crate) fn run_uninstall_cmd(
     let confirm = flags.is_set("--confirm");
     let vault = flags.value("--vault").map(str::to_string);
     // Gate `--confirm` (patrón reindex, L4-3): sin el flag nada se resuelve
-    // ni se borra — el uninstall elimina TODO el runtime, destructivo.
+    // ni se borra — el uninstall elimina el payload del harness y el runtime.
     if !confirm {
         let _ = writeln!(
             stderr,
-            "uninstall: nada que hacer sin --confirm — el uninstall borra TODO \
-             .tepochcalli/ (venv, bin, db, models, config). Re-ejecuta con `--confirm` \
-             para proceder."
+            "uninstall: nada que hacer sin --confirm — el uninstall borra \
+             .opencode/, .tepochcalli/ (venv, bin, db, models, config) y opencode.json. \
+             Re-ejecuta con `--confirm` para proceder."
         );
         return 2;
     }
@@ -221,21 +234,114 @@ pub(crate) fn run_uninstall_cmd(
         }
     };
     let path = Path::new(&raw);
-    match run_uninstall(path) {
+    match run_uninstall(&*ui, path) {
         Ok(report) => {
             if report.removed {
                 let _ = writeln!(
                     stdout,
-                    "uninstall: removed {}",
-                    path.join(".tepochcalli").display()
+                    "uninstall: removed .opencode/, .tepochcalli/ and opencode.json from {}",
+                    path.display()
                 );
+                if let Some(backup) = &report.backup_dir {
+                    let _ = writeln!(stdout, "uninstall: backup en {}", backup.display());
+                    let _ = writeln!(
+                        stdout,
+                        "uninstall: el backup contiene .tepochcalli/config/ (posible API key); \
+                         el directorio se auto-ignora con su propio .gitignore (`*`) — no lo \
+                         commitees"
+                    );
+                }
             } else {
-                let _ = writeln!(stdout, "uninstall: nothing to remove (no .tepochcalli/)");
+                let _ = writeln!(
+                    stdout,
+                    "uninstall: nothing to remove (no .opencode/, .tepochcalli/ or opencode.json)"
+                );
             }
             0
         }
         Err(err) => {
             report_maintenance_failure(&*ui, "uninstall", "uninstall failed", err, Some(path))
         }
+    }
+}
+
+/// `update` (H7): overwrite the 5 payload scopes of an installed vault with a
+/// `.bak` per replaced file and a rollback on failure. The payload is
+/// resolved like `install` (`--payload` → `--payload-url`+sha → the versioned
+/// release asset for this binary).
+pub(crate) fn run_update_cmd(
+    args: Vec<&str>,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+) -> u8 {
+    let flags = match parse_flags(&args, &UPDATE_SPEC, stdout, stderr) {
+        Ok(Some(flags)) => flags,
+        Ok(None) => return 0,
+        Err(code) => return code,
+    };
+    let non_interactive = flags.is_set("--non-interactive");
+    let vault = flags.value("--vault").map(str::to_string);
+    let payload = flags.value("--payload").map(str::to_string);
+    let payload_url = flags.value("--payload-url").map(str::to_string);
+    let payload_sha256 = flags.value("--payload-sha256").map(str::to_string);
+    if let Err(code) = validate_payload_flags(
+        "update",
+        payload.as_deref(),
+        payload_url.as_deref(),
+        payload_sha256.as_deref(),
+        stderr,
+    ) {
+        return code;
+    }
+    // T6 rule: no TTY means no prompts — fail fast instead of hanging.
+    if !tty_ok(stderr, non_interactive, "update") {
+        return WizardError::UserAborted.exit_code();
+    }
+    let ui: Box<dyn Ui> = if non_interactive {
+        Box::new(HeadlessUi::new(Default::default(), Default::default()))
+    } else {
+        Box::new(TtyUi)
+    };
+    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+        Ok(raw) => raw,
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "update",
+                "update: vault selection failed",
+                err,
+                None,
+            );
+        }
+    };
+    let path = Path::new(&raw);
+    let source: Box<dyn PayloadSource> = match (payload, payload_url, payload_sha256) {
+        (Some(dir), None, None) => Box::new(LocalPayload::new(Path::new(&dir))),
+        (None, Some(url), Some(sha)) => Box::new(ReleasePayload::new(&url, &sha)),
+        (None, None, None) => match fetch_release_payload(&UreqHttpClient::new(), VERSION) {
+            Ok(release) => Box::new(release),
+            Err(err) => {
+                return report_maintenance_failure(
+                    &*ui,
+                    "update",
+                    "update: payload resolution failed",
+                    err,
+                    Some(path),
+                );
+            }
+        },
+        // Unreachable: `validate_payload_flags` rejects half/conflicting sets.
+        _ => return 2,
+    };
+    match run_update(&*source, &*ui, path) {
+        Ok(report) => {
+            let _ = writeln!(
+                stdout,
+                "update: {} ficheros escritos · {} backups (.bak)",
+                report.written, report.backed_up
+            );
+            0
+        }
+        Err(err) => report_maintenance_failure(&*ui, "update", "update failed", err, Some(path)),
     }
 }

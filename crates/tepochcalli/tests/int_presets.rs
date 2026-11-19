@@ -7,7 +7,7 @@
 mod common;
 
 use common::FakeHost;
-use tepochcalli::config::{badge_for, parse_presets, parse_presets_str};
+use tepochcalli::config::{badge_for, parse_presets, parse_presets_str, PresetError};
 use tepochcalli::domain::Badge;
 use tepochcalli::ports::{GpuInfo, HostProbe};
 
@@ -51,6 +51,8 @@ fn embedded_presets_match_spec_v2() {
     assert!((m.rec_ram_gb - 1.0).abs() < f64::EPSILON);
     assert!(!m.gpu_recommended);
     assert!(m.recommended_flag);
+    // Dispositivo sugerido por el catálogo (ADR-015 (a)): dato, no decisión.
+    assert_eq!(m.device, "cpu");
 
     let b = &presets[1];
     assert_eq!(b.name, "BGE-M3 (GPU)");
@@ -62,12 +64,36 @@ fn embedded_presets_match_spec_v2() {
     assert!((b.rec_ram_gb - 2.9).abs() < f64::EPSILON);
     assert!(b.gpu_recommended);
     assert!(!b.recommended_flag);
+    assert_eq!(b.device, "cuda");
 
     // Exactly one preset is pre-selected (D7.2).
     assert_eq!(
         presets.iter().filter(|p| p.recommended_flag).count(),
         1,
         "exactly one recommended_flag"
+    );
+}
+
+/// D7.2/ADR-015 (a): el `device` sugerido viaja como dato; sin él el catálogo
+/// es inválido (nunca un default silencioso que oculte la clave).
+#[test]
+fn preset_without_device_is_a_typed_missing_field() {
+    let no_device = r#"
+[[preset]]
+name = "sin device"
+hf_id = "org/sin-device"
+revision = "sha"
+dims = 384
+size_mb = 470
+disk_mb = 500
+min_ram_gb = 0.7
+rec_ram_gb = 1.0
+gpu_recommended = false
+recommended_flag = true
+"#;
+    assert_eq!(
+        parse_presets_str(no_device),
+        Err(PresetError::MissingField("device"))
     );
 }
 

@@ -6,9 +6,10 @@
 //! clears the index first — the replacement pass completes before the sidecar
 //! goes live, so the old index stays servable until the new one is proven. A
 //! config/index model drift surfaces as an `E_MODEL_MISMATCH` panel, never a
-//! silent rebuild. `uninstall` removes only `.tepochcalli/` and is idempotent.
+//! silent rebuild. `uninstall` removes `.opencode/`, `.tepochcalli/` and
+//! `opencode.json` (H8), backing them up first, and is idempotent.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::domain::WizardError;
 use crate::ports::{CommandRunner, Ui};
@@ -17,6 +18,7 @@ use super::embedder_menu::config_path;
 use super::flow_contract::{parse_gate_dims, parse_refresh, spawn_gate, spawn_refresh, Refreshed};
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::{index_meta_path, write_index_meta};
+use super::phase8::OPENCODE_JSON;
 use super::text::{config_value, json_string, json_u32, or_fallback, provider_is_none};
 
 /// What the confirmed rebuild established: the counts plus the embedder the
@@ -39,12 +41,30 @@ pub struct ReindexReport {
     pub mismatch: bool,
 }
 
+/// `.tepochcalli/` (runtime) is one of the three H8 scopes; the two others
+/// are the harness root and its registration file.
+pub const UNINSTALL_SCOPES: [&str; 3] = [".opencode", ".tepochcalli", "opencode.json"];
+/// What the backup keeps (owner's decision 2026-11-19): only the
+/// irreplaceable. `venv/`, `db/`, `models/` and `bin/` are regenerable
+/// (re-sync / re-index / re-download) and copying them can burn GB and abort
+/// the desinstall on a full disk.
+pub const UNINSTALL_BACKUP_SCOPES: [&str; 4] = [
+    ".opencode",
+    "opencode.json",
+    ".tepochcalli/config",
+    ".tepochcalli/pyproject.toml",
+];
+/// Backup folder prefix (sibling of the scopes, inside the vault).
+const BACKUP_PREFIX: &str = ".tepochcalli-backup-";
+
 /// What the removal established: whether there was a runtime to remove.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UninstallReport {
-    /// `true` when `.tepochcalli/` existed and is now gone; `false` is the
-    /// idempotent no-op (nothing that was there could be lost).
+    /// `true` when at least one of the three scopes existed and is now gone;
+    /// `false` is the idempotent no-op (nothing that was there could be lost).
     pub removed: bool,
+    /// Backup folder holding the removed scopes (`None` on a no-op).
+    pub backup_dir: Option<PathBuf>,
 }
 
 /// Confirmed rebuild: mismatch check → gate (only when the dims are unknown)
@@ -141,20 +161,149 @@ pub fn run_reindex(
     })
 }
 
-/// Scope mínimo: solo `.tepochcalli/` (runtime: `venv/`, `bin/`, `db/`,
-/// `models/`, `config/`). Notas, payload, `opencode.json`, `00-resources/` y
-/// `.obsidian/` sobreviven por construcción: nunca se enumeran, nunca se
-/// tocan. Ausente ⇒ no-op `Ok` (idempotencia, T14).
-pub fn run_uninstall(vault: &Path) -> Result<UninstallReport, WizardError> {
-    match std::fs::remove_dir_all(vault.join(RUNTIME_DIR)) {
-        Ok(()) => Ok(UninstallReport { removed: true }),
-        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
-            Ok(UninstallReport { removed: false })
-        }
-        // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
-        // T15 refines the panel).
-        Err(_) => Err(WizardError::PermissionDenied),
+/// H8 scope: remove `.opencode/`, `.tepochcalli/` and `opencode.json` — and
+/// NOTHING else (`AGENTS.md`, the notes, the trays, `10-templates/` and
+/// `.obsidian/` survive by construction: they are never enumerated). Before
+/// removing, the IRREPLACEABLE subset ([`UNINSTALL_BACKUP_SCOPES`]) is copied
+/// to `<vault>/.tepochcalli-backup-<ts>/` preserving its relative path.
+/// Absent scopes ⇒ no-op `Ok` (idempotencia).
+pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, WizardError> {
+    let present: Vec<(&str, PathBuf)> = UNINSTALL_SCOPES
+        .iter()
+        .map(|scope| (*scope, vault.join(scope)))
+        .filter(|(_, path)| path.exists())
+        .collect();
+    if present.is_empty() {
+        return Ok(UninstallReport {
+            removed: false,
+            backup_dir: None,
+        });
     }
+    ui.panel(
+        "Desinstall (H8)",
+        &format!(
+            "Se eliminarán .opencode/, .tepochcalli/ y opencode.json de {}. AGENTS.md y tus \
+             notas (00-resources/, 01-…05-, 10-templates/, .obsidian/) NO se tocan. Antes de \
+             borrar se copia a una carpeta de backup junto al vault SOLO lo irreemplazable \
+             (.opencode/, opencode.json, .tepochcalli/config/ y .tepochcalli/pyproject.toml); \
+             venv/, db/, models/ y bin/ no se copian (son regenerables).",
+            vault.display()
+        ),
+    );
+    // Backup FIRST: a failed copy aborts with the vault still complete.
+    let backup_dir = create_backup_dir(vault)?;
+    if let Err(err) = copy_into_backup(vault, &backup_dir) {
+        let _ = std::fs::remove_dir_all(&backup_dir);
+        return Err(err);
+    }
+    for (scope, path) in &present {
+        // Scope → kind is fixed: the two roots are dirs, `opencode.json` is a
+        // file. A corrupted tree (a file named `.tepochcalli`) fails typed
+        // instead of silently deleting the wrong thing.
+        let outcome = if *scope == OPENCODE_JSON {
+            std::fs::remove_file(path)
+        } else {
+            std::fs::remove_dir_all(path)
+        };
+        match outcome {
+            Ok(()) => {}
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+            // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
+            // T15 refines the panel).
+            Err(_) => return Err(WizardError::PermissionDenied),
+        }
+    }
+    ui.panel(
+        "Desinstall completo",
+        &format!(
+            "backup en {} — contiene .tepochcalli/config/ (posible API key): no lo commitees",
+            backup_dir.display()
+        ),
+    );
+    Ok(UninstallReport {
+        removed: true,
+        backup_dir: Some(backup_dir),
+    })
+}
+
+/// `<vault>/.tepochcalli-backup-<unix-ts>` (a `-N` suffix if that second is
+/// already taken by a previous run), created 0700 and self-ignored by its own
+/// `.gitignore` (`*`) — it holds `config/`, which may carry an API key.
+fn create_backup_dir(vault: &Path) -> Result<PathBuf, WizardError> {
+    let stamp = super::failure::now_secs();
+    for seq in 0..100u32 {
+        let name = if seq == 0 {
+            format!("{BACKUP_PREFIX}{stamp}")
+        } else {
+            format!("{BACKUP_PREFIX}{stamp}-{seq}")
+        };
+        let dir = vault.join(name);
+        match create_private_dir(&dir) {
+            Ok(()) => {
+                // `*` blocks the whole folder whatever the vault's .gitignore
+                // says; the payload's .gitignore is frozen, this one is ours.
+                let marker = dir.join(".gitignore");
+                std::fs::write(&marker, "*\n").map_err(|_| WizardError::PermissionDenied)?;
+                super::installer::set_user_private(&marker)?;
+                return Ok(dir);
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => return Err(WizardError::PermissionDenied),
+        }
+    }
+    Err(WizardError::PermissionDenied)
+}
+
+/// `create_dir` with 0700 on Unix (0600 for files lives in
+/// [`super::installer::set_user_private`]).
+fn create_private_dir(dir: &Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt as _;
+        std::fs::DirBuilder::new().mode(0o700).create(dir)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::create_dir(dir)
+    }
+}
+
+/// Copy the irreplaceable scopes under `backup` preserving vault-relative
+/// paths; a scope that does not exist is simply absent.
+fn copy_into_backup(vault: &Path, backup: &Path) -> Result<(), WizardError> {
+    for scope in UNINSTALL_BACKUP_SCOPES {
+        let source = vault.join(scope);
+        if !source.exists() {
+            continue;
+        }
+        copy_tree(&source, &backup.join(scope))?;
+    }
+    Ok(())
+}
+
+/// Recursive copy that never follows symlinks (a symlinked model dir must
+/// not drag the backup outside the vault).
+fn copy_tree(source: &Path, target: &Path) -> Result<(), WizardError> {
+    let kind = std::fs::symlink_metadata(source)
+        .map_err(|_| WizardError::PermissionDenied)?
+        .file_type();
+    if kind.is_symlink() {
+        return Ok(());
+    }
+    if kind.is_dir() {
+        std::fs::create_dir_all(target).map_err(|_| WizardError::PermissionDenied)?;
+        let entries = std::fs::read_dir(source).map_err(|_| WizardError::PermissionDenied)?;
+        for entry in entries {
+            let entry = entry.map_err(|_| WizardError::PermissionDenied)?;
+            copy_tree(&entry.path(), &target.join(entry.file_name()))?;
+        }
+        return Ok(());
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|_| WizardError::PermissionDenied)?;
+    }
+    std::fs::copy(source, target).map_err(|_| WizardError::PermissionDenied)?;
+    Ok(())
 }
 
 /// Gate success payload of the reindex (variante reducida del contrato

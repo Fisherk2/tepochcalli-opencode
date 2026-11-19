@@ -1,0 +1,63 @@
+# Ruedas PyPI del wizard `tepochcalli` (ADR-014: canal `uvx tepochcalli`).
+#
+# ESTE WORKFLOW SOLO CONSTRUYE. No publica en ningún índice: no hay
+# `maturin publish`, ni `twine`, ni `id-token: write`, ni `PYPI_*`. Publicar es
+# un acto manual futuro, fuera de esta fase (orden del dueño 2026-11-19); por eso
+# `permissions` se queda en `contents: read` y las ruedas viajan como artefactos
+# de CI, no como release.
+#
+# Linux construye en contenedor manylinux (`manylinux: auto`) para que la rueda
+# no dependa del glibc del runner; macOS y Windows compilan nativos y el input
+# `manylinux` se ignora allí. No colisiona con `release.yml` (cargo-dist, TD-51).
+name: Wheels
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "crates/**"
+      - ".github/workflows/wheels.yml"
+  push:
+    paths:
+      - "crates/**"
+      - ".github/workflows/wheels.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  wheels:
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            runner: ubuntu-24.04-arm
+          - target: x86_64-apple-darwin
+            runner: macos-15-intel
+          - target: aarch64-apple-darwin
+            runner: macos-latest
+          - target: x86_64-pc-windows-msvc
+            runner: windows-latest
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Construye la rueda (sin publicar)
+        uses: PyO3/maturin-action@e83996d129638aa358a18fbd1dfb82f0b0fb5d3b # v1.51.0
+        with:
+          working-directory: crates/tepochcalli
+          target: ${{ matrix.target }}
+          manylinux: auto
+          maturin-version: v1.15.0
+          args: --release --out dist
+
+      - name: Sube la rueda como artefacto de CI
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: wheels-${{ matrix.target }}
+          path: crates/tepochcalli/dist/*.whl
+          if-no-files-found: error

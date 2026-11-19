@@ -15,21 +15,24 @@
 //! no se toca antes del commit, así cualquier fallo se arrolla con el
 //! snapshot byte-identical (rollback + temps fuera, cero estado).
 //!
-//! Umbral de líneas (923, tramo 701-1000, justificado): dominio único — el
+//! Umbral de líneas (810, tramo 701-1000, justificado): dominio único — el
 //! swap atómico D8.4 de 6 pasos con su rollback por snapshot — con ~25 % de
 //! unit tests Tier 1 en el propio módulo; partirlo repartiría un solo
 //! invariante (conmutar-vivo-antes-del-gate + arrollar-al-fallo) entre
-//! ficheros que ya no se leerían por sí solos.
+//! ficheros que ya no se leerían por sí solos. El paso 6 (GC del cache) sí
+//! quedó fuera, en `embedder_gc`.
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use crate::config::{default_and_large, parse_presets, Preset};
 use crate::domain::{EmbedderChoice, WizardError};
-use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
+use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
 
+use super::embedder_gc::gc_old_model;
 use super::embedder_menu::{
-    ask_non_empty, ask_secret_non_empty, build_options, config_path, external_config, local_config,
-    none_config, parse_hf_metadata, write_config, Phase6Report, Provenance, EMBEDDER_PATHS,
+    ask_non_empty, ask_secret_non_empty, build_options, choose_device, config_path,
+    external_config, local_config, none_config, parse_hf_metadata, write_config, Phase6Report,
+    Provenance, EMBEDDER_PATHS,
 };
 use super::flow_contract::{spawn_gate, spawn_refresh, GateOk};
 use super::installer::{set_user_private, RUNTIME_DIR};
@@ -48,8 +51,6 @@ const SWAP_EXTERNAL_HEADER: &str =
 const SWAP_NONE_HEADER: &str =
     "generado por `tepochcalli config embedder` (swap D8.4, salida 5) — re-entrada con el mismo comando";
 
-/// Model cache dir, sandboxed under the vault (same dir the F6 gate uses).
-const MODELS_DIR: &str = "models";
 /// HF API base for the free-id pre-check (D8.1; the gate stays ground truth).
 const HF_API_BASE: &str = "https://huggingface.co/api/models/";
 const BYTES_PER_MB: f64 = 1_000_000.0;
@@ -105,6 +106,8 @@ struct Snapshot {
 struct CurrentState {
     provider: Option<String>,
     model: Option<String>,
+    /// `[embedding].device` vivo: preselección de la re-entrada (ADR-015 (c)).
+    device: Option<String>,
     dims: Option<u32>,
     /// Ficheros de datos bajo `db/` (`db_usage`); no son filas del índice.
     db_file_count: u64,
@@ -144,7 +147,7 @@ pub fn run_swap(
         .panel("Estado actual del embedder", &current.describe());
     // (2) Pick the new embedder: the same D7.1 menu with D8 badges.
     // The optional HF token travels alongside (never in a panel or file).
-    let (picked, token) = pick_embedder(deps)?;
+    let (picked, token) = pick_embedder(deps, current.device.as_deref())?;
     // (3) Explicit full-reindex warning + estimate; `--confirm` is mandatory.
     deps.ui
         .panel("Advertencia de re-index", &warning(&picked, &current));
@@ -161,7 +164,10 @@ pub fn run_swap(
     // write_config de F6) ANTES del gate/refresh — el refresh reconstruye ya
     // con el nuevo embedder. La guarda E1-S3: un fallo aquí comparte el mismo
     // abort del resto de ramas (rollback a los bytes previos del snapshot).
-    if let Err(err) = write_config(vault, &picked_config_body(&picked)) {
+    if let Err(err) = write_config(
+        vault,
+        &picked_config_body(&picked, current.device.as_deref()),
+    ) {
         abort_swap(vault, &before);
         return Err(err);
     }
@@ -243,6 +249,7 @@ fn current_state(vault: &Path) -> CurrentState {
     CurrentState {
         provider: config_value(&raw_config, "provider"),
         model: config_value(&raw_config, "model").or_else(|| json_string(&raw_meta, "model")),
+        device: config_value(&raw_config, "device"),
         dims: json_u32(&raw_meta, "dims"),
         db_file_count,
         db_bytes,
@@ -295,7 +302,10 @@ fn warning(picked: &Phase6Report, current: &CurrentState) -> String {
 /// Step 2: the D7.1 menu with D8.1 figures and D8.2 badges. Selection only —
 /// nothing is written here; the gate (step 4) decides. Returns the pick plus
 /// an optional HF token for a gated free id (child-env only, never logged).
-fn pick_embedder(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), WizardError> {
+fn pick_embedder(
+    deps: &SwapDeps<'_>,
+    existing_device: Option<&str>,
+) -> Result<(Phase6Report, Option<String>), WizardError> {
     let presets = parse_presets().map_err(|_| WizardError::Internal)?;
     let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
     // L5-1: un snapshot de facts por corrida — el menú deja de re-probar
@@ -311,26 +321,43 @@ fn pick_embedder(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), 
     // shortcut: single-shot menu (no T11 retry loop) — an invalid free id
     // fails the swap with zero state instead of re-asking.
     match choice {
-        EmbedderChoice::PresetDefault => Ok((pending_local(default), None)),
-        EmbedderChoice::PresetLarge => Ok((pending_local(large), None)),
-        EmbedderChoice::HuggingFaceId => pending_free_id(deps),
+        EmbedderChoice::PresetDefault => {
+            Ok((pending_local(deps, &facts, default, existing_device)?, None))
+        }
+        EmbedderChoice::PresetLarge => {
+            Ok((pending_local(deps, &facts, large, existing_device)?, None))
+        }
+        EmbedderChoice::HuggingFaceId => pending_free_id(deps, &facts, existing_device),
         EmbedderChoice::ExternalApi => pending_external(deps).map(|report| (report, None)),
         EmbedderChoice::ConfigureLater => Ok((Phase6Report::configure_later(), None)),
     }
 }
 
 /// Local pick before the gate: dims/RSS arrive in step 4 (measured, D8.1).
-fn pending_local(preset: &Preset) -> Phase6Report {
-    Phase6Report {
+/// El device se pregunta aquí (H9): la preselección es la elección viva del
+/// vault y, sin ella, la sugerencia del catálogo (ADR-015 §4.4 (c)).
+fn pending_local(
+    deps: &SwapDeps<'_>,
+    facts: &HostFacts,
+    preset: &Preset,
+    existing_device: Option<&str>,
+) -> Result<Phase6Report, WizardError> {
+    let device = choose_device(deps.ui, facts, existing_device.unwrap_or(&preset.device))?;
+    Ok(Phase6Report {
         provider: "local".to_string(),
         model: Some(preset.hf_id.clone()),
         revision: Some(preset.revision.clone()),
+        device: Some(device),
         dims: None,
         rss_peak_bytes: None,
-    }
+    })
 }
 
-fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>), WizardError> {
+fn pending_free_id(
+    deps: &SwapDeps<'_>,
+    facts: &HostFacts,
+    existing_device: Option<&str>,
+) -> Result<(Phase6Report, Option<String>), WizardError> {
     let id = ask_non_empty(deps.ui, "HuggingFace model id")?;
     if !is_plausible_hf_id(&id) {
         deps.ui.panel(
@@ -352,24 +379,30 @@ fn pending_free_id(deps: &SwapDeps<'_>) -> Result<(Phase6Report, Option<String>)
     // La revisión pineada es el `sha` del repo (D59): el gate materializa ese
     // snapshot y la config lo registra. Sin API queda `None` (default del flow).
     let revision = estimate.as_ref().and_then(|estimate| estimate.sha.clone());
+    // Misma lectura que el menú F6: la decisión vive en `HfEstimate`
+    // (`embedding_tag`/`gated`), con HF real (`"gated":"auto"`) el swap ya
+    // ofrece el token — el viejo `contains("\"gated\":true")` no lo veía.
+    if estimate
+        .as_ref()
+        .is_some_and(|estimate| estimate.embedding_tag == Some(false))
+    {
+        deps.ui.panel(
+            "E_MODEL_INVALID",
+            "Ese ID no es un modelo de embeddings; el swap se aborta sin escribir nada.",
+        );
+        return Err(WizardError::ModelInvalid);
+    }
+    // El device se pregunta tras validar el id (H9) y antes de descargar.
+    let device = choose_device(deps.ui, facts, existing_device.unwrap_or("cpu"))?;
     let report_for = |model: String, revision: Option<String>| Phase6Report {
         provider: "local".to_string(),
         model: Some(model),
         revision,
+        device: Some(device.clone()),
         dims: None,
         rss_peak_bytes: None,
     };
-    // Misma lectura que el menú F6: la decisión vive en `HfEstimate`
-    // (`embedding_tag`/`gated`), con HF real (`"gated":"auto"`) el swap ya
-    // ofrece el token — el viejo `contains("\"gated\":true")` no lo veía.
     if let Some(estimate) = &estimate {
-        if estimate.embedding_tag == Some(false) {
-            deps.ui.panel(
-                "E_MODEL_INVALID",
-                "Ese ID no es un modelo de embeddings; el swap se aborta sin escribir nada.",
-            );
-            return Err(WizardError::ModelInvalid);
-        }
         if estimate.gated {
             deps.ui.panel(
                 "Modelo gated",
@@ -404,6 +437,7 @@ fn pending_external(deps: &SwapDeps<'_>) -> Result<Phase6Report, WizardError> {
         provider: "litellm".to_string(),
         model: Some(format!("{model}\u{0}{api_key}")),
         revision: None,
+        device: None,
         dims: None,
         rss_peak_bytes: None,
     })
@@ -419,7 +453,11 @@ fn abort_swap(vault: &Path, before: &Snapshot) {
 /// Config body for the pick. The external path carries `model\0api_key`
 /// internally so the key never crosses a panel; it is split here, at the
 /// only place that writes the file.
-fn picked_config_body(picked: &Phase6Report) -> String {
+///
+/// El device sale de la elección del pick; si no la trae (defensivo), del
+/// valor vivo del vault y, en último término, del default del flow — nunca
+/// se pisa un `cuda:0` escrito a mano (ADR-015 §4.4 (c)).
+fn picked_config_body(picked: &Phase6Report, existing_device: Option<&str>) -> String {
     if picked.provider == "litellm" {
         let (model, key) = picked
             .model
@@ -434,6 +472,11 @@ fn picked_config_body(picked: &Phase6Report) -> String {
             SWAP_LOCAL_HEADER,
             picked.model.as_deref().unwrap_or_default(),
             picked.revision.as_deref(),
+            picked
+                .device
+                .as_deref()
+                .or(existing_device)
+                .unwrap_or("cpu"),
         )
     }
 }
@@ -527,69 +570,6 @@ fn commit_meta(vault: &Path, picked: &Phase6Report) -> Result<(), WizardError> {
 
 fn map_fs_err(_: std::io::Error) -> WizardError {
     WizardError::PermissionDenied
-}
-
-/// Step 6: purge the previous model cache — only after the atomic switch, and
-/// never with `--keep-previous`, never when old == new. Targets the HF slug
-/// dirs (`models--<id con / → -->`, más el gemelo `sentence-transformers`)
-/// bajo `models/` y `models/hub/`; los nombres planos del esquema antiguo son
-/// decoys y se conservan. Las candidatas del modelo nuevo nunca se tocan.
-fn gc_old_model(vault: &Path, old: Option<String>, new: Option<&str>, keep_previous: bool) {
-    if keep_previous {
-        return;
-    }
-    let (Some(old_model), Some(new_model)) = (old, new) else {
-        return;
-    };
-    if old_model == new_model || new_model.is_empty() {
-        return;
-    }
-    let protected = gc_candidate_dirs(new_model);
-    for root in model_cache_roots(vault) {
-        for name in gc_candidate_dirs(&old_model) {
-            if protected.contains(&name) {
-                continue;
-            }
-            remove_cache_entry(&root.join(name));
-        }
-    }
-}
-
-/// Slug dirs HF de un model id: `models--<id con / → -->`, más el gemelo con
-/// prefijo `sentence-transformers` (en ambas direcciones: un id escueto
-/// comparte caché con su forma `sentence-transformers/...` y viceversa).
-fn gc_candidate_dirs(model: &str) -> Vec<String> {
-    let slug = model.replace('/', "--");
-    let mut out = vec![format!("models--{slug}")];
-    const ST: &str = "sentence-transformers--";
-    if let Some(rest) = slug.strip_prefix(ST) {
-        let bare = format!("models--{rest}");
-        if bare != out[0] {
-            out.push(bare);
-        }
-    } else {
-        out.push(format!("models--{ST}{slug}"));
-    }
-    out
-}
-
-/// Raíces del cache de modelos bajo el vault (`HF_HOME`/`SENTENCE_TRANSFORMERS_HOME`).
-fn model_cache_roots(vault: &Path) -> [PathBuf; 2] {
-    let base = vault.join(RUNTIME_DIR).join(MODELS_DIR);
-    [base.clone(), base.join("hub")]
-}
-
-/// Borra una entrada de caché (dir slug HF o archivo suelto); ausente ⇒ nada.
-fn remove_cache_entry(path: &Path) {
-    match std::fs::symlink_metadata(path) {
-        Ok(meta) if meta.is_dir() => {
-            let _ = std::fs::remove_dir_all(path);
-        }
-        Ok(_) => {
-            let _ = std::fs::remove_file(path);
-        }
-        Err(_) => {}
-    }
 }
 
 /// Zero-state rollback: staged temps are removed by the caller; live config
@@ -736,12 +716,14 @@ mod tests {
             provider: "litellm".to_string(),
             model: Some("openai/text-embedding-3-small\u{0}sk-SECRETO".to_string()),
             revision: None,
+            device: None,
             dims: None,
             rss_peak_bytes: None,
         };
         let current = CurrentState {
             provider: Some("local".to_string()),
             model: Some("viejo".to_string()),
+            device: None,
             dims: Some(384),
             db_file_count: 7,
             db_bytes: 4_000_000,
@@ -759,60 +741,6 @@ mod tests {
         assert!(text.contains("ficheros en db/: 7"), "got:\n{text}");
     }
 
-    // ---- model cache GC --------------------------------------------------
-
-    #[test]
-    fn gc_candidate_dirs_covers_slash_and_flat_ids() {
-        assert_eq!(
-            gc_candidate_dirs("org/model"),
-            vec![
-                "models--org--model".to_string(),
-                "models--sentence-transformers--org--model".to_string()
-            ]
-        );
-        assert_eq!(
-            gc_candidate_dirs("all-MiniLM-L6-v2"),
-            vec![
-                "models--all-MiniLM-L6-v2".to_string(),
-                "models--sentence-transformers--all-MiniLM-L6-v2".to_string()
-            ]
-        );
-    }
-
-    #[test]
-    fn gc_candidate_dirs_maps_the_sentence_transformers_twin_both_ways() {
-        let st = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2";
-        let dirs = gc_candidate_dirs(st);
-        assert_eq!(
-            dirs,
-            vec![
-                "models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2".to_string(),
-                "models--paraphrase-multilingual-MiniLM-L12-v2".to_string()
-            ]
-        );
-        // El gemelo inverso: un id escueto protege también su forma ST.
-        let bare = gc_candidate_dirs("paraphrase-multilingual-MiniLM-L12-v2");
-        assert_eq!(bare.len(), 2);
-        assert_eq!(
-            bare[1],
-            format!(
-                "models--sentence-transformers--{}",
-                bare[0].trim_start_matches("models--")
-            )
-        );
-    }
-
-    #[test]
-    fn model_cache_roots_point_at_models_and_its_hub() {
-        let vault = Path::new("/v");
-        let roots = model_cache_roots(vault);
-        assert_eq!(roots[0], vault.join(".tepochcalli").join("models"));
-        assert_eq!(
-            roots[1],
-            vault.join(".tepochcalli").join("models").join("hub")
-        );
-    }
-
     // ---- commit: estado final tras un fallo ------------------------------
 
     fn picked_local() -> Phase6Report {
@@ -820,6 +748,7 @@ mod tests {
             provider: "local".to_string(),
             model: Some("BAAI/bge-m3".to_string()),
             revision: Some("5617a9f61b028005a4858fdac845db406aefb181".to_string()),
+            device: Some("cpu".to_string()),
             dims: Some(1024),
             rss_peak_bytes: None,
         }

@@ -6,10 +6,14 @@
 pub mod embedder;
 pub mod error;
 pub mod failure;
+pub mod menu;
 pub mod phase;
 pub mod plan;
+pub mod version;
 
 pub use embedder::{Badge, EmbedderChoice, ResourceFacts};
 pub use error::WizardError;
+pub use menu::{installed_state, menu_spec, InstalledState, MenuAction, MenuButton, MenuSpec};
 pub use phase::Phase;
 pub use plan::VaultPath;
+pub use version::Version;

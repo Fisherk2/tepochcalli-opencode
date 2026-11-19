@@ -346,6 +346,46 @@ rust-publish-dry-run target_dir=cargo_target:
 rust-publish target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo publish --locked
 
+# Detalle: `maturin[patchelf]` vía `uvx` porque el host no tiene `patchelf` y el
+# binario enlaza libs del sistema (sin él, maturin muere con `Failed to execute
+# 'patchelf'`); el canal se verifica con la rueda local, nunca publicando.
+# Construye la rueda PyPI del wizard (maturin, `bindings = "bin"`). NO publica.
+rust-wheel target_dir=cargo_target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{crate_dir}}
+    # shortcut: maturin parchea ese ELF in-place (hardlink dentro del target) y
+    # una 2ª corrida no sabe reparar una rueda ya parcheada; borrar sus dos
+    # copias staged hace la receta idempotente (maturin 1.15). Quitar al subir
+    # de versión si el fallo «Cannot repair wheel» ya no aparece.
+    rm -f "{{target_dir}}/maturin/tepochcalli" {{target_dir}}/release/build/tepochcalli/*/out/tepochcalli
+    CARGO_TARGET_DIR="{{target_dir}}" uvx --from 'maturin[patchelf]' maturin build --release --out dist
+
+# Acepta las dos formas de maturin: ELF directo en `*.data/scripts/` o stub
+# Python + binario en `tepochcalli.scripts/` (lo que pasa cuando el binario
+# enlaza libs externas). Comprueba nombre 0.1.0, contenido y ejecución real.
+# Verifica la rueda construida con `uvx --from <rueda>`: contenido y versión.
+rust-wheel-verify: rust-wheel
+    #!/usr/bin/env bash
+    set -euo pipefail
+    wheel="$(ls -t {{crate_dir}}/dist/*.whl | head -1)"
+    echo "rueda: ${wheel}"
+    case "$(basename "${wheel}")" in
+        *0.1.0*) ;;
+        *) echo "FALLO: el nombre de la rueda no lleva la versión 0.1.0" >&2; exit 1 ;;
+    esac
+    python3 -m zipfile -l "${wheel}"
+    if python3 -m zipfile -l "${wheel}" | awk 'NR > 2 { print $1 }' \
+        | grep -qxE 'tepochcalli(-0\.1\.0\.data/scripts|\.scripts)/tepochcalli'; then
+        echo "contenido OK: binario presente en la rueda"
+    else
+        echo "FALLO: la rueda no contiene el binario tepochcalli" >&2; exit 1
+    fi
+    out="$(uvx --from "${wheel}" tepochcalli --version)"
+    test "${out}" = "tepochcalli 0.1.0" \
+        || { echo "FALLO: '${out}' != 'tepochcalli 0.1.0'" >&2; exit 1; }
+    echo "uvx OK: ${out}"
+
 # Path 5: `--skip-model`, sin descargar modelos de 470 MB; la red solo se usa
 # para `uv` y `uv sync`. Espejo del job `smoke` de `phase3.yml` con el payload
 # local del repo.

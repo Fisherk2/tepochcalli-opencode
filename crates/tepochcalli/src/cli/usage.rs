@@ -8,6 +8,7 @@ pub(crate) fn usage_top() -> &'static str {
      \n\
      Commands:\n  \
      install            install a vault\n  \
+     update             overwrite the payload files (with .bak backups)\n  \
      config embedder    pick the embedding provider\n  \
      reindex            rebuild the index\n  \
      uninstall          remove the runtime\n\
@@ -51,6 +52,22 @@ pub(crate) fn usage_for(command: &str) -> String {
          \nOptions:\n  \
          --confirm          mandatory: the rebuild is destructive (full re-index)\n  \
          --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --non-interactive  never prompt; a missing answer is a typed error\n  \
+         --help     print this help\n  \
+         --version  print the version\n"
+            .to_string();
+    }
+    if command == "update" {
+        return "Usage: tepochcalli update [options]\n\
+         \nOverwrites .opencode/, .tepochcalli/, .gitignore, opencode.json and AGENTS.md\n\
+         in the target vault, saving every replaced file as `<ruta>.bak` first.\n\
+         \nOptions:\n  \
+         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --payload <ruta>   local payload tree (dev/tests; default: the\n  \
+         versioned release asset for this binary (one-version rule))\n  \
+         --payload-url <url>   override the release asset URL (dev/tests;\n  \
+         needs --payload-sha256)\n  \
+         --payload-sha256 <hex>  expected SHA-256 for --payload-url\n  \
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --help     print this help\n  \
          --version  print the version\n"

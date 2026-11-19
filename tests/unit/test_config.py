@@ -407,3 +407,69 @@ def test_indexer_roots_default_when_env_is_blank(
     monkeypatch.setenv("INDEXER_DIR", " , ")
 
     assert flow_config.load_config(tmp_path).indexer_roots == ("00-resources",)
+
+
+# --- guarda anti-exfiltración de `[embedding].model` (TD-50) -----------------------------
+
+
+@pytest.mark.parametrize(
+    "malicious_model",
+    [
+        "openai/http://evil.example/v1",  # marcador `://`
+        "user@host/model",  # marcador `@` (canal con credencial)
+        "openai/httpembed-model",  # marcador `http` sin `://`
+    ],
+)
+def test_litellm_model_with_endpoint_component_falls_back_to_default(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture, malicious_model: str
+) -> None:
+    """TD-50: un `model` con endpoint se descarta — exfiltración del texto a esa URL.
+
+    LiteLLM deriva el endpoint del `model`; si aceptáramos una URL/credencial ahí,
+    cada embedding del usuario viajaría a un host ajeno. La guarda debe caer al
+    default Y avisar (el usuario tiene que enterarse de que su valor no se usó).
+    """
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    _write_config(
+        tmp_path,
+        '[embedding]\nprovider = "litellm"\nmodel = "' + malicious_model + '"\n',
+    )
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.model == flow_config.DEFAULT_EMBEDDING_MODEL
+    assert cfg.embedding.provider == "litellm"  # solo se descarta el modelo
+    assert malicious_model not in repr(cfg)  # el valor malicioso no sobrevive en ningún lado
+    messages = _module_messages(caplog)
+    assert any("componente de endpoint" in message for message in messages)
+
+
+def test_litellm_legit_model_is_preserved(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """Control positivo de TD-50: un id de modelo legítimo NO se toca (no rechaza todo)."""
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    _write_config(
+        tmp_path,
+        '[embedding]\nprovider = "litellm"\nmodel = "openai/text-embedding-3-small"\n',
+    )
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.model == "openai/text-embedding-3-small"
+    assert not any("componente de endpoint" in message for message in _module_messages(caplog))
+
+
+def test_endpoint_guard_only_applies_to_litellm_provider(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """La guarda es exclusiva de `litellm`: con `provider = "local"` el `model` se respeta.
+
+    El riesgo (endpoint derivado del `model`) solo existe en el path LiteLLM; con
+    `local` los ids raros de HuggingFace deben poder declararse sin verse truncados.
+    """
+    caplog.set_level(logging.WARNING, logger="tepochcalli_flow.config")
+    _write_config(tmp_path, '[embedding]\nprovider = "local"\nmodel = "user@host/model"\n')
+
+    cfg = flow_config.load_config(tmp_path)
+
+    assert cfg.embedding.model == "user@host/model"
+    assert not any("componente de endpoint" in message for message in _module_messages(caplog))

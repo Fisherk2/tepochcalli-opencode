@@ -7,7 +7,7 @@
 
 use crate::config::{badge_for, Preset};
 use crate::domain::{Badge, WizardError};
-use crate::ports::Ui;
+use crate::ports::{HostFacts, Ui};
 
 use super::embedder_menu::Provenance;
 
@@ -53,6 +53,42 @@ pub(super) fn build_options(
         "API externa vía LiteLLM (clave solo en config gitignored)".to_string(),
         "Configurar después (sin índice, RAG degraded)".to_string(),
     ]
+}
+
+/// Dispositivo de inferencia (H9, ADR-015): `cpu` siempre; `cuda` **solo** si
+/// la sonda vio GPU. La detección NO autoselecciona (§4.1: el índice debe ser
+/// determinista): ordena la elección y nada más — el usuario puede forzar
+/// `cuda`/`cuda:N` por TOML o aquí, y el wizard nunca bloquea (D8.3).
+///
+/// Un `device` ya elegido a mano (`cuda:0`, …) gana fila propia: solo así la
+/// preselección puede conservarlo en la re-entrada (ADR-015 §4.4 (c)).
+pub(super) fn choose_device(
+    ui: &dyn Ui,
+    facts: &HostFacts,
+    preselected: &str,
+) -> Result<String, WizardError> {
+    let mut options = vec!["cpu"];
+    if facts.gpu.is_some() {
+        options.push("cuda");
+    }
+    if !preselected.is_empty() && !matches!(preselected, "cpu" | "cuda") {
+        options.push(preselected);
+    }
+    let default_index = options
+        .iter()
+        .position(|option| *option == preselected)
+        .unwrap_or(0);
+    if facts.gpu.is_none() {
+        ui.panel(
+            "Dispositivo de inferencia",
+            "GPU no detectada: la opción cuda está deshabilitada para este equipo.",
+        );
+    }
+    let index = ui.select("Dispositivo de inferencia", &options, default_index)?;
+    options
+        .get(index)
+        .map(|option| (*option).to_string())
+        .ok_or(WizardError::UserAborted)
 }
 
 /// Re-ask until the answer is non-blank; an exhausted script surfaces

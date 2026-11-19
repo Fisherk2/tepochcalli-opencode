@@ -45,7 +45,7 @@ fn swap_success_runs_six_steps_in_order_and_purges_old_model() {
     let vault = installed_vault();
     let (result, ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -128,7 +128,7 @@ fn swap_missing_confirm_explains_and_mutates_nothing() {
     // luego `Ok` aquí prueba que sin --confirm nada se descarga ni reindexa.
     let (result, ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![],
         empty_http(),
@@ -158,7 +158,7 @@ fn swap_interrupted_download_rolls_back_to_zero_state() {
     let before = snapshot(vault.path());
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![Err(WizardError::NetDownload)],
         empty_http(),
@@ -178,7 +178,7 @@ fn swap_failed_refresh_rolls_back_to_zero_state() {
     let before = snapshot(vault.path());
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![
             gate_ok(NEW_MODEL, 1024, 3_000_000_000),
@@ -199,7 +199,7 @@ fn swap_rejected_gate_rolls_back_to_zero_state() {
     let before = snapshot(vault.path());
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![Ok(CommandOutput {
             status: 0,
@@ -220,7 +220,7 @@ fn swap_keep_previous_retains_old_model() {
     let vault = installed_vault();
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -251,7 +251,7 @@ fn swap_keep_previous_retains_old_model() {
 fn swap_live_files_untouched_while_replacement_runs() {
     let vault = installed_vault();
     let (_, meta, index, model, decoy) = snapshot(vault.path());
-    let ui = TapUi::new(vec![1], vec![]);
+    let ui = TapUi::new(vec![1, 0], vec![]);
     let host = host_16gb();
     let proc = CheckingProc::scripted([gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)]);
     proc.expect_live(vault.path(), NEW_MODEL, &meta, &index, &model, &decoy);
@@ -285,7 +285,7 @@ fn swap_gc_maps_org_qualified_id_to_slug_dirs() {
     let vault = installed_vault_with(NEW_MODEL, &[OLD_MODEL]);
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![0],
+        vec![0, 0],
         vec![],
         vec![gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -304,7 +304,7 @@ fn swap_gc_maps_st_qualified_id_to_both_slug_variants() {
     let vault = installed_vault_with(OLD_MODEL_ST, &[NEW_MODEL]);
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -537,7 +537,7 @@ fn swap_live_config_write_failure_rolls_back_to_zero_state_like_the_other_branch
     // y delataría que un write-config fallido no abortó a tiempo.
     let (result, _ui, proc) = run_swap_case(
         vault.path(),
-        vec![0],
+        vec![0, 0],
         vec![],
         vec![],
         empty_http(),
@@ -668,7 +668,7 @@ fn free_id_gated_repo_passes_hf_token_only_to_child_env() {
     let rt = vault.path().join(".tepochcalli");
     let (result, ui, proc) = run_swap_case(
         vault.path(),
-        vec![2],
+        vec![2, 0],
         vec![GATED_ID.to_string(), GATED_TOKEN.to_string()],
         vec![gate_ok(GATED_ID, 768, 1_500_000_000), refresh_ok(2)],
         http_serving(
@@ -750,7 +750,7 @@ fn swap_meta_rename_failure_restores_config_byte_identical() {
 
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -802,7 +802,7 @@ fn swap_meta_rename_failure_keeps_an_absent_config_absent() {
 
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![1],
+        vec![1, 0],
         vec![],
         vec![gate_ok(NEW_MODEL, 1024, 3_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -834,7 +834,7 @@ fn swap_to_the_same_model_does_not_purge_models() {
     let rt = vault.path().join(".tepochcalli");
     let (result, _ui, _proc) = run_swap_case(
         vault.path(),
-        vec![0],
+        vec![0, 0],
         vec![],
         vec![gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)],
         empty_http(),
@@ -886,7 +886,7 @@ fn free_id_missing_metadata_proceeds_to_download() {
     // Sin entradas: cualquier GET devuelve NetDownload (404/API caída).
     let (result, ui, proc) = run_swap_case(
         vault.path(),
-        vec![2],
+        vec![2, 0],
         vec![id.to_string()],
         vec![gate_ok(id, 512, 900_000_000), refresh_ok(2)],
         empty_http(),
@@ -916,4 +916,54 @@ fn free_id_missing_metadata_proceeds_to_download() {
         calls.iter().map(|call| &call.env).collect::<Vec<_>>()
     );
     no_stray_temps(vault.path());
+}
+
+/// TD-47 / ADR-015 §4.4 (c): un `device` escrito a mano sobrevive a la
+/// re-entrada `config embedder`. Aceptar la preselección reescribe el MISMO
+/// valor — el swap deja de ser destructivo con la elección manual.
+#[test]
+fn swap_preserves_a_hand_written_device() {
+    let vault = installed_vault();
+    let config = vault
+        .path()
+        .join(".tepochcalli")
+        .join("config")
+        .join("tepochcalli.toml");
+    // Elección manual fuera del catálogo (`cuda:N`): el caso que ADR-015 cita.
+    std::fs::write(
+        &config,
+        "[embedding]\nprovider = \"local\"\nmodel = \"paraphrase-multilingual-MiniLM-L12-v2\"\ndevice = \"cuda:0\"\n",
+    )
+    .expect("config con device manual");
+    let (result, ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![0, 1],
+        vec![],
+        vec![gate_ok(OLD_MODEL, 384, 1_000_000_000), refresh_ok(2)],
+        empty_http(),
+        &confirmed(),
+    );
+    result.expect("el swap local debe completarse conservando el device");
+
+    // Opciones ["cpu", "cuda:0"] con la elección manual preseleccionada.
+    let select = ui
+        .events()
+        .into_iter()
+        .find_map(|event| match event {
+            common::UiEvent::Select {
+                prompt,
+                options,
+                default,
+            } if prompt.contains("Dispositivo") => Some((options, default)),
+            _ => None,
+        })
+        .expect("la re-entrada pregunta el dispositivo");
+    assert_eq!(select.0, vec!["cpu".to_string(), "cuda:0".to_string()]);
+    assert_eq!(select.1, 1, "cuda:0 va preseleccionado");
+
+    let after = std::fs::read_to_string(&config).expect("config tras el swap");
+    assert!(
+        after.contains("device = \"cuda:0\""),
+        "el device manual sobrevive a la re-entrada, got:\n{after}"
+    );
 }

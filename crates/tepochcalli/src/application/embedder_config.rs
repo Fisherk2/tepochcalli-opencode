@@ -28,10 +28,15 @@ pub(super) const F6_EXTERNAL_HEADER: &str =
 pub(super) const F6_NONE_HEADER: &str =
     "generado por `tepochcalli install` (F6, salida 5) — re-entrada: `tepochcalli config embedder`";
 
-/// `provider = "local"` con el modelo y, cuando se conoce, su `revision` (SHA):
-/// sin esa clave el read path cae al default del flow y puede no coincidir con
-/// el snapshot materializado (D59).
-pub(super) fn local_config(header: &str, model: &str, revision: Option<&str>) -> String {
+/// `provider = "local"` con el modelo, su `revision` (SHA) cuando se conoce y
+/// el dispositivo ELEGIDO (H9/ADR-015 (b)): sin esa clave el read path cae al
+/// default del flow y puede no coincidir con el snapshot materializado (D59).
+pub(super) fn local_config(
+    header: &str,
+    model: &str,
+    revision: Option<&str>,
+    device: &str,
+) -> String {
     let mut body = format!(
         "# {header}\n[embedding]\nprovider = \"local\"\nmodel = \"{}\"\n",
         toml_escape(model)
@@ -39,7 +44,7 @@ pub(super) fn local_config(header: &str, model: &str, revision: Option<&str>) ->
     if let Some(sha) = revision {
         body.push_str(&format!("revision = \"{}\"\n", toml_escape(sha)));
     }
-    body.push_str("device = \"cpu\"\n");
+    body.push_str(&format!("device = \"{}\"\n", toml_escape(device)));
     body
 }
 
@@ -116,6 +121,7 @@ pub fn read_completed_report(vault: &Path) -> Option<Phase6Report> {
         provider,
         model,
         revision,
+        device: config_value(&body, "device"),
         dims: None,
         rss_peak_bytes: None,
     })
@@ -131,15 +137,15 @@ pub fn compensate_phase6(vault: &Path) -> Result<(), WizardError> {
 #[cfg(test)]
 mod tests {
     use super::{
-        config_path, external_config, local_config, none_config, write_config, F6_EXTERNAL_HEADER,
-        F6_LOCAL_HEADER, F6_NONE_HEADER,
+        config_path, external_config, local_config, none_config, read_completed_report,
+        write_config, F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER,
     };
 
     #[test]
     fn config_bodies_combine_the_caller_header_byte_identically() {
         // Trazabilidad del artefacto: la cabecera es del caller, el cuerpo lo
         // ponen los generadores. Comillas/barras van en medio del escape.
-        let body = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3", None);
+        let body = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3", None, "cpu");
         assert_eq!(
             body,
             "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
@@ -149,7 +155,7 @@ mod tests {
              device = \"cpu\"\n"
         );
         // Con SHA, `revision` va entre `model` y `device` (D59).
-        let pinned = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3", Some("5617a9f"));
+        let pinned = local_config(F6_LOCAL_HEADER, "BAAI/bge-m3", Some("5617a9f"), "cpu");
         assert_eq!(
             pinned,
             "# generado por `tepochcalli install` (F6) — re-entrada: `tepochcalli config embedder`\n\
@@ -173,6 +179,29 @@ mod tests {
              [embedding]\n\
              provider = \"none\"\n"
         );
+    }
+
+    /// H9/ADR-015 (b): el cuerpo escribe el device ELEGIDO, no un `cpu` fijo.
+    #[test]
+    fn local_config_writes_the_chosen_device() {
+        let body = local_config(F6_LOCAL_HEADER, "m", None, "cuda");
+        assert!(body.contains("device = \"cuda\""), "got:\n{body}");
+        assert!(!body.contains("device = \"cpu\""), "got:\n{body}");
+    }
+
+    /// `--resume` reconstruye el reporte CON su device: el artefacto y el
+    /// reporte no divergen (H9).
+    #[test]
+    fn read_completed_report_keeps_the_device() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let body = local_config(F6_LOCAL_HEADER, "m", None, "cuda:0");
+        if let Err(err) = write_config(vault.path(), &body) {
+            panic!("write_config: {err:?}");
+        }
+        let report = read_completed_report(vault.path()).expect("config local ⇒ reporte");
+        assert_eq!(report.device.as_deref(), Some("cuda:0"));
     }
 
     /// L2-5: un rename que falla (destino ocupado por un dir) limpia el

@@ -14,10 +14,32 @@ pub struct MergeReport {
     pub skipped: Vec<PathBuf>,
 }
 
+/// What an overwrite wrote and backed up (H7 `update`). Feeds
+/// [`crate::adapters::payload::rollback_overwrite`] when a run fails midway:
+/// `backed_up` are the originals saved as `<ruta>.bak`, `written` every file
+/// the overwrite created or replaced.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OverwriteJournal {
+    /// Files written by the overwrite (new or replaced).
+    pub written: Vec<PathBuf>,
+    /// Pre-existing files copied to `<ruta>.bak` before being replaced.
+    pub backed_up: Vec<PathBuf>,
+}
+
 /// Materializes the workspace payload (`ReleasePayload` vs `LocalPayload`
 /// in T8). Returns exactly written + skipped (pre-existing user files,
 /// `.obsidian/`, symlinks) — basis of `.install-intent`.
 pub trait PayloadSource {
     /// Copy/extract the payload under `dest`; return written + skipped.
     fn materialize_report(&self, dest: &Path) -> Result<MergeReport, WizardError>;
+    /// Overwrite ONLY the entries whose first component is in `scopes`
+    /// (H7 `update`): every replaced file is saved as `<ruta>.bak` first and
+    /// journaled, identical content is a no-op. On error the journal keeps
+    /// what was done so the caller can roll back.
+    fn materialize_overwrite(
+        &self,
+        dest: &Path,
+        scopes: &[&str],
+        journal: &mut OverwriteJournal,
+    ) -> Result<(), WizardError>;
 }

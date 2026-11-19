@@ -21,7 +21,7 @@ use std::path::Path;
 
 use crate::config::{default_and_large, parse_presets, Preset};
 use crate::domain::{EmbedderChoice, WizardError};
-use crate::ports::{CommandRunner, HostProbe, HttpClient, Ui};
+use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
 
 use super::embedder_config::{F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER};
 use super::embedder_estimate::{estimate_row, BYTES_PER_MB, HF_API_BASE};
@@ -33,7 +33,9 @@ pub use super::embedder_config::{
 };
 pub(super) use super::embedder_config::{external_config, local_config, none_config, write_config};
 pub(super) use super::embedder_estimate::parse_hf_metadata;
-pub(super) use super::embedder_options::{ask_non_empty, ask_secret_non_empty, build_options};
+pub(super) use super::embedder_options::{
+    ask_non_empty, ask_secret_non_empty, build_options, choose_device,
+};
 
 /// Menu order = UI index contract (D7.1, ADR-007).
 ///
@@ -99,6 +101,9 @@ pub struct Phase6Report {
     /// snapshot. `None` cuando no se conoce (la API de HF no respondió) o no
     /// aplica (paths 4-5).
     pub revision: Option<String>,
+    /// Dispositivo escrito en `[embedding].device` (H9, ADR-015): `None` para
+    /// los paths 4-5, que no llevan embedder local.
+    pub device: Option<String>,
     /// Gate-measured dims (`None` for paths 4-5).
     pub dims: Option<u32>,
     /// Gate-measured RSS peak in bytes (`None` for paths 4-5).
@@ -123,9 +128,9 @@ pub fn run_phase6(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
             .copied()
             .ok_or(WizardError::UserAborted)?;
         match choice {
-            EmbedderChoice::PresetDefault => return finish_local(deps, vault, default),
-            EmbedderChoice::PresetLarge => return finish_local(deps, vault, large),
-            EmbedderChoice::HuggingFaceId => match finish_free_id(deps, vault) {
+            EmbedderChoice::PresetDefault => return finish_local(deps, vault, default, &facts),
+            EmbedderChoice::PresetLarge => return finish_local(deps, vault, large, &facts),
+            EmbedderChoice::HuggingFaceId => match finish_free_id(deps, vault, &facts) {
                 Err(WizardError::ModelInvalid) => {
                     deps.ui.panel(
                         "E_MODEL_INVALID",
@@ -145,8 +150,10 @@ fn finish_local(
     deps: &Phase6Deps<'_>,
     vault: &Path,
     preset: &Preset,
+    facts: &HostFacts,
 ) -> Result<Phase6Report, WizardError> {
     let revision = Some(preset.revision.as_str());
+    let device = choose_device(deps.ui, facts, &preset.device)?;
     let gate = run_gate(deps.proc, vault, &preset.hf_id, revision, None)?;
     verify_materialized(vault, &preset.hf_id, revision)?;
     deps.ui.panel(
@@ -161,18 +168,23 @@ fn finish_local(
     );
     write_config(
         vault,
-        &local_config(F6_LOCAL_HEADER, &preset.hf_id, revision),
+        &local_config(F6_LOCAL_HEADER, &preset.hf_id, revision, &device),
     )?;
     Ok(Phase6Report {
         provider: "local".to_string(),
         model: Some(preset.hf_id.clone()),
         revision: Some(preset.revision.clone()),
+        device: Some(device),
         dims: Some(gate.dims),
         rss_peak_bytes: Some(gate.rss_peak_bytes),
     })
 }
 
-fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, WizardError> {
+fn finish_free_id(
+    deps: &Phase6Deps<'_>,
+    vault: &Path,
+    facts: &HostFacts,
+) -> Result<Phase6Report, WizardError> {
     let id = ask_non_empty(deps.ui, "HuggingFace model id")?;
     if !is_plausible_hf_id(&id) {
         return Err(WizardError::ModelInvalid);
@@ -208,6 +220,10 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
             "La API de HF no responde (sin red): se intenta la descarga directa.",
         );
     }
+    // El dispositivo se pregunta tras validar el id y antes de descargar: un
+    // `cuda` elegido en un host sin GPU falla al cargar el modelo, no al
+    // configurar (D8.3).
+    let device = choose_device(deps.ui, facts, "cpu")?;
     let gate = run_gate(deps.proc, vault, &id, revision.as_deref(), token.as_deref())?;
     verify_materialized(vault, &id, revision.as_deref())?;
     deps.ui.panel(
@@ -222,12 +238,13 @@ fn finish_free_id(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
     );
     write_config(
         vault,
-        &local_config(F6_LOCAL_HEADER, &id, revision.as_deref()),
+        &local_config(F6_LOCAL_HEADER, &id, revision.as_deref(), &device),
     )?;
     Ok(Phase6Report {
         provider: "local".to_string(),
         model: Some(id),
         revision,
+        device: Some(device),
         dims: Some(gate.dims),
         rss_peak_bytes: Some(gate.rss_peak_bytes),
     })
@@ -250,6 +267,7 @@ fn finish_external(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, 
         provider: "litellm".to_string(),
         model: Some(model),
         revision: None,
+        device: None,
         dims: None,
         rss_peak_bytes: None,
     })
@@ -269,6 +287,7 @@ impl Phase6Report {
             provider: "none".to_string(),
             model: None,
             revision: None,
+            device: None,
             dims: None,
             rss_peak_bytes: None,
         }

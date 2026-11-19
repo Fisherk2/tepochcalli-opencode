@@ -12,6 +12,9 @@ min_ram_gb = 0.7
 rec_ram_gb = 1.0
 gpu_recommended = false
 recommended_flag = true
+# Dispositivo sugerido por el catálogo (ADR-015): dato, no decisión — el
+# usuario puede cambiarlo en el menú y el TOML conserva su elección.
+device = "cpu"
 
 [[preset]]
 name = "BGE-M3 (GPU)"
@@ -25,3 +28,4 @@ min_ram_gb = 2.4
 rec_ram_gb = 2.9
 gpu_recommended = true
 recommended_flag = false
+device = "cuda"

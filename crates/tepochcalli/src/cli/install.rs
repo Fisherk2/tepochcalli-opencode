@@ -54,44 +54,18 @@ pub(crate) fn run_install(
     let payload_url = flags.value("--payload-url").map(str::to_string);
     let payload_sha256 = flags.value("--payload-sha256").map(str::to_string);
     // Payload source validation (usage errors, exit 2 — no network touched).
-    // First: an EMPTY value is a typo, not an absent flag. Filtering it out
-    // used to turn `--payload-url "$URL"` with an empty `$URL` into a silent
-    // release-asset download (network), so it fails here — before any HTTP
-    // client exists.
-    for (flag, value) in [
-        ("--payload", &payload),
-        ("--payload-url", &payload_url),
-        ("--payload-sha256", &payload_sha256),
-    ] {
-        if value.as_deref().is_some_and(|v| v.trim().is_empty()) {
-            let _ = writeln!(
-                stderr,
-                "install: {flag} got an empty value (a shell variable that expanded to \
-                 nothing?); pass a real value, or drop the flag"
-            );
-            return 2;
-        }
+    if let Err(code) = validate_payload_flags(
+        "install",
+        payload.as_deref(),
+        payload_url.as_deref(),
+        payload_sha256.as_deref(),
+        stderr,
+    ) {
+        return code;
     }
-    // Then: `--payload` (local tree) conflicts with the URL override, and the
-    // override needs both halves (URL + SHA-256) or neither.
     let payload_dir = payload;
     let url_override = payload_url;
     let sha_override = payload_sha256;
-    if payload_dir.is_some() && (url_override.is_some() || sha_override.is_some()) {
-        let _ = writeln!(
-            stderr,
-            "install: --payload conflicts with --payload-url/--payload-sha256 \
-             (local tree or release asset, not both)"
-        );
-        return 2;
-    }
-    if url_override.is_some() != sha_override.is_some() {
-        let _ = writeln!(
-            stderr,
-            "install: --payload-url needs --payload-sha256 (and vice versa)"
-        );
-        return 2;
-    }
     // T6 rule: no TTY means no prompts — fail fast instead of hanging or
     // resolving the default dir under an unintended cwd.
     if !tty_ok(stderr, non_interactive, "install") {
@@ -216,6 +190,49 @@ pub(crate) fn run_install(
         stdout,
         stderr,
     )
+}
+
+/// Shared `--payload*` usage validation (`install` + `update`, exit 2, no
+/// network touched). An EMPTY value is a typo, not an absent flag — filtering
+/// it out used to turn `--payload-url "$URL"` with an empty `$URL` into a
+/// silent release download.
+pub(crate) fn validate_payload_flags(
+    command: &str,
+    payload: Option<&str>,
+    url: Option<&str>,
+    sha: Option<&str>,
+    stderr: &mut dyn std::io::Write,
+) -> Result<(), u8> {
+    for (flag, value) in [
+        ("--payload", payload),
+        ("--payload-url", url),
+        ("--payload-sha256", sha),
+    ] {
+        if value.is_some_and(|v| v.trim().is_empty()) {
+            let _ = writeln!(
+                stderr,
+                "{command}: {flag} got an empty value (a shell variable that expanded to \
+                 nothing?); pass a real value, or drop the flag"
+            );
+            return Err(2);
+        }
+    }
+    if payload.is_some() && (url.is_some() || sha.is_some()) {
+        let _ = writeln!(
+            stderr,
+            "{command}: --payload conflicts with --payload-url/--payload-sha256 \
+             (local tree or release asset, not both)"
+        );
+        return Err(2);
+    }
+    if url.is_some() != sha.is_some() {
+        let _ = writeln!(
+            stderr,
+            "{command}: --payload-url needs --payload-sha256 (and vice versa)"
+        );
+        return Err(2);
+    }
+    Ok(())
 }
 
 /// `true` when the vault already holds downloaded models (offline resume).
