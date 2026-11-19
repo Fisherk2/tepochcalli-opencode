@@ -1,4 +1,8 @@
-## Tepochcalli - USER HISTORIES
+# Backlog — Tepochcalli
+
+2026-11-19 | Fisherk2 | frozen
+
+## 1. Purpose and scope
 
 Quiero construir un Workspace de Obsidian (Vault) para investigación y temas de estudio, potenciado con [Opencode V2](https://opencode.ai/v2/docs) y un motor RAG. El sistema debe permitir consultas semánticas sobre notas de investigación, PDFs académicos y documentación técnica, minimizando el consumo de tokens del LLM mediante indexación incremental y recuperación precisa de fragmentos relevantes.
 
@@ -7,11 +11,8 @@ Todos los archivos de configuración, scripts de ingesta, índices vectoriales y
 El sistema consta de cuatro componentes principales:
 
 1. **Obsidian Vault (Capa de Usuario):** Directorio raíz donde residen las notas markdown, PDFs, imágenes y enlaces. Es el único componente visible para el usuario final.
-
 2. **RAG Engine (Capa de Procesamiento):** Motor de indexación incremental que monitorea el vault, extrae texto de markdown y PDFs, genera embeddings locales y los almacena en una base de datos vectorial embebida.
-
 3. **MCP Server (Capa de Comunicación):** Servidor que expone herramientas de búsqueda semántica mediante el protocolo Model Context Protocol, permitiendo que Opencode consulte el índice vectorial, lo llamaremos tepochcalli-rag para identificarlo en el harness.
-
 4. **[Opencode V2](https://opencode.ai/v2/docs) (Capa de Agente):** Harness que consume las herramientas MCP y orquesta las consultas del usuario final hacia el LLM con contexto enriquecido.
 
 **RAG Engine**:
@@ -49,17 +50,68 @@ La organización del vault de Obsidian debe seguir esta estructura jerárquica:
 - Las fuentes y materiales que serán indexados (PDFs, Markdowns, Hojas calculo, etc.) deben almacenarse en `00-Resources/`
 - El usuario debe tener la libertad de crear su propios directorios dentro de `00-Resources/` para que tenga la organización deseada con sus materiales, por lo que se debe procurar que el RAG engine pueda de manera automática (ó semi-automática) detectar e indexar los recursos de todo el contenido de `00-Resources/` sin importar como este organizado dentro de ese directorio.
 
+### Criterios de aceptación (C1–C7)
+
 El sistema se considera correctamente implementado cuando:
 
-1. El vault de Obsidian funciona normalmente sin interferencias
-2. Los archivos nuevos se indexan automáticamente en menos de 30 segundos cuando Opencode invoca la función del MCP correspondiente
-3. Las búsquedas semánticas devuelven resultados relevantes en menos de 500ms
-4. El consumo de tokens por consulta es inferior a 2000 tokens (incluyendo contexto)
-5. Las respuestas del agente incluyen citas precisas a las fuentes originales
-6. El sistema puede manejar vaults de hasta 10,000 notas y 1,000 PDFs sin degradación de rendimiento
-7. Pueda procesar distintos formatos de texto, si no, utilizar el convertidor Markdown para que pueda manipularse adecuadamente.
+- **C1** — El vault de Obsidian funciona normalmente sin interferencias
+- **C2** — Los archivos nuevos se indexan automáticamente en menos de 30 segundos cuando Opencode invoca la función del MCP correspondiente
+- **C3** — Las búsquedas semánticas devuelven resultados relevantes en menos de 500ms
+- **C4** — El consumo de tokens por consulta es inferior a 2000 tokens (incluyendo contexto)
+- **C5** — Las respuestas del agente incluyen citas precisas a las fuentes originales
+- **C6** — El sistema puede manejar vaults de hasta 10,000 notas y 1,000 PDFs sin degradación de rendimiento
+- **C7** — Pueda procesar distintos formatos de texto, si no, utilizar el convertidor Markdown para que pueda manipularse adecuadamente.
 
-### Agent Workflow
+## 2. User stories
+
+| ID | As [role] | I want [action] | So that [benefit] | Priority [high/mid/low] | Complexity [S/M/L] | Status [open/accepted/deferred] | Source [question N] |
+| ---- | ---------- | ---------------- | ------------------- | ------------------------- | -------------------- | --------------------------------- | -------------------- |
+| US-001 | investigador | un vault Obsidian que no interfiera con mi flujo y con carpetas numeradas | trabajar con notas y PDFs con indexación automática de `00-Resources/` | high | M | accepted | UH §1 / C1, C2 |
+| US-002 | investigador | indexación incremental de mis materiales | consultas semánticas con consumo mínimo de tokens | high | L | accepted | UH §1 / C2, C3 |
+| US-003 | agente | el servidor MCP `tepochcalli-rag` | consultar el índice vectorial desde Opencode | high | M | accepted | UH §1 / C3, C4 |
+| US-004 | usuario | Opencode V2 orquestando el LLM con contexto enriquecido | respuestas citadas sobre mis fuentes | high | M | accepted | UH §1 / C5 |
+| US-005 | usuario | un wizard TUI Rust, atómico y versionado | instalar el workspace sin interferir con la meta-configuración del harness | high | L | accepted | Wizard de instalación |
+| US-006 | usuario | un convertidor a Markdown vía MCP | convertir recursos propios o URLs a markdown y añadirlos al índice | mid | M | accepted | UH §1 / C7 |
+| US-007 | usuario | que el wizard gestione las dependencias automáticamente | empezar a usar el workspace sin instalar nada en el host | high | L | deferred | Q-003, Q-004 |
+| US-008 | investigador | los 9 comandos del workflow de investigación | cubrir definición, recolección, evaluación, análisis, citas, redacción, revisión, diseminación y mantenimiento | high | L | accepted | Agent Workflow |
+| US-009 | investigador | 5 agentes primarios con roles y permisos definidos | delegar cada fase del workflow a un agente especializado | high | L | accepted | Agent Workflow |
+| US-010 | agente | skills de investigación instaladas localmente | tener capacidades de research, OSINT, síntesis, gráficos y Obsidian | mid | M | accepted | UH §skills (14 categorías) |
+| US-H1 | investigador | convertir documentos a Markdown con la misma semántica que `local-doc-to-markdown` | reutilizar la conversión conocida con anydoc como fallback | high | M | accepted | H1 (2026-10-30) |
+| US-H2 | usuario | respuestas de conversión que no inunden el contexto del LLM | mantener ~200 tokens por respuesta de conversión | high | S | accepted | H2 (2026-10-30) |
+| US-H3 | usuario | indicar qué directorio escanear o dónde escribir el resultado | dar órdenes directas de escaneo y conversión dentro del vault | high | M | accepted | H3 / B′ (2026-10-30) |
+| US-H4 | agente | una skill espejo de `local-doc-to-markdown` | decidir cuándo y cómo convertir sin adivinar | high | M | accepted | H4 (2026-10-30) |
+| US-H5 | usuario | ver versión, estado e instalación del embedder antes de actuar | saber qué gestiona el wizard y qué opciones tengo | high | M | deferred | H5 (2026-11-18) |
+| US-H6 | usuario | instalar limpiamente el payload en mi workspace destino | tener el runtime `.tepochcalli/` listo con `cocoindex` y `markitdown` | high | M | deferred | H6 (2026-11-18) |
+| US-H7 | usuario | actualizar un workspace con versión anterior | conservar mi trabajo mientras se actualiza el payload | high | M | deferred | H7 (2026-11-18) |
+| US-H8 | usuario | remover solo los artefactos del instalador | limpiar el workspace sin tocar mis notas | mid | S | deferred | H8 (2026-11-18) |
+| US-H9 | usuario | reinstalar o cambiar el modelo embedder sin reinstalar el workspace | gestionar modelos locales y API keys con transparencia de hardware | high | L | deferred | H9 (2026-11-18) |
+| US-H10 | usuario | salir del wizard sin cambios | abortar sin materializar ni modificar nada | low | S | deferred | H10 (2026-11-18) |
+| US-H11 | usuario | que el instalador se cierre de forma confirmada y amable | terminar la operación con agradecimiento a Tepochcalli | low | S | deferred | H11 (2026-11-18) |
+
+Los detalles literales de cada historia se conservan en las subsecciones siguientes; el texto de H1–H11 y de las tablas y diagramas del workflow es el de la fuente original, sin resumen.
+
+### US-005 — Wizard de instalación
+
+Utilizaremos un TUI en forma de instalador atomico y versionado para descargar el workspace de obsidian, en el cual incluirá todo lo mencionado anteriormente, desarrollado en Rust.
+Esto con el fin de no interferir con la meta-configuración del harness de desarrollo, tengo un proyecto con la misma arquitectura de instalación con un gestor de paquetes:
+
+<https://github.com/Fisherk2/codice-opencode>
+
+En el, los archivos que se instalan están en un directorio llamado `template/`, nosotros haremos lo mismo, todo el contenido que este en `obsidian-workspace/` se instalara al usuario con los requisitos mencionados
+
+El directorio `obsidian-workspace/` debe contener obligatoriamente los siguientes directorios:
+
+- `00-Resources/`: Es donde el usuario debe añadir sus recursos que deben ser embebidos, podríamos dejarlo vacio o con un markdown y un PDF con información de muestra para testear el RAG, es mas que nada un placeholder
+- `.opencode/`: Es donde se configurara el harness, debe incluir el directorio de skills, comandos y agentes (Proximamente un [plugin](https://opencode.ai/v2/docs/build/plugins/) o tool para asegurar la utilizacion del MCP)
+- `opencode.json`: Es el archivo de configuración general del harness, solo de tu parte, me vas a ayudar como añadir el [MCP](https://opencode.ai/v2/docs/mcp-servers/) de forma local.
+- `.<Directorio con el nombre del motor RAG>/`: Es donde estará el motor RAG.
+- `AGENTS.md`: Es el archivo de instrucciones para los agentes de IA, que servirá como system prompt. En el debe estar establecido como usar el Vault, que herramientas debe utilizar y que recursos debe consultar para entregarle al usuario la mejor respuesta a sus peticiones. Debe priorizar primero usar el MCP que se diseñara para conectar el motor RAG con Opencode, después puede utilizar las herramientas restantes u otros MCPs que el usuario pueda configurar. Este archivo puede ser modificable por el usuario al gusto, así que en ese sentido no podemos restringir su modificación (Para implementaciones futuras, dejaremos este fichero solo con un placeholder cuando añadamos un [plugin](https://opencode.ai/v2/docs/build/plugins/) o tool que pueda utilizar el RAG con Opencode)
+
+### US-007 — Instalación de dependencias
+
+La gestión de dependencias y su instalación automática por el wizard se plantea en la deuda cognitiva (Q-003 y Q-004, §3): el usuario no debe instalar dependencias en su host nativamente y el instalador debe ser ready-to-use para Opencode. La fuente no cierra estas preguntas, por lo que la historia queda `deferred`; las decisiones de canal y runtime que sí están documentadas se registran en §4.
+
+### US-008 — Agent Workflow: 9 comandos del workflow de investigación
 
 Para enriquecer el flujo de trabajo del workspace tenemos que diseñar estos comandos y agentes para la metodologia de investigacion general
 
@@ -132,6 +184,8 @@ graph TD
     style F6 fill:#f3e5f5,stroke:#4a148c
 ```
 
+### US-009 — Agentes Primarios
+
 | Nombre del Agente Primario                      | Justificación Histórica                                                                                                                                                                                                                    | Propósito en el Workflow                                                                                                                                                                                                                 | Comandos Asignados                                               | Permisos                                                                                                                                                                                                            |
 | :---------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **Itzamná**<br>*(Agente General / Orquestador)* | En la mitología maya, es el dios supremo, creador y patrono del conocimiento, la escritura y la sabiduría. Actúa como la fuente primordial de guía y el puente entre lo divino (el sistema) y los sacerdotes (los agentes especializados). | Es la interfaz principal con el usuario. Resuelve dudas generales, ofrece sugerencias contextuales, explica el estado del workspace y enruta las solicitudes hacia los agentes especializados sin ejecutar el pipeline de investigación. | **Ninguno**<br>*(Gestión de interacción general y enrutamiento)* | **Lectura/Escritura (Contexto):** Puede leer el estado general del workspace para ofrecer sugerencias informadas y hacer revisiones.                                                                                |
@@ -139,6 +193,8 @@ graph TD
 | **Pochteca**<br>*(El Explorador)*               | Mercaderes de larga distancia del Imperio Mexica. Su función secundaria y más crítica era actuar como los "ojos y oídos" del Tlatoani, recopilando inteligencia y datos de territorios lejanos sin alterar su propio entorno.              | Navega la web, busca información y extrae datos crudos de fuentes externas según los parámetros estrictos definidos por Nezahualcóyotl.                                                                                                  | `/research`                                                      | **Solo Lectura (Workspace) / Navegación (Externo):** Acceso total a MCPs y herramientas de búsqueda, navegadores y lectores de documentos. **Estrictamente sin permisos de escritura** en el workspace del usuario. |
 | **Chilam**<br>*(El Auditor)*                    | Título del sumo sacerdote y profeta maya. Los *Chilam Balam* eran los libros sagrados donde estos sabios compilaban, validaban y preservaban el conocimiento histórico, astronómico y médico, filtrando la verdad.                         | Evalúa la calidad de los datos, detecta contradicciones, formatea las citas bibliográficas y realiza la revisión por pares del contenido para asegurar su veracidad y coherencia.                                                        | `/validate`<br>`/cite`<br>`/review`                              | **Lectura (Total) / Escritura (Auditoría):** Lee todos los datos y borradores. Solo puede escribir en archivos de registro de auditoría, bases de datos de citas o notas de revisión.                               |
 | **Tlacuilo**<br>*(El Ingeniero)*                | El escriba y artesano náhuatl (*tlacuiloa*: escribir/pintando). Era el maestro de los formatos, los pigmentos y el plasmar físicamente el conocimiento en los códices, adaptándolo a la materia (piedra, papel amate, piel).               | Materializa la investigación. Redacta el texto final, formatea los documentos y transforma los datos en los artefactos técnicos solicitados (Markdown, CSV, cuadernos de Python).                                                        | `/draft`<br>`/transform`<br>`/update`                            | **Lectura/Escritura (Workspace):** Permisos exclusivos para crear, sobrescribir y modificar los archivos finales en el workspace (documentos, hojas de cálculo, código). Sin acceso a la navegación web.            |
+
+### US-010 — Skills de investigación (14 categorías)
 
 Para las skills, necesitamos que cargues la skill `find-skills` para encontrar las skills mas apropiadas:
 
@@ -161,41 +217,9 @@ Instala las skills de forma local, no global, en el proyecto y lo que se descarg
 
 Revisa que no halla skills redundantes o duplicadas.
 
-### Wizard de instalación
-
-Utilizaremos un TUI en forma de instalador atomico y versionado para descargar el workspace de obsidian, en el cual incluirá todo lo mencionado anteriormente, desarrollado en Rust.
-Esto con el fin de no interferir con la meta-configuración del harness de desarrollo, tengo un proyecto con la misma arquitectura de instalación con un gestor de paquetes:
-
-<https://github.com/Fisherk2/codice-opencode>
-
-En el, los archivos que se instalan están en un directorio llamado `template/`, nosotros haremos lo mismo, todo el contenido que este en `obsidian-workspace/` se instalara al usuario con los requisitos mencionados
-
-El directorio `obsidian-workspace/` debe contener obligatoriamente los siguientes directorios:
-
-- `00-Resources/`: Es donde el usuario debe añadir sus recursos que deben ser embebidos, podríamos dejarlo vacio o con un markdown y un PDF con información de muestra para testear el RAG, es mas que nada un placeholder
-- `.opencode/`: Es donde se configurara el harness, debe incluir el directorio de skills, comandos y agentes (Proximamente un [plugin](https://opencode.ai/v2/docs/build/plugins/) o tool para asegurar la utilizacion del MCP)
-- `opencode.json`: Es el archivo de configuración general del harness, solo de tu parte, me vas a ayudar como añadir el [MCP](https://opencode.ai/v2/docs/mcp-servers/) de forma local.
-- `.<Directorio con el nombre del motor RAG>/`: Es donde estará el motor RAG.
-- `AGENTS.md`: Es el archivo de instrucciones para los agentes de IA, que servirá como system prompt. En el debe estar establecido como usar el Vault, que herramientas debe utilizar y que recursos debe consultar para entregarle al usuario la mejor respuesta a sus peticiones. Debe priorizar primero usar el MCP que se diseñara para conectar el motor RAG con Opencode, después puede utilizar las herramientas restantes u otros MCPs que el usuario pueda configurar. Este archivo puede ser modificable por el usuario al gusto, así que en ese sentido no podemos restringir su modificación (Para implementaciones futuras, dejaremos este fichero solo con un placeholder cuando añadamos un [plugin](https://opencode.ai/v2/docs/build/plugins/) o tool que pueda utilizar el RAG con Opencode)
-
-### Deuda cognitiva
-
-Las siguientes cuestiones son dudas mías acerca de como tenemos que llevar el proyecto, la experiencia de usuario y como es que el wizard de instalación se presentará:
-
-1. ¿Que gestor de paquetes me recomiendas utilizar? el en repositorio que te proporcione, he utilizado bunx ya que el instalador funciona con Typescript, pero me gustaria saber si puedo usar el mismo, pnpm, o cargo.
-2. En caso de utilizar cargo, ¿que condiciones extra debo tener para utilizar su gestor de paquetes? ¿Debo registrarme en algun sitio web para hostear el paquete como lo que se hace con Bunx con npmjs?
-3. Tanto el MCP como el motor RAG en si mismo puede contener o es en si mismo, una dependencia, ¿Que podemos hacer para gestionar las dependencias a la hora de el usuario instale el workspace? Mi intencion es evitar lo maximo posible que el usuario tenga que instalar dependencias en su host nativamente, preferiblemente como lo que se hace con .venv cuando se desarrolla con Python, pero tampoco hay que hacer que el usuario ejecute comandos extras para comenzar a utilizar el workspace.
-4. ¿Podemos hacer que el wizard de instalación gestione las dependencias que se instalan de forma automatica sin que el usuario intervenga o instale manualmente las dependencias necesarias para ejecutar el MCP o el motor RAG? El instalador debe ser ready-to-use para Opencode, ¿Es posible que el wizard realiza esa instalacion incluyendo las dependencias o tendremos que establecer en el README del proyecto el paso extra de instalar las dependencias en un entorno seguro (o directamente en el host)? te lo menciono en caso de que el punto anterior no se pueda implementar un entorno virtual y seguro
-5. El MCP ¿En que directorio lo estariamos añadiendo en `obsidian-workspace/`? ¿Dentro de `.<Directorio con el nombre del motor RAG>/`? Si es asi, me gustaria que ese directorio estuviera dividido en 2, uno para el mcp, otro para el motor del RAG. No es opcion crear un directorio llamado `.mcp/` o similar en la raiz del directorio `obsidian-workspace/` para que el usuario final no manipule su contenido.
-6. ¿Como podemos gestionar los embebidos para que procese los documentos en el RAG? ¿Donde podemos hacer que el usuario configure y coloque sus modelos locales para embebidos? ¿Es posible hacerlo en un directorio llamado `.<Directorio con el nombre del motor RAG>/models`? si es asi ¿Es posible crear un archivo de configuración donde el usuario pueda añadir una API key de modelos para embebidos externos? ¿Si el modelo es local, cual seria los requisitos minimos para que el usuario pueda utilizar el workspace?
-
-Me gustaría que respondieras estas preguntas primero antes de tomar decisiones concretas y continuar, investiga en la web para que me proporciones respuestas actualizadas.
-
----
-
 ### Historias de conversión Markdown + skill tepochcalli-mcp (2026-10-30)
 
-#### H1 — Paridad anydoc
+### US-H1 — Paridad anydoc
 
 Como investigador quiero convertir documentos a Markdown con la misma semántica que la skill `local-doc-to-markdown`.
 
@@ -204,7 +228,7 @@ Como investigador quiero convertir documentos a Markdown con la misma semántica
 - anydoc actúa como FALLBACK del conversor.
 - Documento escaneado sin capa de texto ⇒ respuesta «OCR no soportado».
 
-#### H2 — Summary-only
+### US-H2 — Summary-only
 
 Como usuario quiero respuestas de conversión que no inunden el contexto del LLM.
 
@@ -212,15 +236,15 @@ Como usuario quiero respuestas de conversión que no inunden el contexto del LLM
 - Coste aproximado de ~200 tokens por respuesta.
 - Fallo de fuente ⇒ `SOURCE_UNREACHABLE` con guía de solución, sin parciales al LLM.
 
-#### H3 — Directorios parametrizados
+### US-H3 — Directorios parametrizados
 
 Como usuario quiero indicar qué directorio escanear o dónde escribir el resultado.
 
 - «Escanea `sources/` e indexa» e «convierte `prueba.docx` a `convertidos/prueba.md`» funcionan como órdenes directas.
 - `00-Resources/` sigue siendo el convenio default cuando no se indica otro directorio.
-- Decisión del dueño (2026-10-30, por question tool): **B′ — frontera = el vault completo, nada fuera.** El conversor escanea/escribe en CUALQUIER directorio del vault, jamás en directorios externos; fuera del vault ⇒ error tipado (`VALIDATION_ERROR`, mismo estilo D16). `00-Resources/` sigue siendo el convenio default para fuentes indexables (MCP-first/D9.1); la escritura con `output_path` explícito puede apuntar a cualquier ruta interna del vault. La extensión del dominio D16 al OUTPUT del conversor se formaliza como enmienda spec (`spec-markitdown` §Security + `spec-mcp-server` §Security, cuyo wording D16 sigue pendiente del FTR) o ADR nuevo al aterrizar en Phase 3.5 — las HU se implementan en esa fase.
+- Decisión de Fisherk2 (2026-10-30, por question tool): **B′ — frontera = el vault completo, nada fuera.** El conversor escanea/escribe en CUALQUIER directorio del vault, jamás en directorios externos; fuera del vault ⇒ error tipado (`VALIDATION_ERROR`, mismo estilo D16). `00-Resources/` sigue siendo el convenio default para fuentes indexables (MCP-first/D9.1); la escritura con `output_path` explícito puede apuntar a cualquier ruta interna del vault. La extensión del dominio D16 al OUTPUT del conversor se formaliza como enmienda spec (`spec-markitdown` §Security + `spec-mcp-server` §Security, cuyo wording D16 sigue pendiente del FTR) o ADR nuevo al aterrizar en Phase 3.5 — las HU se implementan en esa fase.
 
-#### H4 — Skill `tepochcalli-mcp`
+### US-H4 — Skill `tepochcalli-mcp`
 
 Como agente quiero una skill espejo de `local-doc-to-markdown` para decidir cuándo y cómo convertir.
 
@@ -241,26 +265,17 @@ Como agente quiero una skill espejo de `local-doc-to-markdown` para decidir cuá
 
 - La sección Tools de la skill lista el catálogo completo anterior con una regla de decisión por tool (cuándo usar cada una sin adivinar); todo futuro MCP/tool del proyecto debe añadirse a esa tabla (única fuente de verdad para el agente).
 
-#### Repositorios de referencia
-
-- <https://github.com/firecrawl/anydoc> (motor Rust de conversión)
-- <https://github.com/ofershap/mcp-server-anydoc> (MCP anydoc de referencia/fallback)
-- <https://github.com/microsoft/markitdown> (conversor incumbente)
-- <https://opencode.ai/v2/docs/mcp-servers/> (cómo configurar un MCP en Opencode)
-
----
-
 ### Wizard de instalación: flujo destino (2026-11-18)
 
 Estado objetivo del wizard de instalación (`tepochcalli`), documentado como DESTINO — no como código vigente. Las decisiones de canal, interfaz y alcance que siguen son requisitos de estas HU y quedan pendientes de formalización: no se implementan ni se aprueban aquí.
 
-- **Canal único `uvx` (decisión del dueño, 2026-11-18):** el instalador se publica en PyPI como paquete Python que empaqueta el binario Rust como script (patrón maturin `bindings = "bin"`). El usuario ejecuta `uvx tepochcalli` y se abre el wizard directo: sin binario del proyecto en PATH y sin descargas en runtime. El wheel permanece en la caché de uv hasta su limpieza. Se retira `cargo binstall` / cargo-dist como canal recomendado. El comando de refresco a mostrar en el TUI es `uvx --refresh tepochcalli` (alternativa `uvx tepochcalli@latest`). Inspiración: Codice usa `bunx @fisherk2-dev/codice` y `bunx --fresh @fisherk2-dev/codice`.
+- **Canal único `uvx` (decisión de Fisherk2, 2026-11-18):** el instalador se publica en PyPI como paquete Python que empaqueta el binario Rust como script (patrón maturin `bindings = "bin"`). El usuario ejecuta `uvx tepochcalli` y se abre el wizard directo: sin binario del proyecto en PATH y sin descargas en runtime. El wheel permanece en la caché de uv hasta su limpieza. Se retira `cargo binstall` / cargo-dist como canal recomendado. El comando de refresco a mostrar en el TUI es `uvx --refresh tepochcalli` (alternativa `uvx tepochcalli@latest`). Inspiración: Codice usa `bunx @fisherk2-dev/codice` y `bunx --fresh @fisherk2-dev/codice`.
 - **ADR-014 futuro (dependencia, NO creado aquí):** este flujo exige un ADR-014 que supere el canal de ADR-013 (que rechazó uv/PyPI) y el backend de ADR-003 (cargo-dist), además de una enmienda de `specs/spec-installer-wizard.md`. Queda escrito como requisito pendiente, no como decisión aprobada.
 - **TUI full-screen (dependencia):** botones reales con estados deshabilitados (p. ej. `ratatui`) sustituyen al `dialoguer` line-based actual (D23). Todo bloqueo se muestra como botón deshabilitado con razón visible. Exige enmienda de spec/ADR futura (no se realiza en este lote).
 - **Versión:** la versión instalada se detecta leyendo `.tepochcalli/pyproject.toml`; la versión del wizard es la del paquete/release publicado (gestionada por `uvx`). Comparación semver. Hoy divergen (`Cargo.toml = 0.1.0-beta.1` frente a `pyproject.toml = 0.1.0`): deben alinearse antes de implementar.
 - **Alcance destino de `Update` / `Desinstall`:** `Update` sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`; `Desinstall` remueve `.opencode/`, `.tepochcalli/` y `opencode.json`. Esto amplía el alcance frente al código vigente (F3 no sobrescribe; uninstall hoy solo `.tepochcalli/`) y exige enmienda futura.
 
-#### H5 — Inicio del wizard: versión, estado y navegación
+### US-H5 — Inicio del wizard: versión, estado y navegación
 
 Como usuario quiero que el wizard me muestre la versión que gestiona, el estado de mi instalación y mis opciones disponibles antes de actuar.
 
@@ -274,7 +289,7 @@ Como usuario quiero que el wizard me muestre la versión que gestiona, el estado
 - Mostrar info de contacto y link del repositorio <https://github.com/Fisherk2/tepochcalli-opencode> y el correo `dev@fisherk2.com` para reportar bugs/issues.
 - Todo bloqueo se presenta como botón deshabilitado con razón visible (TUI full-screen; ver dependencias de spec/ADR en el preámbulo).
 
-#### H6 — 🔵 Install
+### US-H6 — 🔵 Install
 
 Como usuario quiero instalar limpiamente el payload en mi workspace de Obsidian destino.
 
@@ -282,7 +297,7 @@ Como usuario quiero instalar limpiamente el payload en mi workspace de Obsidian 
 - Mensaje de confirmación de qué se instala y dónde, incluyendo el runtime `.tepochcalli/` con el motor `cocoindex` y el convertidor `markitdown`.
 - Barra de progreso de descarga e instalación.
 
-#### H7 — 🟢 Update
+### US-H7 — 🟢 Update
 
 Como usuario quiero actualizar un workspace que ya tiene una versión anterior.
 
@@ -290,7 +305,7 @@ Como usuario quiero actualizar un workspace que ya tiene una versión anterior.
 - Mostrar el directorio objetivo; tras confirmar, actualización con barra de progreso.
 - Alcance destino (amplía el código vigente: F3 no sobrescribe) — requiere enmienda futura (ver preámbulo).
 
-#### H8 — 🔴 Desinstall
+### US-H8 — 🔴 Desinstall
 
 Como usuario quiero limpiar el workspace removiendo solo los artefactos del instalador.
 
@@ -298,7 +313,7 @@ Como usuario quiero limpiar el workspace removiendo solo los artefactos del inst
 - Advertir antes de continuar y mostrar el directorio objetivo; tras confirmar, desinstalación con barra de progreso.
 - Alcance destino (hoy uninstall solo `.tepochcalli/`) — requiere enmienda futura (ver preámbulo).
 
-#### H9 — 🟣 Change Embedder
+### US-H9 — 🟣 Change Embedder
 
 Como usuario quiero reinstalar o cambiar el modelo embedder sin reinstalar el workspace.
 
@@ -315,20 +330,48 @@ Como usuario quiero reinstalar o cambiar el modelo embedder sin reinstalar el wo
 - Resumen de las opciones elegidas antes de aplicar.
 - Instalación/reinstalación con barra de progreso.
 
-#### H10 — 🟠 Exit
+### US-H10 — 🟠 Exit
 
 Como usuario quiero salir del wizard sin que se realice ningún cambio.
 
 - Salir del wizard sin más; no se materializa ni modifica nada del workspace.
 
-#### H11 — Cierre
+### US-H11 — Cierre
 
 Como usuario quiero que el instalador se cierre de forma confirmada y amable tras la operación.
 
 - Tras cualquier opción excepto 🟠Exit, cerrar el instalador previa confirmación del usuario presionando cualquier tecla.
 - Agradecimiento a Tepochcalli en el mensaje de cierre.
 
-#### Anexo — Mapeo de módulos de Codice a Rust (requisito, no implementado)
+## 3. Open questions and answers
+
+| ID | Question | Answer | Asked by | Resolved [yes/no] | Date | Affects [story ID] |
+| ---- | --------- | ------- | --------- | ------------------- | ----- | ------------------- |
+| Q-001 | ¿Que gestor de paquetes me recomiendas utilizar? el en repositorio que te proporcione, he utilizado bunx ya que el instalador funciona con Typescript, pero me gustaria saber si puedo usar el mismo, pnpm, o cargo. | Se retira bunx/pnpm; históricamente `cargo binstall` como canal recomendado y, como destino (decisión de Fisherk2 2026-11-18), canal único `uvx` (`uvx tepochcalli`, paquete PyPI con binario Rust vía maturin `bindings = "bin"`). Ver §4 D-005. | Fisherk2 | yes | 2026-10-21 | US-005, US-H5 |
+| Q-002 | En caso de utilizar cargo, ¿que condiciones extra debo tener para utilizar su gestor de paquetes? ¿Debo registrarme en algun sitio web para hostear el paquete como lo que se hace con Bunx con npmjs? | pending — la fuente no responde esta duda (el flujo destino abandona cargo en favor de PyPI/uvx). | Fisherk2 | no | 2026-10-21 | US-005, US-H5 |
+| Q-003 | Tanto el MCP como el motor RAG en si mismo puede contener o es en si mismo, una dependencia, ¿Que podemos hacer para gestionar las dependencias a la hora de el usuario instale el workspace? Mi intencion es evitar lo maximo posible que el usuario tenga que instalar dependencias en su host nativamente, preferiblemente como lo que se hace con .venv cuando se desarrolla con Python, pero tampoco hay que hacer que el usuario ejecute comandos extras para comenzar a utilizar el workspace. | pending — la fuente no cierra la estrategia de gestión de dependencias. | Fisherk2 | no | 2026-10-21 | US-007 |
+| Q-004 | ¿Podemos hacer que el wizard de instalación gestione las dependencias que se instalan de forma automatica sin que el usuario intervenga o instale manualmente las dependencias necesarias para ejecutar el MCP o el motor RAG? El instalador debe ser ready-to-use para Opencode, ¿Es posible que el wizard realiza esa instalacion incluyendo las dependencias o tendremos que establecer en el README del proyecto el paso extra de instalar las dependencias en un entorno seguro (o directamente en el host)? te lo menciono en caso de que el punto anterior no se pueda implementar un entorno virtual y seguro | pending — la fuente plantea la disyuntiva pero no la resuelve. | Fisherk2 | no | 2026-10-21 | US-007 |
+| Q-005 | El MCP ¿En que directorio lo estariamos añadiendo en `obsidian-workspace/`? ¿Dentro de `.<Directorio con el nombre del motor RAG>/`? Si es asi, me gustaria que ese directorio estuviera dividido en 2, uno para el mcp, otro para el motor del RAG. No es opcion crear un directorio llamado `.mcp/` o similar en la raiz del directorio `obsidian-workspace/` para que el usuario final no manipule su contenido. | pending — la fuente establece el directorio oculto del motor RAG (§1) pero no cierra su subdivisión interna. | Fisherk2 | no | 2026-10-21 | US-003, US-005 |
+| Q-006 | ¿Como podemos gestionar los embebidos para que procese los documentos en el RAG? ¿Donde podemos hacer que el usuario configure y coloque sus modelos locales para embebidos? ¿Es posible hacerlo en un directorio llamado `.<Directorio con el nombre del motor RAG>/models`? si es asi ¿Es posible crear un archivo de configuración donde el usuario pueda añadir una API key de modelos para embebidos externos? ¿Si el modelo es local, cual seria los requisitos minimos para que el usuario pueda utilizar el workspace? | Modelo local en `.tepochcalli/models/` o API key para embebidos externos; catálogo `presets.toml` con `paraphrase-multilingual-MiniLM-L12-v2` (recomendado/preseleccionado, ~470MB) y `BAAI/bge-m3` (~2300MB); requisitos 💾/🧠/🎮 con procedencia `declarado`/`estimado`/`medido`; dispositivo explícito en `[embedding].device`. Ver §2 / US-H9. | Fisherk2 | yes | 2026-10-21 | US-H9 |
+
+Las siguientes cuestiones son dudas mías acerca de como tenemos que llevar el proyecto, la experiencia de usuario y como es que el wizard de instalación se presentará:
+
+Las preguntas surgieron en la sección «Deuda cognitiva» de la fuente: «Me gustaría que respondieras estas preguntas primero antes de tomar decisiones concretas y continuar, investiga en la web para que me proporciones respuestas actualizadas.»
+
+## 4. Decisions, options and alternatives
+
+| ID | Decision | Options considered | Chosen option | Rationale | Replaces [decision ID] |
+| ---- | --------- | ------------------- | -------------- | ---------- | ----------------------- |
+| D-001 | Elección de motor RAG | CocoIndex; Leann; LightRAG; RAG-Anything; PageIndex | CocoIndex | Tomar uno ya construido, fácil de instalar y bien documentado, sin crear un RAG desde cero: incorporar uno ya hecho por la comunidad en el ecosistema del Harness. Solo se había leído la documentación de CocoIndex; los demás se documentarán en tabla de comparación, en caso de que en el futuro cambiemos el motor o lo migremos a otra tecnología. | none |
+| D-002 | Almacén vectorial de embeddings | LanceDB; ChromaDB; pgvector | LanceDB embebido (registrado en ADR-002; la fuente enumera las tres opciones sin elegir explícitamente) | Base de datos vectorial embebida que no interfiere con el flujo normal de Obsidian. | none |
+| D-003 | Convertidor a Markdown como herramienta adicional | markitdown vía MCP; anydoc como alternativa/fallback | markitdown + guía MCP, configurado en `obsidian-workspace/opencode.json` | El usuario quiere convertir sus recursos a markdown directo; se usa el MCP para convertir ficheros y se sigue la documentación de Opencode para configurarlo. | none |
+| D-004 | Frontera del conversor (decisión de Fisherk2, 2026-10-30, por question tool) | Solo `00-Resources/`; vault completo; directorios externos | **B′ — frontera = el vault completo, nada fuera** | El conversor escanea/escribe en CUALQUIER directorio del vault, jamás fuera; fuera del vault ⇒ `VALIDATION_ERROR` (mismo estilo D16). `00-Resources/` sigue siendo el default para fuentes indexables; la extensión del dominio D16 al OUTPUT se formaliza como enmienda de spec o ADR nuevo en Phase 3.5. | Extiende D16 al OUTPUT (no lo reemplaza) |
+| D-005 | Canal de distribución del instalador (decisión de Fisherk2, 2026-11-18) | bunx (`@fisherk2-dev/codice`); pnpm; cargo binstall / cargo-dist; `uvx` | Canal único `uvx`: `uvx tepochcalli`, paquete PyPI que empaqueta el binario Rust con patrón maturin `bindings = "bin"`; refresco `uvx --refresh tepochcalli` | Sin binario del proyecto en PATH y sin descargas en runtime; el wheel queda en caché de uv. Exige ADR-014 futuro que supere ADR-013 (rechazó uv/PyPI) y el backend ADR-003 (cargo-dist), más enmienda de `specs/spec-installer-wizard.md` — escrito como requisito pendiente, no decisión aprobada. | cargo binstall / cargo-dist como canal recomendado (ADR-013 / ADR-003) |
+| D-006 | Interfaz del wizard | `dialoguer` line-based actual (D23); TUI full-screen con botones y estados deshabilitados (p. ej. `ratatui`) | TUI full-screen (dependencia) | Todo bloqueo se muestra como botón deshabilitado con razón visible; exige enmienda de spec/ADR futura, no realizada en este lote. | D23 (`dialoguer` line-based) |
+| D-007 | Versión canónica instalada | `Cargo.toml = 0.1.0-beta.1`; `.tepochcalli/pyproject.toml = 0.1.0` | `.tepochcalli/pyproject.toml` (la versión del wizard la gestiona `uvx`) | Comparación semver; hoy divergen y deben alinearse antes de implementar. | none (divergencia a alinear) |
+| D-008 | Alcance destino de `Update` / `Desinstall` (H7/H8) | Alcance vigente (F3 no sobrescribe; uninstall solo `.tepochcalli/`); alcance destino con advertencia y respaldo del usuario | Alcance destino: `Update` sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md` (el usuario debe respaldarlos si hace falta); `Desinstall` remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más | Amplía el alcance frente al código vigente y exige enmienda futura (ver preámbulo de flujo destino). | Alcance vigente (F3 / uninstall actual) |
+
+### Anexo — Mapeo de módulos de Codice a Rust (requisito, no implementado)
 
 Requisito de organización de módulos derivado de <https://github.com/Fisherk2/codice-opencode/tree/main/src>, separando lo común de lo propio. Codice organiza `src/cli/` (entrada, flags, versión, contexto), `src/application/` (use-cases, ports, types), `src/domain/` (entities, services — `VersionComparator`/`FileMergeEngine`, ports) y `src/infrastructure/` (adapters: TUI Clack, `GitHubRestClient`, FS atómico). Nuestro `crates/tepochcalli/src/` ya tiene forma similar (`cli/`, `application/`, `adapters/`, `config/`).
 
@@ -343,3 +386,62 @@ Módulos y responsabilidades a cubrir (comunes a Codice):
 | Cliente de release/versión última | `GitHubRestClient.ts` | `adapters/` |
 
 **Diferencia propia de Tepochcalli (ausente en Codice):** nuestro wizard gestiona el modelo de embeddings — selección, instalación y swap del local `paraphrase-multilingual-MiniLM-L12-v2` en `.tepochcalli/models/`, o API key + endpoint — con resumen de opciones y barra de progreso. Codice no gestiona embeddings, por lo que esta responsabilidad no tiene equivalente en su árbol de módulos y debe añadirse a `application/` + `adapters/` sin forzar un mapeo artificial.
+
+## 5. External references and research
+
+Repositorios de referencia del conversor (R-013 a R-016) y resto de fuentes consultadas:
+
+| ID | Source | What was consulted | URL / citation | Related [story ID / question ID] |
+| ---- | ------- | ------------------- | --------------- | ---------------------------------- |
+| R-001 | Opencode V2 docs | documentación del harness (componente Agente y propósito general) | <https://opencode.ai/v2/docs> | US-001, US-004 |
+| R-002 | CocoIndex (GitHub) | una de las 5 opciones de motor RAG | <https://github.com/cocoindex-io/cocoindex> | D-001 |
+| R-003 | LEANN (GitHub) | una de las 5 opciones de motor RAG | <https://github.com/StarTrail-org/LEANN> | D-001 |
+| R-004 | LightRAG (GitHub) | una de las 5 opciones de motor RAG | <https://github.com/HKUDS/LightRAG> | D-001 |
+| R-005 | RAG-Anything (GitHub) | una de las 5 opciones de motor RAG | <https://github.com/HKUDS/RAG-Anything> | D-001 |
+| R-006 | PageIndex (GitHub) | una de las 5 opciones de motor RAG | <https://github.com/VectifyAI/PageIndex> | D-001 |
+| R-007 | CocoIndex docs | documentación leída del motor elegido; base de la tabla de comparación | <https://cocoindex.io/docs/> | D-001 |
+| R-008 | Opencode MCP servers | cómo configurar un MCP en Opencode (en `obsidian-workspace/opencode.json`) | <https://opencode.ai/v2/docs/mcp-servers/> | US-003, US-006, US-005 |
+| R-009 | Convertidor a Markdown (mcp/microsoft/markitdown) | convertidor a markdown como herramienta adicional | <https://github.com/mcp/microsoft/markitdown> | US-006, D-003 |
+| R-010 | Guía de instalación markitdown-mcp | guía de instalación del convertidor | <https://mcp.directory/blog/markitdown-mcp-complete-guide-2026> | US-006, D-003 |
+| R-011 | Opencode plugins | plugin/tool futuro para asegurar el uso del MCP y del RAG | <https://opencode.ai/v2/docs/build/plugins/> | US-005 |
+| R-012 | codice-opencode | proyecto de referencia con la misma arquitectura de instalación y gestor de paquetes (`template/`, bunx) | <https://github.com/Fisherk2/codice-opencode> | US-005, D-005, D-006 |
+| R-013 | firecrawl/anydoc | motor Rust de conversión, fallback del conversor | <https://github.com/firecrawl/anydoc> | US-H1 |
+| R-014 | ofershap/mcp-server-anydoc | MCP anydoc de referencia/fallback | <https://github.com/ofershap/mcp-server-anydoc> | US-H1 |
+| R-015 | microsoft/markitdown | conversor incumbente | <https://github.com/microsoft/markitdown> | US-H1 |
+| R-016 | codice-opencode `src/` | mapeo de módulos de Codice a Rust (anexo de §4) | <https://github.com/Fisherk2/codice-opencode/tree/main/src> | D-006, anexo §4 |
+| R-017 | tepochcalli-opencode | repositorio del proyecto; link e info de contacto del wizard | <https://github.com/Fisherk2/tepochcalli-opencode> | US-H5 |
+
+## 6. FAQs
+
+Sin FAQs aún: la fuente no contiene preguntas frecuentes con respuesta estable. Las preguntas abiertas y sus respuestas (o su estado `pending`) están en §3.
+
+| ID | Question | Answer | Last reviewed |
+| ---- | --------- | ------- | -------------- |
+| — | Sin FAQs con respuesta estable en la fuente; véanse las preguntas de §3 | — | 2026-11-19 |
+
+## 7. Split policy
+
+Todo el contenido migrado cabe en un solo fichero (por debajo del umbral de ~500 líneas), por lo que NO se aplica el split. Si en el futuro se supera, se partirá en `docs/backlog/<topic>.md` manteniendo aquí el índice, según la regla del template «Past ~500 lines, split».
+
+## 8. Change log
+
+| Date | Change | Author | Approved by |
+| ----- | ------- | ------- | ------------ |
+| 2026-11-19 | Migración de docs/UH.md al formato BACKLOG; UH.md se elimina y BACKLOG.md pasa a ser fuente de verdad | Fisherk2 (orden) + docs-writer (redacción) | Fisherk2 |
+| 2026-11-19 | Sustitución del rol anónimo por el usuario del remoto Fisherk2 en atribuciones | docs-writer (redacción) | Fisherk2 |
+
+Estado `frozen`: el contenido se migra como instantánea congelada de `docs/UH.md` (345 líneas) por orden de Fisherk2. Los requisitos del flujo destino siguen marcados explícitamente como pendientes de formalización, no como aprobados.
+
+Las citas con número de línea del documento migrado se retiran a anclas de este fichero; el contenido es el mismo, solo cambia el contenedor.
+
+## External References
+
+| Source | What to consult it for | URL |
+| ------- | ----------------------- | ---- |
+| Opencode V2 docs | harness, configuración de MCP y plugins | <https://opencode.ai/v2/docs> |
+| Motores RAG (CocoIndex, LEANN, LightRAG, RAG-Anything, PageIndex) | comparativa de motores y elección de CocoIndex | <https://github.com/cocoindex-io/cocoindex> · <https://github.com/StarTrail-org/LEANN> · <https://github.com/HKUDS/LightRAG> · <https://github.com/HKUDS/RAG-Anything> · <https://github.com/VectifyAI/PageIndex> |
+| CocoIndex docs | documentación del motor elegido | <https://cocoindex.io/docs/> |
+| markitdown + guía MCP | convertidor a markdown y su instalación | <https://github.com/mcp/microsoft/markitdown> · <https://mcp.directory/blog/markitdown-mcp-complete-guide-2026> |
+| anydoc (firecrawl / ofershap) | motor Rust de conversión y MCP de fallback | <https://github.com/firecrawl/anydoc> · <https://github.com/ofershap/mcp-server-anydoc> |
+| codice-opencode | arquitectura de instalación, mapeo de módulos y canal bunx de inspiración | <https://github.com/Fisherk2/codice-opencode> · <https://github.com/Fisherk2/codice-opencode/tree/main/src> |
+| tepochcalli-opencode | repositorio del proyecto y contacto del wizard | <https://github.com/Fisherk2/tepochcalli-opencode> |
