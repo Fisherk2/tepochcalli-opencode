@@ -11,4 +11,9 @@ pub trait HttpClient {
     fn get(&self, url: &str) -> Result<Vec<u8>, WizardError>;
     /// Download `url` to `dest`, failing unless its SHA-256 matches.
     fn download(&self, url: &str, dest: &Path, expected_sha256: &str) -> Result<(), WizardError>;
+    /// R-offline-1: sonda fail-fast de alcanzabilidad ANTES del primer write.
+    /// `Ok(())` = el host respondió (cualquier status HTTP cuenta, 404 incluido:
+    /// la pregunta es «¿hay red?», no «¿existe el asset?»). Fallo de transporte
+    /// ⇒ `NetDownload`.
+    fn probe(&self, url: &str) -> Result<(), WizardError>;
 }

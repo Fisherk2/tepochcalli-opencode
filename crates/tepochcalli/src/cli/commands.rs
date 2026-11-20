@@ -12,7 +12,7 @@ use tepochcalli::application::{
     resolve_vault_dir, run_reindex, run_swap, run_uninstall, run_update, SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::WizardError;
-use tepochcalli::ports::{PayloadSource, Ui};
+use tepochcalli::ports::{HttpClient, PayloadSource, Ui};
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install::validate_payload_flags;
@@ -317,7 +317,21 @@ pub(crate) fn run_update_cmd(
     let path = Path::new(&raw);
     let source: Box<dyn PayloadSource> = match (payload, payload_url, payload_sha256) {
         (Some(dir), None, None) => Box::new(LocalPayload::new(Path::new(&dir))),
-        (None, Some(url), Some(sha)) => Box::new(ReleasePayload::new(&url, &sha)),
+        (None, Some(url), Some(sha)) => {
+            // R-offline-1 (T13): la rama release ya GET-ea el sidecar en
+            // `fetch_release_payload` y `--payload` local no usa red; el
+            // override es el único camino que llegaría al write sin sonda.
+            if let Err(err) = UreqHttpClient::new().probe(&url) {
+                return report_maintenance_failure(
+                    &*ui,
+                    "update",
+                    "update: sin red (preflight)",
+                    err,
+                    Some(path),
+                );
+            }
+            Box::new(ReleasePayload::new(&url, &sha))
+        }
         (None, None, None) => match fetch_release_payload(&UreqHttpClient::new(), VERSION) {
             Ok(release) => Box::new(release),
             Err(err) => {

@@ -160,6 +160,15 @@ pub fn run_swap(
         );
         return Err(WizardError::UserAborted);
     }
+    // R-offline-1 (T13): sin red no se escribe ni la config elegida (C1). Solo
+    // modelos locales: la ruta 5 no descarga y el provider externo no tiene
+    // endpoint declarado en el TOML (LiteLLM lo deriva del prefijo de `model`).
+    if picked.provider == "local" {
+        if let Some(model) = picked.model.as_deref() {
+            let name = model.split_once('\u{0}').map_or(model, |(name, _)| name);
+            deps.http.probe(&format!("{HF_API_BASE}{name}"))?;
+        }
+    }
     // C1 (D7.3): la config ELEGIDA queda VIVA (tmp+rename, mismo tramo del
     // write_config de F6) ANTES del gate/refresh — el refresh reconstruye ya
     // con el nuevo embedder. La guarda E1-S3: un fallo aquí comparte el mismo

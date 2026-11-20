@@ -15,6 +15,9 @@ use crate::ports::HttpClient;
 
 /// GET timeout for every request (payloads, `uv` binary, HF estimates).
 const TIMEOUT: Duration = Duration::from_secs(120);
+/// Budget del preflight (R-offline-1): corto y fail-fast; el `TIMEOUT` de
+/// 120 s es para transferencias, no para decidir si hay red.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(8);
 /// Bounded redirect hops; excess ⇒ [`WizardError::NetDownload`].
 const MAX_REDIRECTS: u32 = 10;
 
@@ -153,6 +156,22 @@ impl HttpClient for UreqHttpClient {
     fn download(&self, url: &str, dest: &Path, expected_sha256: &str) -> Result<(), WizardError> {
         self.transport_allowed(url)?;
         fetch_verified(url, dest, expected_sha256).map_err(map_fetch_error)
+    }
+
+    /// R-offline-1: solo importa «¿hay red?», así que un 4xx/5xx es `Ok`.
+    fn probe(&self, url: &str) -> Result<(), WizardError> {
+        self.transport_allowed(url)?;
+        let config = ureq::Agent::config_builder()
+            .timeout_global(Some(PROBE_TIMEOUT))
+            .timeout_connect(Some(PROBE_TIMEOUT))
+            .http_status_as_error(false)
+            .max_redirects(self.max_redirects)
+            .build();
+        ureq::Agent::new_with_config(config)
+            .get(url)
+            .call()
+            .map(|_| ())
+            .map_err(|_| WizardError::NetDownload)
     }
 }
 

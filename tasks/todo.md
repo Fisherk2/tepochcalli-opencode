@@ -297,12 +297,14 @@ de código implementado en esta sesión.*
 
 *Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T12*
 
-- [ ] Preflight con `ureq` (sin dep nueva) del endpoint que la operación necesita, con timeout corto y fallo rápido
-- [ ] Preflight corre **antes** del primer write de H6/H7/H9
-- [ ] Sin red ⇒ **test sin red falla con error tipado** (razón + acción correctiva, no texto libre) y `git status` del vault temporal limpio: **cero ficheros escritos**
-- [ ] `sin dato` de la estimación previa **no** cuenta como preflight (R-offline-4)
-- [ ] Test: `tests/int_offline_preflight.rs` (nuevo) con red falsa en fallo
-- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes
+- [x] Preflight con `ureq` (sin dep nueva) del endpoint que la operación necesita, con timeout corto y fallo rápido
+- [x] Preflight corre **antes** del primer write de H6/H7/H9
+- [x] Sin red ⇒ **test sin red falla con error tipado** (razón + acción correctiva, no texto libre) y `git status` del vault temporal limpio: **cero ficheros escritos**
+- [x] `sin dato` de la estimación previa **no** cuenta como preflight (R-offline-4)
+- [x] Test: `tests/int_offline_preflight.rs` (nuevo) con red falsa en fallo
+- [x] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes
+
+**Evidencia 2026-11-20.** `HttpClient::probe` (8 s, `http_status_as_error(false)`, guard L4-2 antes de tocar red) + `FakeHttp`/`DeadNetwork`. H9 sondea HF solo con provider `local`; H7 solo la rama `--payload-url`; H6 antes de `ensure_vault_dir` (el write que se colaba era `.install-state`, no F3). Tests: `int_offline_preflight` (2, loopback), `e2e_offline_preflight` (2: install/update sin red ⇒ exit 20 y vault vacío), `swap_sin_red_no_escribe_ni_la_config` (config byte-idéntica **e inode** intacto). 406 tests Rust, `rust-ci` exit 0. Exclusión declarada: con `--payload` local no se sondea (F3 no toca red; F4/F5 compensan por fase) y el mirror http sin TLS espera su consentimiento. `tests/e2e_swap.rs` queda en 999 líneas — tramo 701-1000 del umbral, justificado: fichero de escenarios del swap, sin división posible sin duplicar fixtures.
 
 ### T14 · Cancelación de descarga en progreso + limpieza (R-offline-2)
 

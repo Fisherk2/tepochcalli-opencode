@@ -18,6 +18,7 @@ pub mod installer;
 pub mod maintenance;
 pub mod phase7;
 pub mod phase8;
+mod preflight;
 mod prereqs;
 mod resume;
 pub mod swap;
@@ -48,5 +49,6 @@ pub use phase8::{
     compensate_phase8, mcp_python_command, mcp_python_command_for, run_phase8, Phase8Report,
     RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
 };
+pub use preflight::payload_endpoint;
 pub use swap::{run_swap, SwapDeps, SwapOptions, SwapReport};
 pub use update::{run_update, UpdateReport, UPDATE_SCOPES};

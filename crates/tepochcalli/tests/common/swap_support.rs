@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use super::{host_16gb, seed_runtime, FakeHost, FakeHttp, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::swap::{run_swap, SwapDeps, SwapOptions, SwapReport};
 use tepochcalli::domain::WizardError;
-use tepochcalli::ports::{CommandOutput, CommandRunner, Ui};
+use tepochcalli::ports::{CommandOutput, CommandRunner, HttpClient, Ui};
 
 pub const OLD_MODEL: &str = "paraphrase-multilingual-MiniLM-L12-v2";
 pub const NEW_MODEL: &str = "BAAI/bge-m3";
@@ -181,7 +181,7 @@ pub fn deps<'a>(
     ui: &'a dyn Ui,
     host: &'a FakeHost,
     proc: &'a dyn CommandRunner,
-    http: &'a FakeHttp,
+    http: &'a dyn HttpClient,
 ) -> SwapDeps<'a> {
     SwapDeps {
         ui,
@@ -484,5 +484,46 @@ impl CommandRunner for CheckingProc {
             .borrow_mut()
             .pop_front()
             .unwrap_or(Err(WizardError::Internal))
+    }
+}
+
+/// Entradas de `<vault>/.tepochcalli/db`, ordenadas: la lista completa
+/// (nombres), no solo los ficheros que el snapshot conoce.
+pub fn db_listing(vault: &Path) -> Vec<String> {
+    let mut names: Vec<String> = std::fs::read_dir(vault.join(".tepochcalli").join("db"))
+        .expect("db legible")
+        .map(|entry| {
+            entry
+                .expect("entrada legible")
+                .file_name()
+                .to_string_lossy()
+                .into_owned()
+        })
+        .collect();
+    names.sort();
+    names
+}
+
+/// Inode de la config viva: `write_config` reemplaza (tmp+rename ⇒ inode
+/// nuevo) y el rollback reescribe EN SITIO (mismo inode), así que un inode
+/// distinto delata una escritura aunque los bytes hayan vuelto. `None` fuera
+/// de Unix (sin inodos): ahí el pin se degrada a los bytes.
+pub fn config_inode(vault: &Path) -> Option<u64> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        std::fs::metadata(
+            vault
+                .join(".tepochcalli")
+                .join("config")
+                .join("tepochcalli.toml"),
+        )
+        .ok()
+        .map(|meta| meta.ino())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = vault;
+        None
     }
 }

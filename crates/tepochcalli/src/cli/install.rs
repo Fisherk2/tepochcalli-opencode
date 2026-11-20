@@ -4,19 +4,23 @@
 
 use std::path::Path;
 
-use tepochcalli::adapters::{path_dirs, HeadlessUi, SysHostProbe, TtyUi};
+use tepochcalli::adapters::{
+    mirror_http_non_loopback, path_dirs, payload_asset_url, release_base_url, HeadlessUi,
+    SysHostProbe, TtyUi, UreqHttpClient,
+};
 use tepochcalli::application::{
     check_prereqs_on, compensate_phase6, ensure_vault_dir, guard_offline_before_touch,
-    is_phase_done, litellm_config_present, mark_phase_done, payload_local_ready, resolve_vault_dir,
-    run_phase6, Phase6Deps, Phase6Report,
+    is_phase_done, litellm_config_present, mark_phase_done, payload_endpoint, payload_local_ready,
+    resolve_vault_dir, run_phase6, Phase6Deps, Phase6Report,
 };
 use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
-use tepochcalli::ports::Ui;
+use tepochcalli::ports::{HttpClient, Ui};
 use tepochcalli::EMBEDDER_PATHS;
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install_phases::run_phases;
 use super::report::report_failure;
+use super::usage::VERSION;
 
 const INSTALL_SPEC: FlagSpec = FlagSpec {
     prefix: "install",
@@ -158,6 +162,28 @@ pub(crate) fn run_install(
                     &*ui,
                     Some(Phase::F2),
                     "install: offline without local payload/cache",
+                    err,
+                    None,
+                );
+            }
+        }
+    }
+    // R-offline-1 (T13): sin red no se toca el vault — cero ficheros.
+    // Con un mirror http sin TLS el sondeo espera al consentimiento de
+    // `run_phases` (probar http antes de consentir saltaría el gate L4-2).
+    let base = release_base_url();
+    let mirror_pending =
+        payload_dir.is_none() && url_override.is_none() && mirror_http_non_loopback(&base);
+    if !offline && !mirror_pending {
+        let release = payload_asset_url(VERSION);
+        if let Some(url) =
+            payload_endpoint(payload_dir.as_deref(), url_override.as_deref(), &release)
+        {
+            if let Err(err) = UreqHttpClient::new().probe(&url) {
+                return report_failure(
+                    &*ui,
+                    Some(Phase::F2),
+                    "install: sin red (preflight)",
                     err,
                     None,
                 );

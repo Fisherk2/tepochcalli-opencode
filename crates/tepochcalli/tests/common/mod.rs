@@ -77,6 +77,34 @@ impl HttpClient for FakeHttp {
         std::fs::write(dest, &bytes).map_err(|_| WizardError::DiskFull)?;
         Ok(())
     }
+
+    fn probe(&self, url: &str) -> Result<(), WizardError> {
+        let _ = url;
+        // Los fixtures existentes modelan payloads, no alcanzabilidad; los tests de T13 usan DeadNetwork.
+        Ok(())
+    }
+}
+
+/// Red caída: `probe` falla tipado y no sirve nada (R-offline-1).
+pub struct DeadNetwork;
+
+impl HttpClient for DeadNetwork {
+    fn get(&self, _url: &str) -> Result<Vec<u8>, WizardError> {
+        Err(WizardError::NetDownload)
+    }
+
+    fn download(
+        &self,
+        _url: &str,
+        _dest: &Path,
+        _expected_sha256: &str,
+    ) -> Result<(), WizardError> {
+        Err(WizardError::NetDownload)
+    }
+
+    fn probe(&self, _url: &str) -> Result<(), WizardError> {
+        Err(WizardError::NetDownload)
+    }
 }
 
 /// `HostProbe` fake: fully configurable fixtures, `None` = probe failed.

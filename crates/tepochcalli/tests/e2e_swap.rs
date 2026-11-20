@@ -16,13 +16,13 @@ use std::path::Path;
 
 use common::swap_support::{
     argv, assert_byte_identical, assert_gc_outcome, assert_no_spawns, assert_old_slug_dirs_gone,
-    assert_old_slug_dirs_present, assert_zero_state, bodies, confirmed, deps, empty_http, gated,
-    http_serving, installed_vault, installed_vault_with, no_stray_temps, panel_mentions,
-    refresh_ok, refreshed, run_swap_case, sidecar_becomes_nonempty_dir, snapshot, titles,
-    visible_text, CheckingProc, EXTERNAL_MODEL, FAKE_KEY, GATED_ID, GATED_TOKEN, NEW_MODEL,
+    assert_old_slug_dirs_present, assert_zero_state, bodies, config_inode, confirmed, db_listing,
+    deps, empty_http, gated, http_serving, installed_vault, installed_vault_with, no_stray_temps,
+    panel_mentions, refresh_ok, refreshed, run_swap_case, sidecar_becomes_nonempty_dir, snapshot,
+    titles, visible_text, CheckingProc, EXTERNAL_MODEL, FAKE_KEY, GATED_ID, GATED_TOKEN, NEW_MODEL,
     OLD_MODEL, OLD_MODEL_ST,
 };
-use common::{gate_ok, host_16gb, TapUi};
+use common::{gate_ok, host_16gb, DeadNetwork, RecordingProc, TapUi};
 use tepochcalli::application::swap::{run_swap, SwapOptions};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::CommandOutput;
@@ -150,6 +150,36 @@ fn swap_missing_confirm_explains_and_mutates_nothing() {
         "debe advertir que el re-index es irreversible, got:\n{bodies}"
     );
     assert_zero_state(vault.path(), &before);
+}
+
+/// R-offline-1 (T13): sin red el preflight del swap corta ANTES de
+/// `write_config` — ni la config elegida se escribe, ni se lanza el gate.
+#[test]
+fn swap_sin_red_no_escribe_ni_la_config() {
+    let vault = installed_vault();
+    let before = snapshot(vault.path());
+    let db = db_listing(vault.path());
+    let inode = config_inode(vault.path());
+    let ui = TapUi::new(vec![1, 0], vec![]);
+    let host = host_16gb();
+    // Guion vacío: si el flujo llegara al gate, `RecordingProc` devolvería
+    // `Internal` y el error no sería `NetDownload`.
+    let proc = RecordingProc::scripted(vec![]);
+    let result = run_swap(
+        &deps(&ui, &host, &proc, &DeadNetwork),
+        vault.path(),
+        &confirmed(),
+    );
+
+    assert_eq!(
+        result.expect_err("sin red no se escribe nada"),
+        WizardError::NetDownload
+    );
+    // Cero escritura: config, índice, cache vieja, db/ y spawns intactos.
+    assert_zero_state(vault.path(), &before);
+    assert_eq!(db_listing(vault.path()), db, "db/ sin ficheros nuevos");
+    assert_eq!(config_inode(vault.path()), inode, "config sin reescribir");
+    assert_no_spawns(&proc, "sin red no se llega al gate test-embed");
 }
 
 #[test]
