@@ -285,13 +285,13 @@ de código implementado en esta sesión.*
 
 *Dueño: `docs-writer` · Revisión: `code-reviewer` · Depende de: ninguna · **en ejecución en este cambio documental***
 
-- [~] ADR-016 creado con `Status: Accepted` y fecha 2026-11-20 (lo crea OTRO frente; este frente solo toca `tasks/`)
-- [ ] ADR-016 decide **cancelación con rollback**, no degradación; ≥2 alternativas rechazadas con razón
-- [ ] Enmienda 2026-11-20 en `specs/spec-installer-wizard.md`: R-offline-1/2/3/4 + estados de botón y mensajes de cancelación para H6/H7/H9
-- [ ] Enmienda 2026-11-20 en `specs/spec-embeddings.md`: `sin dato` = solo estimación previa; degradado de runtime intacto
-- [ ] `docs/BACKLOG.md`: D-009 en §4 + fila en §8 + edge case en US-H6/H7/H9
-- [ ] `git diff --exit-code` sobre ADR-007/008/014/015 → 0 líneas (no se reescriben)
-- [ ] `just md-lint` → 0 issues
+- [x] ADR-016 creado con `Status: Accepted` y fecha 2026-11-20 (lo crea OTRO frente; este frente solo toca `tasks/`)
+- [x] ADR-016 decide **cancelación con rollback**, no degradación; ≥2 alternativas rechazadas con razón
+- [x] Enmienda 2026-11-20 en `specs/spec-installer-wizard.md`: R-offline-1/2/3/4 + estados de botón y mensajes de cancelación para H6/H7/H9
+- [x] Enmienda 2026-11-20 en `specs/spec-embeddings.md`: `sin dato` = solo estimación previa; degradado de runtime intacto
+- [x] `docs/BACKLOG.md`: D-009 en §4 + fila en §8 + edge case en US-H6/H7/H9
+- [x] `git diff --exit-code` sobre ADR-007/008/014/015 → 0 líneas (no se reescriben)
+- [x] `just md-lint` → 0 issues
 
 ### T13 · Preflight de red y error tipado antes de escribir (R-offline-1)
 
@@ -357,19 +357,21 @@ de código implementado en esta sesión.*
 
 *Dueño: `test-automation-engineer` · Apoyo: `testing-reality-checker` · Depende de: T16*
 
-- [ ] Todo test de red usa loopback o es `#[ignore]` con receta (`int_fetch_verified` / `int_model_availability`)
-- [ ] `just rust-test` y `just ci` pasan **sin red**
-- [ ] E2E sobre vault temporal: H6/H7/H9 × {sin red, cancelación a mitad}, con comparación byte-a-byte del árbol antes/después
-- [ ] `just quality` · `just ci` · `just rust-ci /tmp/opencode/cargo-target` · `just md-lint` → 0 issues
-- [ ] `grep -rn 'https://huggingface' crates/tepochcalli/tests/` → solo en tests `#[ignore]`
-- [ ] Cierre documental: WORKFLOW §Phase 6.6 con métricas medidas; TECH_DEBT con la deuda esperada; BACKLOG §8
-- [ ] Transcript del recorrido en el cuerpo del commit; `git status --short` sin modelos parciales ni artefactos
+- [x] Todo test de red usa loopback o es `#[ignore]` con receta (`int_fetch_verified` / `int_model_availability`)
+- [x] `just rust-test` y `just ci` pasan **sin red**
+- [x] E2E sobre vault temporal: H6/H7/H9 × {sin red, cancelación a mitad}, con comparación byte-a-byte del árbol antes/después
+- [x] `just quality` · `just ci` · `just rust-ci /tmp/opencode/cargo-target` · `just md-lint` → 0 issues
+- [x] `grep -rn 'https://huggingface' crates/tepochcalli/tests/` → solo en tests `#[ignore]`
+- [x] Cierre documental: WORKFLOW §Phase 6.6 con métricas medidas; TECH_DEBT con la deuda esperada; BACKLOG §8
+- [x] Transcript del recorrido en el cuerpo del commit; `git status --short` sin modelos parciales ni artefactos
+
+**Evidencia 2026-11-20 (cierre de fase).** Matriz real ejercitada: **H6 sin red** (`e2e_offline_preflight::install_sin_red_no_escribe_nada`: exit 20, vault con 0 entradas), **H7 sin red** (`update_sin_red_no_escribe_nada`), **H9 sin red** (`swap_sin_red_no_escribe_ni_la_config`: config byte-idéntica **e inode** intacto), **cancelación** por inyección del token (`int_download_cancel`, `swap_cancelado_en_el_gate_no_deja_modelo_parcial`, `int_ui_progress`) y **rollback** (`int_rollback_integrity`, árbol byte a byte). **No** hay celda de «cancelación con TTY real»: se declara deuda, no cobertura. Gates: `just quality` 707 tests/69,45 s · `just ci` **exit 0 en 37m26s** · `just rust-ci` exit 0 (424 tests) · `just md-lint` 0 en 63 ficheros. `grep https://huggingface` en `tests/` solo aparece en `int_model_availability.rs` (`#[ignore]`).
 
 ### 🛑 Checkpoints de la fase
 
-- [ ] **C5 (tras T12):** ADR-016 Accepted · enmiendas + D-009 presentes · `just md-lint` 0 → si falla, el núcleo no arranca
-- [ ] **C6 (tras T13-T15):** `just rust-test`/`just rust-ci` verdes · cero ficheros sin red · cero modelos parciales al cancelar · byte-idéntico tras rollback → si falla, se revierte el corte
-- [ ] **C7 (tras T16-T17):** `just quality` · `just ci` · `just md-lint` 0 · e2e con red falsa + transcript → si falla, no se cierra la fase
+- [x] **C5 (tras T12):** ADR-016 Accepted · enmiendas + D-009 presentes · `just md-lint` 0 → si falla, el núcleo no arranca
+- [x] **C6 (tras T13-T15):** `just rust-test`/`just rust-ci` verdes · cero ficheros sin red · cero modelos parciales al cancelar · byte-idéntico tras rollback → si falla, se revierte el corte
+- [x] **C7 (tras T16-T17):** `just quality` · `just ci` · `just md-lint` 0 · e2e con red falsa + transcript → si falla, no se cierra la fase
 
 ### 📌 Deuda esperada al cierre (sin ID nuevo)
 

@@ -350,6 +350,46 @@
   implementación se planifica en `tasks/plan.md` / `tasks/todo.md` como **fase 6.6**; Phase 6.5
   queda cerrada como está.
 
+### Phase 6.6 — resiliencia offline y rollback cancelable (H6/H7/H9)
+
+* **Estado: COMPLETADA 2026-11-20** — T12 documental en `2ec9c51`; T13-T16 en los commits de la
+  tabla; cierre en el commit de T17. La nota de §Phase 6.5 (2026-11-20) queda cumplida por esta fase.
+* **Fuente:** [BACKLOG.md §2 US-H6/H7/H9](BACKLOG.md) (edge case 2026-11-20, R-offline-1..4) +
+  §4 D-009 + [ADR-016](adr/adr-016-resiliencia-offline-y-rollback.md).
+
+| Tarea | Commit | Entrega |
+| --- | --- | --- |
+| T13 | `0cb94cf` | Preflight de red antes del primer write (`HttpClient::probe`, 8 s, `http_status_as_error(false)`), `payload_endpoint`, wiring H6/H7/H9 |
+| T14 | `a627ad9` | `CancelToken` + `CommandRunner::run_cancellable` (mata el hijo) + purga de modelos parciales |
+| T15 | `8874bf8` | `InstallSnapshot` + `rollback_install` (compensación en orden inverso; F6 por bytes, nunca `compensate_phase6`) |
+| T16 | `5b17b52` | `Ui::run_cancellable` + pantalla de descarga con Cancelar (Esc/Ctrl+C) y 5 acciones en DIM con razón; `failure_body(UserAborted)` con `estado:` y sin `retry:` |
+
+* **Métricas medidas:** tests Rust **397 → 424** (+27: T13 +9, T14 +6, T15 +5, T16 +7), 0 failed;
+  4 `#[ignore]` (2 preexistentes + 2 de red real, fuera de la suite por diseño) · `just rust-ci`
+  exit 0, última corrida **2m45s** (build caliente), `just rust-fmt` limpio, `just rust-lint` 0
+  warnings (único aviso: `package.homepage` redundante en `Cargo.toml`, preexistente) · `just
+  quality` **707 tests Python en 69,45 s**, exit 0 (Python no se tocó en toda la fase) · `just
+  md-lint` **0 issues** (63 ficheros) · cero dependencias nuevas (R1): `ureq` 3.5.0 ya estaba en
+  el lock.
+* **`just ci` completo:** exit 0 el 2026-11-20 en **37m26s** (medido en primer plano con
+  `time`; incluye las 4 suites de módulo, `test-acceptance`, `bench-smoke` y `rust-ci`).
+* **Límites declarados (no maquillados):**
+  1. La descarga del modelo ocurre en el subproceso `venv python -m tepochcalli_flow
+     embed-check`, no en `ureq`: la cancelación **mata el hijo**; no hay stream HTTP cancelable
+     en Rust.
+  2. Sin journal por fichero en el install: se reutilizan `.install-intent` (F3), `.bak` (F8), el
+     marker de fases y el snapshot.
+  3. Re-ejecución sobre un vault con `.install-intent` previo: el journal es acumulativo, así que
+     los ficheros que esa pasada de F3 añadió pueden sobrevivir al rollback (probado con marker `F1/F2`).
+  4. La rama de re-ejecución no promete byte-identidad dentro de `db/`, `bin/` ni `venv/` (estado
+     derivado) y pueden quedar directorios vacíos en un vault preexistente; el `remove_dir_all`
+     final solo aplica al vault creado por la corrida.
+  5. **No medido** (declarado): TTY real (pantalla alternativa, teclas desde `/dev/tty`), Ctrl+C
+     inyectado por el SO —incluido Windows— y animación de progreso (el gate bloquea el hilo
+     principal; la pantalla muestra estado, no avance).
+  6. H6 con `--payload` local no sondea red (F3 no la toca; F4/F5 compensan por fase) y el mirror
+     `http` sin TLS espera su consentimiento antes de sondear (gate L4-2).
+
 ## 3. Testing Strategy per Phase
 
 | Phase | Tool | Scope | Success |

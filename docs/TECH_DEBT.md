@@ -432,3 +432,18 @@ publicado.
 | **TD-51** | **Retiro materializado de cargo-dist sin ejecutar**: ADR-014 decreta el retiro de `crates/tepochcalli/dist.toml` y del `.github/workflows/release.yml` heredado, pero **ambos siguen en el árbol** — la Phase 6.5 solo prepara el canal nuevo | ADR-014 §4.1/§7 (Accepted 2026-11-19); plan §9 «Fuera de alcance» | Contradicción aparente entre el ADR y el árbol; dos backends de release conviven y confunden cuál manda | **Diferido por decisión del dueño (D-6.5-c); sigue ABIERTA 2026-11-19.** Se paga al abrir la publicación real (borrar `dist.toml`, retirar el `release.yml` heredado dejando solo el workflow de ruedas) o antes si alguien toca el backend |
 | **TD-52** | **Smoke de TTY/interacción bajo `uvx` en Windows nunca ejercitado**: el wizard depende de un TTY real y `uvx` no se ha probado ahí; el requisito de H5 en Windows queda `declarado`, no `medido` | Plan Phase 6.5 §8 R6; §D-b (Windows fuera de la matriz CI) | Una regresión de TUI específica de Windows (crossterm, códigos de consola) pasaría sin que CI la vea | Runner `windows-latest`: `uvx --from <rueda> tepochcalli` en una consola real, recorrer los 4 escenarios de H5 y archivar la evidencia; junto al smoke path-5 de D-b. **Sigue ABIERTA (2026-11-19):** la verificación de Phase 6.5 fue Linux/TTY real; Windows no se ejercitó |
 | **TD-53** | **`--payload` con el checkout completo arrastra `venv/` al vault**: apuntar el wizard al `obsidian-workspace/` del repo copia también los artefactos gitignored de runtime (venv de 2,1 GB, y con él `db/models/bin` si existen en el origen); el `update` posterior los respaldaría enteros. El asset de release sí los excluye, así que el fallo es del payload local, no del paquete | Verificación Phase 6.5 (T10, 2026-11-19): install con `--payload obsidian-workspace` ⇒ **19m10s** y **2,1 GB** copiados | Vault de desarrollo con ~2 GB de artefactos duplicados y `.bak` gigantes en cada update; nada de eso viaja al usuario que instala desde la rueda | Excluir los artefactos de runtime (`venv/`, `db/`, `models/`, `bin/`, `config/`, `__pycache__/`) en el adaptador `LocalPayload`, **o** validar el payload antes de materializar y abortar con mensaje accionable. Payload real de release medido como correcto; re-verificar con un `install` de punta a punta sobre el checkout tras el fix |
+
+### Deuda esperada de Phase 6.6 (2026-11-20, sin ID asignado)
+
+Límites declarados al cerrar la Phase 6.6 (resiliencia offline y rollback cancelable en H6/H7/H9,
+[WORKFLOW.md](WORKFLOW.md) §Phase 6.6). Son límites de lo implementado, no defectos ocultos.
+
+| Deuda | Por qué no se cierra aquí |
+| --- | --- |
+| Ctrl+C y rollback en Windows | Requiere un runner `windows-latest` con consola real; hoy queda `declarado`, no `medido` |
+| TTY real y animación de progreso | No hay terminal interactiva en la suite; el render se verifica en `TestBackend` y la pantalla muestra estado, no avance |
+| Journal acumulativo de F3 en re-ejecución | El journal no es por fichero: los ficheros que esa pasada de F3 añadió pueden sobrevivir al rollback |
+| Byte-identidad dentro de `db/`, `bin/` y `venv/` en re-ejecución | Estado derivado: no se promete byte-identidad en esas rutas |
+| Directorios vacíos en un vault preexistente tras el rollback | El `remove_dir_all` final solo aplica al vault creado por la corrida |
+
+El dueño asigna los IDs; no se inventan aquí.
