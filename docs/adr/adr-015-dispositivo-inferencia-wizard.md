@@ -118,11 +118,13 @@ variable de entorno de LiteLLM en `opencode.json`, fuera del TOML y del wizard (
   `[embedding].device` de `tepochcalli.toml`; una re-entrada `config embedder` posterior
   preseleciona ese valor y no lo pisa.
 * Prueba del loader: `model = "https://evil.example/x"` con provider `litellm` → fallback al
-  default con warning (guarda implementada en `config.py:357-369`; **sin test específico en la
-  suite — TD-50**).
-* **Estado de la evidencia: `declarado`** para (a)/(b)/(c) — el campo `device` en `Preset` y la
-  preservación en re-entrada no existen en el código todavía (§1); la Phase 6.5 los materializa
-  (T4) y entonces pasarán a `medido`. *Medible* hoy solo la guarda del loader.
+  default con warning (guarda implementada en `config.py:357-369`; **cubierta por test desde
+  Phase 6.5, T6 — TD-50 cerrada 2026-11-19**).
+* **Estado de la evidencia: `medido` desde Phase 6.5 (2026-11-19)** para (a)/(b)/(c) — el campo
+  `device` en `Preset`, la escritura de `[embedding].device` y su preservación en la re-entrada
+  están implementados y probados (T4: `int_presets`, `int_embedder_menu`, `e2e_swap`). Antes de
+  esa fecha la evidencia era `declarado`; el cambio de estado no altera ninguna decisión de este
+  ADR. Detalle en `docs/WORKFLOW.md` §Phase 6.5.
 
 ## 5. Pros and Cons of the Options
 

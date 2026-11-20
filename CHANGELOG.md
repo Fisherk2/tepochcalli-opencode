@@ -7,7 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Added (flujo destino del wizard — documentación, 2026-11-18)
+### Added (Phase 6.5 — flujo destino materializado, 2026-11-19)
+
+- **FTR del dueño firmado:** [ADR-014](docs/adr/adr-014-distribucion-uvx-pypi.md) y
+  [ADR-015](docs/adr/adr-015-dispositivo-inferencia-wizard.md) pasan de *Proposed* a
+  **Accepted**; las enmiendas «2026-11-18 — flujo destino» de `spec-installer-wizard` y
+  `spec-embeddings` también. Versión alineada a **`0.1.0`** (`Cargo.toml` + `Cargo.lock` detrás
+  de la canónica `.tepochcalli/pyproject.toml`, TD-45) y Phase 6.5 desbloqueada y cerrada.
+- **Canal `uvx` preparado y verificado — sin publicar:** rueda
+  `tepochcalli-0.1.0-py3-none-manylinux_2_39_x86_64.whl` (**2 401 134 B**) ejecutada con
+  `uvx --from <rueda local> tepochcalli --version` ⇒ `tepochcalli 0.1.0` (Linux, glibc 2.39).
+  **Nada se publicó:** 0 workflow runs, 0 releases y `https://pypi.org/pypi/tepochcalli/json` ⇒
+  HTTP 404; en `.github/workflows/` solo hay 2 líneas sobre publicación a un **registro de
+  paquetes**, ambas comentarios de no-publicación (`wheels.yml:1` y `:4`); el `publish:` de
+  `release.yml` sube assets a un GitHub Release (backend heredado, TD-51), no a PyPI.
+- **TUI full-screen con menú H5** (`ratatui` 0.30 + `crossterm` 0.29, sustituye `dialoguer`):
+  cabecera con versión del wizard, instalada y estado del embedder; 5 botones
+  (Install/Update/Change Embedder/Desinstall/Exit) con bloqueo = botón deshabilitado + razón
+  visible. Verificado en **TTY real** (`script -qec`, 80×24):
+  `Tepochcalli 0.1.0 · instalada: — · embedder: sin configurar`.
+- **`device` electivo (H9)** en wizard y re-entrada (`cpu`/`cuda`/`cuda:N`), escrito en
+  `[embedding].device` y **preservado** por `config embedder`; la autoselección en runtime sigue
+  rechazada. Guarda anti-exfiltración de `model` con test (`tests/unit/test_config.py:412`).
+- **`update` (H7) y `desinstall` (H8)** con backup y advertencia. Medido: update **0,293 s**
+  (2 ficheros + 2 `.bak`; `venv/` de 2,0 GB y `00-resources/` intactos) y **0,081 s** en la
+  segunda pasada con 0 entradas modificadas; desinstall **1,44 s**, `AGENTS.md` y
+  `00-resources/` intactos, backup `.tepochcalli-backup-<ts>/` con permisos `drwx------` y
+  segundo uninstall no-op.
+- **Gates de la fase:** `just quality` **707 tests Python** · suite Rust **386 tests** ·
+  `just ci` **exit 0 en 45m49s** · `just md-lint` **0 issues**.
+- **Salvedades declaradas (no medidas):** Change Embedder e2e (solo integración con fakes;
+  exige descargar ~470 MB y reindexar), Windows/TTY ⇒ TD-52, `uvx` desde PyPI o VM limpia
+  (imposible sin publicar) e install con el payload del checkout (TD-53: `--payload` arrastra
+  el `venv/` gitignored de 2,1 GB, 19m10s).
+
+### Added (flujo destino del wizard — documentación, 2026-11-18) (superseded 2026-11-19)
 
 - **ADR-014 (Proposed)** — [canal de distribución `uvx` + PyPI](docs/adr/adr-014-distribucion-uvx-pypi.md):
   wheel vía maturin (`bindings = "bin"`), instalación `uvx tepochcalli` y refresco
@@ -29,8 +63,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (H7) y Desinstall (H8) sobrescriben/remueven `opencode.json` y `AGENTS.md` del vault con
   **backup obligatorio + advertencia visible**; primera Install y re-entradas `config` siguen
   con merge conservador.
-- **`docs/WORKFLOW.md`**: nueva **Phase 6.5 — Wizard flujo destino (H5-H11)**, GATED / no
-  ejecutable (precondiciones: ADR-014/015 Accepted + deps aprobadas + one-version alineada +
+- **`docs/WORKFLOW.md`**: nueva **Phase 6.5 — Wizard flujo destino (H5-H11)**, no ejecutable
+  (precondiciones: ADR-014/015 Accepted + deps aprobadas + one-version alineada +
   enmiendas Accepted); ola **D68** registrada en §8.
 
   *Documentación solo — cero implementación, cero ADR Accepted.* Contexto: 0 tags publicados y

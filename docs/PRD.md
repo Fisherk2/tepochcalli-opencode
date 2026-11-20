@@ -42,18 +42,19 @@ nativas.
 | F2 | Motor RAG incremental | CocoIndex flow: live-watch `00-resources/**`, chunking RecursiveSplitter, embeddings locales MiniLM, LanceDB ANN+FTS; Δ-only | spec-rag-engine |
 | F3 | Herramientas MCP | `tepochcalli-rag`: `search` (chunks citables), `index_refresh()` (delta del conjunto declarado en `INDEXER_DIR` + reporte), `add_source` (ingesta convertida), `rag_status` (diagnóstico) | spec-mcp-server |
 | F4 | Conversor Markdown | markitdown **como librería en proceso** en el venv: `convert_document`/`convert_base64`/`list_formats` escriben a disco y devuelven solo el resumen (summary-only); URL/DOCX/PPTX/XLSX/XLS/PDF/HTML → Markdown indexable; fallback `anydoc` deshabilitado (criterio 7) | spec-markitdown, ADR-009, ADR-011 |
-| F5 | Wizard atomico | TUI Rust, 8 fases con rollback, bootstrap uv→venv→modelo→índice→config MCP; flags `--offline`, `--skip-model` | spec-installer-wizard |
-| F6 | Distribución versionada | cargo-dist + GitHub Releases; canal recomendado `cargo binstall tepochcalli` (crates.io), con `shell`/`powershell` como fallback sin toolchain; instalación en dos pasos (`cargo binstall` + `tepochcalli install`); payload y wizard versionan juntos | ADR-013, ADR-003 |
+| F5 | Wizard atomico | TUI Rust (`ratatui`+`crossterm`), 8 fases con rollback, bootstrap uv→venv→modelo→índice→config MCP; flags `--offline`, `--skip-model`; menú H5 con botones por estado | spec-installer-wizard, ADR-014 |
+| F6 | Distribución versionada | Canal único `uvx tepochcalli` (rueda PyPI vía maturin, ADR-014); canal heredado `cargo binstall` + cargo-dist en retiro (TD-51); instalación en un comando; payload y wizard versionan juntos | ADR-014, ADR-013 |
 | F7 | Metodología de investigación | `/rubric /research /validate /synthesize /cite /draft /review /transform /update` con agentes Itzamná/Nezahualcóyotl/Pochteca/Chilam/Tlacuilo | spec-agent-workflow |
 
-### Nota destino 2026-11-18 (Proposed, sin aprobación)
+### Nota destino 2026-11-18 (aprobada por FTR el 2026-11-19 — estado vigente)
 
 La evolución `/evolve` sobre [docs/BACKLOG.md §"Wizard de instalación: flujo destino"](BACKLOG.md) (H5-H11)
-fija el estado **objetivo** de F5/F6 como **Proposed** — no sustituye nada de lo aprobado:
+fija el estado **vigente** de F5/F6, aprobado por el FTR del dueño el 2026-11-19:
 
 * **Canal único `uvx tepochcalli`** (rueda de PyPI vía maturin `bindings = "bin"`; refresco
-  `uvx --refresh tepochcalli`) — [ADR-014](adr/adr-014-distribucion-uvx-pypi.md). Mientras
-  no sea *Accepted*, el canal vigente sigue siendo `cargo binstall` + cargo-dist (ADR-013/003).
+  `uvx --refresh tepochcalli`) — [ADR-014](adr/adr-014-distribucion-uvx-pypi.md), **Accepted
+  2026-11-19**: preparado y verificado en local, **sin publicar** (0 releases, PyPI 404);
+  `cargo binstall` + cargo-dist quedan como canal heredado en retiro (TD-51).
 * **TUI full-screen con botones por estado** (4 escenarios de versión, H5; bloqueo = botón
   deshabilitado con razón visible) en lugar del `dialoguer` line-based (D23).
 * **Update (H7) y Desinstall (H8)**: operaciones nuevas/ampliadas que sobrescriben o remueven
@@ -62,7 +63,7 @@ fija el estado **objetivo** de F5/F6 como **Proposed** — no sustituye nada de 
 * **Device de inferencia explícito** (`cpu`/`cuda`/`cuda:N`, H9) —
   [ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md).
 
-Implementación y aprobación: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**GATED**).
+Implementación y cierre: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**COMPLETADA 2026-11-19**), con las salvedades declaradas (Windows/TD-52, `uvx` desde PyPI, Change Embedder e2e, payload completo/TD-53).
 
 ## 5. Out of scope (v1)
 

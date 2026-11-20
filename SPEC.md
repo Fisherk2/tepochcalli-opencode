@@ -148,11 +148,12 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 > salvedad D-P5-10 intacta (TD-31 diferida); **PHASE 6 (aceptación E2E) LISTA para
 > planificarse** (runbook `tests/phase5-methodology-runbook.md`).
 >
-> **Evolución 2026-11-18 (/evolve sobre `docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»`):** ADR-014/015 nacieron **Proposed** (canal
+> **Evolución 2026-11-18 (/evolve sobre `docs/BACKLOG.md §2 «Wizard de instalación: flujo destino (2026-11-18)»`) — histórico:** ADR-014/015 nacieron **Proposed** (canal
 > `uvx` único + device explícito en wizard), con enmiendas "Enmienda 2026-11-18 — flujo destino
-> (Proposed)" en `spec-installer-wizard.md` y `spec-embeddings.md`, y Phase 6.5 **GATED** en
-> `docs/WORKFLOW.md` (ola D68). **FTR del dueño 2026-11-19:** ADR-014/015 **Accepted**, las dos
-> enmiendas **Accepted**, versión alineada a `0.1.0` y **Phase 6.5 desbloqueada**; el canal queda
+> (entonces Proposed)" en `spec-installer-wizard.md` y `spec-embeddings.md`, y Phase 6.5 declarada
+> no ejecutable en `docs/WORKFLOW.md` (ola D68). **FTR del dueño 2026-11-19:** ADR-014/015 **Accepted**, las dos
+> enmiendas **Accepted**, versión alineada a `0.1.0` y Phase 6.5 **desbloqueada y después
+> COMPLETADA** el mismo día (métricas y salvedades en WORKFLOW §Phase 6.5); el canal queda
 > decidido, sin publicar nada.
 
 ## Log de decisiones

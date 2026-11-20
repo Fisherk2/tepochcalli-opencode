@@ -173,8 +173,8 @@ umbral de su propio tramo**, no a <500:
   pisarlo/quitarlo y advertencia
   visible**; la primera Install y las re-entradas `config` siguen con merge conservador
   byte-a-byte salvo los `mcp.servers.*` gestionados. Referencias:
-  specs/spec-installer-wizard.md §Enmienda 2026-11-18 — flujo destino (Proposed) y ADR-014
-  (pendiente).
+  specs/spec-installer-wizard.md §Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19) y ADR-014
+  (Accepted 2026-11-19).
 * Nunca commitear artefactos: `.tepochcalli/{venv,db,models,bin,config}` (gitignore del vault,
   spec-vault-structure).
 * `docs/BACKLOG.md` es la fuente de verdad: todo cambio se registra en su §8 y, si es decisión, exige ADR/enmienda; el detalle nuevo vive en `docs/PRD.md`/specs.

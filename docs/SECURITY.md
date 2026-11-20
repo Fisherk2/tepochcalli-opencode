@@ -120,18 +120,19 @@ requeriría rewiring del conector, fuera del scope v1):
   arrastrar el traceback, y el fallo de credencial sale como `E_API_AUTH` con `fix_hint` que
   nombra la variable — jamás su contenido.
 
-## Wizard sobre el vault: sobrescritura, backup y endpoint (destino Proposed 2026-11-18)
+## Wizard sobre el vault: sobrescritura, backup y endpoint (flujo destino, Accepted 2026-11-19)
 
 Excepción aprobada por el dueño (2026-11-18, [docs/CODE_STYLE.md](CODE_STYLE.md) §Reglas
-específicas del payload): en el flujo destino, **Update (H7)** sobrescribe `.opencode/`,
+específicas del payload): en el flujo vigente desde el 2026-11-19, **Update (H7)** sobrescribe `.opencode/`,
 `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`; **Desinstall (H8)** remueve
 `.opencode/`, `.tepochcalli/` y `opencode.json` — **no** `AGENTS.md` (BACKLOG.md §2 / US-H8) —, ambos con
 backup obligatorio antes de pisar/quitar y advertencia visible — amplían el alcance
-vigente (no existe `update`; `uninstall` hoy solo borra `.tepochcalli/`). La primera Install y las
+anterior (no existía `update`; `uninstall` solo borraba `.tepochcalli/`). La primera Install y las
 re-entradas `config` siguen con merge conservador byte-a-byte salvo los `mcp.servers.*` gestionados.
 Estado: [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) /
-[ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) **Proposed**, Phase 6.5 **GATED**
-en [WORKFLOW.md](WORKFLOW.md). Reglas:
+[ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) **Accepted 2026-11-19**, Phase 6.5
+**COMPLETADA 2026-11-19** en [WORKFLOW.md](WORKFLOW.md) (verificada en Linux; Windows/TD-52 y
+`uvx` desde PyPI siguen `declarado`). Reglas:
 
 * **Backup obligatorio antes de pisar + advertencia visible** con el directorio objetivo. El `.bak`
   vive en el vault del usuario: no introduce secretos nuevos, pero **hereda el contenido** del
@@ -146,7 +147,7 @@ en [WORKFLOW.md](WORKFLOW.md). Reglas:
 * **Anti-exfiltración en `model` (cross-ref):** la guarda que rechaza `://`, `http` y `@` dentro del
   `model` de LiteLLM está **implementada** (`.tepochcalli/flow/tepochcalli_flow/config.py:357-369`) y se
   documenta en la Enmienda 2026-11-18 de
-  [../specs/spec-embeddings.md](../specs/spec-embeddings.md) / ADR-015 (Proposed).
+  [../specs/spec-embeddings.md](../specs/spec-embeddings.md) / ADR-015 (Accepted 2026-11-19).
 * **Endpoint custom = riesgo declarado, no contrato:** el TOML **no** tiene campo de endpoint;
   LiteLLM lo deriva del prefijo de `model` (`openai/` → `https://api.openai.com/v1`). Un endpoint
   propio (Ollama/vLLM/proxy) se declara por **env var de LiteLLM** (`OPENAI_BASE_URL`,

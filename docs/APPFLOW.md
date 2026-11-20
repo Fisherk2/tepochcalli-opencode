@@ -58,10 +58,14 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
    vault y devuelven **solo el resumen de 5 claves** — nunca el cuerpo; el `index_refresh` se
    pide aparte cuando el usuario quiera buscar en él.)
 
-## 5. Journey (d) — primer arranque con wizard
+## 5. Journey (d) — primer arranque con wizard (mecánica heredada, canal sustituido 2026-11-19)
 
-1. **Paso 1 — instalar el binario:** `cargo binstall tepochcalli` (canal recomendado,
-   ADR-013). El usuario ve a binstall resolver el crate en crates.io, descargar el asset de la
+> **Estado:** el canal y la TUI de este journey quedaron **sustituidos el 2026-11-19** por el
+> journey destino de abajo (ADR-014 `Accepted`); la mecánica de las 8 fases F1-F8 del install
+> sigue vigente por debajo.
+
+1. **Paso 1 — instalar el binario (heredado):** `cargo binstall tepochcalli` (canal de
+   ADR-013, sustituido por ADR-014). El usuario ve a binstall resolver el crate en crates.io, descargar el asset de la
    release y dejarlo en `~/.cargo/bin/tepochcalli`; **no ejecuta ningún `.sh`** y no compila si
    hay asset para su target (`x86_64`/`aarch64` Linux GNU, `x86_64`/`aarch64` macOS, `x86_64`
    Windows MSVC). Requisito del host: `cargo` + `cargo-binstall`
@@ -70,8 +74,8 @@ Regla transversal: todo paso que consulte material propio pasa primero por `sear
    script antes de ejecutarlo.
 2. **Paso 2 — configurar el vault:** `tepochcalli install --vault <ruta>`. Son dos comandos
    porque **binstall no reenvía flags al binario**: `--vault`, `--offline` y `--skip-model` van
-   aquí, no en el `cargo binstall`. El usuario ve la TUI line-based (`dialoguer`, sin TTY con
-   `--non-interactive`): detección de prereqs F1 (SO/arch, RAM ≥ 8 GB, disco ≥ 4 GB;
+   aquí, no en el `cargo binstall`. El usuario veía la TUI line-based (`dialoguer`, hoy
+   `ratatui`+`crossterm` con el menú H5; sin TTY con `--non-interactive`): detección de prereqs F1 (SO/arch, RAM ≥ 8 GB, disco ≥ 4 GB;
    Obsidian y OpenCode V2 solo se detectan, no se instalan) → F2 elige/crea el
    directorio del vault (reutiliza si existe, nunca borra).
 3. F3 extrae el payload versionado (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`,
@@ -111,20 +115,23 @@ indexación inicial se omite y el RAG queda en estado `degraded`;
 `search`/`index_refresh`/`add_source` devuelven `E_NO_EMBEDDER` con `fix_hint`, y `rag_status()`
 reporta `degraded` con la solución; re-entrada vía `tepochcalli config embedder` (flujo D8.4).
 
-### Journey destino (Proposed 2026-11-18 — Phase 6.5 **GATED**; no es el estado vigente)
+### Journey destino (vigente desde 2026-11-19 — Phase 6.5 completada)
 
 Requisito: [docs/BACKLOG.md §"Wizard de instalación: flujo destino"](BACKLOG.md) (H5-H11); diseño:
 [../specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-18 —
-flujo destino (Proposed) y [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) /
-[adr-015](adr/adr-015-dispositivo-inferencia-wizard.md) (Proposed). El journey (d) de
-arriba sigue siendo lo que el wizard hace hoy.
+flujo destino (Accepted 2026-11-19) y [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) /
+[adr-015](adr/adr-015-dispositivo-inferencia-wizard.md) (**Accepted 2026-11-19**). Este journey
+**es** el estado vigente del wizard; el journey (d) describe la mecánica del install que sigue
+viva por debajo.
 
 1. **Arranque:** `uvx tepochcalli` — un solo comando, sin binario del proyecto en PATH y sin
-   descargas en runtime (canal único, ADR-014 Proposed). Refresco: `uvx --refresh tepochcalli`.
-2. **Menú con botones según la versión (H5, TUI full-screen):** muestra la versión que gestiona,
-   la instalada (leída de `.tepochcalli/pyproject.toml`) y cómo está configurado el embedder (API
-   key externa o modelo local en `.tepochcalli/models/`). Todo bloqueo es un botón deshabilitado
-   con razón visible:
+   descargas en runtime (canal único, ADR-014 Accepted). Refresco: `uvx --refresh tepochcalli`.
+2. **Menú con botones según la versión (H5, TUI full-screen):** cabecera con la versión del
+   wizard, la instalada (leída de `.tepochcalli/pyproject.toml`) y el estado del embedder — API
+   key externa o modelo local en `.tepochcalli/models/`, o `sin configurar`; verificado en TTY
+   real con `Tepochcalli 0.1.0 · instalada: — · embedder: sin configurar`. Los **5 botones** son
+   🔵Install · 🟢Update · 🟣Change Embedder · 🔴Desinstall · 🟠Exit, y todo bloqueo es un botón
+   deshabilitado con razón visible:
    * **no instalado** → único disponible 🔵Install (🟢Update, 🟣Change Embedder, 🔴Desinstall
      deshabilitados);
    * **instalada == wizard** → deshabilitados 🟢Update y 🔵Install;
@@ -139,7 +146,8 @@ arriba sigue siendo lo que el wizard hace hoy.
    (excepción del dueño 2026-11-18, [docs/CODE_STYLE.md](CODE_STYLE.md)); muestra el directorio
    objetivo y progresa.
 5. **🔴 Desinstall (H8):** remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más —
-   tras advertencia y confirmación (hoy `uninstall` solo borra `.tepochcalli/`).
+   tras advertencia y confirmación, dejando `AGENTS.md` y `00-resources/` intactos (medido:
+   1,44 s, backup `.tepochcalli-backup-<ts>/` con permisos `drwx------`).
 6. **🟣 Change Embedder (H9):** catálogo **activo** de `presets.toml`
    (`paraphrase-multilingual-MiniLM-L12-v2` preseleccionado + `BAAI/bge-m3`) e ID libre de
    HuggingFace con gate `test-embed` y `HF_TOKEN` opcional; requisitos 💾/🧠/🎮 etiquetados
@@ -147,7 +155,7 @@ arriba sigue siendo lo que el wizard hace hoy.
    bloqueo**; **device explícito** `cpu` (preseleccionado) / `cuda`/`cuda:N` — GPU sin sonda ⇒ botón
    deshabilitado con la razón `GPU no detectada`; forzarlo solo advierte con procedencia `medido`
    (autoselección en runtime: rechazada). La re-entrada `tepochcalli config embedder` **preserva**
-   el device existente como preselección ([ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) Proposed).
+   el device existente como preselección ([ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) Accepted 2026-11-19). **Verificación e2e de este journey: no ejecutada** (exige descargar ~470 MB y reindexar); se cubre con integración de fakes (`e2e_swap`, `int_ui_menu`) — ver [WORKFLOW.md](WORKFLOW.md) §Phase 6.5.
 7. **🟠 Exit (H10):** sale sin materializar ni modificar nada.
 8. **Cierre (H11):** tras cualquier opción salvo Exit, cualquier tecla confirma y el mensaje de
    agradecimiento despide el instalador.
