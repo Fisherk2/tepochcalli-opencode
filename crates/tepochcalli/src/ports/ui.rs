@@ -1,7 +1,23 @@
-//! `Ui`: the four interactions the installer needs (`TtyUi` vs
-//! `HeadlessUi` in T6; `ScriptedUi` fake in tests).
+//! `Ui`: the five interactions the installer needs (`TtyUi` with the
+//! ratatui menu and its line-based fallback, `HeadlessUi` scripted, and the
+//! `ScriptedUi`/`TapUi` fakes in tests).
 
-use crate::domain::WizardError;
+use crate::domain::{MenuAction, MenuSpec, WizardError};
+
+/// Everything the H5 menu renders, resolved by the caller: the pure spec plus
+/// the three facts the header shows. `embedder` arrives as a ready label —
+/// this port never reads the vault.
+#[derive(Debug, Clone, Copy)]
+pub struct MenuView<'a> {
+    /// Buttons and state message (pure domain matrix).
+    pub spec: &'a MenuSpec,
+    /// Version this binary manages.
+    pub wizard: &'a str,
+    /// Canonical installed version (`None` = no runtime yet).
+    pub installed: Option<&'a str>,
+    /// Embedder state, already worded (`externo (API key)`/…).
+    pub embedder: &'a str,
+}
 
 /// Installer dialogue. `panel` only renders (errors surface via `Result`
 /// returns), and every answer method fails with a typed error instead of
@@ -22,4 +38,8 @@ pub trait Ui {
     fn input_secret(&self, prompt: &str) -> Result<String, WizardError>;
     /// Informational/error block (failure UX panel in T15).
     fn panel(&self, title: &str, body: &str);
+    /// H5 menu over the caller-resolved [`MenuView`]. Returns the chosen
+    /// action; a button disabled in the spec is never returned (typed abort
+    /// instead).
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError>;
 }

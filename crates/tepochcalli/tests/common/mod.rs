@@ -13,8 +13,10 @@ use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
+use tepochcalli::domain::{MenuAction, MenuSpec};
 use tepochcalli::ports::{
-    CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, MergeReport, PayloadSource, Ui,
+    CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, MenuView, MergeReport,
+    PayloadSource, Ui,
 };
 use tepochcalli::WizardError;
 
@@ -238,6 +240,17 @@ impl Ui for ScriptedUi {
     }
 
     fn panel(&self, _title: &str, _body: &str) {}
+
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        // Misma cola que `select`: el guion elige por índice de botón.
+        let index = self
+            .script
+            .borrow_mut()
+            .selects
+            .pop_front()
+            .ok_or(WizardError::UserAborted)?;
+        tepochcalli::adapters::ui_ratatui::choose(view.spec, index)
+    }
 }
 
 // --- RecordingProc: CommandRunner fake que REGISTRA argv/env (T12/T16) ---
@@ -430,6 +443,25 @@ impl Ui for TapUi {
             title: title.to_string(),
             body: body.to_string(),
         });
+    }
+
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        // Delegación: graba un `Select` con los labels del menú y valida el
+        // índice contra los botones habilitados.
+        let labels: Vec<&str> = view.spec.buttons.iter().map(|b| b.action.label()).collect();
+        let index = self.select("menu", &labels, 0)?;
+        tepochcalli::adapters::ui_ratatui::choose(view.spec, index)
+    }
+}
+
+/// `MenuView` de los tests de puerto: versiones fijas y embedder sin
+/// configurar (los valores reales los arma `home_view` en producción).
+pub fn menu_view(spec: &MenuSpec) -> MenuView<'_> {
+    MenuView {
+        spec,
+        wizard: "0.2.0",
+        installed: Some("0.1.0"),
+        embedder: "sin configurar",
     }
 }
 

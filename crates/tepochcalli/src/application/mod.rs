@@ -12,6 +12,7 @@ mod embedder_options;
 pub mod failure;
 pub(crate) mod flow_cli;
 mod flow_contract;
+mod home;
 mod installed;
 pub mod installer;
 pub mod maintenance;
@@ -26,6 +27,7 @@ pub use embedder_menu::{
     compensate_phase6, config_path, litellm_config_present, read_completed_report, run_phase6,
     Phase6Deps, Phase6Report, Provenance, EMBEDDER_PATHS,
 };
+pub use home::{choose_action, embedder_label, home_view, HomeView};
 pub use installed::{embedder_presence, installed_version, wizard_version, EmbedderPresence};
 pub use installer::{
     check_prereqs_on, compensate_phase1, compensate_phase2, compensate_phase3, compensate_phase4,

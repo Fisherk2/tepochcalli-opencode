@@ -112,6 +112,13 @@ impl tepochcalli::ports::Ui for ConsentUi {
             .borrow_mut()
             .push((title.to_string(), body.to_string()));
     }
+
+    fn menu(
+        &self,
+        _view: &tepochcalli::ports::MenuView<'_>,
+    ) -> Result<tepochcalli::domain::MenuAction, WizardError> {
+        Err(WizardError::UserAborted)
+    }
 }
 
 /// Venv interpreter fixture: F8 refuses to verify without it (same rule as

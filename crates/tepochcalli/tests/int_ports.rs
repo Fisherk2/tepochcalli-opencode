@@ -8,10 +8,11 @@
 #[allow(dead_code)]
 mod common;
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-use common::{FakeHost, FakeHttp, FakeProc, FakeUiScript, ScriptedUi};
+use common::{menu_view, FakeHost, FakeHttp, FakeProc, FakeUiScript, ScriptedUi};
 use sha2::{Digest, Sha256};
+use tepochcalli::adapters::HeadlessUi;
 use tepochcalli::ports::{CommandRunner, GpuInfo, HostProbe, HttpClient, PayloadSource, Ui};
 use tepochcalli::WizardError;
 
@@ -133,4 +134,41 @@ fn ui_errors_when_script_exhausted() {
     let ui = ScriptedUi::new(FakeUiScript::default());
     assert_eq!(ui.select("pick", &["a"], 0), Err(WizardError::UserAborted));
     assert_eq!(ui.input("name?", None), Err(WizardError::UserAborted));
+}
+
+#[test]
+fn headless_menu_returns_the_scripted_button() {
+    use tepochcalli::domain::{menu_spec, InstalledState, MenuAction};
+    // Outdated: Update (0) is enabled, so the scripted index resolves.
+    let spec = menu_spec(InstalledState::Outdated);
+    let ui = HeadlessUi::new(VecDeque::from([0]), VecDeque::new());
+    assert_eq!(ui.menu(&menu_view(&spec)), Ok(MenuAction::Update));
+}
+
+#[test]
+fn headless_menu_on_a_disabled_button_is_a_typed_abort() {
+    use tepochcalli::domain::{menu_spec, InstalledState};
+    // Outdated: Install (3) is "ya existe instalación" — never guessed.
+    let spec = menu_spec(InstalledState::Outdated);
+    let ui = HeadlessUi::new(VecDeque::from([3]), VecDeque::new());
+    assert_eq!(ui.menu(&menu_view(&spec)), Err(WizardError::UserAborted));
+}
+
+#[test]
+fn headless_menu_with_an_exhausted_queue_aborts() {
+    use tepochcalli::domain::{menu_spec, InstalledState};
+    let spec = menu_spec(InstalledState::NotInstalled);
+    let ui = HeadlessUi::new(VecDeque::new(), VecDeque::new());
+    assert_eq!(ui.menu(&menu_view(&spec)), Err(WizardError::UserAborted));
+}
+
+#[test]
+fn scripted_ui_answers_the_menu_from_its_select_queue() {
+    use tepochcalli::domain::{menu_spec, InstalledState, MenuAction};
+    let spec = menu_spec(InstalledState::Outdated);
+    let ui = ScriptedUi::new(FakeUiScript {
+        selects: vec![1].into(),
+        inputs: VecDeque::new(),
+    });
+    assert_eq!(ui.menu(&menu_view(&spec)), Ok(MenuAction::ChangeEmbedder));
 }

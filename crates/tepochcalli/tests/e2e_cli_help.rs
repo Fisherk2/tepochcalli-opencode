@@ -57,6 +57,68 @@ fn each_subcommand_supports_help_and_version() {
 }
 
 #[test]
+fn bare_invocation_opens_the_menu_and_never_dumps_usage() {
+    // H5 (T9): no subcommand ⇒ the menu, not a usage error. Without a TTY
+    // there is no menu to draw, so the wizard aborts typed (41) after naming
+    // the missing TTY — it never prints usage and never hangs.
+    let out = bin().stdin(Stdio::null()).output().expect("spawn binary");
+    assert_eq!(out.status.code(), Some(41));
+    let combined = stdout_text(&out) + &stderr_text(&out);
+    assert!(
+        !combined.contains("Usage:"),
+        "the menu is not a usage error:\n{combined}"
+    );
+    assert!(
+        combined.contains("no TTY"),
+        "the abort must name the missing terminal:\n{combined}"
+    );
+}
+
+#[test]
+fn non_interactive_menu_without_a_script_aborts_typed() {
+    // Checklist T9: `--non-interactive` sin guion ⇒ `UserAborted` tipado,
+    // nunca un cuelgue. Without `--vault` the headless menu cannot even
+    // resolve the vault, so it fails fast with the documented 41.
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let out = bin()
+            .arg("--non-interactive")
+            .stdin(Stdio::null())
+            .output()
+            .expect("spawn binary");
+        let _ = tx.send(out);
+    });
+    let out = rx
+        .recv_timeout(std::time::Duration::from_secs(15))
+        .expect("`tepochcalli --non-interactive` blocked on closed stdin");
+    assert_eq!(out.status.code(), Some(41));
+}
+
+#[test]
+fn explicit_subcommands_never_open_the_menu() {
+    // "Change Embedder" only exists in the H5 menu: if it shows up in a
+    // subcommand's help, the dispatch leaked into the menu path.
+    for args in [
+        vec!["install", "--help"],
+        vec!["update", "--help"],
+        vec!["reindex", "--help"],
+        vec!["uninstall", "--help"],
+    ] {
+        let out = bin().args(&args).output().expect("spawn binary");
+        assert_eq!(out.status.code(), Some(0), "args {args:?} must exit 0");
+        let text = stdout_text(&out);
+        assert!(
+            text.starts_with("Usage: tepochcalli"),
+            "args {args:?} must print its own usage:\n{text}"
+        );
+        assert!(
+            !text.contains("Change Embedder"),
+            "args {args:?} opened the menu:\n{text}"
+        );
+    }
+}
+
+#[test]
 fn config_without_subcommand_fails_with_usage() {
     let out = bin().arg("config").output().expect("spawn binary");
     assert!(

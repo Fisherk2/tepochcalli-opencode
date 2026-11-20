@@ -4,7 +4,10 @@
 pub(crate) const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 pub(crate) fn usage_top() -> &'static str {
-    "Usage: tepochcalli <command> [options]\n\
+    "Usage: tepochcalli [<command>] [options]\n\
+     \n\
+     Without a command, tepochcalli opens the H5 menu: install, update,\n\
+     change embedder, desinstall or exit (choosing touches nothing).\n\
      \n\
      Commands:\n  \
      install            install a vault\n  \
@@ -19,6 +22,10 @@ pub(crate) fn usage_top() -> &'static str {
 }
 
 pub(crate) fn usage_for(command: &str) -> String {
+    // Empty command = the menu (`tepochcalli --help`): the top usage.
+    if command.is_empty() {
+        return usage_top().to_string();
+    }
     if command == "install" {
         return "Usage: tepochcalli install [options]\n\
          \nOptions:\n  \

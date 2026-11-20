@@ -311,6 +311,11 @@ rust-fmt-fix:
 rust-build target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo build --locked
 
+# Resuelve Cargo.lock conservando las versiones ya fijadas (solo añade las
+# deps nuevas); las recetas de gate siguen en --locked.
+rust-lock:
+    cd {{crate_dir}} && cargo metadata --format-version 1 >/dev/null
+
 # Formato del wizard (falla si algo habría que reescribir). No compila, así que
 # no necesita el directorio de destino.
 rust-fmt:

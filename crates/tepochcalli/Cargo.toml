@@ -30,7 +30,9 @@ name = "tepochcalli"
 path = "src/main.rs"
 
 [dependencies]
+crossterm = "0.29"
 dialoguer = "0.12"
+ratatui = "0.30"
 tar = "0.4"
 zip = "2"
 flate2 = "1"

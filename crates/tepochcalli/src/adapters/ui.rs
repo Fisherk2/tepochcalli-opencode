@@ -1,5 +1,6 @@
-//! `Ui` adapters (T6): [`TtyUi`] over `dialoguer` for interactive runs,
-//! [`HeadlessUi`] with scripted answers for `--non-interactive` (CI/pipes).
+//! `Ui` adapters (T6/T8): [`TtyUi`] renders the H5 menu with ratatui on a
+//! real TTY and falls back to `dialoguer` otherwise; [`HeadlessUi`] answers
+//! from a script for `--non-interactive` (CI/pipes).
 //!
 //! Both keep messages on stderr; the panel uses color only on a terminal.
 
@@ -7,13 +8,15 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::IsTerminal;
 
-use crate::domain::WizardError;
-use crate::ports::Ui;
+use crate::domain::{MenuAction, WizardError};
+use crate::ports::{MenuView, Ui};
 
-/// Interactive dialogue over `dialoguer` (line-based, D23 — no ratatui).
+/// Interactive dialogue: full-screen ratatui menu on a TTY, `dialoguer`
+/// line-based fallback when there is none.
 ///
-/// Every prompt failure (no TTY, EOF, Esc) is [`WizardError::UserAborted`]:
-/// without a terminal the caller must use [`HeadlessUi`] instead.
+/// Every prompt failure (no TTY, EOF, Esc, Ctrl-C) is
+/// [`WizardError::UserAborted`]: without a terminal the caller must use
+/// [`HeadlessUi`] instead.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TtyUi;
 
@@ -53,6 +56,71 @@ impl Ui for TtyUi {
 
     fn panel(&self, title: &str, body: &str) {
         render_panel(title, body);
+    }
+
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        // Pantalla completa solo con un TTY real; sin él, el mismo contenido
+        // en line-based. `ratatui::init` no devuelve error (entra en pánico):
+        // no hay init fallido que capturar, solo el aborto tipado del bucle.
+        if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
+            return super::ui_ratatui::run_menu(view);
+        }
+        self.line_menu(view)
+    }
+}
+
+impl TtyUi {
+    /// Fallback sin full-screen: cabecera con las versiones y el embedder,
+    /// razones de los deshabilitados, luego un `Select` que ofrece solo los
+    /// habilitados.
+    fn line_menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        let spec = view.spec;
+        let enabled: Vec<usize> = spec
+            .buttons
+            .iter()
+            .enumerate()
+            .filter(|(_, button)| button.enabled)
+            .map(|(index, _)| index)
+            .collect();
+        if enabled.is_empty() {
+            return Err(WizardError::UserAborted);
+        }
+
+        let mut body = format!(
+            "Tepochcalli {} · instalada: {} · embedder: {}\n",
+            view.wizard,
+            view.installed.unwrap_or("—"),
+            view.embedder
+        );
+        for button in spec.buttons.iter().filter(|button| !button.enabled) {
+            if let Some(reason) = button.reason {
+                body.push_str(&format!(
+                    "{} {}: {reason}\n",
+                    button.action.icon(),
+                    button.action.label()
+                ));
+            }
+        }
+        if let Some(notice) = spec.notice {
+            body.push_str(notice);
+        }
+        render_panel("Tepochcalli", body.trim_end());
+
+        let labels: Vec<String> = enabled
+            .iter()
+            .map(|&index| {
+                let action = spec.buttons[index].action;
+                format!("{} {}", action.icon(), action.label())
+            })
+            .collect();
+        let items: Vec<&str> = labels.iter().map(String::as_str).collect();
+        let picked = dialoguer::Select::new()
+            .with_prompt("What do you want to do?")
+            .items(&items)
+            .default(0)
+            .interact()
+            .map_err(|_| WizardError::UserAborted)?;
+        super::ui_ratatui::choose(spec, enabled[picked])
     }
 }
 
@@ -135,6 +203,18 @@ impl Ui for HeadlessUi {
 
     fn panel(&self, title: &str, body: &str) {
         render_panel(title, body);
+    }
+
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        // El guion elige por índice de botón: un índice deshabilitado o una
+        // cola agotada aborta tipado — nunca se adivina. Las versiones y el
+        // embedder solo alimentan el header del render, que aquí no se dibuja.
+        let index = self
+            .selects
+            .borrow_mut()
+            .pop_front()
+            .ok_or(WizardError::UserAborted)?;
+        super::ui_ratatui::choose(view.spec, index)
     }
 }
 
