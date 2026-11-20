@@ -11,7 +11,7 @@
 
 use std::path::Path;
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::{CommandOutput, CommandRunner};
 
 use super::flow_cli::{run_flow_cli, GATE_TIMEOUT, REFRESH_TIMEOUT};
@@ -50,13 +50,14 @@ pub(super) fn spawn_gate(
     model_id: &str,
     revision: Option<&str>,
     token: Option<&str>,
+    cancel: Option<&CancelToken>,
 ) -> Result<CommandOutput, WizardError> {
     let mut args: Vec<&str> = vec!["-m", FLOW_MODULE, GATE_SUBCOMMAND, "--model", model_id];
     if let Some(sha) = revision {
         args.push("--revision");
         args.push(sha);
     }
-    run_flow_cli(proc, vault, &args, &[], token, GATE_TIMEOUT)
+    run_flow_cli(proc, vault, &args, &[], token, cancel, GATE_TIMEOUT)
 }
 
 /// Spawn trunk del refresh (T12): `venv python -m tepochcalli_flow refresh`.
@@ -69,6 +70,7 @@ pub(super) fn spawn_refresh(
         vault,
         &["-m", FLOW_MODULE, REFRESH_SUBCOMMAND],
         &[],
+        None,
         None,
         REFRESH_TIMEOUT,
     )

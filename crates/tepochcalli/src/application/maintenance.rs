@@ -319,7 +319,7 @@ struct GateOk {
 /// portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
 /// `PhaseFailed`.
 fn run_gate(proc: &dyn CommandRunner, vault: &Path, model: &str) -> Result<GateOk, WizardError> {
-    let out = spawn_gate(proc, vault, model, None, None)?;
+    let out = spawn_gate(proc, vault, model, None, None, None)?;
     parse_gate(&out.stdout)
 }
 

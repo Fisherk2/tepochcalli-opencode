@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 
 use common::{gate_ok, host_16gb, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::embedder_menu::{Phase6Deps, EMBEDDER_PATHS};
-use tepochcalli::domain::{EmbedderChoice, WizardError};
+use tepochcalli::domain::{CancelToken, EmbedderChoice, WizardError};
 use tepochcalli::ports::{CommandOutput, CommandRunner, GpuInfo, Ui};
 
 /// Los dos presets embebidos y su SHA pineada (espejo de `presets.toml`).
@@ -97,6 +97,8 @@ fn deps<'a>(
         host,
         proc,
         http,
+        // Ninguna prueba del menú dispara la cancelación (T14).
+        cancel: CancelToken::new(),
     }
 }
 

@@ -263,6 +263,7 @@ fn verify_rag_status(proc: &dyn CommandRunner, vault: &Path) -> Result<RagHealth
         &["-c", RAG_STATUS_PROBE],
         &[(CONTRACT_ROOT_ENV, ".")],
         None,
+        None,
         super::flow_cli::PROBE_TIMEOUT,
     )?;
     parse_rag_status(out.stdout.trim())

@@ -18,7 +18,7 @@ use tepochcalli::application::installer::{
     run_phase3,
 };
 use tepochcalli::application::{run_phase6, run_phase7, run_phase8};
-use tepochcalli::domain::{Phase, WizardError};
+use tepochcalli::domain::{CancelToken, Phase, WizardError};
 use tepochcalli::ports::CommandOutput;
 use tepochcalli::{INSTALL_STATE_PATH, MANAGED_RAG};
 
@@ -270,6 +270,7 @@ fn f6_failure_compensates_to_degraded_path5() {
         host: &host_16gb(),
         proc: &proc,
         http: &FakeHttp::new(HashMap::new()),
+        cancel: CancelToken::new(),
     };
     let err = run_phase6(&deps, vault.path()).expect_err("crashed gate must fail F6");
     assert_eq!(err, WizardError::PhaseFailed);
@@ -517,6 +518,7 @@ fn rerun_is_idempotent_with_zero_dupes() {
         host: &host_16gb(),
         proc: &FakeProc::scripted([]),
         http: &FakeHttp::new(HashMap::new()),
+        cancel: CancelToken::new(),
     };
     // --skip-model == salida 5 exacta: degraded config, no spawn, no index.
     let picked = run_phase6(&deps, vault.path()).expect("path 5 must succeed");
@@ -547,6 +549,7 @@ fn skip_model_writes_path5_config_without_spawning() {
         host: &host_16gb(),
         proc: &FakeProc::scripted([]),
         http: &FakeHttp::new(HashMap::new()),
+        cancel: CancelToken::new(),
     };
     let picked = run_phase6(&deps, vault.path()).expect("skip-model must succeed");
     assert_eq!(picked.provider, "none", "--skip-model == salida 5");

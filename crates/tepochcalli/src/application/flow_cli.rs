@@ -8,7 +8,7 @@
 
 use std::path::Path;
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::{CommandOutput, CommandRunner};
 
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
@@ -37,6 +37,7 @@ pub(super) fn run_flow_cli(
     args: &[&str],
     extra_env: &[(&str, &str)],
     token: Option<&str>,
+    cancel: Option<&CancelToken>,
     timeout: std::time::Duration,
 ) -> Result<CommandOutput, WizardError> {
     // shortcut: a vault without the venv interpreter means F5 never ran;
@@ -61,7 +62,10 @@ pub(super) fn run_flow_cli(
         // UI/log surfaces; a generic env-scrubber is T15 scope).
         env.push(("HF_TOKEN", secret));
     }
-    let out = proc.run_with_timeout(&program, args, vault, &env, timeout)?;
+    let out = match cancel {
+        Some(cancel) => proc.run_cancellable(&program, args, vault, &env, timeout, cancel)?,
+        None => proc.run_with_timeout(&program, args, vault, &env, timeout)?,
+    };
     if out.status != 0 {
         return Err(WizardError::PhaseFailed);
     }
@@ -145,6 +149,7 @@ mod tests {
             &["-m", "tepochcalli_flow", "refresh"],
             &[],
             Some("hf-secret"),
+            None,
             REFRESH_TIMEOUT,
         );
         let got = match got {
@@ -205,6 +210,7 @@ mod tests {
                 &["-m", "tepochcalli_flow"],
                 &[],
                 None,
+                None,
                 REFRESH_TIMEOUT,
             ),
             Err(WizardError::Internal)
@@ -230,6 +236,7 @@ mod tests {
                 vault.path(),
                 &["-c", "probe"],
                 &[("TEPOCHCALLI_ROOT", ".")],
+                None,
                 None,
                 PROBE_TIMEOUT,
             ),

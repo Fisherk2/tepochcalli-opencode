@@ -7,7 +7,7 @@ use std::path::Path;
 use std::process::Command;
 use std::sync::{mpsc, Arc, Mutex};
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::{CommandOutput, CommandRunner};
 
 /// [`CommandRunner`] over [`std::process::Command`] (no shell wrapping).
@@ -93,72 +93,128 @@ impl CommandRunner for StdCommandRunner {
         env: &[(&str, &str)],
         timeout: std::time::Duration,
     ) -> Result<CommandOutput, WizardError> {
-        let mut child = build_command(program, args, cwd, env)
-            .stdout(std::process::Stdio::piped())
-            .stderr(std::process::Stdio::piped())
-            .spawn()
-            .map_err(|_| WizardError::PhaseFailed)?;
-        let stdout_pipe = child.stdout.take();
-        let stderr_pipe = child.stderr.take();
-        let child = Arc::new(Mutex::new(child));
+        run_inner(program, args, cwd, env, timeout, None)
+    }
 
-        // Lector: drena stdout y stderr (EOF al morir el hijo, natural o
-        // killed). Abandonado pasar el plazo — los buffers nueno fugan.
-        let (text_tx, text_rx) = mpsc::channel::<(String, String)>();
-        std::thread::spawn(move || {
-            let mut out = String::new();
-            let mut err = String::new();
-            if let Some(mut pipe) = stdout_pipe {
-                use std::io::Read as _;
-                let _ = pipe.read_to_string(&mut out);
-            }
-            if let Some(mut pipe) = stderr_pipe {
-                use std::io::Read as _;
-                let _ = pipe.read_to_string(&mut err);
-            }
-            let _ = text_tx.send((out, err));
-        });
+    /// Variante cancelable (R-offline-2): el mismo watcher sondea el token y,
+    /// disparado, mata al hijo y devuelve `UserAborted`. La descarga del
+    /// modelo ocurre en el hijo del flow, así que matarlo ES detenerla.
+    fn run_cancellable(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &str)],
+        timeout: std::time::Duration,
+        cancel: &CancelToken,
+    ) -> Result<CommandOutput, WizardError> {
+        run_inner(program, args, cwd, env, timeout, Some(cancel))
+    }
+}
 
-        // Watcher: sondea el status con el lock tomado en ráfagas (so el
-        // padreNavLink puede tomar el lock para kill pasa del plazo).
-        let (status_tx, status_rx) = mpsc::channel::<i32>();
-        let slot_for_watcher = Arc::clone(&child);
-        std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_millis(50));
-            let verdict = match slot_for_watcher.lock() {
-                Ok(mut guard) => guard.try_wait().unwrap_or_default(),
-                Err(_) => return,
-            };
-            if let Some(status) = verdict {
-                // El padre pudo vencer el plazo y soltar el canal: send(si llega)
-                // falla y salimos — ningun thread queda eterno.
-                if status_tx.send(status.code().unwrap_or(-1)).is_err() {
-                    return;
-                }
-            }
-        });
+/// Veredicto del watcher: muerte natural (status) o cancelación del token.
+enum Verdict {
+    Exited(i32),
+    Cancelled,
+}
 
-        match status_rx.recv_timeout(timeout) {
-            Ok(status) => {
-                // El plazo del text_rx no re-verdicta: sin texto, vacíos.
-                let (stdout, stderr) = text_rx
-                    .recv_timeout(timeout)
-                    .unwrap_or_else(|_| (String::new(), String::new()));
-                Ok(CommandOutput {
-                    status,
-                    stdout,
-                    stderr,
-                })
+/// Trunk único de `run_with_timeout`/`run_cancellable` (mismo lector y
+/// watcher); `cancel: None` es el comportamiento byte-idéntico anterior.
+fn run_inner(
+    program: &str,
+    args: &[&str],
+    cwd: &Path,
+    env: &[(&str, &str)],
+    timeout: std::time::Duration,
+    cancel: Option<&CancelToken>,
+) -> Result<CommandOutput, WizardError> {
+    if cancel.is_some_and(CancelToken::is_cancelled) {
+        return Err(WizardError::UserAborted);
+    }
+    let mut child = build_command(program, args, cwd, env)
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .map_err(|_| WizardError::PhaseFailed)?;
+    let stdout_pipe = child.stdout.take();
+    let stderr_pipe = child.stderr.take();
+    let child = Arc::new(Mutex::new(child));
+
+    // Lector: drena stdout y stderr (EOF al morir el hijo, natural o
+    // killed). Abandonado pasar el plazo — los buffers nueno fugan.
+    let (text_tx, text_rx) = mpsc::channel::<(String, String)>();
+    std::thread::spawn(move || {
+        let mut out = String::new();
+        let mut err = String::new();
+        if let Some(mut pipe) = stdout_pipe {
+            use std::io::Read as _;
+            let _ = pipe.read_to_string(&mut out);
+        }
+        if let Some(mut pipe) = stderr_pipe {
+            use std::io::Read as _;
+            let _ = pipe.read_to_string(&mut err);
+        }
+        let _ = text_tx.send((out, err));
+    });
+
+    // Watcher: sondea el status con el lock tomado en ráfagas (so el
+    // padreNavLink puede tomar el lock para kill pasa del plazo). Con token,
+    // primero mira la cancelación: disparada ⇒ kill + veredicto `Cancelled`.
+    // El token es un `Arc`: se clona para el hilo (la UI conserva el suyo).
+    let (status_tx, status_rx) = mpsc::channel::<Verdict>();
+    let slot_for_watcher = Arc::clone(&child);
+    let cancel = cancel.cloned();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        if cancel.as_ref().is_some_and(CancelToken::is_cancelled) {
+            if let Ok(mut guard) = slot_for_watcher.lock() {
+                let _ = guard.kill();
+                let _ = guard.wait();
             }
-            Err(_) => {
-                // Plazo vencido con el hijo vivo: kill; las ráfagas cortas del
-                // watcher permiten tomar el lock al padre.
-                if let Ok(mut guard) = child.lock() {
-                    let _ = guard.kill();
-                    let _ = guard.wait();
-                }
-                Err(WizardError::PhaseFailed)
+            let _ = status_tx.send(Verdict::Cancelled);
+            return;
+        }
+        let verdict = match slot_for_watcher.lock() {
+            Ok(mut guard) => guard.try_wait().unwrap_or_default(),
+            Err(_) => return,
+        };
+        if let Some(status) = verdict {
+            // El padre pudo vencer el plazo y soltar el canal: send(si llega)
+            // falla y salimos — ningun thread queda eterno.
+            if status_tx
+                .send(Verdict::Exited(status.code().unwrap_or(-1)))
+                .is_err()
+            {
+                return;
             }
+        }
+    });
+
+    match status_rx.recv_timeout(timeout) {
+        Ok(Verdict::Exited(status)) => {
+            // El plazo del text_rx no re-verdicta: sin texto, vacíos.
+            let (stdout, stderr) = text_rx
+                .recv_timeout(timeout)
+                .unwrap_or_else(|_| (String::new(), String::new()));
+            Ok(CommandOutput {
+                status,
+                stdout,
+                stderr,
+            })
+        }
+        Ok(Verdict::Cancelled) => {
+            // El watcher ya hizo kill + wait; los buffers del lector se
+            // descartan (la salida de una descarga cancelada no es dato).
+            Err(WizardError::UserAborted)
+        }
+        Err(_) => {
+            // Plazo vencido con el hijo vivo: kill; las ráfagas cortas del
+            // watcher permiten tomar el lock al padre.
+            if let Ok(mut guard) = child.lock() {
+                let _ = guard.kill();
+                let _ = guard.wait();
+            }
+            Err(WizardError::PhaseFailed)
         }
     }
 }

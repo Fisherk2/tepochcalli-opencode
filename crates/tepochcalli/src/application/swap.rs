@@ -25,16 +25,17 @@
 use std::path::Path;
 
 use crate::config::{default_and_large, parse_presets, Preset};
-use crate::domain::{EmbedderChoice, WizardError};
+use crate::domain::{CancelToken, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
 
+use super::embedder_gate::run_gate_cancellable;
 use super::embedder_gc::gc_old_model;
 use super::embedder_menu::{
     ask_non_empty, ask_secret_non_empty, build_options, choose_device, config_path,
     external_config, local_config, none_config, parse_hf_metadata, write_config, Phase6Report,
     Provenance, EMBEDDER_PATHS,
 };
-use super::flow_contract::{spawn_gate, spawn_refresh, GateOk};
+use super::flow_contract::spawn_refresh;
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
@@ -68,6 +69,9 @@ pub struct SwapDeps<'a> {
     pub proc: &'a dyn CommandRunner,
     /// HF API pre-check for free ids (D8.1).
     pub http: &'a dyn HttpClient,
+    /// Cancelación de la descarga en curso (R-offline-2; T16 la dispara).
+    /// Clon del token de la corrida.
+    pub cancel: CancelToken,
 }
 
 /// Swap flags (`tepochcalli config embedder [--confirm] [--keep-previous]`).
@@ -521,12 +525,13 @@ fn download_gate_and_reindex(
         .map(|(name, key)| (name.to_string(), Some(key.to_string())))
         .unwrap_or((model, None));
     let (dims, rss) = if picked.provider == "local" {
-        let gate = run_gate(
+        let gate = run_gate_cancellable(
             deps.proc,
             vault,
             &model_name,
             picked.revision.as_deref(),
             token,
+            &deps.cancel,
         )?;
         deps.ui.panel(
             "Embedding OK",
@@ -607,18 +612,12 @@ fn cleanup_staged(vault: &Path) {
     let _ = std::fs::remove_file(index_meta_path(vault).with_extension("json.tmp"));
 }
 
-/// Gate del swap (trunk y parser del contrato compartido, T12). `ok:false`
-/// is the portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
-/// `PhaseFailed`.
-fn run_gate(
-    proc: &dyn CommandRunner,
-    vault: &Path,
-    model_id: &str,
-    revision: Option<&str>,
-    token: Option<&str>,
-) -> Result<GateOk, WizardError> {
-    let out = spawn_gate(proc, vault, model_id, revision, token)?;
-    parse_gate(&out.stdout)
+/// Gate del swap (trunk y parser del contrato compartido, T12). La descarga
+/// del modelo (y su cancelación, R-offline-2) la orquesta
+/// `embedder_gate::run_gate_cancellable`; aquí solo el parser.
+#[cfg(test)]
+fn parse_gate(body: &str) -> Result<super::flow_contract::GateOk, WizardError> {
+    super::flow_contract::parse_gate(body)
 }
 
 /// `venv python -m tepochcalli_flow refresh` (T12 contract): returns the
@@ -627,10 +626,6 @@ fn run_gate(
 fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<u64, WizardError> {
     let out = spawn_refresh(proc, vault)?;
     parse_refresh(&out.stdout)
-}
-
-fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
-    super::flow_contract::parse_gate(body)
 }
 
 /// Los otros tres contadores comparten el parser del contrato; al swap solo

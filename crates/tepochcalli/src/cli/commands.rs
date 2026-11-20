@@ -11,7 +11,7 @@ use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
     resolve_vault_dir, run_reindex, run_swap, run_uninstall, run_update, SwapDeps, SwapOptions,
 };
-use tepochcalli::domain::WizardError;
+use tepochcalli::domain::{CancelToken, WizardError};
 use tepochcalli::ports::{HttpClient, PayloadSource, Ui};
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
@@ -99,6 +99,8 @@ pub(crate) fn run_config_embedder(
         host: &SysHostProbe,
         proc: &proc,
         http: &http,
+        // T16 conectará el disparo (botón TUI / Ctrl+C) a este token.
+        cancel: CancelToken::new(),
     };
     let opts = SwapOptions {
         confirm,

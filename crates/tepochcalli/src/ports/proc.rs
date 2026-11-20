@@ -3,7 +3,7 @@
 use std::path::Path;
 use std::time::Duration;
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 
 /// Captured child output (status code kept as `i32`, as the OS reports it).
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,5 +41,23 @@ pub trait CommandRunner {
     ) -> Result<CommandOutput, WizardError> {
         let _ = timeout;
         self.run(program, args, cwd, env)
+    }
+
+    /// Como `run_with_timeout`, pero honra `cancel` (R-offline-2): token ya
+    /// disparado ⇒ `UserAborted` sin spawn; el runner real además mata al
+    /// hijo a mitad. Default: solo la comprobación previa.
+    fn run_cancellable(
+        &self,
+        program: &str,
+        args: &[&str],
+        cwd: &Path,
+        env: &[(&str, &str)],
+        timeout: Duration,
+        cancel: &CancelToken,
+    ) -> Result<CommandOutput, WizardError> {
+        if cancel.is_cancelled() {
+            return Err(WizardError::UserAborted);
+        }
+        self.run_with_timeout(program, args, cwd, env, timeout)
     }
 }

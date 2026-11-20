@@ -20,12 +20,12 @@
 use std::path::Path;
 
 use crate::config::{default_and_large, parse_presets, Preset};
-use crate::domain::{EmbedderChoice, WizardError};
+use crate::domain::{CancelToken, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
 
 use super::embedder_config::{F6_EXTERNAL_HEADER, F6_LOCAL_HEADER, F6_NONE_HEADER};
 use super::embedder_estimate::{estimate_row, BYTES_PER_MB, HF_API_BASE};
-use super::embedder_gate::{run_gate, verify_materialized};
+use super::embedder_gate::{run_gate_cancellable, verify_materialized};
 use super::text::is_plausible_hf_id;
 
 pub use super::embedder_config::{
@@ -87,6 +87,9 @@ pub struct Phase6Deps<'a> {
     pub proc: &'a dyn CommandRunner,
     /// HF API estimates for free ids (D8.1).
     pub http: &'a dyn HttpClient,
+    /// Cancelación de la descarga en curso (R-offline-2; T16 la dispara).
+    /// Clon del token de la corrida.
+    pub cancel: CancelToken,
 }
 
 /// What F6 established: the `[embedding]` choice plus gate evidence.
@@ -154,7 +157,14 @@ fn finish_local(
 ) -> Result<Phase6Report, WizardError> {
     let revision = Some(preset.revision.as_str());
     let device = choose_device(deps.ui, facts, &preset.device)?;
-    let gate = run_gate(deps.proc, vault, &preset.hf_id, revision, None)?;
+    let gate = run_gate_cancellable(
+        deps.proc,
+        vault,
+        &preset.hf_id,
+        revision,
+        None,
+        &deps.cancel,
+    )?;
     verify_materialized(vault, &preset.hf_id, revision)?;
     deps.ui.panel(
         "Embedding OK",
@@ -224,7 +234,14 @@ fn finish_free_id(
     // `cuda` elegido en un host sin GPU falla al cargar el modelo, no al
     // configurar (D8.3).
     let device = choose_device(deps.ui, facts, "cpu")?;
-    let gate = run_gate(deps.proc, vault, &id, revision.as_deref(), token.as_deref())?;
+    let gate = run_gate_cancellable(
+        deps.proc,
+        vault,
+        &id,
+        revision.as_deref(),
+        token.as_deref(),
+        &deps.cancel,
+    )?;
     verify_materialized(vault, &id, revision.as_deref())?;
     deps.ui.panel(
         "Embedding OK",

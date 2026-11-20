@@ -12,7 +12,7 @@ use tepochcalli::application::{
     compensate_phase3, compensate_phase7, is_phase_done, mark_phase_done, read_completed_report,
     run_phase3, run_phase4, run_phase5, run_phase7, run_phase8, Phase6Deps,
 };
-use tepochcalli::domain::{Phase, VaultPath, WizardError};
+use tepochcalli::domain::{CancelToken, Phase, VaultPath, WizardError};
 use tepochcalli::ports::Ui;
 
 use super::install::{offline_map, run_f6_or_degraded};
@@ -256,6 +256,8 @@ pub(crate) fn run_phases(
         host: &SysHostProbe,
         proc: &proc,
         http: &http,
+        // T16 conectará el disparo (botón TUI / Ctrl+C) a este token.
+        cancel: CancelToken::new(),
     };
     let picked = if resume && is_phase_done(path.as_path(), Phase::F6) {
         match read_completed_report(path.as_path()) {

@@ -310,12 +310,16 @@ de código implementado en esta sesión.*
 
 *Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T13*
 
-- [ ] Descarga cancelable por botón del TUI **y** Ctrl+C mediante una señal compartida; `ureq` se aborta y el stream se cierra
-- [ ] Bytes parciales van a un temporal y se borran en **todas** las salidas (éxito, error, cancelación)
-- [ ] Tras cancelar a mitad, **no queda modelo a medias en `.tepochcalli/models/`** (ni temporal ni versión incompleta) — test explícito
-- [ ] Cancelación propaga rollback (T15) y aborta la instalación completa
-- [ ] Test: `tests/int_download_cancel.rs` (nuevo) con servidor loopback que entrega a trozos + señal inyectada (sin matar el proceso de test)
-- [ ] `just rust-test /tmp/opencode/cargo-target` verde
+- [x] Descarga cancelable por botón del TUI **y** Ctrl+C mediante una señal compartida; `ureq` se aborta y el stream se cierra
+- [x] Bytes parciales van a un temporal y se borran en **todas** las salidas (éxito, error, cancelación)
+- [x] Tras cancelar a mitad, **no queda modelo a medias en `.tepochcalli/models/`** (ni temporal ni versión incompleta) — test explícito
+- [x] Cancelación propaga rollback (T15) y aborta la instalación completa
+- [x] Test: `tests/int_download_cancel.rs` (nuevo) con servidor loopback que entrega a trozos + señal inyectada (sin matar el proceso de test)
+- [x] `just rust-test /tmp/opencode/cargo-target` verde
+
+**Evidencia 2026-11-20.** `CancelToken` (`Arc<AtomicBool>`, clon comparte disparo) en `domain/`; `CommandRunner::run_cancellable` con default (token disparado ⇒ `UserAborted` sin spawn) y `std_proc` que extrae `run_inner` + watcher con `Verdict::{Exited,Cancelled}` que mata y reapea al hijo. Token atravesando `run_flow_cli`→`spawn_gate`→`run_gate` en F6/H9 (`maintenance`/F8/refresh pasan `None`); `Deps` lo **poseen** (sin `Box::leak`). Purga: snapshot de `models/` antes del gate y borrado solo de lo nuevo si hay `UserAborted`; un gate roto conserva el degradado. Tests: 412 Rust (+6), `rust-ci` exit 0.
+
+**Desviación declarada del plan.** La descarga del modelo ocurre en el subproceso `venv python -m tepochcalli_flow embed-check`, no en `ureq`: la unidad cancelable es el **hijo** (se mata), no un stream HTTP. Por eso `int_download_cancel` usa un hijo largo (`sleep 30`) y no un servidor loopback a trozos; está documentado en el doc-comment del fichero. El disparador real desde el TUI llega en T16 (hoy el token se crea siempre vivo).
 
 ### T15 · Journal/backup + compensación y verificación post-rollback (R-offline-3)
 

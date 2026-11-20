@@ -4,9 +4,10 @@
 //! [--revision <sha>]` y verifica que `<models>/<slug>@<sha>/` quedó
 //! materializado antes de escribir la config.
 
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::CommandRunner;
 
 use super::flow_cli::MODELS_DIR;
@@ -23,9 +24,58 @@ pub(super) fn run_gate(
     model_id: &str,
     revision: Option<&str>,
     token: Option<&str>,
+    cancel: Option<&CancelToken>,
 ) -> Result<GateOk, WizardError> {
-    let out = spawn_gate(proc, vault, model_id, revision, token)?;
+    let out = spawn_gate(proc, vault, model_id, revision, token, cancel)?;
     parse_gate(&out.stdout)
+}
+
+/// Gate cancelable (R-offline-2): una cancelación purga los snapshots que la
+/// descarga dejó a medias y NADA MÁS. Un gate roto conserva el comportamiento
+/// actual (sin purga: puede no haber descargado nada).
+pub(super) fn run_gate_cancellable(
+    proc: &dyn CommandRunner,
+    vault: &Path,
+    model_id: &str,
+    revision: Option<&str>,
+    token: Option<&str>,
+    cancel: &CancelToken,
+) -> Result<GateOk, WizardError> {
+    let before = models_snapshot(vault);
+    match run_gate(proc, vault, model_id, revision, token, Some(cancel)) {
+        Err(WizardError::UserAborted) => {
+            purge_partials(vault, &before);
+            Err(WizardError::UserAborted)
+        }
+        other => other,
+    }
+}
+
+/// Nombres de los snapshots de `models/` antes del gate (R-offline-2).
+pub(super) fn models_snapshot(vault: &Path) -> BTreeSet<String> {
+    std::fs::read_dir(vault.join(RUNTIME_DIR).join(MODELS_DIR))
+        .map(|entries| {
+            entries
+                .flatten()
+                .map(|entry| entry.file_name().to_string_lossy().into_owned())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Borra SOLO los snapshots que no estaban antes: un modelo previo legítimo
+/// nunca se toca. Errores de fs se ignoran (higiene, no dato del usuario).
+pub(super) fn purge_partials(vault: &Path, before: &BTreeSet<String>) {
+    let dir = vault.join(RUNTIME_DIR).join(MODELS_DIR);
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if !before.contains(&name) {
+            let _ = std::fs::remove_dir_all(entry.path());
+        }
+    }
 }
 
 /// `BAAI/bge-m3` → `BAAI__bge-m3`: un id con `/` no puede anidar el
@@ -90,7 +140,45 @@ fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_materialized, model_dir, parse_gate};
+    use super::{is_materialized, model_dir, models_snapshot, parse_gate, purge_partials};
+
+    /// R-offline-2: la purga borra SOLO lo que nació durante la descarga
+    /// cancelada; un snapshot previo del usuario sobrevive intacto.
+    #[test]
+    fn purge_partials_removes_only_the_new_snapshot() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let models = vault.path().join(".tepochcalli").join("models");
+        let old = models.join("old@sha");
+        let new = models.join("new@sha");
+        if let Err(err) = std::fs::create_dir_all(&old) {
+            panic!("mkdir old: {err}");
+        }
+        // Snapshot ANTES del gate: solo `old@sha` existía.
+        let before = models_snapshot(vault.path());
+        if let Err(err) = std::fs::create_dir_all(&new) {
+            panic!("mkdir new: {err}");
+        }
+        purge_partials(vault.path(), &before);
+        assert!(old.is_dir(), "un modelo previo legítimo nunca se toca");
+        assert!(
+            !new.exists(),
+            "el parcial de la descarga cancelada se borra"
+        );
+    }
+
+    /// Sin `models/` (vault recién creado) no hay nada que purgar ni que
+    /// romper: el snapshot es vacío y la purga es un no-op.
+    #[test]
+    fn purge_partials_tolerates_a_missing_models_dir() {
+        let Ok(vault) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let before = models_snapshot(vault.path());
+        assert!(before.is_empty());
+        purge_partials(vault.path(), &before);
+    }
 
     /// El path estable del snapshot es el MISMO que resuelven write y read del
     /// flow (`config.py`: `model_slug` + `embedding_model_path`). Los dos

@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 
 use super::{host_16gb, seed_runtime, FakeHost, FakeHttp, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::swap::{run_swap, SwapDeps, SwapOptions, SwapReport};
-use tepochcalli::domain::WizardError;
+use tepochcalli::domain::{CancelToken, WizardError};
 use tepochcalli::ports::{CommandOutput, CommandRunner, HttpClient, Ui};
 
 pub const OLD_MODEL: &str = "paraphrase-multilingual-MiniLM-L12-v2";
@@ -188,6 +188,8 @@ pub fn deps<'a>(
         host,
         proc,
         http,
+        // Ninguna prueba del swap dispara la cancelación (T14).
+        cancel: CancelToken::new(),
     }
 }
 

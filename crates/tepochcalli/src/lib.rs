@@ -22,7 +22,9 @@ pub use application::{
     UV_MANAGED_PYTHON, UV_PROJECT_ENVIRONMENT, UV_STAGE_DIR, VENV_DIR_NAME,
 };
 
-pub use domain::{Badge, EmbedderChoice, Phase, ResourceFacts, VaultPath, WizardError};
+pub use domain::{
+    Badge, CancelToken, EmbedderChoice, Phase, ResourceFacts, VaultPath, WizardError,
+};
 pub use ports::{
     CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, MenuView, PayloadSource, Ui,
 };
