@@ -2,7 +2,7 @@
 //! ratatui menu and its line-based fallback, `HeadlessUi` scripted, and the
 //! `ScriptedUi`/`TapUi` fakes in tests).
 
-use crate::domain::{MenuAction, MenuSpec, WizardError};
+use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
 
 /// Everything the H5 menu renders, resolved by the caller: the pure spec plus
 /// the three facts the header shows. `embedder` arrives as a ready label —
@@ -42,4 +42,12 @@ pub trait Ui {
     /// action; a button disabled in the spec is never returned (typed abort
     /// instead).
     fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError>;
+    /// R-offline-2: ejecuta `work` bajo una pantalla cuyo botón Cancelar está
+    /// habilitado (Esc / Ctrl+C también) y que bloquea el resto con razón
+    /// visible. `work` recibe el mismo `cancel`; la UI no decide el resultado.
+    /// Default (sin TTY): `work()` en línea, sin pantalla.
+    fn run_cancellable(&self, title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
+        let _ = (title, cancel);
+        work();
+    }
 }

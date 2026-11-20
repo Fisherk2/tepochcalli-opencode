@@ -6,6 +6,9 @@
 //! exit path.
 
 use std::io::IsTerminal;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
@@ -14,7 +17,7 @@ use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
-use crate::domain::{MenuAction, MenuSpec, WizardError};
+use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
 use crate::ports::MenuView;
 
 /// Contact shown at the bottom of the menu (H5).
@@ -96,6 +99,100 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
         .style(Style::new().add_modifier(Modifier::DIM))
         .wrap(Wrap { trim: true });
     frame.render_widget(contact, contact_area);
+}
+
+/// R-offline-2: the download screen. Pure (no I/O) like `render_menu`: only
+/// the Cancel row is enabled; the five menu actions stay visible, dimmed and
+/// with the reason, so a blocked action is never hidden (H5 rule).
+pub fn render_progress(frame: &mut Frame, title: &str) {
+    let mut lines = vec![
+        Line::from(format!("Tepochcalli · {title}"))
+            .style(Style::new().add_modifier(Modifier::BOLD)),
+        Line::from("⏹ Cancelar   — Esc / Ctrl+C")
+            .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED)),
+    ];
+    for action in [
+        MenuAction::Install,
+        MenuAction::Update,
+        MenuAction::ChangeEmbedder,
+        MenuAction::Desinstall,
+        MenuAction::Exit,
+    ] {
+        lines.push(
+            Line::from(format!(
+                "{} {}  — descarga en curso",
+                action.icon(),
+                action.label()
+            ))
+            .style(Style::new().add_modifier(Modifier::DIM)),
+        );
+    }
+    lines.push(
+        Line::from("El workspace no se tocará: la cancelación deshace lo aplicado.")
+            .style(Style::new().add_modifier(Modifier::DIM)),
+    );
+    frame.render_widget(
+        Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }),
+        frame.area(),
+    );
+}
+
+/// Esc or Ctrl+C cancel the download; any other key keeps waiting.
+pub fn is_cancel_key(code: KeyCode, modifiers: KeyModifiers) -> bool {
+    code == KeyCode::Esc
+        || (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
+}
+
+/// R-offline-2: draws the Cancel screen once, runs `work` while a watcher
+/// thread fires `cancel` on Esc/Ctrl+C, and redraws the undo notice when the
+/// user cancelled. Any terminal failure degrades to plain `work()`: a broken
+/// screen must never break the operation.
+pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
+    let mut terminal = ratatui::init();
+    let _restore = RestoreOnDrop;
+    if terminal
+        .draw(|frame| render_progress(frame, title))
+        .is_err()
+    {
+        work();
+        return;
+    }
+    let done = Arc::new(AtomicBool::new(false));
+    let watcher = {
+        let done = Arc::clone(&done);
+        let cancel = cancel.clone();
+        std::thread::spawn(move || {
+            while !done.load(Ordering::SeqCst) {
+                match event::poll(Duration::from_millis(100)) {
+                    Ok(true) => {
+                        if let Ok(Event::Key(key)) = event::read() {
+                            if is_cancel_key(key.code, key.modifiers) {
+                                cancel.cancel();
+                                return;
+                            }
+                        }
+                    }
+                    Ok(false) => {}
+                    // Sin terminal legible no hay tecla que esperar: el
+                    // watcher se retira y `work` sigue su curso.
+                    Err(_) => return,
+                }
+            }
+        })
+    };
+    work();
+    done.store(true, Ordering::SeqCst);
+    // El poll es de 100 ms: la espera está acotada, no hay join eterno.
+    let _ = watcher.join();
+    if cancel.is_cancelled() {
+        let _ = terminal.draw(|frame| {
+            frame.render_widget(
+                Paragraph::new(Line::from("Cancelado — deshaciendo los cambios aplicados…"))
+                    .style(Style::new().add_modifier(Modifier::BOLD)),
+                frame.area(),
+            );
+        });
+    }
 }
 
 /// Restores raw mode and the alternate screen on every exit path — including

@@ -158,6 +158,7 @@ fn finish_local(
     let revision = Some(preset.revision.as_str());
     let device = choose_device(deps.ui, facts, &preset.device)?;
     let gate = run_gate_cancellable(
+        deps.ui,
         deps.proc,
         vault,
         &preset.hf_id,
@@ -235,6 +236,7 @@ fn finish_free_id(
     // configurar (D8.3).
     let device = choose_device(deps.ui, facts, "cpu")?;
     let gate = run_gate_cancellable(
+        deps.ui,
         deps.proc,
         vault,
         &id,

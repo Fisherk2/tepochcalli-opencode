@@ -526,6 +526,7 @@ fn download_gate_and_reindex(
         .unwrap_or((model, None));
     let (dims, rss) = if picked.provider == "local" {
         let gate = run_gate_cancellable(
+            deps.ui,
             deps.proc,
             vault,
             &model_name,

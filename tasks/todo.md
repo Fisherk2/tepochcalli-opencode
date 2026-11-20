@@ -341,13 +341,17 @@ de código implementado en esta sesión.*
 
 *Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T15*
 
-- [ ] Durante la descarga: botón de cancelar habilitado y conectado a T14; otros botones deshabilitados con razón visible «descarga en curso»
-- [ ] Sin red en preflight: error tipado de T13 con razón y acción correctiva; **sin salida «modo degradado»**
-- [ ] Tras cancelar/rollback: mensaje visible que confirma que el workspace quedó como estaba
-- [ ] Regla H5: botón deshabilitado con razón, nunca oculto
-- [ ] `HeadlessUi` y `--non-interactive` sin regresión; cancelación inyectable por índice/señal en tests
-- [ ] `tests/e2e_ui.rs` ampliado con los 3 estados nuevos; 33 call sites del puerto `Ui` intactos
-- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
+- [x] Durante la descarga: botón de cancelar habilitado y conectado a T14; otros botones deshabilitados con razón visible «descarga en curso»
+- [x] Sin red en preflight: error tipado de T13 con razón y acción correctiva; **sin salida «modo degradado»**
+- [x] Tras cancelar/rollback: mensaje visible que confirma que el workspace quedó como estaba
+- [x] Regla H5: botón deshabilitado con razón, nunca oculto
+- [x] `HeadlessUi` y `--non-interactive` sin regresión; cancelación inyectable por índice/señal en tests
+- [x] `tests/e2e_ui.rs` ampliado con los 3 estados nuevos; 33 call sites del puerto `Ui` intactos
+- [x] `just rust-ci /tmp/opencode/cargo-target` verde
+
+**Evidencia 2026-11-20.** `Ui::run_cancellable` (no genérico: un genérico rompería `&dyn Ui`) con default inline; `TtyUi` lo sobrescribe solo con TTY ⇒ `ui_ratatui::run_progress` (pantalla alternativa, `RestoreOnDrop`, watcher de 100 ms que dispara el token con Esc/Ctrl+C, redibujo «Cancelado — deshaciendo los cambios aplicados…»; si el draw falla degrada a `work()`). `render_progress` puro: Cancelar habilitado + las 5 acciones en `DIM` con «descarga en curso» + aviso de no-destrucción. Wiring en **un solo punto**: `run_gate_cancellable` envuelve solo el gate (los paneles de F6/swap no quedan ocultos tras la pantalla). `failure_body(UserAborted)`: línea `estado: cancelado… el workspace quedó como estaba` y **sin** `retry:`. Tests: `int_ui_progress` (5: render, DIM en buffer, mapeo de tecla, Headless inline), +1 unit de `failure_body`, +1 e2e de panel. 424 Rust, `rust-ci` exit 0.
+
+**No medido (declarado, no se presenta como cubierto):** TTY real (pantalla alternativa y teclas desde `/dev/tty`), Ctrl+C inyectado por el SO —incluido Windows— y animación de progreso (el gate bloquea el hilo principal: la pantalla dibuja estado, no avance). El render se verifica en `TestBackend` y el disparo del token en fakes.
 
 ### T17 · Verificación y cierre: gates + e2e con red falsa
 

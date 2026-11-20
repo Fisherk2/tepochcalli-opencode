@@ -42,6 +42,32 @@ fn panel_contains_phase_cause_retry_and_log_path() {
     );
 }
 
+/// R-offline-3 (T16): a deliberate cancellation replaces the retry line with
+/// the state line — retrying is not the corrective action after a cancel.
+#[test]
+fn user_aborted_panel_states_the_workspace_was_untouched_and_drops_retry() {
+    let log = std::path::Path::new("/tmp/state/tepochcalli/install-41.log");
+    let body = tepochcalli::domain::failure::failure_body(
+        "install: phase F6 failed",
+        Some(Phase::F6),
+        WizardError::UserAborted,
+        log,
+        &[],
+    );
+    assert!(
+        body.contains("estado: cancelado por el usuario — el workspace quedó como estaba"),
+        "a cancellation must state the workspace survived: {body}"
+    );
+    assert!(
+        !body.contains("retry:"),
+        "a cancelled run offers no retry line: {body}"
+    );
+    assert!(
+        body.contains("log: /tmp/state/tepochcalli/install-41.log"),
+        "the log line survives: {body}"
+    );
+}
+
 #[test]
 fn e_star_surfaces_where_the_contract_defines_one() {
     let log = std::path::Path::new("/tmp/state/tepochcalli/install-1.log");
@@ -225,8 +251,12 @@ fn failing_install_panel_is_stderr_only_with_log_outside_vault() {
         "panel must name the phase:\n{stderr}"
     );
     assert!(
-        stderr.contains(RETRY),
-        "panel must carry the retry command:\n{stderr}"
+        stderr.contains("estado: cancelado por el usuario"),
+        "a cancelled install states that nothing was touched:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains(RETRY),
+        "a cancelled install offers no retry command:\n{stderr}"
     );
     assert!(
         stderr.contains("install-") && stderr.contains(".log"),

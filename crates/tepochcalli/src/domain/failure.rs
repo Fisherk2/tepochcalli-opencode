@@ -63,9 +63,17 @@ pub fn failure_body(
         body.push_str(code);
         body.push('\n');
     }
-    body.push_str("retry: ");
-    body.push_str(RETRY_COMMAND);
-    body.push('\n');
+    // R-offline-3: tras una cancelación deliberada la acción correctiva no es
+    // reintentar, sino confirmar que el workspace quedó intacto.
+    if err == WizardError::UserAborted {
+        body.push_str(
+            "estado: cancelado por el usuario — el workspace quedó como estaba (cambios deshechos)\n",
+        );
+    } else {
+        body.push_str("retry: ");
+        body.push_str(RETRY_COMMAND);
+        body.push('\n');
+    }
     body.push_str("log: ");
     body.push_str(&log_path.to_string_lossy());
     body.push('\n');
@@ -157,6 +165,25 @@ mod tests {
         assert!(body.contains("code: E_API_AUTH"), "{body}");
         assert!(body.contains(RETRY_COMMAND), "{body}");
         assert!(body.contains("log: /tmp/state/install-1.log"), "{body}");
+    }
+
+    #[test]
+    fn body_for_user_aborted_states_the_cancellation_and_skips_retry() {
+        // R-offline-3 (T16): retrying is not the fix after a deliberate
+        // cancel; the panel states the workspace is untouched instead.
+        let body = failure_body(
+            "install: cancelled",
+            Some(Phase::F6),
+            WizardError::UserAborted,
+            Path::new("/tmp/state/install-4.log"),
+            &[],
+        );
+        assert!(
+            body.contains("estado: cancelado por el usuario — el workspace quedó como estaba"),
+            "{body}"
+        );
+        assert!(!body.contains("retry:"), "{body}");
+        assert!(body.contains("log: /tmp/state/install-4.log"), "{body}");
     }
 
     #[test]

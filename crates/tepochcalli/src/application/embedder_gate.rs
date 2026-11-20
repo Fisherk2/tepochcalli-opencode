@@ -8,7 +8,7 @@ use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 use crate::domain::{CancelToken, WizardError};
-use crate::ports::CommandRunner;
+use crate::ports::{CommandRunner, Ui};
 
 use super::flow_cli::MODELS_DIR;
 use super::flow_contract::{spawn_gate, GateOk};
@@ -30,10 +30,12 @@ pub(super) fn run_gate(
     parse_gate(&out.stdout)
 }
 
-/// Gate cancelable (R-offline-2): una cancelación purga los snapshots que la
-/// descarga dejó a medias y NADA MÁS. Un gate roto conserva el comportamiento
-/// actual (sin purga: puede no haber descargado nada).
+/// Gate cancelable (R-offline-2): la descarga corre bajo la pantalla de
+/// cancelación de la UI (Esc/Ctrl+C disparan el token); una cancelación purga
+/// los snapshots que dejó a medias y NADA MÁS. Un gate roto conserva el
+/// comportamiento actual (sin purga: puede no haber descargado nada).
 pub(super) fn run_gate_cancellable(
+    ui: &dyn Ui,
     proc: &dyn CommandRunner,
     vault: &Path,
     model_id: &str,
@@ -42,12 +44,24 @@ pub(super) fn run_gate_cancellable(
     cancel: &CancelToken,
 ) -> Result<GateOk, WizardError> {
     let before = models_snapshot(vault);
-    match run_gate(proc, vault, model_id, revision, token, Some(cancel)) {
-        Err(WizardError::UserAborted) => {
+    let mut outcome: Option<Result<GateOk, WizardError>> = None;
+    ui.run_cancellable("Descargando modelo de embeddings", cancel, &mut || {
+        outcome = Some(run_gate(
+            proc,
+            vault,
+            model_id,
+            revision,
+            token,
+            Some(cancel),
+        ));
+    });
+    match outcome {
+        Some(Err(WizardError::UserAborted)) => {
             purge_partials(vault, &before);
             Err(WizardError::UserAborted)
         }
-        other => other,
+        Some(other) => other,
+        None => Err(WizardError::Internal),
     }
 }
 

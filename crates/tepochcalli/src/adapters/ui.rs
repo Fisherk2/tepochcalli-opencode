@@ -8,7 +8,7 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::IsTerminal;
 
-use crate::domain::{MenuAction, WizardError};
+use crate::domain::{CancelToken, MenuAction, WizardError};
 use crate::ports::{MenuView, Ui};
 
 /// Interactive dialogue: full-screen ratatui menu on a TTY, `dialoguer`
@@ -66,6 +66,16 @@ impl Ui for TtyUi {
             return super::ui_ratatui::run_menu(view);
         }
         self.line_menu(view)
+    }
+
+    fn run_cancellable(&self, title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
+        // Pantalla completa solo con un TTY real (misma guarda que `menu`):
+        // sin él no hay a quién preguntar y `work` corre en línea.
+        if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
+            super::ui_ratatui::run_progress(title, cancel, work);
+        } else {
+            work();
+        }
     }
 }
 
