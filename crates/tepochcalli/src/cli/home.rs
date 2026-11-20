@@ -96,22 +96,59 @@ pub(crate) fn run_home_cmd(
         url: payload_url.as_deref(),
         sha: payload_sha256.as_deref(),
     };
-    let code = match action {
-        MenuAction::Exit => return 0,
-        MenuAction::Install => run_install(forward.payload_args(), stdout, stderr),
-        MenuAction::Update => run_update_cmd(forward.payload_args(), stdout, stderr),
-        // The menu click is the consent; the swap still shows its own warning
-        // panel and option summary before touching anything.
-        MenuAction::ChangeEmbedder => run_config_embedder(forward.confirm_args(), stdout, stderr),
-        MenuAction::Desinstall => run_uninstall_cmd(forward.confirm_args(), stdout, stderr),
+    let code = match route(action, &forward) {
+        // H10: `Exit` dispatches nothing.
+        None => 0,
+        Some((target, args)) => match target {
+            Target::Install => run_install(args, stdout, stderr),
+            Target::Update => run_update_cmd(args, stdout, stderr),
+            // The menu click is the consent; the swap still shows its own warning
+            // panel and option summary before touching anything.
+            Target::ConfigEmbedder => run_config_embedder(args, stdout, stderr),
+            Target::Uninstall => run_uninstall_cmd(args, stdout, stderr),
+        },
     };
     // H11: any action but Exit closes on any key, whatever its outcome.
+    if write_farewell(action, stdout) {
+        wait_any_key();
+    }
+    code
+}
+
+/// H11: the thank-you closes every action but `Exit`, which leaves without a
+/// word (H10). Returns whether it was written, so the caller waits for a key
+/// only on that path.
+fn write_farewell(action: MenuAction, stdout: &mut dyn std::io::Write) -> bool {
+    if action == MenuAction::Exit {
+        return false;
+    }
     let _ = writeln!(
         stdout,
         "Gracias por usar Tepochcalli. Pulsa cualquier tecla para salir."
     );
-    wait_any_key();
-    code
+    true
+}
+
+/// The subcommand a menu button routes to (H6..H9). `Exit` has none (H10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Target {
+    Install,
+    Update,
+    ConfigEmbedder,
+    Uninstall,
+}
+
+/// The dispatch glue: a chosen button becomes the subcommand it runs plus the
+/// argv it re-sends (the vault already resolved, never asked twice). `None`
+/// for `Exit` — it dispatches nothing and touches nothing (H10).
+fn route<'a>(action: MenuAction, forward: &'a Forwarded<'_>) -> Option<(Target, Vec<&'a str>)> {
+    match action {
+        MenuAction::Exit => None,
+        MenuAction::Install => Some((Target::Install, forward.payload_args())),
+        MenuAction::Update => Some((Target::Update, forward.payload_args())),
+        MenuAction::ChangeEmbedder => Some((Target::ConfigEmbedder, forward.confirm_args())),
+        MenuAction::Desinstall => Some((Target::Uninstall, forward.confirm_args())),
+    }
 }
 
 /// The flags the menu forwards to the command it routes to: the vault it
@@ -155,5 +192,134 @@ impl Forwarded<'_> {
             args.push("--non-interactive");
         }
         args
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::IsTerminal;
+
+    use super::*;
+
+    fn forwarded(non_interactive: bool) -> Forwarded<'static> {
+        Forwarded {
+            vault: "/vault",
+            non_interactive,
+            payload: None,
+            url: None,
+            sha: None,
+        }
+    }
+
+    #[test]
+    fn install_and_update_re_send_the_resolved_vault_and_the_payload_overrides() {
+        let forward = Forwarded {
+            vault: "/vault",
+            non_interactive: false,
+            payload: Some("/payload"),
+            url: Some("https://example.test/p.tar.gz"),
+            sha: Some("deadbeef"),
+        };
+        let expected = vec![
+            "--vault",
+            "/vault",
+            "--payload",
+            "/payload",
+            "--payload-url",
+            "https://example.test/p.tar.gz",
+            "--payload-sha256",
+            "deadbeef",
+        ];
+        for (action, target) in [
+            (MenuAction::Install, Target::Install),
+            (MenuAction::Update, Target::Update),
+        ] {
+            let (routed, args) = route(action, &forward).expect("the menu click dispatches");
+            assert_eq!(routed, target, "{action:?} must route to its subcommand");
+            assert_eq!(args, expected, "{action:?} argv");
+        }
+    }
+
+    #[test]
+    fn change_embedder_and_desinstall_add_the_confirm_the_menu_click_answered() {
+        let forward = forwarded(false);
+        for (action, target) in [
+            (MenuAction::ChangeEmbedder, Target::ConfigEmbedder),
+            (MenuAction::Desinstall, Target::Uninstall),
+        ] {
+            let (routed, args) = route(action, &forward).expect("the menu click dispatches");
+            assert_eq!(routed, target, "{action:?} must route to its subcommand");
+            assert_eq!(
+                args,
+                vec!["--vault", "/vault", "--confirm"],
+                "{action:?} argv"
+            );
+        }
+    }
+
+    #[test]
+    fn exit_dispatches_nothing() {
+        // H10: leaving touches nothing, so there is no argv to re-send.
+        let forward = forwarded(false);
+        assert_eq!(route(MenuAction::Exit, &forward), None);
+    }
+
+    #[test]
+    fn the_non_interactive_flag_travels_with_every_dispatch() {
+        // The subcommand must never ask again what the menu already resolved.
+        let forward = forwarded(true);
+        let (routed, args) =
+            route(MenuAction::Desinstall, &forward).expect("the menu click dispatches");
+        assert_eq!(routed, Target::Uninstall);
+        assert_eq!(
+            args,
+            vec!["--vault", "/vault", "--non-interactive", "--confirm"]
+        );
+    }
+
+    #[test]
+    fn every_action_but_exit_closes_with_the_farewell() {
+        // H11: whichever button was clicked — whatever its outcome — the
+        // wizard thanks the user before closing.
+        for action in [
+            MenuAction::Install,
+            MenuAction::Update,
+            MenuAction::ChangeEmbedder,
+            MenuAction::Desinstall,
+        ] {
+            let mut out = Vec::new();
+            assert!(
+                write_farewell(action, &mut out),
+                "{action:?} must close with the H11 thank-you"
+            );
+            let text = String::from_utf8(out).expect("utf8 farewell");
+            assert!(
+                text.contains("Gracias por usar Tepochcalli"),
+                "{action:?} farewell must thank the user, got: {text:?}"
+            );
+            assert!(
+                text.contains("Pulsa cualquier tecla para salir"),
+                "{action:?} farewell must mention the any-key close, got: {text:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn exit_leaves_without_the_farewell() {
+        // H10: leaving touches nothing — not even a goodbye line.
+        let mut out = Vec::new();
+        assert!(!write_farewell(MenuAction::Exit, &mut out));
+        assert!(out.is_empty(), "Exit must write nothing, got: {out:?}");
+    }
+
+    #[test]
+    fn wait_any_key_returns_when_there_is_no_terminal() {
+        // Smoke guard (no RED possible: the no-op is already the behaviour).
+        // Sin TTY la sonda es no-op; con TTY esperaría una tecla real y
+        // colgaría la suite, así que solo se ejercita el camino sin terminal.
+        if std::io::stdin().is_terminal() {
+            return;
+        }
+        wait_any_key();
     }
 }

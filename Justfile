@@ -335,6 +335,13 @@ rust-test target_dir=cargo_target:
 rust-test-filter name target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo test --locked {{name}}
 
+# Chequeo de RED bajo demanda (FUERA del gate): comprueba que la descarga del
+# modelo default no es un enlace roto (API HF + snapshot pineado, con red real).
+# Los tests van `#[ignore]`d — sin `--ignored` la suite por defecto no los ve,
+# así que `rust-test`/`rust-ci` siguen sin depender de la red.
+rust-model-check target_dir=cargo_target:
+    cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo test --locked --test int_model_availability -- --ignored --nocapture
+
 # Gate Rust local: espejo del job `rust` de `.github/workflows/phase3.yml`.
 # Reenvía el directorio a las dos recetas que compilan; `rust-fmt` no lo usa.
 rust-ci target_dir=cargo_target: rust-fmt (rust-lint target_dir) (rust-test target_dir)

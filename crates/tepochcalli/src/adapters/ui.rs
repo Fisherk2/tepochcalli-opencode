@@ -74,54 +74,79 @@ impl TtyUi {
     /// razones de los deshabilitados, luego un `Select` que ofrece solo los
     /// habilitados.
     fn line_menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
-        let spec = view.spec;
-        let enabled: Vec<usize> = spec
-            .buttons
-            .iter()
-            .enumerate()
-            .filter(|(_, button)| button.enabled)
-            .map(|(index, _)| index)
-            .collect();
-        if enabled.is_empty() {
+        let Some(plan) = line_menu_plan(view) else {
             return Err(WizardError::UserAborted);
-        }
+        };
+        render_panel("Tepochcalli", plan.body.trim_end());
 
-        let mut body = format!(
-            "Tepochcalli {} · instalada: {} · embedder: {}\n",
-            view.wizard,
-            view.installed.unwrap_or("—"),
-            view.embedder
-        );
-        for button in spec.buttons.iter().filter(|button| !button.enabled) {
-            if let Some(reason) = button.reason {
-                body.push_str(&format!(
-                    "{} {}: {reason}\n",
-                    button.action.icon(),
-                    button.action.label()
-                ));
-            }
-        }
-        if let Some(notice) = spec.notice {
-            body.push_str(notice);
-        }
-        render_panel("Tepochcalli", body.trim_end());
-
-        let labels: Vec<String> = enabled
-            .iter()
-            .map(|&index| {
-                let action = spec.buttons[index].action;
-                format!("{} {}", action.icon(), action.label())
-            })
-            .collect();
-        let items: Vec<&str> = labels.iter().map(String::as_str).collect();
+        let items: Vec<&str> = plan.labels.iter().map(String::as_str).collect();
         let picked = dialoguer::Select::new()
             .with_prompt("What do you want to do?")
             .items(&items)
             .default(0)
             .interact()
             .map_err(|_| WizardError::UserAborted)?;
-        super::ui_ratatui::choose(spec, enabled[picked])
+        super::ui_ratatui::choose(view.spec, plan.enabled[picked])
     }
+}
+
+/// What the line-based fallback shows: the rows the `Select` offers (only
+/// enabled buttons, in spec order) plus the panel text printed before asking
+/// — the header, every disabled reason and the state notice. `None` when
+/// nothing is enabled: there is nothing to offer, so nothing is drawn.
+struct LineMenuPlan {
+    /// Indices into `spec.buttons`, in spec order.
+    enabled: Vec<usize>,
+    /// `icon label` per enabled button, in the same order.
+    labels: Vec<String>,
+    /// Header + disabled reasons + notice, as the panel prints it.
+    body: String,
+}
+
+fn line_menu_plan(view: &MenuView<'_>) -> Option<LineMenuPlan> {
+    let spec = view.spec;
+    let enabled: Vec<usize> = spec
+        .buttons
+        .iter()
+        .enumerate()
+        .filter(|(_, button)| button.enabled)
+        .map(|(index, _)| index)
+        .collect();
+    if enabled.is_empty() {
+        return None;
+    }
+
+    let mut body = format!(
+        "Tepochcalli {} · instalada: {} · embedder: {}\n",
+        view.wizard,
+        view.installed.unwrap_or("—"),
+        view.embedder
+    );
+    for button in spec.buttons.iter().filter(|button| !button.enabled) {
+        if let Some(reason) = button.reason {
+            body.push_str(&format!(
+                "{} {}: {reason}\n",
+                button.action.icon(),
+                button.action.label()
+            ));
+        }
+    }
+    if let Some(notice) = spec.notice {
+        body.push_str(notice);
+    }
+
+    let labels = enabled
+        .iter()
+        .map(|&index| {
+            let action = spec.buttons[index].action;
+            format!("{} {}", action.icon(), action.label())
+        })
+        .collect();
+    Some(LineMenuPlan {
+        enabled,
+        labels,
+        body,
+    })
 }
 
 /// Scripted dialogue for `--non-interactive`: answers come from flags, in
@@ -226,5 +251,102 @@ fn render_panel(title: &str, body: &str) {
         eprintln!("\x1b[1;31m== {title} ==\x1b[0m\n{body}");
     } else {
         eprintln!("== {title} ==\n{body}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::domain::{menu_spec, InstalledState, MenuButton, MenuSpec};
+
+    fn view(spec: &MenuSpec) -> MenuView<'_> {
+        MenuView {
+            spec,
+            wizard: "0.1.0",
+            installed: Some("0.1.0"),
+            embedder: "sin configurar",
+        }
+    }
+
+    #[test]
+    fn offers_the_select_only_the_enabled_buttons_in_spec_order() {
+        // Outdated: Update/Change Embedder/Desinstall/Exit enabled, Install off.
+        let spec = menu_spec(InstalledState::Outdated);
+        let plan = line_menu_plan(&view(&spec)).expect("Exit keeps the menu alive");
+
+        assert_eq!(
+            plan.labels,
+            vec![
+                "🟢 Update",
+                "🟣 Change Embedder",
+                "🔴 Desinstall",
+                "🟠 Exit"
+            ],
+            "the Select must not offer the disabled Install row"
+        );
+        for (index, label) in plan.enabled.iter().zip(&plan.labels) {
+            let button = &spec.buttons[*index];
+            assert!(button.enabled, "only enabled rows are offered");
+            assert_eq!(
+                *label,
+                format!("{} {}", button.action.icon(), button.action.label())
+            );
+        }
+    }
+
+    #[test]
+    fn prints_every_disabled_reason_before_asking() {
+        // NotInstalled: three disabled buttons, each with its own reason.
+        let spec = menu_spec(InstalledState::NotInstalled);
+        let plan = line_menu_plan(&view(&spec)).expect("Install keeps the menu alive");
+
+        for button in spec.buttons.iter().filter(|button| !button.enabled) {
+            let reason = button
+                .reason
+                .expect("a disabled button always carries a reason");
+            let line = format!(
+                "{} {}: {reason}",
+                button.action.icon(),
+                button.action.label()
+            );
+            assert!(
+                plan.body.contains(&line),
+                "the panel must print `{line}` before asking:\n{}",
+                plan.body
+            );
+        }
+    }
+
+    #[test]
+    fn carries_the_header_and_the_state_notice_to_the_panel() {
+        let spec = menu_spec(InstalledState::NotInstalled);
+        let plan = line_menu_plan(&view(&spec)).expect("Install keeps the menu alive");
+
+        assert!(
+            plan.body
+                .starts_with("Tepochcalli 0.1.0 · instalada: 0.1.0 · embedder: sin configurar"),
+            "header first:\n{}",
+            plan.body
+        );
+        assert!(
+            plan.body.contains("directorio listo para instalar"),
+            "the notice reaches the panel:\n{}",
+            plan.body
+        );
+    }
+
+    #[test]
+    fn a_menu_with_nothing_enabled_has_no_plan() {
+        // The typed abort behind an empty `Select`: nothing to offer, nothing
+        // to ask — the panel is never drawn either.
+        let spec = MenuSpec {
+            buttons: vec![MenuButton {
+                action: MenuAction::Exit,
+                enabled: false,
+                reason: Some("nada habilitado"),
+            }],
+            notice: None,
+        };
+        assert!(line_menu_plan(&view(&spec)).is_none());
     }
 }
