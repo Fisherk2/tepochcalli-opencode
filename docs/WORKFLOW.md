@@ -343,6 +343,12 @@
   vs wizard, `device` electivo escrito y preservado. **No verificado:** `uvx` desde PyPI o VM
   limpia (no hay publicación), TTY en Windows (TD-52), Change Embedder e2e (solo fakes) e
   install con payload completo del checkout (TD-53).
+* **Nota 2026-11-20 (edge case ordenado, NO ejecutado en 6.5):** el dueño ordenó resiliencia
+  offline y rollback cancelable en H6/H7/H9 (no H8) — [BACKLOG.md §4 D-009](BACKLOG.md) y ADR-016;
+  R-offline-1 preflight de red, R-offline-2 cancelación TUI/Ctrl+C con compensación,
+  R-offline-3 integridad vía backup + journal, R-offline-4 degradado solo de runtime. Su
+  implementación se planifica en `tasks/plan.md` / `tasks/todo.md` como **fase 6.6**; Phase 6.5
+  queda cerrada como está.
 
 ## 3. Testing Strategy per Phase
 

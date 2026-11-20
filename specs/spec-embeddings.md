@@ -321,6 +321,66 @@ fase sustituye. Depende de **ADR-015** (*Accepted* 2026-11-19) y de la enmienda 
   (`OPENAI_BASE_URL`, `OLLAMA_API_BASE`) en `opencode.json` — fuera del TOML y del wizard, y no
   es contrato de Tepochcalli sino de LiteLLM.
 
+## Enmienda 2026-11-20 — descarga de embedder cancelable y sin red (ADR-016, H9)
+
+**Status: Accepted 2026-11-20** — orden directa de Fisherk2 («orden de Fisherk2, 2026-11-20»),
+registrada en docs/BACKLOG.md §2 / US-H9 y §4 / D-009. Decisión de fondo:
+[ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md). **Refina** ADR-007/008/015 y la
+§Enmienda 2026-11-18 sin re-escribirlas. Alcance: **solo el flujo de descarga del modelo local**
+en H6/H9 (y H7 si descarga algo); la rama de API externa no descarga y el modo degradado de
+runtime **no cambia**.
+
+### Preflight antes de tocar `.tepochcalli/models/`
+
+* Antes de crear el directorio estable `<models>/<slug>@<revision>/` o escribir en la caché
+  temporal de descarga, el wizard comprueba la conectividad mínima que la operación necesita
+  (API/host de HuggingFace para el snapshot; proveedor LiteLLM si la salida es API externa).
+* Sin red ⇒ **cancelar la operación con rollback** antes de escribir `[embedding]` en
+  `config/tepochcalli.toml`: error tipado con razón y acción correctiva (reconectar o usar
+  `--offline` con snapshot ya cacheado). No se crea ni se modifica `.tepochcalli/models/`, no se
+  toca `.tepochcalli/db/` y cualquier índice previo sigue servible. No hay instalación degradada
+  ni parcial por falta de red.
+* `--offline` (D7.3) conserva su regla: con snapshot válido no hay preflight; sin caché,
+  `E_OFFLINE_NO_CACHE` como en la matriz de edge cases.
+
+### Cancelación en progreso y limpieza de parciales
+
+* El botón **Cancel** del TUI y `Ctrl+C` comparten el manejador de cancelación cooperativa de
+  `specs/spec-installer-wizard.md` §Enmienda 2026-11-20: detienen el stream, descartan el fichero
+  en escritura y compensan todo cambio ya aplicado (backup + journal de H7/H8), cancelando la
+  instalación completa — no solo el paso embedder.
+* El directorio estable `<slug>@<revision>/` sigue publicándose por **rename atómico** solo tras
+  pasar el gate `test-embed` (§Gate test-embed, T6/D59). Un snapshot cancelado no se publica: se
+  borra el parcial y no queda `<slug>@*` a medias en `.tepochcalli/models/`.
+* Tras la compensación se verifica «sin restos»: ni parcial, ni marker de instalación, ni
+  `[embedding]` recién escrito. El default `paraphrase-multilingual-MiniLM-L12-v2` y el preset
+  `BAAI/bge-m3` quedan sujetos a la misma regla que un ID libre de HuggingFace.
+
+### Frontera con el modo degradado y con `sin dato` (R-offline-4)
+
+* El estado `degraded` de `rag_status()` (salida 5, `--skip-model`, `provider = "none"` →
+  `E_NO_EMBEDDER`) es un estado de **runtime** y **sigue vigente sin cambios**: responde honestamente
+  cuando el vault no tiene embedder, también tras una elección explícita del usuario. No es la
+  salida de una instalación cancelada por red.
+* La frase de US-H9 «si la API no responde, se muestra `sin dato` sin fallar la instalación»
+  (§Extracción de requisitos vía API pública de HuggingFace; ADR-015 §4.2) regula **únicamente la
+  estimación previa** de disco/RAM/GPU del menú. Si falla la API de estimación: `sin dato` y el
+  flujo continúa. Si falla la red en la **descarga real** del snapshot: cancelación con rollback
+  (R-offline-1/R-offline-2). Un `sin dato` no autoriza instalar parcialmente ni degrada el RAG.
+* El swap atómico D8.4 mantiene su invariante: el índice viejo permanece servable y el modelo
+  viejo solo se borra tras el éxito; ante cancelación, config, índice y modelo viejos quedan
+  intactos.
+
+### Verificación exigida a la implementación
+
+* Sin red antes del primer escrito → cancelación tipada, `.tepochcalli/models/` sin cambios y
+  `config/tepochcalli.toml` sin `[embedding]` nuevo.
+* Cancelación vía botón y vía `Ctrl+C` a mitad de descarga → cero parcial en `models/`, rollback
+  aplicado y verificación «sin restos».
+* No regresión: `rag_status()` con `provider = "none"` → `degraded` + `fix_hint`, `search` del MCP
+  `tepochcalli-rag` → `E_NO_EMBEDDER`, y `sin dato` solo en la estimación de requisitos.
+* Evidencia `declarado` hasta la implementación (ADR-016 §6).
+
 ## References
 
 * ADR-006; CocoIndex embedders docs (SentenceTransformerEmbedder, LiteLLM); <https://www.sbert.net/docs/pretrained_models.html>; HF: `BAAI/bge-m3`

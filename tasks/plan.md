@@ -515,3 +515,205 @@ sesión. Ninguno inventado.
 ---
 
 *Plan redactado por Moctezuma (tlatoani) el 2026-11-19. Sin código implementado: este documento y `tasks/todo.md` son la única entrega de esta sesión.*
+
+---
+
+## 11. Fase 6.6 — resiliencia offline y rollback cancelable (H6/H7/H9)
+
+> **Estado:** planificado el 2026-11-20 · tlatoani: Moctezuma · orden del dueño 2026-11-20
+> **Fuente de verdad:** [docs/BACKLOG.md](../docs/BACKLOG.md) §2 US-H6/H7/H9 (edge case 2026-11-20) + §4 D-009 + [ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md)
+> **Restricción vigente del dueño:** **no se publica en ningún gestor de paquetes.** Solo se prepara y se verifica en local.
+> **Alcance documental de este cambio:** ADR-016 (único fichero nuevo del cambio global; lo crea otro frente) + enmiendas de `spec-installer-wizard` / `spec-embeddings` + BACKLOG §4 D-009 / §8 + estos dos ficheros `tasks/`.
+
+### 11.1 Enunciado canónico del requisito (usar tal cual, no re-inventar)
+
+- **R-offline-1 (preflight):** Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela la operación con rollback y deja el workspace del usuario exactamente como estaba; muestra error tipado con razón y acción correctiva. No hay modo degradado ni instalación parcial en tiempo de instalación.
+- **R-offline-2 (cancelación en progreso):** Durante la descarga del modelo, el usuario puede cancelar en cualquier momento desde el TUI y con Ctrl+C. La cancelación detiene la descarga, elimina los artefactos parciales y compensa todo cambio ya aplicado (rollback), cancelando la instalación completa. No queda modelo a medias en `.tepochcalli/models/`.
+- **R-offline-3 (integridad):** El rollback restaura el estado previo de los ficheros gestionados usando el backup + journal ya existentes de H7/H8. Notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan. Tras el rollback se verifica que no quedan restos.
+- **R-offline-4 (distinción crítica):** El modo degradado de **runtime** (ADR-007 / `rag_status`) NO cambia: en instalación/cambio de embedder, **sin red = cancelación, no degradación**. «Si la API no responde, se muestra `sin dato` sin fallar la instalación» aplica **solo a la estimación previa de requisitos**, no a la descarga real.
+
+### 11.2 Objetivo
+
+Hacer que H6 (Install), H7 (Update) y H9 (Change Embedder) **fallen limpio**: sin red antes de empezar se cancela sin tocar nada (R-offline-1); con red caída o cancelación del usuario a mitad de descarga se compensa el trabajo ya hecho y no queda modelo parcial (R-offline-2); y el estado previo se restaura y se verifica con el backup + journal que H7/H8 ya usan (R-offline-3). Todo sin una dependencia nueva: se reutiliza `ureq` (ya en `Cargo.toml`, v3) y el patrón de red falsa de `tests/int_fetch_verified.rs`.
+
+### 11.3 Fuera de alcance
+
+- **H8 (Desinstall)**: no se toca; su alcance y su `AGENTS.md` intacto quedan como los fijó T5.
+- **El modo degradado de runtime** de ADR-007 / `rag_status`: no cambia (R-offline-4).
+- **«Sin dato»**: sigue siendo solo la estimación previa de requisitos; no se extiende a la descarga real (R-offline-4).
+- **Publicación** en cualquier registro, cambios en el payload, en el contrato MCP de 7 tools o en el motor RAG: reglas intactas de §9.
+
+### 11.4 Decisiones del dueño (2026-11-20)
+
+| # | Decisión | Alcance | Efecto en el plan |
+| --- | --- | --- | --- |
+| D-6.6-a | **Formalizar con ADR-016 + enmiendas** de `spec-installer-wizard` / `spec-embeddings` | Documental | T12 (en ejecución en este cambio) |
+| D-6.6-b | **Alcance H6 + H7 + H9**; H8 queda fuera | Install, Update, Change Embedder | T13-T16 |
+| D-6.6-c | **Cancelación con rollback, no degradación** en instalación/cambio de embedder | R-offline-1/2/4 | T13, T14, T15 |
+| D-6.6-d | **Cero dependencias nuevas** (R1): reutilizar `ureq` y lo ya en `Cargo.lock` | Sin alta de deps | T13, T14, T17 |
+| D-6.6-e | **La suite por defecto nunca depende de red real**: red falsa en loopback, patrón `int_fetch_verified` | e2e sin red | T17 |
+
+### 11.5 Grafo y tareas por corte
+
+```mermaid
+graph TB
+    T12["T12 · Formalización documental"]
+    T13["T13 · Preflight de red y error tipado"]
+    T14["T14 · Cancelación en progreso + limpieza"]
+    T15["T15 · Journal/backup + compensación"]
+    T16["T16 · TUI estados y mensajes"]
+    T17["T17 · Verificación y cierre"]
+    T12 --> T13
+    T13 --> T14
+    T14 --> T15
+    T15 --> T16
+    T16 --> T17
+```
+
+**Orden:** T12 (contrato) → T13/T14/T15 (núcleo, secuencial por compartir las fases de instalación) → T16 (TUI sobre el contrato ya cerrado) → T17 (gate). Igual regla que §4: el contrato se congela antes que las adaptaciones (ADR-005).
+
+#### T12 · Formalización documental (ADR-016, enmiendas, BACKLOG D-009/§8)
+
+**Descripción.** Dejar el contrato written-down antes del código: ADR-016 *Accepted*, enmiendas de las dos specs y registro de la decisión D-009. **Es el trabajo que se está ejecutando ahora — en ejecución en este cambio documental** (OTRO frente crea el ADR; este frente solo escribe `tasks/plan.md` y `tasks/todo.md`).
+
+**Criterios de aceptación.**
+
+- [ ] `docs/adr/adr-016-resiliencia-offline-y-rollback.md` existe con `Status: Accepted` y fecha 2026-11-20; decide **cancelación con rollback**, no degradación; registra al menos dos alternativas (degradar / instalación parcial) y por qué se rechazan.
+- [ ] `specs/spec-installer-wizard.md`: enmienda 2026-11-20 con R-offline-1/2/3/4 y los estados de botón/mensajes de cancelación para H6/H7/H9.
+- [ ] `specs/spec-embeddings.md`: enmienda 2026-11-20 que deja explícito que `sin dato` es solo estimación previa (R-offline-4) y que el modo degradado de runtime no cambia.
+- [ ] `docs/BACKLOG.md`: §4 D-009 + filas en §8 + edge case en US-H6/H7/H9.
+
+**Verificación.**
+
+- [ ] `just md-lint` → 0 issues.
+- [ ] `git diff --exit-code` sobre ADR-007/008/014/015 → 0 líneas (no se reescriben decisiones Accepted).
+
+**Dependencias:** ninguna. **Ficheros:** ADR-016 (nuevo), 2 specs, BACKLOG. **Alcance:** M. **Gate:** contrato congelado; sin él T13 no arranca.
+
+#### T13 · Preflight de red y error tipado antes de escribir (R-offline-1)
+
+**Descripción.** Comprobar la conectividad mínima que la operación necesita **antes del primer write** de H6/H7/H9; si falla, cancelar con rollback y error tipado con razón + acción correctiva. Sin modo degradado.
+
+**Criterios de aceptación.**
+
+- [ ] Un preflight con `ureq` (ya en `Cargo.toml`, sin dep nueva) valida el endpoint que la operación necesita con timeout corto y fallo rápido.
+- [ ] Sin red ⇒ **ningún fichero escrito**; error tipado del wizard con razón y acción correctiva (no texto libre, no PANIC).
+- [ ] El preflight corre **antes** de cualquier fase de escritura de `application/update.rs` y del swap de H9.
+- [ ] `sin dato` de la estimación previa **no** cuenta como preflight (R-offline-4).
+
+**Verificación.**
+
+- [ ] Test sin red (red falsa que devuelve fallo): falla con error tipado y `git status` del vault temporal queda limpio — **cero ficheros**.
+- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes.
+
+**Dependencias:** T12. **Ficheros:** `src/application/` (preflight + taxonomía de error), `tests/int_offline_preflight.rs` (nuevo). **Alcance:** M. **Gate:** checkpoint 1.
+
+#### T14 · Cancelación de descarga en progreso + limpieza de parciales (R-offline-2)
+
+**Descripción.** Durante la descarga del modelo, cancelar desde el TUI y con Ctrl+C: detener la descarga, borrar parciales y compensar lo ya aplicado, cancelando la instalación completa.
+
+**Criterios de aceptación.**
+
+- [ ] La descarga escucha una señal de cancelación compartida por el botón del TUI y Ctrl+C; al dispararse, la petición `ureq` se aborta y el stream se cierra.
+- [ ] Los bytes parciales se escriben a un fichero temporal y se eliminan en **todas** las salidas (éxito, error, cancelación).
+- [ ] Tras cancelar a mitad, `.tepochcalli/models/` queda **sin modelo a medias** (ni el temporal ni un directorio de versión incompleto).
+- [ ] La cancelación propaga rollback (T15) y la instalación se aborta completa, no solo la descarga.
+
+**Verificación.**
+
+- [ ] Test `int_` con servidor loopback que entrega el cuerpo a trozos y se cancela a mitad: no queda ningún fichero bajo `.tepochcalli/models/`.
+- [ ] Test de Ctrl+C simulado (señal inyectada al canal de cancelación, sin matar el proceso de test).
+- [ ] `just rust-test /tmp/opencode/cargo-target` verde.
+
+**Dependencias:** T13. **Ficheros:** `src/application/` (descarga + cancelación), `src/adapters/` (señal), `tests/int_download_cancel.rs` (nuevo). **Alcance:** M. **Gate:** checkpoint 1.
+
+#### T15 · Journal/backup + compensación y verificación post-rollback (R-offline-3)
+
+**Descripción.** Reutilizar el backup + journal de H7/H8 para compensar cambios ya aplicados en H6/H7/H9, y verificar que no quedan restos. Notas, PDFs, `.obsidian/` y config propia del usuario: nunca se tocan.
+
+**Criterios de aceptación.**
+
+- [ ] El journal registra cada fichero gestionado tocado (mismo mecanismo que el rollback de `application/update.rs` de T5), antes de tocarlo.
+- [ ] Preflight fallido (T13) y cancelación a mitad (T14) invocan la **misma** compensación; no hay dos caminos de rollback divergentes.
+- [ ] Tras el rollback, los ficheros gestionados quedan **byte-idénticos** al estado previo (comparación de bytes, no solo existencia).
+- [ ] Test de no-interferencia: `00-resources/`, `.obsidian/` y un fichero de config propio del usuario siguen byte-idénticos tras forzar rollback en H6, H7 y H9.
+
+**Verificación.**
+
+- [ ] Tests `int_` que inducen fallo en cada fase y comparan el árbol completo del vault temporal antes/después.
+- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes.
+
+**Dependencias:** T14. **Ficheros:** `src/application/` (journal/compensación), `tests/int_rollback_integrity.rs` (nuevo). **Alcance:** M. **Gate:** checkpoint 1.
+
+#### T16 · TUI: estados de botón, razón visible y mensajes de cancelación/rollback (H6/H7/H9)
+
+**Descripción.** Exponer en la TUI lo que el núcleo ya hace: progreso con botón de cancelación, razón visible cuando la red no está disponible, y confirmación de cancelación/rollback. Misma regla de H5: botón deshabilitado con razón, nunca oculto.
+
+**Criterios de aceptación.**
+
+- [ ] Durante la descarga, el botón de cancelar está habilitado y conectado a la señal de T14; el resto de botones deshabilitados con razón visible «descarga en curso».
+- [ ] Sin red en preflight: el error tipado de T13 se muestra con razón y acción correctiva; no se ofrece «modo degradado» como salida.
+- [ ] Tras cancelar/rollback, mensaje visible que confirma que el workspace quedó como estaba (R-offline-3).
+- [ ] `HeadlessUi` y `--non-interactive` siguen sin regresión: la cancelación se puede inyectar por índice/señal en tests.
+
+**Verificación.**
+
+- [ ] `tests/e2e_ui.rs` ampliado con los 3 estados nuevos (descarga, sin red, post-rollback).
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde; 33 call sites del puerto `Ui` intactos.
+
+**Dependencias:** T15. **Ficheros:** `src/ports/ui.rs` (sin cambiar firmas existentes si basta), `src/adapters/ui_ratatui.rs`, `src/adapters/ui.rs`, `tests/e2e_ui.rs`. **Alcance:** M. **Gate:** checkpoint 2.
+
+#### T17 · Verificación y cierre: gates + e2e con red falsa
+
+**Descripción.** Evidencia final: la suite por defecto **nunca** usa red real; los escenarios offline se ejercitan contra un servidor loopback, con el patrón de `int_fetch_verified.rs`.
+
+**Criterios de aceptación.**
+
+- [ ] Todo test de red de la fase usa loopback o es `#[ignore]` con receta explícita, igual que `int_model_availability.rs`; `just rust-test` / `just ci` pasan sin red.
+- [ ] Recorrido e2e sobre vault temporal: H6/H7/H9 × {sin red, cancelación a mitad}, con comparación byte-a-byte del árbol antes/después.
+- [ ] `just quality` · `just ci` · `just rust-ci /tmp/opencode/cargo-target` · `just md-lint` → 0 issues.
+- [ ] Cierre documental: WORKFLOW §Phase 6.6 con métricas medidas, TECH_DEBT con la deuda esperada de §11.8, BACKLOG §8.
+
+**Verificación.**
+
+- [ ] Transcript del recorrido en el cuerpo del commit; `git status --short` sin artefactos ni modelos parciales.
+- [ ] `grep -rn 'https://huggingface' crates/tepochcalli/tests/` → solo en tests `#[ignore]`.
+
+**Dependencias:** T16. **Ficheros:** `tests/`, `Justfile` (receta de e2e con red falsa), docs de cierre. **Alcance:** M. **Gate:** checkpoint 3.
+
+### 11.6 Tabla de asignación (subagentes · skills · herramientas · recursos)
+
+| Tarea | Subagente principal | Subagente de apoyo | Skills | Herramientas | Recursos |
+| --- | --- | --- | --- | --- | --- |
+| **T12** | `docs-writer` | `code-reviewer` | `documentation-and-adrs`, `spec-driven-development` | shell | ADR-016 + BACKLOG §4/§8 (interno) |
+| **T13** | `rust-engineer` | `code-reviewer` | `rust-best-practices`, `test-driven-development`, `error-handling-patterns` | shell (`just`) | `ureq` 3 (ya en lock) · `int_fetch_verified.rs` (interno) |
+| **T14** | `rust-engineer` | `code-reviewer` | `rust-best-practices`, `test-driven-development` | shell (`just`) | servidor loopback · `crossterm` (ya en lock) |
+| **T15** | `rust-engineer` | `software-architect` | `clean-ddd-hexagonal`, `design-patterns` (Command/compensación) | shell (`just`) | rollback de `application/update.rs` (interno) |
+| **T16** | `rust-engineer` | `code-reviewer` | `ratatui`, `domain-cli`, `test-driven-development` | shell (`just`) | `src/adapters/ui_ratatui.rs` (interno) |
+| **T17** | `test-automation-engineer` | `testing-reality-checker` | `test-driven-development`, `ci-cd-and-automation` | shell (`just`) | `int_fetch_verified.rs` · `int_model_availability.rs` (internos) |
+
+### 11.7 Checkpoints
+
+| # | Momento | Puerta | Si falla |
+| --- | --- | --- | --- |
+| **C5** | Tras T12 | ADR-016 Accepted · enmiendas y D-009 presentes · `just md-lint` 0 | se para: sin contrato no arranca el núcleo |
+| **C6** | Tras T13-T15 | `just rust-test` / `just rust-ci` verdes · cero ficheros sin red · cero modelos parciales al cancelar · byte-idéntico tras rollback | se revierte el corte |
+| **C7** | Tras T16-T17 | `just quality` · `just ci` · `just md-lint` 0 · e2e con red falsa y transcript | no se cierra la fase |
+
+### 11.8 Riesgos (omens) y mitigación
+
+| # | Omen | Impacto | Mitigación |
+| --- | --- | --- | --- |
+| R11 | La cancelación por Ctrl+C no se propaga al stream de `ureq` | Queda descarga zombi / modelo a medias | T14 aborta petición y cierra stream; test de señal inyectada; el temporal se borra en todas las salidas |
+| R12 | Dos caminos de rollback divergen (preflight vs cancelación) | Estado inconsistente del vault | T15 los unifica en una sola compensación con journal |
+| R13 | Test de red real se cuela en la suite por defecto | `just ci` depende de red; fallos flaky | T17: loopback o `#[ignore]` con receta, patrón `int_fetch_verified` |
+| R14 | Se confunde `sin dato` (estimación) con degradación de runtime | Se instala sin red contra R-offline-4 | T12 lo fija en spec; T13 excluye la estimación del preflight |
+| R15 | Cancelación/rollback en Windows no medido (Ctrl+C distinto) | Salvedad de cobertura | Deuda esperada (sin ID nuevo): queda `declarado`, no `medido`; no se afirma cobertura |
+
+### 11.9 Referencias
+
+- [docs/BACKLOG.md](../docs/BACKLOG.md) §2 US-H6/H7/H9 (edge case 2026-11-20) · §4 D-009 · §8 change log
+- [ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md) · [ADR-007](../docs/adr/adr-007-seleccion-embedder-instalacion.md) (degradado de runtime, intacto) · [ADR-015](../docs/adr/adr-015-dispositivo-inferencia-wizard.md)
+- [specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-20 · [specs/spec-embeddings.md](../specs/spec-embeddings.md) §Enmienda 2026-11-20
+- Internos verificados: `crates/tepochcalli/Cargo.toml` (`ureq = "3"`) · `crates/tepochcalli/tests/int_fetch_verified.rs` (red falsa en loopback) · `crates/tepochcalli/tests/int_model_availability.rs` (`#[ignore]` + receta)
+- [docs/CODE_STYLE.md](../docs/CODE_STYLE.md) §Reglas específicas del payload (backup obligatorio) · §Umbral de líneas (este fichero: tramo `<1000`).

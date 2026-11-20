@@ -138,6 +138,14 @@ Estado: [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) /
   vive en el vault del usuario: no introduce secretos nuevos, pero **hereda el contenido** del
   fichero respaldado — si el usuario puso claves literales en `opencode.json` (la política manda
   `{env:VAR}`, §MCP arriba), esas claves quedan también en el `.bak` y le aplica §Nunca se commitea.
+* **Rollback como control de integridad (2026-11-20, D-009 / ADR-016):** en H6/H7/H9, el
+  **preflight de red** ocurre antes de cualquier escrito — sin red ⇒ cancelación con error tipado
+  y cero cambios; la cancelación de la descarga (TUI o Ctrl+C) detiene el stream, borra parciales
+  y compensa lo aplicado usando el **backup + journal** de H7/H8, verificando después que no quedan
+  restos (incluidos `.bak` y markers). Es una garantía de **no-destrucción**: notas, PDFs,
+  `.obsidian/` y configuración propia del usuario nunca se tocan, y no se admite modo degradado
+  ni instalación parcial en tiempo de instalación (el degradado es solo de runtime). Ver
+  [APPFLOW.md](APPFLOW.md) §6 y [PRD.md](PRD.md) §Nota 2026-11-20.
 * **Desinstall** remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más; notas y
   `00-resources/` intocados (regla maestra de APPFLOW §e: ningún fallo ni operación pierde datos
   del usuario).

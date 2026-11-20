@@ -65,6 +65,10 @@ fija el estado **vigente** de F5/F6, aprobado por el FTR del dueño el 2026-11-1
 
 Implementación y cierre: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**COMPLETADA 2026-11-19**), con las salvedades declaradas (Windows/TD-52, `uvx` desde PyPI, Change Embedder e2e, payload completo/TD-53).
 
+### Nota 2026-11-20 — resiliencia offline del wizard (F5, H6/H7/H9)
+
+Orden del dueño ([BACKLOG.md §4 D-009](BACKLOG.md), ADR-016): en **Install, Update y Change Embedder**, el usuario ve que **sin red la operación se cancela**: el wizard comprueba la conexión antes de escribir nada, muestra un error tipado con la razón y qué hacer, y deja el vault **exactamente como estaba** — ni modo degradado ni instalación a medias en tiempo de instalación. Si la descarga del modelo ya empezó, el usuario puede **cancelar en cualquier momento desde el TUI o con Ctrl+C**: se detiene la descarga, se borran los parciales y se deshace todo lo ya aplicado; no queda un modelo a medias en `.tepochcalli/models/`. El degradado de `rag_status` es solo de **runtime** y no cambia; un `sin dato` en la estimación de requisitos no autoriza una descarga sin red. Notas, PDFs y `.obsidian/` nunca se tocan.
+
 ## 5. Out of scope (v1)
 
 * **Implementar un motor RAG propio** — se incorpora CocoIndex (decisión D1/ADR-001).

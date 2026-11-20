@@ -269,6 +269,15 @@ python-test-file format_matrix` (~2 min). Detalle, fixtures y mensajes literales
 * **Seguridad:** íntegramente en [docs/SECURITY.md](SECURITY.md) (stdio-only, markitdown
   file-read, claves por env).
 
+### 7.1 Resiliencia offline y cancelación del wizard (R-offline-1..4, ADR-016 / BACKLOG §4 D-009)
+
+Mecánica ordenada el 2026-11-20 para **H6/H7/H9** (no H8); detalle de producto en [PRD.md §Nota 2026-11-20](PRD.md).
+
+* **Preflight de red (R-offline-1):** antes del primer escrito, sonda la conectividad mínima que exige la operación (fuentes de wheels/modelo). Sin red ⇒ abortar con error tipado `E_OFFLINE_*` con razón y acción correctiva, **sin crear** `.tepochcalli/`, backups ni markers. No aplica `--offline`/degradado a la fase de instalación.
+* **Señal de cancelación (R-offline-2):** token de cancelación compartido por el TUI (botón) y el manejador de Ctrl+C, propagado al hilo/llamada de descarga; al dispararse se detiene el stream, se eliminan los ficheros parciales y se ejecuta la compensación completa, cancelando la operación entera. Verificar que `models/` no retiene un modelo a medias.
+* **Compensación (R-offline-3):** reutilizar el **backup + journal** ya existentes de H7/H8 para deshacer en orden inverso los ficheros gestionados; no tocar notas, PDFs, `.obsidian/` ni configuración propia del usuario. Tras el rollback, verificar que no quedan restos (ficheros, `.bak`, markers de estado).
+* **Distinción (R-offline-4):** el modo degradado de runtime (ADR-007 / `rag_status`) queda intacto. «Sin dato» de la API de estimación de requisitos afecta **solo** a la estimación previa; la descarga real sin red se cancela.
+
 ## 8. Dependencias de construcción (dev)
 
 * Rust: toolchain estable + cargo-dist para release; clippy/rustfmt (docs/CODE_STYLE.md).

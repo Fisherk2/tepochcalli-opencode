@@ -84,6 +84,10 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 
 ## Estrategia de testing
 
+* **Integridad ante sin red (2026-11-20, D-009 / ADR-016):** verificar en H6/H7/H9 que el preflight
+  cancela antes del primer escrito, que TUI/Ctrl+C detienen la descarga y compensan vía backup +
+  journal, y que el rollback no deja restos ni toca notas/PDFs/`.obsidian/`; el degradado sigue
+  siendo solo de runtime (`rag_status`), nunca una salida de instalación.
 * **Unit por capa:** transformaciones del flow (puras, sin red); parsers de config; helpers de truncado/token-budget del MCP.
 * **Contract tests MCP:** vault fixture → shape exacto de `search/index_refresh/add_source`, códigos de error, globs de `path_filter`.
 * **Fixtures de performance (los 4 criterios numéricos):** delta <30s; `search` <500ms p95; payload ≤~1600 tokens/call (cota ≤2000 con overhead); stress sintético 10k notas + 1k PDFs (metodología en [docs/TRD.md](docs/TRD.md)).

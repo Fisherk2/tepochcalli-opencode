@@ -182,6 +182,16 @@ viva por debajo.
 5. Índice corrupto o cambio de modelo: `tepochcalli reindex --confirm` borra y reconstruye
    con el modelo actual (sin `--confirm` no hace nada); `E_MODEL_MISMATCH` explica el
    desajuste dims del modelo vs índice.
+6. **Sin red al instalar, actualizar o cambiar el embedder (2026-11-20, H6/H7/H9):** el usuario
+   pulsa 🔵/🟢/🟣 y, **antes de que se escriba nada**, ve un error tipado con la razón y la acción
+   correctiva (conectarse a la red y reintentar). Vuelve al menú con el vault **idéntico**: sin
+   `.tepochcalli/` a medias, sin `.bak` nuevo, sin modelo parcial. No hay opción «continuar
+   degradado» en este momento; el `degraded` de `rag_status` es solo de runtime.
+7. **El usuario cancela a mitad de la descarga del modelo:** desde el botón del TUI o con Ctrl+C
+   se detiene la descarga al instante; la barra desaparece y el wizard deshace lo ya aplicado
+   (backup + journal de H7/H8), verificando que no quedan restos ni un modelo a medias en
+   `.tepochcalli/models/`. Mensaje de cancelación, no de éxito: la operación completa se cancela.
+   Notas, PDFs, `.obsidian/` y su configuración siguen intactos.
 
 Regla maestra de journeys e): **ningún fallo pierde datos del usuario** — solo artefactos
 derivados/installables se deshacen. Ver diagrama de fases en

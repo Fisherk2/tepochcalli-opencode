@@ -253,3 +253,117 @@
 
 *Redactado por Moctezuma (tlatoani) el 2026-11-19. Plan: [tasks/plan.md](./plan.md). Ningún cambio
 de código implementado en esta sesión.*
+
+---
+
+## 🛡️ Fase 6.6 — resiliencia offline y rollback cancelable (H6/H7/H9)
+
+> Checklist operativo de [tasks/plan.md](./plan.md) §11. Fuente de verdad:
+> [docs/BACKLOG.md](../docs/BACKLOG.md) §2 US-H6/H7/H9 (edge case 2026-11-20) + §4 D-009 +
+> [ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md). Añadido el 2026-11-20.
+> **Leyenda:** `[ ]` pendiente · `[~]` en curso · `[x]` hecho · `[!]` bloqueado (motivo en la línea).
+
+### Enunciado canónico (no re-inventar)
+
+- **R-offline-1 (preflight):** Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela la operación con rollback y deja el workspace del usuario exactamente como estaba; muestra error tipado con razón y acción correctiva. No hay modo degradado ni instalación parcial en tiempo de instalación.
+- **R-offline-2 (cancelación en progreso):** Durante la descarga del modelo, el usuario puede cancelar en cualquier momento desde el TUI y con Ctrl+C. La cancelación detiene la descarga, elimina los artefactos parciales y compensa todo cambio ya aplicado (rollback), cancelando la instalación completa. No queda modelo a medias en `.tepochcalli/models/`.
+- **R-offline-3 (integridad):** El rollback restaura el estado previo de los ficheros gestionados usando el backup + journal ya existentes de H7/H8. Notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan. Tras el rollback se verifica que no quedan restos.
+- **R-offline-4 (distinción crítica):** El modo degradado de **runtime** (ADR-007 / `rag_status`) NO cambia: en instalación/cambio de embedder, **sin red = cancelación, no degradación**. «Si la API no responde, se muestra `sin dato` sin fallar la instalación» aplica **solo a la estimación previa de requisitos**, no a la descarga real.
+
+### 🔒 Guardarraíles de la fase
+
+- [ ] **Ningún publish** (ni `twine`, ni `maturin publish`, ni job de upload). Sin excepciones.
+- [ ] **Cero dependencias nuevas** (regla R1): reutilizar `ureq` (ya en `crates/tepochcalli/Cargo.toml`, v3) y lo ya en `Cargo.lock`. Antes de proponer una alta, verificar el lock.
+- [ ] **`CARGO_TARGET_DIR` siempre bajo `/tmp/opencode/`** → `just rust-ci /tmp/opencode/cargo-target`.
+- [ ] **Comandos vía `just`**, nunca `cargo`/`uv`/`pytest` crudos.
+- [ ] **Jamás en segundo plano**: sin `&`, `nohup` ni procesos huérfanos; las corridas largas en primer plano y por partes.
+- [ ] **La suite por defecto nunca depende de red real**: red falsa en loopback (`int_fetch_verified`) o tests `#[ignore]` con receta (`int_model_availability`).
+- [ ] **El rollback deja los ficheros del usuario byte-idénticos**: notas, PDFs, `.obsidian/` y config propia intactos.
+- [ ] **Fuera de alcance**: H8 (Desinstall) no se toca; degradado de runtime (ADR-007) no cambia; `sin dato` sigue siendo solo estimación.
+
+### T12 · Formalización documental
+
+*Dueño: `docs-writer` · Revisión: `code-reviewer` · Depende de: ninguna · **en ejecución en este cambio documental***
+
+- [~] ADR-016 creado con `Status: Accepted` y fecha 2026-11-20 (lo crea OTRO frente; este frente solo toca `tasks/`)
+- [ ] ADR-016 decide **cancelación con rollback**, no degradación; ≥2 alternativas rechazadas con razón
+- [ ] Enmienda 2026-11-20 en `specs/spec-installer-wizard.md`: R-offline-1/2/3/4 + estados de botón y mensajes de cancelación para H6/H7/H9
+- [ ] Enmienda 2026-11-20 en `specs/spec-embeddings.md`: `sin dato` = solo estimación previa; degradado de runtime intacto
+- [ ] `docs/BACKLOG.md`: D-009 en §4 + fila en §8 + edge case en US-H6/H7/H9
+- [ ] `git diff --exit-code` sobre ADR-007/008/014/015 → 0 líneas (no se reescriben)
+- [ ] `just md-lint` → 0 issues
+
+### T13 · Preflight de red y error tipado antes de escribir (R-offline-1)
+
+*Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T12*
+
+- [ ] Preflight con `ureq` (sin dep nueva) del endpoint que la operación necesita, con timeout corto y fallo rápido
+- [ ] Preflight corre **antes** del primer write de H6/H7/H9
+- [ ] Sin red ⇒ **test sin red falla con error tipado** (razón + acción correctiva, no texto libre) y `git status` del vault temporal limpio: **cero ficheros escritos**
+- [ ] `sin dato` de la estimación previa **no** cuenta como preflight (R-offline-4)
+- [ ] Test: `tests/int_offline_preflight.rs` (nuevo) con red falsa en fallo
+- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes
+
+### T14 · Cancelación de descarga en progreso + limpieza (R-offline-2)
+
+*Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T13*
+
+- [ ] Descarga cancelable por botón del TUI **y** Ctrl+C mediante una señal compartida; `ureq` se aborta y el stream se cierra
+- [ ] Bytes parciales van a un temporal y se borran en **todas** las salidas (éxito, error, cancelación)
+- [ ] Tras cancelar a mitad, **no queda modelo a medias en `.tepochcalli/models/`** (ni temporal ni versión incompleta) — test explícito
+- [ ] Cancelación propaga rollback (T15) y aborta la instalación completa
+- [ ] Test: `tests/int_download_cancel.rs` (nuevo) con servidor loopback que entrega a trozos + señal inyectada (sin matar el proceso de test)
+- [ ] `just rust-test /tmp/opencode/cargo-target` verde
+
+### T15 · Journal/backup + compensación y verificación post-rollback (R-offline-3)
+
+*Dueño: `rust-engineer` · Revisión: `software-architect` · Depende de: T14*
+
+- [ ] Journal registra cada fichero gestionado **antes** de tocarlo (mismo mecanismo que el rollback de `application/update.rs`)
+- [ ] Preflight fallido (T13) y cancelación (T14) invocan **la misma** compensación; un solo camino de rollback
+- [ ] Ficheros gestionados **byte-idénticos** al estado previo tras el rollback (comparación de bytes, no solo existencia)
+- [ ] Test de no-interferencia: `00-resources/`, `.obsidian/` y config propia del usuario byte-idénticos tras rollback forzado en H6, H7 y H9
+- [ ] Verificación de que no quedan restos (temporales, `.bak` huérfanos) tras el rollback
+- [ ] Test: `tests/int_rollback_integrity.rs` (nuevo), comparando el árbol completo antes/después
+- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes
+
+### T16 · TUI: estados de botón, razón visible y mensajes (H6/H7/H9)
+
+*Dueño: `rust-engineer` · Revisión: `code-reviewer` · Depende de: T15*
+
+- [ ] Durante la descarga: botón de cancelar habilitado y conectado a T14; otros botones deshabilitados con razón visible «descarga en curso»
+- [ ] Sin red en preflight: error tipado de T13 con razón y acción correctiva; **sin salida «modo degradado»**
+- [ ] Tras cancelar/rollback: mensaje visible que confirma que el workspace quedó como estaba
+- [ ] Regla H5: botón deshabilitado con razón, nunca oculto
+- [ ] `HeadlessUi` y `--non-interactive` sin regresión; cancelación inyectable por índice/señal en tests
+- [ ] `tests/e2e_ui.rs` ampliado con los 3 estados nuevos; 33 call sites del puerto `Ui` intactos
+- [ ] `just rust-ci /tmp/opencode/cargo-target` verde
+
+### T17 · Verificación y cierre: gates + e2e con red falsa
+
+*Dueño: `test-automation-engineer` · Apoyo: `testing-reality-checker` · Depende de: T16*
+
+- [ ] Todo test de red usa loopback o es `#[ignore]` con receta (`int_fetch_verified` / `int_model_availability`)
+- [ ] `just rust-test` y `just ci` pasan **sin red**
+- [ ] E2E sobre vault temporal: H6/H7/H9 × {sin red, cancelación a mitad}, con comparación byte-a-byte del árbol antes/después
+- [ ] `just quality` · `just ci` · `just rust-ci /tmp/opencode/cargo-target` · `just md-lint` → 0 issues
+- [ ] `grep -rn 'https://huggingface' crates/tepochcalli/tests/` → solo en tests `#[ignore]`
+- [ ] Cierre documental: WORKFLOW §Phase 6.6 con métricas medidas; TECH_DEBT con la deuda esperada; BACKLOG §8
+- [ ] Transcript del recorrido en el cuerpo del commit; `git status --short` sin modelos parciales ni artefactos
+
+### 🛑 Checkpoints de la fase
+
+- [ ] **C5 (tras T12):** ADR-016 Accepted · enmiendas + D-009 presentes · `just md-lint` 0 → si falla, el núcleo no arranca
+- [ ] **C6 (tras T13-T15):** `just rust-test`/`just rust-ci` verdes · cero ficheros sin red · cero modelos parciales al cancelar · byte-idéntico tras rollback → si falla, se revierte el corte
+- [ ] **C7 (tras T16-T17):** `just quality` · `just ci` · `just md-lint` 0 · e2e con red falsa + transcript → si falla, no se cierra la fase
+
+### 📌 Deuda esperada al cierre (sin ID nuevo)
+
+| Deuda | Por qué no se cierra aquí |
+| --- | --- |
+| Cancelación/rollback y Ctrl+C en Windows | Requiere runner `windows-latest`; en este entorno no hay Windows ⇒ queda `declarado`, no `medido`. No se afirma cobertura; se registra en TECH_DEBT con el ID que el dueño asigne. |
+| `uvx` desde PyPI y publicación real | Fuera de alcance por orden explícita del dueño; TD-51/TD-52 siguen como estaban. |
+
+---
+
+*Fase 6.6 añadida el 2026-11-20. Plan: [tasks/plan.md](./plan.md) §11. Sin código implementado por este frente.*

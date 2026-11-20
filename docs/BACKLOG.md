@@ -297,6 +297,12 @@ Como usuario quiero instalar limpiamente el payload en mi workspace de Obsidian 
 - Mensaje de confirmación de qué se instala y dónde, incluyendo el runtime `.tepochcalli/` con el motor `cocoindex` y el convertidor `markitdown`.
 - Barra de progreso de descarga e instalación.
 
+**Edge case 2026-11-20 (ADR-016, decisión §4 D-009):**
+
+- **R-offline-1 (preflight):** Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela la operación con rollback y deja el workspace del usuario exactamente como estaba; muestra error tipado con razón y acción correctiva. No hay modo degradado ni instalación parcial en tiempo de instalación.
+- **R-offline-2 (cancelación en progreso):** Durante la descarga del modelo, el usuario puede cancelar en cualquier momento desde el TUI y con Ctrl+C. La cancelación detiene la descarga, elimina los artefactos parciales y compensa todo cambio ya aplicado (rollback), cancelando la instalación completa. No queda modelo a medias en `.tepochcalli/models/`.
+- **R-offline-3 (integridad):** El rollback restaura el estado previo de los ficheros gestionados usando el backup + journal ya existentes de H7/H8. Notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan. Tras el rollback se verifica que no quedan restos.
+
 ### US-H7 — 🟢 Update
 
 Como usuario quiero actualizar un workspace que ya tiene una versión anterior.
@@ -304,6 +310,12 @@ Como usuario quiero actualizar un workspace que ya tiene una versión anterior.
 - Sobrescribir `.opencode/` y `.tepochcalli/`; advertir que también `.gitignore`, `opencode.json` y `AGENTS.md` se sobrescribirán y que el usuario debe respaldarlos si hace falta.
 - Mostrar el directorio objetivo; tras confirmar, actualización con barra de progreso.
 - Alcance destino (amplía el código vigente: F3 no sobrescribe) — requiere enmienda futura (ver preámbulo).
+
+**Edge case 2026-11-20 (ADR-016, decisión §4 D-009):**
+
+- **R-offline-1 (preflight):** Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela la operación con rollback y deja el workspace del usuario exactamente como estaba; muestra error tipado con razón y acción correctiva. No hay modo degradado ni instalación parcial en tiempo de instalación.
+- **R-offline-2 (cancelación en progreso):** Durante la descarga del modelo, el usuario puede cancelar en cualquier momento desde el TUI y con Ctrl+C. La cancelación detiene la descarga, elimina los artefactos parciales y compensa todo cambio ya aplicado (rollback), cancelando la instalación completa. No queda modelo a medias en `.tepochcalli/models/`.
+- **R-offline-3 (integridad):** El rollback restaura el estado previo de los ficheros gestionados usando el backup + journal ya existentes de H7/H8. Notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan. Tras el rollback se verifica que no quedan restos.
 
 ### US-H8 — 🔴 Desinstall
 
@@ -329,6 +341,13 @@ Como usuario quiero reinstalar o cambiar el modelo embedder sin reinstalar el wo
 - Un badge `no recomendado` es una ADVERTENCIA, nunca un bloqueo: antes de continuar se informa al usuario y se le invita a elegir un modelo más apropiado para su hardware; si acepta el riesgo, puede confirmar la instalación del modelo elegido. El resumen previo incluye las cifras de memoria/disco y el badge resultante (D8.1-D8.3).
 - Resumen de las opciones elegidas antes de aplicar.
 - Instalación/reinstalación con barra de progreso.
+
+**Edge case 2026-11-20 (ADR-016, decisión §4 D-009):**
+
+- **R-offline-1 (preflight):** Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela la operación con rollback y deja el workspace del usuario exactamente como estaba; muestra error tipado con razón y acción correctiva. No hay modo degradado ni instalación parcial en tiempo de instalación.
+- **R-offline-2 (cancelación en progreso):** Durante la descarga del modelo, el usuario puede cancelar en cualquier momento desde el TUI y con Ctrl+C. La cancelación detiene la descarga, elimina los artefactos parciales y compensa todo cambio ya aplicado (rollback), cancelando la instalación completa. No queda modelo a medias en `.tepochcalli/models/`.
+- **R-offline-3 (integridad):** El rollback restaura el estado previo de los ficheros gestionados usando el backup + journal ya existentes de H7/H8. Notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan. Tras el rollback se verifica que no quedan restos.
+- **R-offline-4 (distinción crítica):** El modo degradado de **runtime** (ADR-007 / `rag_status`) NO cambia: en instalación/cambio de embedder, **sin red = cancelación, no degradación**. El texto vigente de esta US-H9 «Si la API no responde, se muestra `sin dato` sin fallar la instalación» aplica **solo a la estimación previa de requisitos**, no a la descarga real: si falla la API de estimación se muestra `sin dato` y el flujo continúa, pero si no hay red en la descarga real la operación se cancela con rollback (R-offline-1).
 
 ### US-H10 — 🟠 Exit
 
@@ -370,6 +389,7 @@ Las preguntas surgieron en la sección «Deuda cognitiva» de la fuente: «Me gu
 | D-006 | Interfaz del wizard | `dialoguer` line-based actual (D23); TUI full-screen con botones y estados deshabilitados (p. ej. `ratatui`) | TUI full-screen (dependencia) | Todo bloqueo se muestra como botón deshabilitado con razón visible; exige enmienda de spec/ADR futura, no realizada en este lote. | D23 (`dialoguer` line-based) |
 | D-007 | Versión canónica instalada | `Cargo.toml = 0.1.0-beta.1`; `.tepochcalli/pyproject.toml = 0.1.0` | `.tepochcalli/pyproject.toml` (la versión del wizard la gestiona `uvx`) | Comparación semver; hoy divergen y deben alinearse antes de implementar. | none (divergencia a alinear) |
 | D-008 | Alcance destino de `Update` / `Desinstall` (H7/H8) | Alcance vigente (F3 no sobrescribe; uninstall solo `.tepochcalli/`); alcance destino con advertencia y respaldo del usuario | Alcance destino: `Update` sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md` (el usuario debe respaldarlos si hace falta); `Desinstall` remueve `.opencode/`, `.tepochcalli/` y `opencode.json` — nada más | Amplía el alcance frente al código vigente y exige enmienda futura (ver preámbulo de flujo destino). | Alcance vigente (F3 / uninstall actual) |
+| D-009 | Resiliencia offline y rollback cancelable en instalación/actualización/cambio de embedder (H6/H7/H9) — decisión de Fisherk2 2026-11-20, ADR-016 | Cancelar con rollback; modo degradado; instalación parcial reanudable | **Cancelar con rollback** (preflight de red R-offline-1; cancelación en progreso desde TUI y Ctrl+C R-offline-2; integridad con backup + journal R-offline-3; el modo degradado sigue siendo solo de runtime, R-offline-4) | Integridad de los ficheros del usuario: sin red o ante cancelación el workspace queda exactamente como estaba, sin modelo a medias en `.tepochcalli/models/` ni estado a medias | none |
 
 ### Anexo — Mapeo de módulos de Codice a Rust (requisito, no implementado)
 
@@ -437,8 +457,11 @@ Todo el contenido migrado cabe en un solo fichero (por debajo del umbral de ~500
 | 2026-11-19 | **Phase 6.5 implementada**: flujo destino H5-H11 materializado — TUI full-screen con menú H5, `device` electivo escrito y preservado, `update`/`desinstall` con backup, canal `uvx` con rueda `maturin` verificada en local (§2) | docs-writer (redacción) | Fisherk2 (FTR) |
 | 2026-11-19 | **Phase 6.5 verificada e2e**: H5 en TTY real (80×24), install degradado 20 s, update 0,293 s / 0,081 s, desinstall 1,44 s, `just quality` 707 tests + Rust 386, `just ci` exit 0 (45m49s), `md-lint` 0; prueba negativa: 0 releases y PyPI 404 | docs-writer (redacción) | Fisherk2 (FTR) |
 | 2026-11-19 | **Deuda actualizada**: TD-47/48/49/50 cerradas con evidencia (T4/T5/T8/T6); TD-51 y TD-52 siguen abiertas; nueva **TD-53** (`--payload` del checkout arrastra `venv/`: 2,1 GB, 19m10s) | docs-writer (redacción) | Fisherk2 (FTR) |
+| 2026-11-20 | Edge case de resiliencia offline del wizard (§2 US-H6/H7/H9, §4 D-009): sin red al instalar/actualizar/cambiar embedder ⇒ cancelar con rollback (R-offline-1); cancelación de la descarga desde TUI y Ctrl+C con compensación (R-offline-2); integridad vía backup + journal sin tocar datos del usuario (R-offline-3); el modo degradado sigue siendo solo de runtime (R-offline-4). Alcance **H6/H7/H9** (no H8), con ADR-016 y enmiendas aprobadas | Fisherk2 (orden) + docs-writer (redacción) | Fisherk2 |
 
 Estado `frozen`: el contenido se migra como instantánea congelada de `docs/UH.md` (345 líneas) por orden de Fisherk2. Los requisitos del flujo destino se escribieron como destino **pendiente de formalización**; desde el **2026-11-19** esa formalización existe — [ADR-014](adr/adr-014-distribucion-uvx-pypi.md)/[ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) *Accepted* y las enmiendas *Accepted* de `spec-installer-wizard`/`spec-embeddings` (filas de arriba). El texto de §2 y §4 no se reescribe: es la instantánea de la orden.
+
+Adenda 2026-11-20: por orden del dueño se **añaden** los edge cases de resiliencia offline (R-offline-1..4) a US-H6/H7/H9, la decisión D-009 y su fila de §8, con ADR-016 y enmiendas aprobadas. Se conserva la instantánea original: nada del texto congelado se reescribe ni se borra; los bloques nuevos llevan la marca «Edge case 2026-11-20 (ADR-016, decisión §4 D-009)».
 
 Las citas con número de línea del documento migrado se retiran a anclas de este fichero; el contenido es el mismo, solo cambia el contenedor.
 

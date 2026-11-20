@@ -129,6 +129,14 @@ sequenceDiagram
 | **Wizard TUI Rust — canal `uvx` (Phase 3 + Phase 6.5, 2026-11-19):** `ratatui` 0.30 + `crossterm` 0.29 con menú H5 (5 botones con razón visible), fases con rollback, `install`/`update`/`desinstall`/`config embedder` con `device` electivo (`cpu`/`cuda`/`cuda:N`); rueda `maturin` verificada con `uvx --from` local, **sin publicar** | Distribución | repo `crates/tepochcalli/` (Phase 3 + Phase 6.5) | ADR-014, ADR-015, spec-installer-wizard |
 | **Payload materializado (Phase 5, 2026-11-09; formato revisado 2026-11-11; canónico 2026-11-12):** 15 artefactos de texto (5 agentes con permisos inline + 9 comandos + `AGENTS.md` genérico del vault) + 40 skills (`database-lookup/` retirada `c815eb0`; `ls` 2026-11-12 = 40 dirs) + global 313 reglas + scaffold `00-resources/`/`10-templates/`; la capa MCP no cambia | Usuario/Agente | `obsidian-workspace/` (payload instalable) | spec-payload-vault, spec-payload-{skills,permissions,agents,commands}, WORKFLOW §Phase 5, [ADR-012](adr/adr-012-formato-payload-revisado.md) |
 
+> **Nota 2026-11-20 (D-009 / ADR-016 — resiliencia offline del wizard):** el inventario del
+> wizard añade un **preflight de red antes del primer escrito** en H6/H7/H9 (sin red ⇒ cancelación
+> tipada con rollback, sin modo degradado ni instalación parcial) y una **señal de cancelación**
+> (botón TUI / Ctrl+C) propagada a la descarga del modelo que compensa vía el **backup + journal**
+> ya existente de H7/H8 y verifica que no quedan restos. No cambia la topología de capas ni el
+> contrato MCP: solo se refuerza la frontera de fallo en la capa de Distribución. Detalle:
+> [PRD.md](PRD.md) §Nota 2026-11-20 y [TRD.md](TRD.md) §7.1.
+
 ## Engine components (hexagonal view)
 
 Vista hexagonal del motor tal como quedó tras Phase 3.5: dominio puro en el centro, `ports.py`

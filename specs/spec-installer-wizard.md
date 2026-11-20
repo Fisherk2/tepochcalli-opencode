@@ -398,6 +398,63 @@ Derivado de <https://github.com/Fisherk2/codice-opencode/tree/main/src> (docs/BA
 | Cliente de release/última versión | `GitHubRestClient.ts` | `adapters/` |
 | **Diferencia propia:** gestión del modelo de embeddings (selección, instalación y swap, con resumen y barra de progreso) — sin equivalente en Codice | — | `application/` + `adapters/`, sin forzar el mapeo |
 
+## Enmienda 2026-11-20 — resiliencia offline y rollback cancelable (H6/H7/H9, ADR-016)
+
+**Status: Accepted 2026-11-20** — orden directa de Fisherk2 («orden de Fisherk2, 2026-11-20»),
+registrada en docs/BACKLOG.md §2 (US-H6/H7/H9) y §4 / D-009. Decisión de fondo:
+[ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md). **Refina**, sin re-escribir:
+la §Enmienda 2026-11-18, la fila 6 de §Fases, la §Semántica de rollback del provider (D7.1),
+la §UX de fallo y el backup de H7/H8. Canal `uvx`, TUI full-screen y `device` electivo intactos.
+
+### Contrato verificable
+
+| Req | Regla |
+| --- | --- |
+| **R-offline-1** | Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela con rollback y deja el workspace del usuario exactamente como estaba; error tipado con razón y acción correctiva. **No hay modo degradado ni instalación parcial en tiempo de instalación.** |
+| **R-offline-2** | Durante la descarga del modelo (H6/H9; y H7 si la operación descarga algo), el usuario puede cancelar en cualquier momento desde el TUI y con **Ctrl+C**: se detiene la descarga, se eliminan los parciales y se compensa todo cambio ya aplicado. No queda modelo a medias en `.tepochcalli/models/`. |
+| **R-offline-3** | El rollback restaura los ficheros gestionados mediante el **backup + journal ya existentes de H7/H8**; notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan; tras el rollback se verifica que no quedan restos. |
+| **R-offline-4** | El modo `degraded` de **runtime** (ADR-007 / `rag_status`) NO cambia: en instalación/cambio de embedder, **sin red = cancelación, no degradación**. «`sin dato` si la API no responde» (US-H9) aplica **solo a la estimación previa**, nunca a la descarga real. |
+
+### Fases atómicas y compensación
+
+* **Fase 0 (nueva) — preflight de red**, antes de la fase 1 y de cualquier escrito: reachability
+  mínima según la operación (registro de paquetes / HuggingFace / proveedor LiteLLM). Sin red ⇒
+  cancelación tipada en la banda 20-29, antes de crear `.tepochcalli/`, antes del backup de H7 y
+  antes de escribir `opencode.json`. `--offline` (D7.3) conserva su semántica: con caché válida
+  no hay preflight; sin ella, `E_OFFLINE_NO_CACHE` como hoy.
+* **Fase 6 — descarga del modelo:** el botón **Cancel** y `Ctrl+C` comparten un manejador de
+  cancelación cooperativa propagado al gate (§Materialización del modelo). Se detiene el stream,
+  se descarta el fichero en escritura y se compensan las fases ejecutadas en **orden inverso**
+  usando el journal de H7/H8. Resultado: cancelación de la **instalación completa**.
+* **Precedencia sobre el texto previo:** la fila 6 de §Fases y la §Semántica de rollback del
+  provider (D7.1) siguen vigentes para `E_MODEL_INVALID` (modelo no válido en `test-embed`) y para
+  la salida 5 elegida **explícitamente** o `--skip-model`. **Cuando la causa es ausencia de red en
+  H6/H7/H9, el fallback automático a salida 5 se sustituye por cancelación con rollback**: nunca
+  se instala `degraded` por falta de red.
+
+### UX de fallo ante sin red y cancelación
+
+* Error tipado con fase, razón y acción correctiva (reconectar o usar `--offline` con caché) en la
+  banda 20-29 de red; `E_CANCELLED` para cancelación del usuario; coherente con §UX de fallo y
+  sin texto libre como error.
+* La barra de progreso de H6/H9 muestra el botón **Cancel** activo y el hint `Ctrl+C`; tras la
+  cancelación informa del rollback ejecutado y de la verificación «sin restos».
+* El log sigue fuera del vault (`$XDG_STATE_HOME/tepochcalli/install-<ts>.log`).
+
+### Testing exigido a la implementación
+
+* **Sin red:** fixture sin conectividad en H6, H7 y H9 → el preflight cancela antes del primer
+  escrito; assert de workspace byte-a-byte idéntico, sin `.tepochcalli/` nuevo y error tipado.
+* **Cancelación a mitad de descarga:** botón Cancel y `Ctrl+C` por separado → stream detenido,
+  cero parcial en `.tepochcalli/models/`, compensaciones en orden inverso y sin marker de
+  instalación; coherente con el test de descarga interrumpida del swap D8.4.
+* **Integridad:** snapshot de notas, PDFs, `.obsidian/` y config propia antes/después →
+  byte-idénticos; assert de verificación «sin restos» (ni parcial, ni `.install-intent`, ni
+  entrada `tepochcalli-rag` nueva en `opencode.json`).
+* **No regresión:** la salida 5 explícita y `--skip-model` siguen instalando completo con
+  `rag_status` → `degraded`; `sin dato` sigue siendo solo la estimación de requisitos.
+* Evidencia `declarado` hasta la implementación (ADR-016 §6); este lote no añade gates.
+
 ## References
 
 * Fisherk2/codice-opencode (modelo `template/` → instalación)
