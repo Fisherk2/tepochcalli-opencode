@@ -192,10 +192,15 @@ fn forced_offline_install(target: &Path, payload: &Path) -> std::process::Comman
 
 /// F4 always downloads the pinned `uv` (`installer.rs:413`), so a blocked
 /// network must be reported as the network failure — never as a full disk —
-/// and must compensate `bin/`.
+/// and R-offline-3 rolls the vault back: F1–F3 wrote the payload and the
+/// runtime, and a failed install leaves neither.
 #[test]
-fn install_offline_fails_at_f4_with_a_network_error() {
+fn install_offline_fails_at_f4_and_rolls_back_the_vault() {
     let (_dir, target, payload) = install_fixture();
+    // Vault que YA existía: su nota es del usuario y debe sobrevivir.
+    std::fs::create_dir_all(&target).expect("vault preexistente");
+    std::fs::write(target.join("nota.md"), b"# nota del usuario\n").expect("nota del usuario");
+
     let out = forced_offline_install(&target, &payload)
         .output()
         .expect("spawn install");
@@ -216,19 +221,24 @@ fn install_offline_fails_at_f4_with_a_network_error() {
             "a blocked network must not be diagnosed as {wrong:?}, got:\n{stderr}"
         );
     }
-    // F1-F3 ran before the download failed...
-    assert!(target.is_dir(), "F2 must create the vault dir for real");
     assert!(
-        target
-            .join(".tepochcalli")
-            .join(".install-intent")
-            .is_file(),
-        "F3 must have written the intent file before F4"
+        stderr.contains("rollback aplicado"),
+        "the failure must confirm the rollback, got:\n{stderr}"
     );
-    // ...and F4 compensated what it wrote.
+    // R-offline-3: el contenido del usuario queda intacto, el payload y el
+    // runtime que creó esta corrida se revierten.
+    assert_eq!(
+        std::fs::read(target.join("nota.md")).expect("nota tras el rollback"),
+        b"# nota del usuario\n",
+        "los ficheros del usuario no se tocan"
+    );
     assert!(
-        !target.join(".tepochcalli").join("bin").exists(),
-        "failed F4 must compensate bin/"
+        !target.join(".tepochcalli").exists(),
+        "el runtime creado por esta corrida se revierte"
+    );
+    assert!(
+        !target.join("00-resources").exists(),
+        "el payload/placeholders de F3 se revierten"
     );
 }
 

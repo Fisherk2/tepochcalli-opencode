@@ -325,13 +325,17 @@ de código implementado en esta sesión.*
 
 *Dueño: `rust-engineer` · Revisión: `software-architect` · Depende de: T14*
 
-- [ ] Journal registra cada fichero gestionado **antes** de tocarlo (mismo mecanismo que el rollback de `application/update.rs`)
-- [ ] Preflight fallido (T13) y cancelación (T14) invocan **la misma** compensación; un solo camino de rollback
-- [ ] Ficheros gestionados **byte-idénticos** al estado previo tras el rollback (comparación de bytes, no solo existencia)
-- [ ] Test de no-interferencia: `00-resources/`, `.obsidian/` y config propia del usuario byte-idénticos tras rollback forzado en H6, H7 y H9
-- [ ] Verificación de que no quedan restos (temporales, `.bak` huérfanos) tras el rollback
-- [ ] Test: `tests/int_rollback_integrity.rs` (nuevo), comparando el árbol completo antes/después
-- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes
+- [x] Journal registra cada fichero gestionado **antes** de tocarlo (mismo mecanismo que el rollback de `application/update.rs`)
+- [x] Preflight fallido (T13) y cancelación (T14) invocan **la misma** compensación; un solo camino de rollback
+- [x] Ficheros gestionados **byte-idénticos** al estado previo tras el rollback (comparación de bytes, no solo existencia)
+- [x] Test de no-interferencia: `00-resources/`, `.obsidian/` y config propia del usuario byte-idénticos tras rollback forzado en H6, H7 y H9
+- [x] Verificación de que no quedan restos (temporales, `.bak` huérfanos) tras el rollback
+- [x] Test: `tests/int_rollback_integrity.rs` (nuevo), comparando el árbol completo antes/después
+- [x] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes
+
+**Evidencia 2026-11-20.** `InstallSnapshot::capture` (read-only, antes de `ensure_vault_dir`) + `rollback_install` en `application/rollback.rs`: `executed = completed_phases(now) − snapshot.completed`, compensadores en orden inverso (F8 → F7 → F3 → runtime), `remove_dir_all(.tepochcalli)` de una vez si el runtime no existía, por fase si existía, y `remove_dir_all(vault)` si el vault lo creó esta corrida. **F6 no usa `compensate_phase6`** (escribe `provider = "none"`): config por bytes del snapshot. Punto único en `run_install` (`code != 0`) + línea `install: rollback aplicado`. Tests: `int_rollback_integrity` (4, árbol byte a byte), `install_offline_fails_at_f4_and_rolls_back_the_vault` (renombrado: ya no queda `.install-intent` ni payload, la nota del usuario sobrevive), `swap_cancelado_en_el_gate_no_deja_modelo_parcial`. 417 tests Rust, `rust-ci` exit 0.
+
+**Desviaciones declaradas.** (a) No se añade un journal por fichero para install: se reutilizan los que ya existen (`.install-intent` de F3, `.opencode` `.bak` de F8, marker de fases) más el snapshot — menos mecanismo, mismo invariante. (b) En un vault **con `.install-intent` previo**, la re-ejecución de F3 no promete borrar los ficheros que esa pasada añadió (journal acumulativo); probado con marker `F1/F2`. (c) La rama de re-ejecución no promete byte-identidad dentro de `db/`, `bin/` ni `venv/` (estado derivado; solo se borran si los creó la corrida). (d) Pueden quedar **directorios vacíos** en un vault preexistente (el `remove_dir_all` del final solo aplica al vault creado por la corrida).
 
 ### T16 · TUI: estados de botón, razón visible y mensajes (H6/H7/H9)
 

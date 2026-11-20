@@ -21,6 +21,7 @@ pub mod phase8;
 mod preflight;
 mod prereqs;
 mod resume;
+mod rollback;
 pub mod swap;
 pub mod text;
 pub mod update;
@@ -50,5 +51,6 @@ pub use phase8::{
     RagHealth, MANAGED_RAG, OPENCODE_BAK, OPENCODE_JSON, RAG_STATUS_PROBE, STALE_MARKITDOWN,
 };
 pub use preflight::payload_endpoint;
+pub use rollback::{rollback_install, InstallSnapshot};
 pub use swap::{run_swap, SwapDeps, SwapOptions, SwapReport};
 pub use update::{run_update, UpdateReport, UPDATE_SCOPES};

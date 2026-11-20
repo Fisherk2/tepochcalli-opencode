@@ -11,7 +11,7 @@ use tepochcalli::adapters::{
 use tepochcalli::application::{
     check_prereqs_on, compensate_phase6, ensure_vault_dir, guard_offline_before_touch,
     is_phase_done, litellm_config_present, mark_phase_done, payload_endpoint, payload_local_ready,
-    resolve_vault_dir, run_phase6, Phase6Deps, Phase6Report,
+    resolve_vault_dir, rollback_install, run_phase6, InstallSnapshot, Phase6Deps, Phase6Report,
 };
 use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
 use tepochcalli::ports::{HttpClient, Ui};
@@ -190,6 +190,8 @@ pub(crate) fn run_install(
             }
         }
     }
+    // R-offline-3 (T15): huella read-only del vault ANTES del primer write.
+    let snapshot = InstallSnapshot::capture(Path::new(&raw));
     let vault_path = match ensure_vault_dir(Path::new(&raw)) {
         Ok(path) => path,
         Err(err) => {
@@ -204,7 +206,7 @@ pub(crate) fn run_install(
     };
     mark_phase_done(vault_path.as_path(), Phase::F1);
     mark_phase_done(vault_path.as_path(), Phase::F2);
-    run_phases(
+    let code = run_phases(
         &vault_path,
         payload_dir,
         url_override,
@@ -215,7 +217,16 @@ pub(crate) fn run_install(
         &*ui,
         stdout,
         stderr,
-    )
+    );
+    // Punto único de rollback: cualquier salida no-cero deshace lo aplicado.
+    if code != 0 {
+        rollback_install(vault_path.as_path(), &snapshot);
+        let _ = writeln!(
+            stderr,
+            "install: rollback aplicado — el vault quedó como estaba"
+        );
+    }
+    code
 }
 
 /// Shared `--payload*` usage validation (`install` + `update`, exit 2, no

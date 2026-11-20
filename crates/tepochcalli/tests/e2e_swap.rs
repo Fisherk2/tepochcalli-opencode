@@ -202,6 +202,49 @@ fn swap_interrupted_download_rolls_back_to_zero_state() {
     assert_zero_state(vault.path(), &before);
 }
 
+/// R-offline-2/3 (T14/T15): cancelar el gate (descarga abortada por el
+/// usuario) no deja un snapshot de modelo nuevo — ni config conmutada.
+#[test]
+fn swap_cancelado_en_el_gate_no_deja_modelo_parcial() {
+    // Solo el modelo viejo cacheado: cualquier dir del nuevo sería un parcial.
+    let vault = installed_vault_with(OLD_MODEL, &[]);
+    let before = snapshot(vault.path());
+    let models = vault.path().join(".tepochcalli").join("models");
+    let listing = || {
+        let mut names: Vec<String> = std::fs::read_dir(&models)
+            .expect("models legible")
+            .map(|entry| {
+                entry
+                    .expect("entrada legible")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        names
+    };
+    let names_before = listing();
+
+    // Fila 1 (bge-m3, local) y el gate devuelve `UserAborted`: la descarga
+    // se corta antes de materializar el snapshot.
+    let (result, _ui, _proc) = run_swap_case(
+        vault.path(),
+        vec![1, 0],
+        vec![],
+        vec![Err(WizardError::UserAborted)],
+        empty_http(),
+        &confirmed(),
+    );
+    assert_eq!(
+        result.expect_err("la cancelación del gate debe abortar el swap"),
+        WizardError::UserAborted
+    );
+
+    assert_zero_state(vault.path(), &before);
+    assert_eq!(listing(), names_before, "no queda ningún modelo parcial");
+}
+
 #[test]
 fn swap_failed_refresh_rolls_back_to_zero_state() {
     let vault = installed_vault();
