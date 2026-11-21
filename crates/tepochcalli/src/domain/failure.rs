@@ -80,13 +80,44 @@ pub fn failure_body(
     redact(&body, secrets)
 }
 
+/// Panel de un fallo de USO en `install --non-interactive` sin `--vault`:
+/// nadie canceló nada, así que la causa no es el Display de `UserAborted`
+/// («cancelled by user» sería mentira), no hay línea `estado:` y la acción
+/// correctiva es pasar el flag que falta — nunca `--resume`.
+///
+/// La causa es solo `context` (sin `": {err}"`): el caller ya lleva el err
+/// tipado para el código de salida.
+#[must_use]
+pub fn failure_body_usage(
+    context: &str,
+    phase: Option<Phase>,
+    log_path: &Path,
+    secrets: &[&str],
+) -> String {
+    let mut body = String::new();
+    if let Some(phase) = phase {
+        body.push_str("phase: ");
+        body.push_str(phase.name());
+        body.push('\n');
+    }
+    body.push_str("cause: ");
+    body.push_str(context);
+    body.push('\n');
+    body.push_str("falta: --vault <directorio>\n");
+    body.push_str("uso: tepochcalli install --vault <directorio> --non-interactive\n");
+    body.push_str("log: ");
+    body.push_str(&log_path.to_string_lossy());
+    body.push('\n');
+    redact(&body, secrets)
+}
+
 #[cfg(test)]
 mod tests {
     //! Tier 1: `redact` is a security boundary (no path-4 key may reach a panel,
     //! log or artifact) and the panel text is the graded contract, so both are
     //! pinned here rather than through the CLI.
 
-    use super::{failure_body, failure_title, redact, RETRY_COMMAND};
+    use super::{failure_body, failure_body_usage, failure_title, redact, RETRY_COMMAND};
     use crate::domain::{Phase, WizardError};
     use std::path::Path;
 
@@ -190,6 +221,11 @@ mod tests {
     /// la única combinación que ningún test cubría (los existentes llevan
     /// `Some(F6)` o `Some(F7)`).
     ///
+    /// El contexto es de una cancelación GENUINA (F6): el `vault selection
+    /// failed` headless ya no pasa por `failure_body` (es un fallo de uso —
+    /// `failure_body_usage`, #10b), y fijarlo aquí acoplaba el shape de
+    /// cancelación a un caso que ya no lo es.
+    ///
     /// Regresión que detecta: si el bloque `if let Some(phase)` emitiera la
     /// línea `phase:` igualmente (o la rama `UserAborted` exigiera una fase
     /// conocida para mostrar el `estado:`/ocultar el `retry:`), el test sale
@@ -197,7 +233,7 @@ mod tests {
     #[test]
     fn body_without_phase_and_user_aborted_states_the_cancel_without_retry() {
         let body = failure_body(
-            "install: vault selection failed",
+            "install: phase F6 failed",
             None,
             WizardError::UserAborted,
             Path::new("/tmp/state/install-0.log"),
@@ -278,5 +314,52 @@ mod tests {
         );
         assert!(body.contains("[redacted]"), "{body}");
         assert!(body.contains("code: E_API_AUTH"), "{body}");
+    }
+
+    /// #10b — panel de USO: `install --non-interactive` sin `--vault` es un
+    /// fallo de uso, NO una cancelación. Fija el shape completo con y sin
+    /// fase: `falta:` + `uso:` como acción correctiva, nunca `estado:`
+    /// cancelado, nunca el Display `cancelled by user` de `UserAborted`
+    /// (nadie canceló) y nunca `retry:` (--resume no arregla un flag ausente).
+    #[test]
+    fn body_usage_names_the_missing_flag_and_never_claims_a_cancel() {
+        let log = Path::new("/tmp/state/install-9.log");
+        for (phase, has_phase) in [(None, false), (Some(Phase::F2), true)] {
+            let body = failure_body_usage("install: vault selection failed", phase, log, &[]);
+            assert_eq!(
+                body.contains("phase:"),
+                has_phase,
+                "la línea phase: solo con fase conocida: {body}"
+            );
+            assert!(
+                body.contains("cause: install: vault selection failed"),
+                "cause sin el Display del err (el caller ya lo lleva para el exit code): {body}"
+            );
+            assert!(body.contains("falta: --vault <directorio>"), "{body}");
+            assert!(
+                body.contains("uso: tepochcalli install --vault <directorio> --non-interactive"),
+                "{body}"
+            );
+            assert!(!body.contains("estado: cancelado"), "{body}");
+            assert!(!body.contains("cancelled by user"), "{body}");
+            assert!(!body.contains(RETRY_COMMAND), "{body}");
+            assert!(!body.contains("retry:"), "{body}");
+            assert!(body.contains("log: /tmp/state/install-9.log"), "{body}");
+        }
+    }
+
+    /// El contexto de USO también se redacta: la clave path-4 puede viajar
+    /// en cualquier string del panel, esté o no en un fallo de uso.
+    #[test]
+    fn body_usage_redacts_the_context() {
+        let context = format!("install: vault selection failed {SECRET}");
+        let body = failure_body_usage(
+            &context,
+            None,
+            Path::new("/tmp/state/install-9.log"),
+            &[SECRET],
+        );
+        assert!(!body.contains(SECRET), "secret leaked: {body}");
+        assert!(body.contains("[redacted]"), "{body}");
     }
 }

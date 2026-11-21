@@ -148,7 +148,22 @@ pub fn is_cancel_key(code: KeyCode, modifiers: KeyModifiers) -> bool {
 /// user cancelled. Any terminal failure degrades to plain `work()`: a broken
 /// screen must never break the operation.
 pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
-    let mut terminal = ratatui::init();
+    // `try_init` (no `init`): el doc de esta función promete degradar ante
+    // CUALQUIER fallo de terminal, y `init` paniquea (`expect`). `try_init`
+    // instala el mismo panic hook antes de intentar (ratatui 0.30.2, init.rs).
+    let mut terminal = match ratatui::try_init() {
+        Ok(terminal) => terminal,
+        Err(_) => {
+            // El contrato de este doc: cualquier fallo de terminal degrada a
+            // `work()` — nunca rompe la operación. `restore()` es idempotente
+            // y cubre el caso de init a mitad (raw mode aplicado, alt screen no).
+            ratatui::restore();
+            work();
+            return;
+        }
+    };
+    // `_restore` solo tras un init exitoso: el brazo `Err` de arriba ya
+    // restauró a mano y duplicarlo ahí sería inofensivo pero sucio.
     let _restore = RestoreOnDrop;
     if terminal
         .draw(|frame| render_progress(frame, title))
@@ -197,7 +212,7 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
 
 /// Restores raw mode and the alternate screen on every exit path — including
 /// a `?` return from the event loop (panics are covered by the hook that
-/// `ratatui::init` installs).
+/// `ratatui::init`/`try_init` installs).
 struct RestoreOnDrop;
 
 impl Drop for RestoreOnDrop {

@@ -19,7 +19,7 @@ use tepochcalli::EMBEDDER_PATHS;
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install_phases::run_phases;
-use super::report::report_failure;
+use super::report::{report_failure, report_usage_failure};
 use super::usage::VERSION;
 
 const INSTALL_SPEC: FlagSpec = FlagSpec {
@@ -132,6 +132,18 @@ pub(crate) fn run_install(
     // F2: vault directory (`--vault` wins; otherwise the Ui asks).
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
+        // #10b: headless sin `--vault` nadie canceló — es un fallo de uso
+        // (el correctivo es el flag). El brazo de abajo (Esc interactivo) sí
+        // es una cancelación genuina y conserva su `estado:` / `failure_body`.
+        Err(err) if non_interactive => {
+            return report_usage_failure(
+                &*ui,
+                Some(Phase::F2),
+                "install: vault selection failed",
+                err,
+                None,
+            );
+        }
         Err(err) => {
             return report_failure(
                 &*ui,

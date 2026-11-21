@@ -7,7 +7,7 @@ use std::path::Path;
 use tepochcalli::application::failure::{
     log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
 };
-use tepochcalli::domain::failure::{failure_body, failure_title, redact};
+use tepochcalli::domain::failure::{failure_body, failure_body_usage, failure_title, redact};
 use tepochcalli::domain::{Phase, WizardError};
 use tepochcalli::ports::Ui;
 
@@ -67,5 +67,26 @@ pub(crate) fn report_failure(
     let log_path = log_path_in(&state_dir(), now_secs());
     let title = failure_title(phase);
     let body = failure_body(context, phase, err, &log_path, &masked);
+    report(ui, &title, body, &owned, &log_path, err.exit_code())
+}
+
+/// Usage-failure exit (#10b): mismo esqueleto compartido que
+/// [`report_failure`] (log redactado bajo el state dir + panel vía el puerto
+/// `Ui`), pero con [`failure_body_usage`] — `install --non-interactive` sin
+/// `--vault` es un fallo de USO, no una cancelación: sin línea `estado:`,
+/// sin el Display de `UserAborted` y con el flag ausente como correctivo
+/// (nunca `--resume`). El código de salida tipado del err se conserva.
+pub(crate) fn report_usage_failure(
+    ui: &dyn Ui,
+    phase: Option<Phase>,
+    context: &str,
+    err: WizardError,
+    vault: Option<&Path>,
+) -> u8 {
+    let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
+    let masked: Vec<&str> = owned.iter().map(String::as_str).collect();
+    let log_path = log_path_in(&state_dir(), now_secs());
+    let title = failure_title(phase);
+    let body = failure_body_usage(context, phase, &log_path, &masked);
     report(ui, &title, body, &owned, &log_path, err.exit_code())
 }

@@ -250,13 +250,26 @@ fn failing_install_panel_is_stderr_only_with_log_outside_vault() {
         stderr.contains("F2"),
         "panel must name the phase:\n{stderr}"
     );
+    // Contrato de USO (no de cancelación): nadie canceló — falta el flag.
     assert!(
-        stderr.contains("estado: cancelado por el usuario"),
-        "a cancelled install states that nothing was touched:\n{stderr}"
+        !stderr.contains("estado: cancelado"),
+        "un fallo de uso no puede afirmar que el usuario canceló:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("falta: --vault <directorio>"),
+        "el panel debe nombrar el flag que falta:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("uso: tepochcalli install --vault <directorio> --non-interactive"),
+        "el correctivo es pasar el flag, no reintentar a ciegas:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("cancelled by user"),
+        "la causa no debe imprimir el Display de UserAborted (es mentira):\n{stderr}"
     );
     assert!(
         !stderr.contains(RETRY),
-        "a cancelled install offers no retry command:\n{stderr}"
+        "a usage error offers no retry command:\n{stderr}"
     );
     assert!(
         stderr.contains("install-") && stderr.contains(".log"),
