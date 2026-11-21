@@ -215,6 +215,15 @@ fn install_offline_fails_at_f4_and_rolls_back_the_vault() {
         stderr.contains("install: phase F4 failed") && stderr.contains("download failed"),
         "the failure must name F4 and the network cause, got:\n{stderr}"
     );
+    // R-offline-1 (T13) — hueco #11(b): con `--payload` local el preflight
+    // NO puede sondear (`payload_endpoint` ⇒ `None`). Si devolviera la
+    // release URL, el hijo moriría en F2 con contexto `preflight` antes de
+    // F4: `phase F4` presente y `preflight` ausente lo discriminan (el
+    // exit 20 solo no basta — F4 muere con el mismo código).
+    assert!(
+        stderr.contains("phase F4") && !stderr.contains("preflight"),
+        "local payload ⇒ sin sonda; el fallo es de F4 y nunca del preflight, got:\n{stderr}"
+    );
     for wrong in ["disk", "espacio"] {
         assert!(
             !stderr.to_lowercase().contains(wrong),
