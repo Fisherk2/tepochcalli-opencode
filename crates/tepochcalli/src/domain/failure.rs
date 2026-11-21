@@ -186,6 +186,64 @@ mod tests {
         assert!(body.contains("log: /tmp/state/install-4.log"), "{body}");
     }
 
+    /// Hueco #10a(a) — panel con fase AUSENTE (`phase: None`) y cancelación:
+    /// la única combinación que ningún test cubría (los existentes llevan
+    /// `Some(F6)` o `Some(F7)`).
+    ///
+    /// Regresión que detecta: si el bloque `if let Some(phase)` emitiera la
+    /// línea `phase:` igualmente (o la rama `UserAborted` exigiera una fase
+    /// conocida para mostrar el `estado:`/ocultar el `retry:`), el test sale
+    /// en rojo. `log:` debe seguir: el panel siempre nombra su fichero.
+    #[test]
+    fn body_without_phase_and_user_aborted_states_the_cancel_without_retry() {
+        let body = failure_body(
+            "install: vault selection failed",
+            None,
+            WizardError::UserAborted,
+            Path::new("/tmp/state/install-0.log"),
+            &[],
+        );
+        assert!(
+            !body.contains("phase:"),
+            "sin fase conocida no hay línea phase: {body}"
+        );
+        assert!(
+            body.contains("estado: cancelado por el usuario — el workspace quedó como estaba"),
+            "{body}"
+        );
+        assert!(!body.contains("retry:"), "{body}");
+        assert!(body.contains("log: /tmp/state/install-0.log"), "{body}");
+    }
+
+    /// Hueco #10a(b) — panel con fase AUSENTE y un fallo REAL: el contrato
+    /// de reintento no depende de conocer la fase.
+    ///
+    /// Regresión que detecta: si el `retry:` se condicionara a
+    /// `phase.is_some()` (o desapareciera al omitir la línea `phase:`), el
+    /// test sale en rojo. `NetDownload` no lleva `E_*`, así que solo caben
+    /// `cause:` + `retry:` + `log:`.
+    #[test]
+    fn body_without_phase_keeps_the_retry_command_for_a_real_failure() {
+        let body = failure_body(
+            "install: phase F4 failed",
+            None,
+            WizardError::NetDownload,
+            Path::new("/tmp/state/install-0.log"),
+            &[],
+        );
+        assert!(
+            !body.contains("phase:"),
+            "sin fase conocida no hay línea phase: {body}"
+        );
+        let expected_retry = format!("retry: {RETRY_COMMAND}");
+        assert!(
+            body.contains(expected_retry.as_str()),
+            "un fallo real reintenta aunque no se sepa la fase: {body}"
+        );
+        assert!(!body.contains("estado: cancelado"), "{body}");
+        assert!(body.contains("log: /tmp/state/install-0.log"), "{body}");
+    }
+
     #[test]
     fn body_with_phase_names_it_and_skips_the_code_line_without_e_star() {
         let body = failure_body(

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 
 use tepochcalli::adapters::LocalPayload;
 use tepochcalli::application::{ensure_vault_dir, rollback_install, run_phase3, InstallSnapshot};
+use tepochcalli::{OPENCODE_BAK, OPENCODE_JSON};
 
 /// Ruta relativa → bytes, recursivo. Los directorios vacíos no aparecen en el
 /// mapa: la igualdad es de FICHEROS, no de estructura vacía.
@@ -197,5 +198,91 @@ fn resume_no_revierte_lo_que_ya_estaba() {
         std::fs::read(vault.join(".tepochcalli/.install-state")).expect("marker"),
         b"F1\nF2\nF3\nF4\nF5\n",
         "el marker vuelve a las fases que ya estaban"
+    );
+}
+
+/// Hueco #7(a) — `rollback_install` con `executed` VACÍO: el snapshot y el
+/// estado actual coinciden ⇒ no se compensa nada, no hay pánico y no se
+/// crea ningún temporal.
+///
+/// Regresión que detecta: si `executed` se calculara mal (p. ej. metiendo
+/// fases que YA estaban en `snapshot.completed`, o compensando por
+/// defecto), el rollback tocaría F4/F5 sobre un vault que nunca cambió —
+/// `compensate_phase4`/`compensate_phase5` se llevarían `bin/uv` o
+/// `venv/`— y `tree()` dejaría de ser byte-idéntico. Un temporal huérfano
+/// también aparecería en el mapa.
+#[test]
+fn rollback_sin_fases_ejecutadas_es_un_no_op_byte_identico() {
+    let (_dir, vault) = prior_vault("F1\nF2\n");
+    let before = tree(&vault);
+    let snapshot = InstallSnapshot::capture(&vault);
+
+    rollback_install(&vault, &snapshot);
+
+    assert_eq!(
+        tree(&vault),
+        before,
+        "sin fases nuevas el árbol vuelve byte a byte, sin temporales"
+    );
+    assert!(
+        vault.join(".tepochcalli/bin/uv").is_file(),
+        "lo ya instalado (F4) no se compensa en una corrida que no lo tocó"
+    );
+    assert!(
+        vault.join(".tepochcalli/venv/bin/python").is_file(),
+        "lo ya instalado (F5) no se compensa en una corrida que no lo tocó"
+    );
+}
+
+/// Hueco #7(b) — PRIMER brazo del orden inverso: F8 en `executed` (jamás
+/// ejercitado antes). Runtime preexistente para no disparar el
+/// `remove_dir_all` del runtime; el snapshot se captura SIN F8 completado y
+/// después F8 «corre»: `opencode.json` con la key gestionada
+/// (`completed_phases` lo detecta por su artefacto, no por marker) más su
+/// `.bak` con los bytes previos.
+///
+/// Regresión que detecta: si `rollback_install` no llamara a
+/// `compensate_phase8` (rollback.rs:77), `opencode.json` seguiría con el
+/// merge y sobreviviría `opencode.json.bak` ⇒ `tree()` deja de ser
+/// byte-idéntico. También distingue los dos brazos del contrato de
+/// `compensate_phase8`: con `.bak` RESTAURA los bytes previos y retira el
+/// backup (sin `.bak` borraría el fichero que F8 creó — caso que este test
+/// no ejercita a propósito, para no mezclar ramas).
+#[test]
+fn rollback_compens_f8_y_restaura_opencode_json_desde_su_backup() {
+    let (_dir, vault) = prior_vault("F1\nF2\n");
+    // El fichero del USUARIO, SIN la key gestionada: F8 no está completado
+    // en el momento del snapshot.
+    let original: &[u8] = b"{\"mcp\":{\"servers\":{\"otro-server\":{}}}}\n";
+    write(&vault.join(OPENCODE_JSON), original);
+    let snapshot = InstallSnapshot::capture(&vault);
+    let before = tree(&vault);
+
+    // F8 «corrió»: backup de los bytes previos + merge con la key.
+    write(&vault.join(OPENCODE_BAK), original);
+    write(
+        &vault.join(OPENCODE_JSON),
+        b"{\"mcp\":{\"servers\":{\"otro-server\":{},\"tepochcalli-rag\":{\"type\":\"local\"}}}}\n",
+    );
+    assert!(
+        tepochcalli::completed_phases(&vault).contains(&tepochcalli::Phase::F8),
+        "el fixture debe dejar F8 completado por su artefacto"
+    );
+
+    rollback_install(&vault, &snapshot);
+
+    assert_eq!(
+        std::fs::read(vault.join(OPENCODE_JSON)).expect("opencode.json"),
+        original,
+        "compensate_phase8 restaura los bytes previos desde el .bak"
+    );
+    assert!(
+        !vault.join(OPENCODE_BAK).exists(),
+        "el backup de F8 se retira al restaurar"
+    );
+    assert_eq!(
+        tree(&vault),
+        before,
+        "el resto del árbol queda byte-idéntico"
     );
 }

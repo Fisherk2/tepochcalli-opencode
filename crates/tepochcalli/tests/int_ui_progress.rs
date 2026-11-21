@@ -1,9 +1,11 @@
 //! R-offline-2 progress screen (T16): the pure `render_progress` drawn into a
 //! `TestBackend` (Cancelar enabled, the five menu rows blocked with a visible
-//! reason, the no-destruction notice), the key classifier, and the inline
-//! default the headless UI inherits (no screen, no token fired).
+//! reason, the no-destruction notice), the key classifier, the inline default
+//! the headless UI inherits (no screen, no token fired) and the same inline
+//! fallback behind `TtyUi`'s no-TTY guard.
 
 use std::cell::Cell;
+use std::io::IsTerminal;
 
 use crossterm::event::{KeyCode, KeyModifiers};
 use ratatui::backend::TestBackend;
@@ -12,7 +14,7 @@ use ratatui::style::Modifier;
 use ratatui::Terminal;
 
 use tepochcalli::adapters::ui_ratatui::{is_cancel_key, render_progress};
-use tepochcalli::adapters::HeadlessUi;
+use tepochcalli::adapters::{HeadlessUi, TtyUi};
 use tepochcalli::domain::CancelToken;
 use tepochcalli::ports::Ui;
 
@@ -117,5 +119,38 @@ fn headless_ui_runs_work_inline_without_touching_the_token() {
     assert!(
         !cancel.is_cancelled(),
         "nobody can answer without a TTY: the token stays alive"
+    );
+}
+
+/// Hueco #8 — guarda no-TTY de `TtyUi`: sin terminal, `run_cancellable`
+/// ejecuta `work` en línea y el token NO se dispara (no hay a quién
+/// preguntar, igual que en el default del puerto que hereda `HeadlessUi`).
+///
+/// Regresión que detecta: si `TtyUi::run_cancellable` perdiera (o
+/// invertiera) la guarda `stdout().is_terminal() && stdin().is_terminal()`,
+/// correría `run_progress` → `ratatui::init()` sobre un proceso sin
+/// terminal: `try_init` falla en `enable_raw_mode` y `init()` pánica
+/// (medido en este entorno, sin `/dev/tty`), o en un host con TTY
+/// secuestraría la pantalla — el test sale en rojo en cualquiera de los dos
+/// casos.
+///
+/// Deuda TTY declarada: si AMBOS descriptores son terminales este test se
+/// omite al principio (una pantalla real no es suyo que secuestrar); en CI y
+/// en cualquier corrida por pipe —que es donde gatea— corre siempre.
+#[test]
+fn tty_ui_sin_terminal_ejecuta_work_en_linea_sin_tocar_el_token() {
+    if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
+        // Este test solo ejercita la rama SIN TTY: con un TTY real
+        // `run_progress` tomaría la pantalla y el atajo no aplicaría.
+        return;
+    }
+    let ui = TtyUi;
+    let cancel = CancelToken::new();
+    let ran = Cell::new(false);
+    ui.run_cancellable("Descargando", &cancel, &mut || ran.set(true));
+    assert!(ran.get(), "sin TTY `work` corre en línea, sin pantalla");
+    assert!(
+        !cancel.is_cancelled(),
+        "sin TTY no hay quien cancele: el token sigue vivo"
     );
 }
