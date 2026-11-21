@@ -447,3 +447,16 @@ Límites declarados al cerrar la Phase 6.6 (resiliencia offline y rollback cance
 | Directorios vacíos en un vault preexistente tras el rollback | El `remove_dir_all` final solo aplica al vault creado por la corrida |
 
 El dueño asigna los IDs; no se inventan aquí.
+
+### Deuda de la ronda de tests de Phase 6.6 (2026-11-20, sin ID asignado)
+
+| Deuda | Por qué no se cierra aquí |
+| --- | --- |
+| **`e2e_swap.rs` > 1000 líneas (1068)** | El umbral CODE_STYLE `>1000` exige bajar a <500; lo cruzó T15 (999→1042 en `8874bf8`) sin declararlo y la ronda de tests lo llevó a 1068. Refactor en el próximo toque (mover scenarios a fichero nuevo; el único spawn `run_embedder_cli` debe quedarse en un `e2e_*` por `int_architecture`) |
+| **Wording «sin red» del preflight H7/H6** | El panel dice «sin red (preflight)» para cualquier `NetDownload`, incluido un `--payload-url` muerto con internet vivo; wording inexacto, no cubierto por test |
+| **`mirror_pending` sin preflight tras el consentimiento** | H6 espera al consentimiento TUI del mirror http, pero tras él no hay sonda; exige TTY interactivo para probarlo (hueco #13 de la auditoría) |
+| **Carrera hijo-ya-muerto en `run_inner`** | El caso «hijo sale con código ≠0 mientras el token se dispara» no es determinista; se cubrió la variante «hijo vivo en el primer tick» y la carrera queda declarada |
+| **`swap.rs:172` (`split_once('\0')`) sin ejercitador** | La rama local con clave embebida es inalcanzable desde la API pública (mutación verificada: sin el split el test sigue verde); código defensivo sin test que lo ponga en rojo |
+| **Test #9 Linux-only** | `e2e_progress_no_tty.rs` depende de `setsid` (util-linux); Windows/macOS lo omiten (`cfg`), deuda de TTY ya existente (TD-52) |
+
+El dueño asigna los IDs; no se inventan aquí.
