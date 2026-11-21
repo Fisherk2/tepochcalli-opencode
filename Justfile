@@ -329,6 +329,18 @@ rust-lint target_dir=cargo_target:
 rust-test target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo test --locked
 
+# Suite completa SIN fail-fast: recorre todos los targets y lista todos los
+# rojos en una sola corrida (auditorías: ¿la suite depende de red real?).
+rust-test-nofail target_dir=cargo_target:
+    cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo test --locked --no-fail-fast
+
+# Suite completa SIN red real (gate «sin red» de Phase 6.6; Linux): namespace
+# de red con solo loopback + sin CAP_DAC_OVERRIDE para que los fixtures
+# `chmod 000` se comporten como un usuario normal. Requiere `unshare`/`setpriv`
+# (util-linux). Windows/macOS: deuda declarada, no medido.
+rust-test-nonet:
+    unshare -rn sh -c 'ip link set lo up && exec setpriv --bounding-set -dac_override,-dac_read_search,-fowner just rust-test-nofail'
+
 # Tests Rust filtrados por subcadena del nombre (iteración sin re-ejecutar
 # toda la suite): `just rust-test-filter f8_real_venv`. El directorio, si quieres
 # pasarlo, va DESPUÉS del nombre: `just rust-test-filter f8_real_venv /ruta/dir`.
