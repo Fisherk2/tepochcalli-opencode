@@ -92,9 +92,10 @@ const fn off(reason: &'static str) -> Button {
 }
 
 /// Derives the state from the two versions. `None` (no
-/// `.tepochcalli/pyproject.toml`) is the only "not installed" case; a vault
-/// that has the file but an unparsable version is treated as `UpToDate` —
-/// conservative, so the menu never offers Install over an existing runtime.
+/// `.tepochcalli/pyproject.toml`) is the only "not installed" case. An
+/// unparsable INSTALLED version is `Outdated` — Update is the action that can
+/// repair it; an unparsable WIZARD version is `UpToDate` — conservative, so
+/// the menu never offers Install over an existing runtime.
 #[must_use]
 pub fn installed_state(installed: Option<&str>, wizard: &str) -> InstalledState {
     use std::cmp::Ordering;
@@ -104,7 +105,9 @@ pub fn installed_state(installed: Option<&str>, wizard: &str) -> InstalledState 
     match version::compare(installed, wizard) {
         Some(Ordering::Less) => InstalledState::Outdated,
         Some(Ordering::Greater) => InstalledState::Ahead,
-        _ => InstalledState::UpToDate,
+        Some(Ordering::Equal) => InstalledState::UpToDate,
+        None if version::Version::parse(installed).is_none() => InstalledState::Outdated,
+        None => InstalledState::UpToDate,
     }
 }
 

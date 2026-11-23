@@ -81,7 +81,7 @@ pub(super) fn choose_device(
     if facts.gpu.is_none() {
         ui.panel(
             "Dispositivo de inferencia",
-            "GPU no detectada: la opción cuda está deshabilitada para este equipo.",
+            "GPU no detectada: cuda no se ofrece en este equipo (puedes forzarla en el TOML).",
         );
     }
     let index = ui.select("Dispositivo de inferencia", &options, default_index)?;

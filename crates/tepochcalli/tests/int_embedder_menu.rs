@@ -576,7 +576,7 @@ fn device_without_gpu_offers_only_cpu_and_shows_the_reason() {
     assert!(
         ui.captured().iter().any(|line| line
             == "PANEL Dispositivo de inferencia :: \
-                GPU no detectada: la opción cuda está deshabilitada para este equipo."),
+                GPU no detectada: cuda no se ofrece en este equipo (puedes forzarla en el TOML)."),
         "la razón debe ser visible antes de elegir: {:?}",
         ui.captured()
     );

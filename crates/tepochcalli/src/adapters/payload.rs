@@ -468,18 +468,12 @@ fn backup_path(target: &Path) -> PathBuf {
 /// `true` when both files hold the same bytes (idempotent update: an
 /// unchanged file is neither rewritten nor backed up).
 fn same_bytes(left: &Path, right: &Path) -> bool {
-    // Lengths differ ⇒ contents differ: never read the bytes of two multi-GB
-    // trees just to see they are not equal.
-    let (Ok(left_meta), Ok(right_meta)) = (fs::metadata(left), fs::metadata(right)) else {
-        return false;
-    };
-    if left_meta.len() != right_meta.len() {
+    // Lengths differ ⇒ contents differ: never read multi-GB files to see it.
+    let len = |path: &Path| fs::metadata(path).map(|meta| meta.len()).ok();
+    if len(left) != len(right) || len(left).is_none() {
         return false;
     }
-    match (fs::read(left), fs::read(right)) {
-        (Ok(left), Ok(right)) => left == right,
-        _ => false,
-    }
+    fs::read(left).is_ok_and(|a| fs::read(right).is_ok_and(|b| a == b))
 }
 
 /// Copy `src` over `root/rel`, saving the previous bytes as `<ruta>.bak`

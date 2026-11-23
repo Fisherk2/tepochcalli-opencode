@@ -232,8 +232,10 @@ fn installed_state_derives_from_the_two_versions() {
     assert_eq!(installed_state(Some("0.1.0"), "0.1.0"), UpToDate);
     assert_eq!(installed_state(Some("0.1.0-beta.1"), "0.1.0"), Outdated);
     assert_eq!(installed_state(Some("0.2.0"), "0.1.0"), Ahead);
-    // Fichero ilegible: conservador, nunca Install sobre un runtime existente.
-    assert_eq!(installed_state(Some("garbage"), "0.1.0"), UpToDate);
+    // Versión instalada ilegible: Update sigue ofreciéndose para repararla.
+    assert_eq!(installed_state(Some("garbage"), "0.1.0"), Outdated);
+    // Versión del wizard ilegible: conservador, nunca Install sobre un
+    // runtime existente.
     assert_eq!(installed_state(Some("0.1.0"), "garbage"), UpToDate);
 }
 
