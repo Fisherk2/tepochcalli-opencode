@@ -11,7 +11,7 @@ use std::io::ErrorKind;
 use std::path::{Component, Path, PathBuf};
 
 use crate::adapters::archive::extract_tar_gz;
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::{HttpClient, MergeReport, OverwriteJournal, PayloadSource};
 
 use super::http::UreqHttpClient;
@@ -169,8 +169,9 @@ impl PayloadSource for LocalPayload {
         dest: &Path,
         scopes: &[&str],
         journal: &mut OverwriteJournal,
+        cancel: Option<&CancelToken>,
     ) -> Result<(), WizardError> {
-        overwrite_tree(&self.src, dest, scopes, journal)
+        overwrite_tree(&self.src, dest, scopes, journal, cancel)
     }
 }
 
@@ -233,6 +234,7 @@ impl ReleasePayload {
         dest: &Path,
         scopes: &[&str],
         journal: &mut OverwriteJournal,
+        cancel: Option<&CancelToken>,
     ) -> Result<(), WizardError> {
         let asset = stage.join("asset.tar.gz");
         UreqHttpClient::new().download(&self.url, &asset, &self.expected_sha256)?;
@@ -240,7 +242,7 @@ impl ReleasePayload {
         let extract_outcome = extract_tar_gz(file, stage).map_err(|_| WizardError::PayloadCorrupt);
         let _ = fs::remove_file(&asset);
         extract_outcome?;
-        overwrite_tree(stage, dest, scopes, journal)?;
+        overwrite_tree(stage, dest, scopes, journal, cancel)?;
         // Best-effort: residue is harmless (T14 resume clears it).
         let _ = fs::remove_dir_all(stage);
         Ok(())
@@ -272,10 +274,11 @@ impl PayloadSource for ReleasePayload {
         dest: &Path,
         scopes: &[&str],
         journal: &mut OverwriteJournal,
+        cancel: Option<&CancelToken>,
     ) -> Result<(), WizardError> {
         let stage = dest.join(STAGE_DIR);
         reset_dir(&stage)?;
-        let outcome = self.stage_and_overwrite(&stage, dest, scopes, journal);
+        let outcome = self.stage_and_overwrite(&stage, dest, scopes, journal, cancel);
         if outcome.is_err() {
             let _ = fs::remove_dir_all(&stage);
             if let Some(parent) = stage.parent() {
@@ -502,12 +505,15 @@ fn overwrite_file(
 /// and nothing outside the scopes is even visited. Same defenses as
 /// [`merge_tree`] (join-checked against the canonical `dest`, symlinks never
 /// followed, `.obsidian/` never crossed). An error leaves `journal` with
-/// what was already done, for [`rollback_overwrite`].
+/// what was already done, for [`rollback_overwrite`]. A cancelled `cancel`
+/// aborts at the next entry with [`WizardError::UserAborted`] (journal intact,
+/// rollback restores the bytes already replaced).
 pub fn overwrite_tree(
     src: &Path,
     dest: &Path,
     scopes: &[&str],
     journal: &mut OverwriteJournal,
+    cancel: Option<&CancelToken>,
 ) -> Result<(), WizardError> {
     fs::create_dir_all(dest).map_err(map_io)?;
     let root = dest
@@ -517,6 +523,9 @@ pub fn overwrite_tree(
     while let Some(dir) = stack.pop() {
         let entries = fs::read_dir(&dir).map_err(|_| WizardError::PayloadCorrupt)?;
         for entry in entries {
+            if cancel.is_some_and(CancelToken::is_cancelled) {
+                return Err(WizardError::UserAborted);
+            }
             let entry = entry.map_err(|_| WizardError::PayloadCorrupt)?;
             let rel = entry
                 .path()

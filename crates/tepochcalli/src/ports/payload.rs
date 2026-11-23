@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 
 /// What a merge wrote vs. left untouched (pre-existing user files,
 /// `.obsidian/`, symlinks). Paths are absolute under the vault `dest`.
@@ -35,11 +35,14 @@ pub trait PayloadSource {
     /// Overwrite ONLY the entries whose first component is in `scopes`
     /// (H7 `update`): every replaced file is saved as `<ruta>.bak` first and
     /// journaled, identical content is a no-op. On error the journal keeps
-    /// what was done so the caller can roll back.
+    /// what was done so the caller can roll back. A cancelled `cancel`
+    /// stops the walk at the next entry with [`WizardError::UserAborted`],
+    /// journal intact.
     fn materialize_overwrite(
         &self,
         dest: &Path,
         scopes: &[&str],
         journal: &mut OverwriteJournal,
+        cancel: Option<&CancelToken>,
     ) -> Result<(), WizardError>;
 }

@@ -13,7 +13,8 @@ use std::collections::{HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
-use tepochcalli::domain::{MenuAction, MenuSpec};
+use tepochcalli::adapters::HeadlessUi;
+use tepochcalli::domain::{CancelToken, MenuAction, MenuSpec};
 use tepochcalli::ports::{
     CommandOutput, CommandRunner, GpuInfo, HostProbe, HttpClient, MenuView, MergeReport,
     PayloadSource, Ui,
@@ -208,8 +209,49 @@ impl PayloadSource for FakePayload {
         dest: &Path,
         scopes: &[&str],
         journal: &mut tepochcalli::ports::OverwriteJournal,
+        cancel: Option<&CancelToken>,
     ) -> Result<(), WizardError> {
-        tepochcalli::adapters::payload::overwrite_tree(&self.src, dest, scopes, journal)
+        tepochcalli::adapters::payload::overwrite_tree(&self.src, dest, scopes, journal, cancel)
+    }
+}
+
+/// `Ui` fake de cancelación (H7/H8): delega en [`HeadlessUi`] y, en
+/// `run_cancellable`, dispara el token ANTES del trabajo — el caso determinista
+/// «el usuario canceló al abrir la pantalla».
+#[derive(Default)]
+pub struct CancellingUi {
+    inner: HeadlessUi,
+}
+
+impl Ui for CancellingUi {
+    fn select(
+        &self,
+        prompt: &str,
+        options: &[&str],
+        default_index: usize,
+    ) -> Result<usize, WizardError> {
+        self.inner.select(prompt, options, default_index)
+    }
+
+    fn input(&self, prompt: &str, default: Option<&str>) -> Result<String, WizardError> {
+        self.inner.input(prompt, default)
+    }
+
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        self.inner.input_secret(prompt)
+    }
+
+    fn panel(&self, title: &str, body: &str) {
+        self.inner.panel(title, body);
+    }
+
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        self.inner.menu(view)
+    }
+
+    fn run_cancellable(&self, _title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
+        cancel.cancel();
+        work();
     }
 }
 

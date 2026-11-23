@@ -8,7 +8,7 @@
 use std::path::{Path, PathBuf};
 
 use tepochcalli::adapters::payload::{merge_tree, overwrite_tree, rollback_overwrite};
-use tepochcalli::domain::WizardError;
+use tepochcalli::domain::{CancelToken, WizardError};
 use tepochcalli::ports::OverwriteJournal;
 use tepochcalli::UPDATE_SCOPES;
 
@@ -42,7 +42,7 @@ fn identical_content_is_a_noop_without_bak() {
     write(vault.path(), "opencode.json", "{}\n");
 
     let mut j = journal();
-    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j).expect("overwrite");
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
 
     assert!(j.written.is_empty(), "nada cambió, nada se escribe: {j:?}");
     assert!(j.backed_up.is_empty(), "sin escritura no hay .bak: {j:?}");
@@ -65,7 +65,7 @@ fn changed_content_is_written_after_a_bak_of_the_original() {
     write(vault.path(), "AGENTS.md", "viejo\n");
 
     let mut j = journal();
-    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j).expect("overwrite");
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
 
     assert_eq!(read(vault.path(), "AGENTS.md"), "nuevo\n");
     assert_eq!(
@@ -97,7 +97,7 @@ fn rollback_restores_the_original_and_removes_created_files() {
     // `opencode.json` no existe en el vault: es un fichero creado.
 
     let mut j = journal();
-    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j).expect("overwrite");
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
     assert!(vault.path().join("AGENTS.md.bak").is_file());
 
     rollback_overwrite(vault.path(), &j);
@@ -136,7 +136,7 @@ fn paths_outside_the_scopes_are_ignored() {
     write(vault.path(), "00-resources/nota.md", "# mía\n");
 
     let mut j = journal();
-    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j).expect("overwrite");
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
 
     assert!(
         !vault.path().join("00-resources/payload.md").exists(),
@@ -170,7 +170,7 @@ fn midway_failure_leaves_the_journal_for_rollback() {
     write(vault.path(), ".opencode/agents.md/hijo.md", "x\n");
 
     let mut j = journal();
-    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j)
+    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None)
         .expect_err("el destino directorio no se puede pisar con un fichero");
     assert!(
         matches!(err, WizardError::DiskFull | WizardError::PermissionDenied),
@@ -203,7 +203,7 @@ fn symlinks_are_never_followed() {
     .expect("symlink fixture");
 
     let mut j = journal();
-    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j).expect("overwrite");
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
 
     assert!(
         !vault.path().join("AGENTS.md").exists(),
@@ -228,7 +228,7 @@ fn symlink_destination_file_is_rejected() {
     .expect("symlink de destino");
 
     let mut j = journal();
-    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j)
+    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None)
         .expect_err("un destino enlazado escribiría fuera del vault");
     assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
     assert_eq!(
@@ -251,7 +251,7 @@ fn symlink_destination_dir_is_rejected() {
         .expect("symlink de directorio");
 
     let mut j = journal();
-    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j)
+    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None)
         .expect_err("un directorio enlazado escribiría fuera del vault");
     assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
     assert!(
@@ -294,11 +294,36 @@ fn scope_entries_match_whole_components_only() {
     write(payload.path(), ".opencode/x.md", "dentro\n");
 
     let mut j = journal();
-    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j).expect("overwrite");
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
 
     assert!(!vault.path().join(".opencode-evil").exists());
     assert_eq!(read(vault.path(), ".opencode/x.md"), "dentro\n");
     assert_eq!(j.written, vec![vault.path().join(".opencode/x.md")]);
+}
+
+#[test]
+fn cancelled_before_the_walk_touches_nothing() {
+    // H7 cancelable: un token ya disparado aborta tipado en la primera
+    // entrada del walk — sin escritura, sin `.bak`, journal intacto.
+    let payload = tmp();
+    let vault = tmp();
+    write(payload.path(), "AGENTS.md", "nuevo\n");
+    write(vault.path(), "AGENTS.md", "viejo\n");
+    let cancel = CancelToken::new();
+    cancel.cancel();
+
+    let mut j = journal();
+    let err = overwrite_tree(
+        payload.path(),
+        vault.path(),
+        &UPDATE_SCOPES,
+        &mut j,
+        Some(&cancel),
+    )
+    .expect_err("un token cancelado debe abortar tipado");
+    assert!(matches!(err, WizardError::UserAborted), "got: {err:?}");
+    assert_eq!(read(vault.path(), "AGENTS.md"), "viejo\n");
+    assert!(j.written.is_empty() && j.backed_up.is_empty(), "got: {j:?}");
 }
 
 #[test]

@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use crate::adapters::payload::rollback_overwrite;
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::{OverwriteJournal, PayloadSource, Ui};
 
 /// The only vault paths `update` may overwrite (H7): the payload files plus
@@ -32,6 +32,8 @@ pub struct UpdateReport {
 
 /// H7: warn (5 paths + target dir) → overwrite with backup → panel. Any
 /// failure rolls the journal back, so the vault keeps its original bytes.
+/// R-offline-2: the overwrite runs under the cancel screen — Esc/Ctrl+C stops
+/// it at the next entry and the journal is rolled back like any other error.
 pub fn run_update(
     payload: &dyn PayloadSource,
     ui: &dyn Ui,
@@ -50,9 +52,19 @@ pub fn run_update(
     // Survivors: out-of-scope trees are never walked; runtime artifacts never
     // travel in the payload asset, so they are never written either.
     let mut journal = OverwriteJournal::default();
-    if let Err(err) = payload.materialize_overwrite(vault, &UPDATE_SCOPES, &mut journal) {
-        rollback_overwrite(vault, &journal);
-        return Err(err);
+    let cancel = CancelToken::new();
+    let mut outcome: Option<Result<(), WizardError>> = None;
+    ui.run_cancellable("Actualizando (H7)", &cancel, &mut || {
+        outcome =
+            Some(payload.materialize_overwrite(vault, &UPDATE_SCOPES, &mut journal, Some(&cancel)));
+    });
+    match outcome {
+        Some(Ok(())) => {}
+        Some(Err(err)) => {
+            rollback_overwrite(vault, &journal);
+            return Err(err);
+        }
+        None => return Err(WizardError::Internal),
     }
     let report = UpdateReport {
         written: journal.written.len(),
