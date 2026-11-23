@@ -241,6 +241,29 @@ fn midway_failure_restores_the_original_vault() {
     );
 }
 
+/// H7 es actualizar un workspace INSTALADO: sin runtime el update es un error
+/// de uso y no siembra nada (un `install` es lo que instala).
+#[test]
+fn update_into_a_non_installed_vault_is_a_usage_error() {
+    let vault = tmp();
+    let payload = payload_fixture();
+
+    let out = run_update(vault.path(), payload.path());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{stderr}");
+    assert!(
+        stderr.contains("install"),
+        "el error debe guiar al `install`, got:\n{stderr}"
+    );
+    let entries = std::fs::read_dir(vault.path())
+        .expect("vault readable")
+        .count();
+    assert_eq!(
+        entries, 0,
+        "el update no siembra nada, got {entries} entradas"
+    );
+}
+
 #[test]
 fn update_help_documents_its_flags() {
     let out = bin()

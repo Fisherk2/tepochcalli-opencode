@@ -82,6 +82,13 @@ fn update_sin_red_no_escribe_nada() {
     let dir = tempfile::tempdir().expect("tempdir");
     let vault = dir.path().join("vault");
     std::fs::create_dir_all(&vault).expect("vault vacío");
+    // H7 solo actualiza un workspace instalado: el runtime es el gate de uso.
+    std::fs::create_dir_all(vault.join(".tepochcalli")).expect("runtime");
+    std::fs::write(
+        vault.join(".tepochcalli/pyproject.toml"),
+        "version = \"0.0.9\"\n",
+    )
+    .expect("runtime fixture");
     let url = format!("{}/p.tar.gz", dead_base_url());
     let sha = "0".repeat(64);
 
@@ -118,10 +125,12 @@ fn update_sin_red_no_escribe_nada() {
     );
     let entries = std::fs::read_dir(&vault).expect("vault readable").count();
     assert_eq!(
-        entries, 0,
+        entries, 1,
         "sin red el update no escribe nada: ni .bak, ni .opencode/, ni opencode.json; \
          got {entries} entradas"
     );
+    assert!(!vault.join("AGENTS.md.bak").exists());
+    assert!(!vault.join(".gitignore").exists());
 }
 
 /// Hueco #2 — R-offline-1 (T13) en H6: el override `--payload-url` es la
@@ -188,6 +197,13 @@ fn update_con_payload_local_y_red_muerta_lo_aplica() {
     let payload = dir.path().join("payload");
     std::fs::create_dir_all(&vault).expect("vault");
     std::fs::create_dir_all(&payload).expect("payload");
+    // H7 solo actualiza un workspace instalado: el runtime es el gate de uso.
+    std::fs::create_dir_all(vault.join(".tepochcalli")).expect("runtime");
+    std::fs::write(
+        vault.join(".tepochcalli/pyproject.toml"),
+        "version = \"0.0.9\"\n",
+    )
+    .expect("runtime fixture");
     std::fs::write(vault.join("AGENTS.md"), "# AGENTS viejo\n").expect("vault fixture");
     std::fs::write(payload.join("AGENTS.md"), "# AGENTS nuevo\n").expect("payload fixture");
 
