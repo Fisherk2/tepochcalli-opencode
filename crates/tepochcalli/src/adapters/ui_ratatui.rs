@@ -7,14 +7,14 @@
 
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
@@ -104,13 +104,29 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
 /// R-offline-2: the download screen. Pure (no I/O) like `render_menu`: only
 /// the Cancel row is enabled; the five menu actions stay visible, dimmed and
 /// with the reason, so a blocked action is never hidden (H5 rule).
-pub fn render_progress(frame: &mut Frame, title: &str) {
-    let mut lines = vec![
-        Line::from(format!("Tepochcalli · {title}"))
-            .style(Style::new().add_modifier(Modifier::BOLD)),
-        Line::from("⏹ Cancelar   — Esc / Ctrl+C")
-            .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED)),
-    ];
+///
+/// The download reports no bytes, so the bar is INDETERMINATE: `tick` only
+/// moves a triangle and the screen says so. Never a fake percentage.
+pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
+    let [header_area, gauge_area, detail_area] = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(3),
+        Constraint::Min(3),
+    ])
+    .areas(frame.area());
+
+    let header = Paragraph::new(Line::from(format!("Tepochcalli · {title}")))
+        .style(Style::new().add_modifier(Modifier::BOLD));
+    frame.render_widget(header, header_area);
+
+    let gauge = Gauge::default()
+        .ratio(indeterminate_ratio(tick))
+        .label("trabajando…")
+        .style(Style::new().add_modifier(Modifier::BOLD));
+    frame.render_widget(gauge, gauge_area);
+
+    let mut lines = vec![Line::from("⏹ Cancelar — Esc / Ctrl+C")
+        .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED))];
     for action in [
         MenuAction::Install,
         MenuAction::Update,
@@ -128,13 +144,28 @@ pub fn render_progress(frame: &mut Frame, title: &str) {
         );
     }
     lines.push(
+        Line::from("Progreso indeterminado: la descarga no reporta bytes.")
+            .style(Style::new().add_modifier(Modifier::DIM)),
+    );
+    lines.push(
         Line::from("El workspace no se tocará: la cancelación deshace lo aplicado.")
             .style(Style::new().add_modifier(Modifier::DIM)),
     );
     frame.render_widget(
         Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }),
-        frame.area(),
+        detail_area,
     );
+}
+
+/// 0 → 1 → 0 over 40 ticks: the bar pulses without claiming progress it has
+/// no way to know. Tick 20 is the full-bar phase.
+fn indeterminate_ratio(tick: u64) -> f64 {
+    let phase = (tick % 40) as f64;
+    if phase < 20.0 {
+        phase / 20.0
+    } else {
+        (40.0 - phase) / 20.0
+    }
 }
 
 /// Esc or Ctrl+C cancel the download; any other key keeps waiting.
@@ -143,10 +174,11 @@ pub fn is_cancel_key(code: KeyCode, modifiers: KeyModifiers) -> bool {
         || (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
 }
 
-/// R-offline-2: draws the Cancel screen once, runs `work` while a watcher
-/// thread fires `cancel` on Esc/Ctrl+C, and redraws the undo notice when the
-/// user cancelled. Any terminal failure degrades to plain `work()`: a broken
-/// screen must never break the operation.
+/// R-offline-2: draws the Cancel screen, runs `work` while a watcher thread
+/// fires `cancel` on Esc/Ctrl+C and redraws the indeterminate bar every
+/// 100 ms, then leaves the final frame (cancel notice, or the full bar). Any
+/// terminal failure degrades to plain `work()`: a broken screen must never
+/// break the operation.
 pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
     // `try_init` (no `init`): el doc de esta función promete degradar ante
     // CUALQUIER fallo de terminal, y `init` paniquea (`expect`). `try_init`
@@ -166,17 +198,23 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
     // restauró a mano y duplicarlo ahí sería inofensivo pero sucio.
     let _restore = RestoreOnDrop;
     if terminal
-        .draw(|frame| render_progress(frame, title))
+        .draw(|frame| render_progress(frame, title, 0))
         .is_err()
     {
         work();
         return;
     }
+    // El receptor se comparte: el watcher anima y el hilo principal deja el
+    // frame final después del join (nunca dos dibujos a la vez).
+    let terminal = Arc::new(Mutex::new(terminal));
     let done = Arc::new(AtomicBool::new(false));
     let watcher = {
         let done = Arc::clone(&done);
         let cancel = cancel.clone();
+        let terminal = Arc::clone(&terminal);
+        let title = title.to_string();
         std::thread::spawn(move || {
+            let mut tick = 0u64;
             while !done.load(Ordering::SeqCst) {
                 match event::poll(Duration::from_millis(100)) {
                     Ok(true) => {
@@ -187,7 +225,14 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
                             }
                         }
                     }
-                    Ok(false) => {}
+                    Ok(false) => {
+                        tick += 1;
+                        // Lock envenenado: la pantalla es decorativa, se
+                        // ignora en vez de paniquear.
+                        if let Ok(mut terminal) = terminal.lock() {
+                            let _ = terminal.draw(|frame| render_progress(frame, &title, tick));
+                        }
+                    }
                     // Sin terminal legible no hay tecla que esperar: el
                     // watcher se retira y `work` sigue su curso.
                     Err(_) => return,
@@ -199,15 +244,20 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
     done.store(true, Ordering::SeqCst);
     // El poll es de 100 ms: la espera está acotada, no hay join eterno.
     let _ = watcher.join();
-    if cancel.is_cancelled() {
-        let _ = terminal.draw(|frame| {
-            frame.render_widget(
-                Paragraph::new(Line::from("Cancelado — deshaciendo los cambios aplicados…"))
-                    .style(Style::new().add_modifier(Modifier::BOLD)),
-                frame.area(),
-            );
-        });
-    }
+    if let Ok(mut terminal) = terminal.lock() {
+        if cancel.is_cancelled() {
+            let _ = terminal.draw(|frame| {
+                frame.render_widget(
+                    Paragraph::new(Line::from("Cancelado — deshaciendo los cambios aplicados…"))
+                        .style(Style::new().add_modifier(Modifier::BOLD)),
+                    frame.area(),
+                );
+            });
+        } else {
+            // tick 20 es la fase de ratio 1.0 del triángulo: barra llena.
+            let _ = terminal.draw(|frame| render_progress(frame, title, 20));
+        }
+    };
 }
 
 /// Restores raw mode and the alternate screen on every exit path — including

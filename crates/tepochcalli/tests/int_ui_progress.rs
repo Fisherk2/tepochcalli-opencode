@@ -18,13 +18,17 @@ use tepochcalli::adapters::{HeadlessUi, TtyUi};
 use tepochcalli::domain::CancelToken;
 use tepochcalli::ports::Ui;
 
-fn draw(width: u16, height: u16) -> Buffer {
+fn draw_at(width: u16, height: u16, tick: u64) -> Buffer {
     let mut terminal =
         Terminal::new(TestBackend::new(width, height)).expect("in-memory test backend");
     terminal
-        .draw(|frame| render_progress(frame, "Descargando modelo de embeddings"))
+        .draw(|frame| render_progress(frame, "Descargando modelo de embeddings", tick))
         .expect("draw into the test buffer");
     terminal.backend().buffer().clone()
+}
+
+fn draw(width: u16, height: u16) -> Buffer {
+    draw_at(width, height, 0)
 }
 
 /// Flattens the buffer grid into searchable text (one line per row).
@@ -72,6 +76,24 @@ fn every_menu_action_is_blocked_with_the_download_reason() {
     assert!(
         text.contains("El workspace no se tocará"),
         "the no-destruction notice must be visible:\n{text}"
+    );
+    assert!(
+        text.contains("Progreso indeterminado: la descarga no reporta bytes."),
+        "the bar must say it is indeterminate, never fake a percentage:\n{text}"
+    );
+    assert!(
+        !text.contains('%'),
+        "no percentage is claimed when the download reports no bytes:\n{text}"
+    );
+}
+
+#[test]
+fn la_barra_anima_entre_ticks() {
+    let start = text(&draw_at(80, 24, 0));
+    let mid = text(&draw_at(80, 24, 10));
+    assert_ne!(
+        start, mid,
+        "the gauge must move between ticks (indeterminate animation)"
     );
 }
 
