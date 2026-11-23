@@ -390,6 +390,28 @@
   6. H6 con `--payload` local no sondea red (F3 no la toca; F4/F5 compensan por fase) y el mirror
      `http` sin TLS espera su consentimiento antes de sondear (gate L4-2).
 
+### Phase 6.7 — Release `0.1.0-beta.1` (2026-11-23)
+
+Primer lanzamiento público, **sin publicar en PyPI** (decisión del dueño 2026-11-23): el GitHub
+Release lleva **solo el asset del payload** y la instalación es **desde el código fuente**. Lo que
+lo hace posible:
+
+* **Versión única:** `0.1.0-beta.1` en `Cargo.toml` + `Cargo.lock`, payload
+  `.tepochcalli/pyproject.toml` (conserva la forma con guion porque el comparador semver del menú
+  no entiende `0.1.0b1`), `uv.lock` (normalizado por uv a `0.1.0b1`) y
+  `tepochcalli_mcp.__version__`; `int_version_consistency` ata payload y binario.
+* **`zip` 2.6.1 → 9.8.2** por `CVE-2026-115905` (CVSS4 crítico) y 8 advisories más; único uso en
+  `extract_zip` (validación propia + dos fases).
+* **`release.yml` reescrito** a un solo job que valida tag == versión == CHANGELOG, empaqueta el
+  payload con el guard de contenido y lo sube como `--prerelease`; **TD-51 CERRADA** (`dist.toml`
+  y la metadata `binstall` retirados).
+* **`THIRD-PARTY.md`** generado desde el grafo de `Cargo.lock` (`just third-party`); `md-lint`
+  cubre ya `README.md` y `CHANGELOG.md`.
+
+**Salvedades:** el release no publica rueda ni binarios (TD-71), el workflow nuevo no se ha
+ejecutado (TD-72) y los textos completos de licencia no viajan en `THIRD-PARTY.md` (TD-73). Los 6
+plugins npm del payload siguen en `@latest` (riesgo aceptado por el dueño).
+
 ## 3. Testing Strategy per Phase
 
 | Phase | Tool | Scope | Success |
