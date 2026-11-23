@@ -2,12 +2,10 @@
 
 Por qué existe: crates.io **rechaza** el `cargo publish` si el manifiesto no
 declara `description`, `license`/`license-file`, `repository` y `readme` (y
-exige 1..=5 `keywords` con `categories` válidas del catálogo), y
-`cargo binstall` **no encuentra el asset** si el `pkg-url` no apunta al tag
-real de la release (`tepochcalli-v<version>`, fijado por
-`.github/workflows/release.yml`) ni al nombre que produce cargo-dist
-(`tepochcalli-<target>.tar.gz|.zip`). Los tres fallos solo se ven al publicar,
-tarde y en público: este test los adelanta a la suite.
+exige 1..=5 `keywords` con `categories` válidas del catálogo). Ese fallo solo
+se ve al publicar, tarde y en público: este test lo adelanta a la suite.
+El canal del wizard es la rueda `uvx tepochcalli` (ADR-014); la metadata
+`cargo binstall` que exigía el canal retirado de ADR-013 ya no existe.
 
 Solo stdlib (`tomllib`): el manifiesto se lee como dato, sin invocar `cargo`.
 """
@@ -51,7 +49,7 @@ def test_package_declares_crates_io_metadata() -> None:
 
 
 def test_package_name_matches_crate_directory() -> None:
-    """`name` y ruta deben coincidir o binstall no encuentra el crate."""
+    """`name` y ruta deben coincidir (cargo publica el crate con ese nombre)."""
     assert _package()["name"] == CRATE_DIR.name == "tepochcalli"
 
 
@@ -67,14 +65,3 @@ def test_package_excludes_integration_tests() -> None:
     assert "tests/" in _package().get("exclude", []), (
         "el .crate debe excluir tests/: cargo install no los usa y duplican el paquete"
     )
-
-
-def test_binstall_pkg_url_matches_release_tag_and_asset_names() -> None:
-    """El `pkg-url` debe casar con el tag y el nombre de asset publicados."""
-    pkg_url = _package()["metadata"]["binstall"]["pkg-url"]
-
-    # Tag real de la release (`release.yml`): binstall solo prueba `<version>` y
-    # `v<version>` por defecto, así que el tag con prefijo exige `pkg-url` explícito.
-    assert "tepochcalli-v{ version }" in pkg_url
-    # Asset de cargo-dist: `tepochcalli-<target>.tar.gz` / `.zip`.
-    assert "{ name }-{ target }" in pkg_url
