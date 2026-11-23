@@ -5,6 +5,32 @@
 > Requisitos: [docs/BACKLOG.md](docs/BACKLOG.md) · Especificación: [SPEC.md](SPEC.md) ·
 > Arquitectura: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 
+## Instalación (beta 0.1.0-beta.1)
+
+Primer beta. **Aún no hay rueda en PyPI ni binarios en el release**: hoy se instala **desde el
+código fuente**. `uvx tepochcalli` es el canal objetivo
+([ADR-014](docs/adr/adr-014-distribucion-uvx-pypi.md)) y funcionará cuando la rueda esté publicada.
+
+**Requisitos:** `cargo` (Rust — el release se compila con 1.99) y `uv` en el host; el wizard hace
+por ti el bootstrap de `uv`/CPython ([ADR-004](docs/adr/adr-004-uv-venv-aislado.md)).
+
+1. `cargo install --path crates/tepochcalli --locked`
+2. `tepochcalli install --vault ~/MiVault`
+   — descarga `tepochcalli-workspace-0.1.0-beta.1.tar.gz` del GitHub Release y **verifica su
+   SHA-256**; `--payload <dir>` o `--payload-url <url> --payload-sha256 <hex>` fijan la fuente.
+3. Abre el vault en Obsidian y en OpenCode V2.
+
+**Qué escribe:** `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json`, `AGENTS.md` y
+`00-resources/`. **Nunca** toca notas, PDFs ni `.obsidian/`. `tepochcalli desinstall` retira lo del
+instalador dejando un backup del `config/`.
+
+**Sin red no se instala** ([ADR-016](docs/adr/adr-016-resiliencia-offline-y-rollback.md)): el
+preflight corre antes del primer escrito y, ante cancelación, el rollback deja el vault como
+estaba. Una cancelación sale con exit **41**; un fallo de fase con restos, **42**.
+
+**Nota honesta:** este release no publica binarios ni rueda; el `install.sh` del repo solo sirve
+cuando existan assets de binario.
+
 ## Rendimiento de ingesta (medido)
 
 Lo que cuesta meter material al índice, por tamaño. **Primera ingesta** = extracción a Markdown
