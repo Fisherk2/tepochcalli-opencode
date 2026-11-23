@@ -54,28 +54,77 @@ pub(crate) fn run_install(
     let resume = flags.is_set("--resume");
     let offline = flags.is_set("--offline");
     let vault = flags.value("--vault").map(str::to_string);
-    let payload = flags.value("--payload").map(str::to_string);
-    let payload_url = flags.value("--payload-url").map(str::to_string);
-    let payload_sha256 = flags.value("--payload-sha256").map(str::to_string);
+    let payload_dir = flags.value("--payload").map(str::to_string);
+    let url_override = flags.value("--payload-url").map(str::to_string);
+    let sha_override = flags.value("--payload-sha256").map(str::to_string);
     // Payload source validation (usage errors, exit 2 — no network touched).
     if let Err(code) = validate_payload_flags(
         "install",
-        payload.as_deref(),
-        payload_url.as_deref(),
-        payload_sha256.as_deref(),
+        payload_dir.as_deref(),
+        url_override.as_deref(),
+        sha_override.as_deref(),
         stderr,
     ) {
         return code;
     }
-    let payload_dir = payload;
-    let url_override = payload_url;
-    let sha_override = payload_sha256;
     // T6 rule: no TTY means no prompts — fail fast instead of hanging or
     // resolving the default dir under an unintended cwd.
     if !tty_ok(stderr, non_interactive, "install") {
         return WizardError::UserAborted.exit_code();
     }
-    let ui: Box<dyn Ui> = if non_interactive {
+    let ui = install_ui(non_interactive, skip_model);
+    if let Err(code) = prereqs_gate(&*ui, stderr) {
+        return code;
+    }
+    // F2: vault directory (`--vault` wins; otherwise the Ui asks).
+    let raw = match resolve_vault_for_install(&*ui, non_interactive, vault.as_deref()) {
+        Ok(raw) => raw,
+        Err(code) => return code,
+    };
+    if let Err(code) = offline_guard(
+        &*ui,
+        &raw,
+        offline,
+        resume,
+        skip_model,
+        payload_dir.as_deref(),
+    ) {
+        return code;
+    }
+    if let Err(code) = network_preflight(
+        &*ui,
+        offline,
+        payload_dir.as_deref(),
+        url_override.as_deref(),
+    ) {
+        return code;
+    }
+    // R-offline-3 (T15): huella read-only del vault ANTES del primer write.
+    let (vault_path, snapshot) = match capture_and_ensure(&*ui, &raw, stderr) {
+        Ok(pair) => pair,
+        Err(code) => return code,
+    };
+    mark_phase_done(vault_path.as_path(), Phase::F1);
+    mark_phase_done(vault_path.as_path(), Phase::F2);
+    run_phases_and_rollback(
+        &vault_path,
+        payload_dir,
+        url_override,
+        sha_override,
+        resume,
+        offline,
+        non_interactive,
+        &*ui,
+        stdout,
+        stderr,
+        &snapshot,
+    )
+}
+
+/// El `Ui` del instalador: [`HeadlessUi`] con las filas reales del menú (D7.1)
+/// en `--non-interactive`, [`TtyUi`] en interactivo.
+fn install_ui(non_interactive: bool, skip_model: bool) -> Box<dyn Ui> {
+    if non_interactive {
         // Índices reales de EMBEDDER_PATHS (D7.1, L3-4): el acoplamiento del
         // constructor hardcodeado muere — reordenar el menú se rompe aquí.
         let skip_row = {
@@ -89,33 +138,37 @@ pub(crate) fn run_install(
         Box::new(HeadlessUi::for_install(skip_row, default_row, skip_model))
     } else {
         Box::new(TtyUi)
-    };
-    // F1: prerequisites (RAM/disk/platform gate; missing tools only warn).
+    }
+}
+
+/// F1: prerequisites (RAM/disk/platform gate) — missing tools only warn.
+/// `Err(code)` is the panel already emitted, on both failures.
+fn prereqs_gate(ui: &dyn Ui, stderr: &mut dyn std::io::Write) -> Result<(), u8> {
     // L4-5 (S-4): las path_dirs reales llegan del adapter — main es el caller
     // del composition-edge; la sonda GPU comparte la misma fuente de `PATH`.
     let disk_cwd = match std::env::current_dir() {
         Ok(cwd) => cwd,
         Err(_) => {
-            return report_failure(
-                &*ui,
+            return Err(report_failure(
+                ui,
                 Some(Phase::F1),
                 "install: prerequisites failed",
                 WizardError::PermissionDenied,
                 None,
-            )
+            ))
         }
     };
     let report =
         match check_prereqs_on(&SysHostProbe, std::env::consts::OS, &disk_cwd, &path_dirs()) {
             Ok(report) => report,
             Err(err) => {
-                return report_failure(
-                    &*ui,
+                return Err(report_failure(
+                    ui,
                     Some(Phase::F1),
                     "install: prerequisites failed",
                     err,
                     None,
-                );
+                ));
             }
         };
     for (tool, found) in [
@@ -129,61 +182,83 @@ pub(crate) fn run_install(
             );
         }
     }
-    // F2: vault directory (`--vault` wins; otherwise the Ui asks).
-    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
-        Ok(raw) => raw,
+    Ok(())
+}
+
+/// F2: `--vault` wins; otherwise the `Ui` asks. `Err(code)` is the panel
+/// already emitted, on both failures.
+fn resolve_vault_for_install(
+    ui: &dyn Ui,
+    non_interactive: bool,
+    vault: Option<&str>,
+) -> Result<String, u8> {
+    match resolve_vault_dir(ui, vault) {
+        Ok(raw) => Ok(raw),
         // #10b: headless sin `--vault` nadie canceló — es un fallo de uso
         // (el correctivo es el flag). El brazo de abajo (Esc interactivo) sí
         // es una cancelación genuina y conserva su `estado:` / `failure_body`.
-        Err(err) if non_interactive => {
-            return report_usage_failure(
-                &*ui,
-                "install",
-                Some(Phase::F2),
-                "vault selection failed",
-                "--vault <directorio>",
-                "tepochcalli install --vault <directorio> --non-interactive",
-                err,
-                None,
-            );
-        }
-        Err(err) => {
-            return report_failure(
-                &*ui,
-                Some(Phase::F2),
-                "install: vault selection failed",
-                err,
-                None,
-            );
-        }
-    };
-    // T14: offline pre-check BEFORE the vault is touched (exit 21, no writes).
-    // D7.3 (L3-5): los brazos válidos son — payload local + cache (o litellm
-    // config, que no necesita modelo local), o un resume cuyo payload ya está
-    // local (F3 resuelta por artefacto: nada se re-descarga).
-    if offline {
-        let vault = Path::new(&raw);
-        let cache_ready = skip_model || models_cached(vault) || litellm_config_present(vault);
-        let resume_payload_local = resume && is_phase_done(vault, Phase::F3);
-        match guard_offline_before_touch(
-            true,
-            payload_local_ready(payload_dir.as_deref()),
-            cache_ready,
-            resume_payload_local,
-        ) {
-            Ok(()) => {}
-            Err(err) => {
-                return report_failure(
-                    &*ui,
-                    Some(Phase::F2),
-                    "install: offline without local payload/cache",
-                    err,
-                    None,
-                );
-            }
-        }
+        Err(err) if non_interactive => Err(report_usage_failure(
+            ui,
+            "install",
+            Some(Phase::F2),
+            "vault selection failed",
+            "--vault <directorio>",
+            "tepochcalli install --vault <directorio> --non-interactive",
+            err,
+            None,
+        )),
+        Err(err) => Err(report_failure(
+            ui,
+            Some(Phase::F2),
+            "install: vault selection failed",
+            err,
+            None,
+        )),
     }
-    // R-offline-1 (T13): sin red no se toca el vault — cero ficheros.
+}
+
+/// T14: offline pre-check BEFORE the vault is touched (exit 21, no writes).
+/// D7.3 (L3-5): los brazos válidos son — payload local + cache (o litellm
+/// config, que no necesita modelo local), o un resume cuyo payload ya está
+/// local (F3 resuelta por artefacto: nada se re-descarga).
+fn offline_guard(
+    ui: &dyn Ui,
+    raw: &str,
+    offline: bool,
+    resume: bool,
+    skip_model: bool,
+    payload_dir: Option<&str>,
+) -> Result<(), u8> {
+    if !offline {
+        return Ok(());
+    }
+    let vault = Path::new(raw);
+    let cache_ready = skip_model || models_cached(vault) || litellm_config_present(vault);
+    let resume_payload_local = resume && is_phase_done(vault, Phase::F3);
+    guard_offline_before_touch(
+        true,
+        payload_local_ready(payload_dir),
+        cache_ready,
+        resume_payload_local,
+    )
+    .map_err(|err| {
+        report_failure(
+            ui,
+            Some(Phase::F2),
+            "install: offline without local payload/cache",
+            err,
+            None,
+        )
+    })
+}
+
+/// R-offline-1 (T13): sin red no se toca el vault — cero ficheros.
+fn network_preflight(
+    ui: &dyn Ui,
+    offline: bool,
+    payload_dir: Option<&str>,
+    url_override: Option<&str>,
+) -> Result<(), u8> {
     // Con un mirror http sin TLS el sondeo espera al consentimiento de
     // `run_phases` (probar http antes de consentir saltaría el gate L4-2).
     let base = release_base_url();
@@ -191,57 +266,78 @@ pub(crate) fn run_install(
         payload_dir.is_none() && url_override.is_none() && mirror_http_non_loopback(&base);
     if !offline && !mirror_pending {
         let release = payload_asset_url(VERSION);
-        if let Some(url) =
-            payload_endpoint(payload_dir.as_deref(), url_override.as_deref(), &release)
-        {
+        if let Some(url) = payload_endpoint(payload_dir, url_override, &release) {
             if let Err(err) = UreqHttpClient::new().probe(&url) {
-                return report_failure(
-                    &*ui,
+                return Err(report_failure(
+                    ui,
                     Some(Phase::F2),
                     "install: sin red (preflight)",
                     err,
                     None,
-                );
+                ));
             }
         }
     }
-    // R-offline-3 (T15): huella read-only del vault ANTES del primer write.
-    let snapshot = InstallSnapshot::capture(Path::new(&raw));
-    let vault_path = match ensure_vault_dir(Path::new(&raw)) {
-        Ok(path) => path,
+    Ok(())
+}
+
+/// R-offline-3 (T15): huella read-only del vault ANTES del primer write.
+fn capture_and_ensure(
+    ui: &dyn Ui,
+    raw: &str,
+    stderr: &mut dyn std::io::Write,
+) -> Result<(VaultPath, InstallSnapshot), u8> {
+    let snapshot = InstallSnapshot::capture(Path::new(raw));
+    match ensure_vault_dir(Path::new(raw)) {
+        Ok(path) => Ok((path, snapshot)),
         Err(err) => {
             // P0-1: si el directorio quedó a medias, se deshace y se declara
             // el resultado medido antes del panel.
-            let report = rollback_install(Path::new(&raw), &snapshot);
+            let report = rollback_install(Path::new(raw), &snapshot);
             if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
-                return WizardError::PhaseFailed.exit_code();
+                return Err(WizardError::PhaseFailed.exit_code());
             }
-            return report_failure(
-                &*ui,
+            Err(report_failure(
+                ui,
                 Some(Phase::F2),
                 "install: vault directory failed",
                 err,
                 None,
-            );
+            ))
         }
-    };
-    mark_phase_done(vault_path.as_path(), Phase::F1);
-    mark_phase_done(vault_path.as_path(), Phase::F2);
+    }
+}
+
+/// F3..F8 + el punto único de rollback: cualquier salida no-cero deshace lo
+/// aplicado.
+#[allow(clippy::too_many_arguments)] // commit siguiente: `PayloadArgs`/`RunFlags`
+fn run_phases_and_rollback(
+    vault_path: &VaultPath,
+    payload_dir: Option<String>,
+    url_override: Option<String>,
+    sha_override: Option<String>,
+    resume: bool,
+    offline: bool,
+    non_interactive: bool,
+    ui: &dyn Ui,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+    snapshot: &InstallSnapshot,
+) -> u8 {
     let code = run_phases(
-        &vault_path,
+        vault_path,
         payload_dir,
         url_override,
         sha_override,
         resume,
         offline,
         non_interactive,
-        &*ui,
+        ui,
         stdout,
         stderr,
     );
-    // Punto único de rollback: cualquier salida no-cero deshace lo aplicado.
     if code != 0 {
-        let report = rollback_install(vault_path.as_path(), &snapshot);
+        let report = rollback_install(vault_path.as_path(), snapshot);
         if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
             // P0-1: no se afirma lo que no se midió; si quedan restos, se
             // devuelve el código de fase fallida, no el del fallo original.
