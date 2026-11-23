@@ -285,19 +285,20 @@ fn capture_and_ensure(
     match ensure_vault_dir(Path::new(raw)) {
         Ok(path) => Ok((path, snapshot)),
         Err(err) => {
-            // P0-1: si el directorio quedó a medias, se deshace y se declara
-            // el resultado medido antes del panel.
-            let report = rollback_install(Path::new(raw), &snapshot);
-            if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
-                return Err(WizardError::PhaseFailed.exit_code());
-            }
-            Err(report_failure(
+            // Orden: causa (panel tipado) → estado MEDIDO del rollback → exit.
+            // El panel se emite SIEMPRE: sin causa, el 42 no explica nada.
+            let code = report_failure(
                 ui,
                 Some(Phase::F2),
                 "install: vault directory failed",
                 err,
                 None,
-            ))
+            );
+            let report = rollback_install(Path::new(raw), &snapshot);
+            if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
+                return Err(WizardError::PhaseFailed.exit_code());
+            }
+            Err(code)
         }
     }
 }

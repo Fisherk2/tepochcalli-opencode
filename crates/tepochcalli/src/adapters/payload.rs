@@ -446,6 +446,9 @@ pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
                         fs::create_dir_all(parent).map_err(map_io)?;
                     }
                     fs::copy(entry.path(), &target).map_err(map_io)?;
+                    // Si el walk muere después, este report se pierde: un
+                    // parcial de F3 lo detecta la verificación de
+                    // `rollback_install` contra el snapshot, no el intent.
                     report.written.push(target);
                 }
                 continue;
@@ -497,8 +500,10 @@ fn overwrite_file(
         fs::copy(&target, &backup).map_err(map_io)?;
         journal.backed_up.push(target.clone());
     }
+    // Journal BEFORE the copy: a copy that dies half-way still leaves the
+    // partial deletable by `rollback_overwrite`.
+    journal.written.push(target.clone());
     fs::copy(src, &target).map_err(map_io)?;
-    journal.written.push(target);
     Ok(())
 }
 
@@ -722,6 +727,27 @@ mod tests {
                 "{escape} escapes the root"
             );
         }
+    }
+
+    /// Si el copy falla, el journal debe permitir a `rollback_overwrite`
+    /// borrar el parcial: sin entrada, el fichero a medias (o el destino
+    /// recién creado) quedaría huérfano tras un rollback de H7.
+    #[test]
+    fn overwrite_file_journals_the_target_before_copying() {
+        let Ok(root) = tempfile::tempdir() else {
+            panic!("tempdir");
+        };
+        let missing = root.path().join("no-existe.md");
+        let mut journal = crate::ports::OverwriteJournal::default();
+
+        let outcome = overwrite_file(&missing, root.path(), Path::new("x.md"), &mut journal);
+
+        assert!(outcome.is_err(), "copiar un src inexistente falla");
+        assert_eq!(
+            journal.written,
+            vec![root.path().join("x.md")],
+            "el destino entra al journal ANTES del copy"
+        );
     }
 
     #[test]
