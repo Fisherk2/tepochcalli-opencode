@@ -1,6 +1,8 @@
 [project]
 name = "tepochcalli-flow"
-version = "0.1.0"
+# Con guion a propósito: PEP 440 también acepta `0.1.0b1`, pero el comparador
+# semver del wizard (`domain/version.rs`) solo parsea `X.Y.Z[-pre]`.
+version = "0.1.0-beta.1"
 description = "Tepochcalli RAG flow: incremental CocoIndex pipeline for the Obsidian vault"
 requires-python = ">=3.12"
 dependencies = [

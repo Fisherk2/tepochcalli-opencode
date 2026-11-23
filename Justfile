@@ -324,6 +324,14 @@ rust-update name target_dir=cargo_target:
 # (no es un gate; `--locked` no lo detecta solo). Es exactamente `rust-lock`.
 rust-lock-refresh: rust-lock
 
+# Regenera el uv.lock del payload tras cambiar su versión (no es un gate).
+payload-lock:
+    cd {{flow_dir}} && uv lock
+
+# Verifica que el uv.lock del payload está al día (no es un gate).
+payload-lock-check:
+    cd {{flow_dir}} && uv lock --check
+
 # Formato del wizard (falla si algo habría que reescribir). No compila, así que
 # no necesita el directorio de destino.
 rust-fmt:
