@@ -55,6 +55,10 @@ jobs:
           maturin-version: v1.15.0
           args: --release --out dist
 
+      - name: Instala uv para ejecutar la rueda
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: pipx install uv
+
       - name: Ejecuta la rueda construida (solo Linux; macOS/Windows sin `uvx`)
         if: matrix.target == 'x86_64-unknown-linux-gnu'
         shell: bash
