@@ -39,16 +39,38 @@ fn resume_skip(
     done
 }
 
+/// The `--payload*` triple (local tree, or URL override + sha).
+pub(crate) struct PayloadArgs {
+    pub dir: Option<String>,
+    pub url: Option<String>,
+    pub sha: Option<String>,
+}
+
+/// The three booleans that change how every phase runs.
+#[derive(Clone, Copy)]
+pub(crate) struct RunFlags {
+    pub resume: bool,
+    pub offline: bool,
+    pub non_interactive: bool,
+}
+
+/// The one failure exit of F3..F8: same panel, phase and vault path; the
+/// caller only decides the mapping (some phases are not offline-mapped).
+fn phase_failed(ui: &dyn Ui, path: &VaultPath, phase: Phase, err: WizardError) -> u8 {
+    report_failure(
+        ui,
+        Some(phase),
+        &format!("install: phase {} failed", phase.name()),
+        err,
+        Some(path.as_path()),
+    )
+}
+
 /// F3..F8 with `--resume` skips (marker + artifacts, never a re-download).
-#[allow(clippy::too_many_arguments)]
 pub(crate) fn run_phases(
     path: &VaultPath,
-    payload_dir: Option<String>,
-    payload_url: Option<String>,
-    payload_sha256: Option<String>,
-    resume: bool,
-    offline: bool,
-    non_interactive: bool,
+    payload: &PayloadArgs,
+    flags: RunFlags,
     ui: &dyn Ui,
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
@@ -56,7 +78,7 @@ pub(crate) fn run_phases(
     // L4-2 security del mirror: la rama release (sin `--payload`/override)
     // con base http NO-loopback exige consentimiento TUI en interactivo y
     // es fallo tipado en non-interactive. Decidido antes de tocar transporte.
-    let release_path = payload_dir.is_none() && payload_url.is_none();
+    let release_path = payload.dir.is_none() && payload.url.is_none();
     let base = if release_path {
         release_base_url()
     } else {
@@ -64,7 +86,7 @@ pub(crate) fn run_phases(
     };
     let mirror_http = release_path && mirror_http_non_loopback(&base);
     if mirror_http {
-        if non_interactive {
+        if flags.non_interactive {
             let _ = writeln!(
                 stderr,
                 "install: mirror http no-loopback ({base}) exige transporte sin TLS; \
@@ -117,10 +139,10 @@ pub(crate) fn run_phases(
     // the versioned release asset for this binary (one-version rule).
     // L3-5: bajo `--resume` con F3 resuelta por artefacto el payload ya está
     // local — ni guard ni fetch de red; es el mismo brazo del guard offline.
-    let resume_covers_payload = resume && is_phase_done(path.as_path(), Phase::F3);
-    let online: Option<ReleasePayload> = match (&payload_url, &payload_sha256) {
+    let resume_covers_payload = flags.resume && is_phase_done(path.as_path(), Phase::F3);
+    let online: Option<ReleasePayload> = match (&payload.url, &payload.sha) {
         (Some(url), Some(sha)) => Some(ReleasePayload::new(url, sha)),
-        (None, None) if payload_dir.is_none() => {
+        (None, None) if payload.dir.is_none() => {
             if resume_covers_payload {
                 // Payload ya local (F3 por artefacto): ninguna red en un resume.
                 None
@@ -136,13 +158,7 @@ pub(crate) fn run_phases(
                         Some(release)
                     }
                     Err(err) => {
-                        return report_failure(
-                            ui,
-                            Some(Phase::F3),
-                            "install: phase F3 failed",
-                            offline_map(offline, err),
-                            Some(path.as_path()),
-                        );
+                        return phase_failed(ui, path, Phase::F3, offline_map(flags.offline, err));
                     }
                 }
             }
@@ -152,34 +168,29 @@ pub(crate) fn run_phases(
         // Unreachable: `run_install` rejects a half override with exit 2.
         _ => return 2,
     };
-    let skipped: Vec<std::path::PathBuf> = if resume && resume_skip(stderr, path, Phase::F3, "") {
-        Vec::new()
-    } else {
-        let outcome = match (&payload_dir, &online) {
-            (Some(dir), None) => run_phase3(&LocalPayload::new(Path::new(dir)), path.as_path()),
-            (None, Some(release)) => run_phase3(release, path.as_path()),
-            // Unreachable: `run_install` rejects `--payload` + override.
-            _ => return 2,
+    let skipped: Vec<std::path::PathBuf> =
+        if flags.resume && resume_skip(stderr, path, Phase::F3, "") {
+            Vec::new()
+        } else {
+            let outcome = match (&payload.dir, &online) {
+                (Some(dir), None) => run_phase3(&LocalPayload::new(Path::new(dir)), path.as_path()),
+                (None, Some(release)) => run_phase3(release, path.as_path()),
+                // Unreachable: `run_install` rejects `--payload` + override.
+                _ => return 2,
+            };
+            match outcome {
+                Ok(report) => {
+                    mark_phase_done(path.as_path(), Phase::F3);
+                    report.skipped
+                }
+                Err(err) => {
+                    // L3-2: wiring del compensador antes del panel — un F3 que
+                    // falló a mitad deja el vault como al entrar, sin intent.
+                    compensate_phase3(path.as_path());
+                    return phase_failed(ui, path, Phase::F3, err);
+                }
+            }
         };
-        match outcome {
-            Ok(report) => {
-                mark_phase_done(path.as_path(), Phase::F3);
-                report.skipped
-            }
-            Err(err) => {
-                // L3-2: wiring del compensador antes del panel — un F3 que
-                // falló a mitad deja el vault como al entrar, sin intent.
-                compensate_phase3(path.as_path());
-                return report_failure(
-                    ui,
-                    Some(Phase::F3),
-                    "install: phase F3 failed",
-                    err,
-                    Some(path.as_path()),
-                );
-            }
-        }
-    };
     // V-5 contracción: en pipe una sola línea (count + muestra), en tty el detalle.
     if !skipped.is_empty() {
         if std::io::stderr().is_terminal() {
@@ -213,7 +224,7 @@ pub(crate) fn run_phases(
     // F4: pinned `uv` into `.tepochcalli/bin/` (+ version proof).
     // Compensates itself on failure.
     let proc = StdCommandRunner;
-    if resume && resume_skip(stderr, path, Phase::F4, " (uv cached)") {
+    if flags.resume && resume_skip(stderr, path, Phase::F4, " (uv cached)") {
         // uv cached — nothing to re-download.
     } else {
         match run_phase4(&http, &proc, path.as_path()) {
@@ -222,33 +233,19 @@ pub(crate) fn run_phases(
                 let _ = writeln!(stderr, "uv {} ready", phase4.version);
             }
             Err(err) => {
-                let err = offline_map(offline, err);
-                return report_failure(
-                    ui,
-                    Some(Phase::F4),
-                    "install: phase F4 failed",
-                    err,
-                    Some(path.as_path()),
-                );
+                return phase_failed(ui, path, Phase::F4, offline_map(flags.offline, err));
             }
         }
     }
     // F5: venv + frozen sync + R6 import check. `bin/` stays when F5 fails
     // (each phase compensates only what it wrote).
-    if resume && resume_skip(stderr, path, Phase::F5, " (venv cached)") {
+    if flags.resume && resume_skip(stderr, path, Phase::F5, " (venv cached)") {
         // venv cached — nothing to re-sync.
     } else {
         match run_phase5(&proc, path.as_path()) {
             Ok(_) => mark_phase_done(path.as_path(), Phase::F5),
             Err(err) => {
-                let err = offline_map(offline, err);
-                return report_failure(
-                    ui,
-                    Some(Phase::F5),
-                    "install: phase F5 failed",
-                    err,
-                    Some(path.as_path()),
-                );
+                return phase_failed(ui, path, Phase::F5, offline_map(flags.offline, err));
             }
         }
     }
@@ -262,22 +259,20 @@ pub(crate) fn run_phases(
         // T16 conectará el disparo (botón TUI / Ctrl+C) a este token.
         cancel: CancelToken::new(),
     };
-    let picked = if resume && is_phase_done(path.as_path(), Phase::F6) {
-        match read_completed_report(path.as_path()) {
-            Some(report) => {
-                let _ = writeln!(stderr, "resume: F6 already done, skipping");
-                report
-            }
-            None => match run_f6_or_degraded(&deps, path, offline, ui, stderr) {
-                Ok(picked) => picked,
-                Err(code) => return code,
-            },
-        }
+    let cached = if flags.resume && is_phase_done(path.as_path(), Phase::F6) {
+        read_completed_report(path.as_path())
     } else {
-        match run_f6_or_degraded(&deps, path, offline, ui, stderr) {
+        None
+    };
+    if cached.is_some() {
+        let _ = writeln!(stderr, "resume: F6 already done, skipping");
+    }
+    let picked = match cached {
+        Some(report) => report,
+        None => match run_f6_or_degraded(&deps, path, flags.offline, ui, stderr) {
             Ok(picked) => picked,
             Err(code) => return code,
-        }
+        },
     };
     let _ = writeln!(
         stderr,
@@ -287,7 +282,7 @@ pub(crate) fn run_phases(
     );
     // F7: initial index via the flow CLI. Path 5 short-circuits inside
     // `run_phase7` (no spawn, no index).
-    if resume && resume_skip(stderr, path, Phase::F7, "") {
+    if flags.resume && resume_skip(stderr, path, Phase::F7, "") {
         // Index already built on a previous run.
     } else {
         match run_phase7(&proc, path.as_path(), &picked) {
@@ -300,22 +295,15 @@ pub(crate) fn run_phases(
                 );
             }
             Err(err) => {
-                let err = offline_map(offline, err);
                 // L3-2: wiring del compensador antes del panel — el sidecar
                 // y su temp fuera; el índice queda sin metadatos huérfanos.
                 compensate_phase7(path.as_path());
-                return report_failure(
-                    ui,
-                    Some(Phase::F7),
-                    "install: phase F7 failed",
-                    err,
-                    Some(path.as_path()),
-                );
+                return phase_failed(ui, path, Phase::F7, offline_map(flags.offline, err));
             }
         }
     }
     // F8: merge `mcp.servers` (+ `.bak`) and verify `rag_status` end to end.
-    if resume && resume_skip(stderr, path, Phase::F8, "") {
+    if flags.resume && resume_skip(stderr, path, Phase::F8, "") {
         // MCP registration already merged on a previous run.
     } else {
         match run_phase8(&proc, path.as_path(), Some(ui)) {
@@ -333,13 +321,7 @@ pub(crate) fn run_phases(
                 );
             }
             Err(err) => {
-                return report_failure(
-                    ui,
-                    Some(Phase::F8),
-                    "install: phase F8 failed",
-                    err,
-                    Some(path.as_path()),
-                );
+                return phase_failed(ui, path, Phase::F8, err);
             }
         }
     }

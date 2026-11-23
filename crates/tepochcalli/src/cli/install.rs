@@ -18,7 +18,7 @@ use tepochcalli::ports::{HttpClient, Ui};
 use tepochcalli::EMBEDDER_PATHS;
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
-use super::install_phases::run_phases;
+use super::install_phases::{run_phases, PayloadArgs, RunFlags};
 use super::report::{report_failure, report_usage_failure};
 use super::usage::VERSION;
 
@@ -54,15 +54,17 @@ pub(crate) fn run_install(
     let resume = flags.is_set("--resume");
     let offline = flags.is_set("--offline");
     let vault = flags.value("--vault").map(str::to_string);
-    let payload_dir = flags.value("--payload").map(str::to_string);
-    let url_override = flags.value("--payload-url").map(str::to_string);
-    let sha_override = flags.value("--payload-sha256").map(str::to_string);
+    let payload = PayloadArgs {
+        dir: flags.value("--payload").map(str::to_string),
+        url: flags.value("--payload-url").map(str::to_string),
+        sha: flags.value("--payload-sha256").map(str::to_string),
+    };
     // Payload source validation (usage errors, exit 2 — no network touched).
     if let Err(code) = validate_payload_flags(
         "install",
-        payload_dir.as_deref(),
-        url_override.as_deref(),
-        sha_override.as_deref(),
+        payload.dir.as_deref(),
+        payload.url.as_deref(),
+        payload.sha.as_deref(),
         stderr,
     ) {
         return code;
@@ -81,22 +83,12 @@ pub(crate) fn run_install(
         Ok(raw) => raw,
         Err(code) => return code,
     };
-    if let Err(code) = offline_guard(
-        &*ui,
-        &raw,
-        offline,
-        resume,
-        skip_model,
-        payload_dir.as_deref(),
-    ) {
+    let payload_dir = payload.dir.as_deref();
+    let url_override = payload.url.as_deref();
+    if let Err(code) = offline_guard(&*ui, &raw, offline, resume, skip_model, payload_dir) {
         return code;
     }
-    if let Err(code) = network_preflight(
-        &*ui,
-        offline,
-        payload_dir.as_deref(),
-        url_override.as_deref(),
-    ) {
+    if let Err(code) = network_preflight(&*ui, offline, payload_dir, url_override) {
         return code;
     }
     // R-offline-3 (T15): huella read-only del vault ANTES del primer write.
@@ -108,12 +100,12 @@ pub(crate) fn run_install(
     mark_phase_done(vault_path.as_path(), Phase::F2);
     run_phases_and_rollback(
         &vault_path,
-        payload_dir,
-        url_override,
-        sha_override,
-        resume,
-        offline,
-        non_interactive,
+        &payload,
+        RunFlags {
+            resume,
+            offline,
+            non_interactive,
+        },
         &*ui,
         stdout,
         stderr,
@@ -310,32 +302,16 @@ fn capture_and_ensure(
 
 /// F3..F8 + el punto único de rollback: cualquier salida no-cero deshace lo
 /// aplicado.
-#[allow(clippy::too_many_arguments)] // commit siguiente: `PayloadArgs`/`RunFlags`
 fn run_phases_and_rollback(
     vault_path: &VaultPath,
-    payload_dir: Option<String>,
-    url_override: Option<String>,
-    sha_override: Option<String>,
-    resume: bool,
-    offline: bool,
-    non_interactive: bool,
+    payload: &PayloadArgs,
+    flags: RunFlags,
     ui: &dyn Ui,
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
     snapshot: &InstallSnapshot,
 ) -> u8 {
-    let code = run_phases(
-        vault_path,
-        payload_dir,
-        url_override,
-        sha_override,
-        resume,
-        offline,
-        non_interactive,
-        ui,
-        stdout,
-        stderr,
-    );
+    let code = run_phases(vault_path, payload, flags, ui, stdout, stderr);
     if code != 0 {
         let report = rollback_install(vault_path.as_path(), snapshot);
         if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
