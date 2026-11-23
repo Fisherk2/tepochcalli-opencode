@@ -15,7 +15,7 @@ pub struct MergeReport {
 }
 
 /// What an overwrite wrote and backed up (H7 `update`). Feeds
-/// [`crate::adapters::payload::rollback_overwrite`] when a run fails midway:
+/// [`crate::application::update::rollback_overwrite`] when a run fails midway:
 /// `backed_up` are the originals saved as `<ruta>.bak`, `written` every file
 /// the overwrite created or replaced.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -45,4 +45,15 @@ pub trait PayloadSource {
         journal: &mut OverwriteJournal,
         cancel: Option<&CancelToken>,
     ) -> Result<(), WizardError>;
+}
+
+/// `<ruta>.bak`: the byte backup taken before an overwrite (H7). Part of the
+/// journal contract — whichever side writes it, [`rollback_overwrite`] reads
+/// it back by the same name.
+///
+/// [`rollback_overwrite`]: crate::application::update::rollback_overwrite
+pub fn backup_path(target: &Path) -> PathBuf {
+    let mut name = target.as_os_str().to_os_string();
+    name.push(".bak");
+    PathBuf::from(name)
 }

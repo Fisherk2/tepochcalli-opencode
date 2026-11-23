@@ -4,11 +4,11 @@
 //! The warning panel is shown BEFORE anything is touched (H7) and the journal
 //! — not a guess — decides what the rollback restores.
 
+use std::fs;
 use std::path::Path;
 
-use crate::adapters::payload::rollback_overwrite;
 use crate::domain::{CancelToken, WizardError};
-use crate::ports::{OverwriteJournal, PayloadSource, Ui};
+use crate::ports::{backup_path, OverwriteJournal, PayloadSource, Ui};
 
 use super::installer::{AGENTS_MD, GITIGNORE, OPENCODE_DIR, RUNTIME_DIR};
 use super::phase8::OPENCODE_JSON;
@@ -83,4 +83,24 @@ pub fn run_update(
         ),
     );
     Ok(report)
+}
+
+/// Undo an H7 overwrite from its journal: restore every `<ruta>.bak` over its
+/// original and delete every written file that had no backup. Best-effort — a
+/// rollback never panics on a vanished temp file.
+// shortcut: directories created for new files stay (possibly empty) — the
+// journal is file-scoped; upgrade only if an empty-dir residue ever matters.
+pub fn rollback_overwrite(journal: &OverwriteJournal) {
+    for original in &journal.backed_up {
+        let backup = backup_path(original);
+        // Keep the .bak when the restore failed: it is the last good copy.
+        if fs::copy(&backup, original).is_ok() {
+            let _ = fs::remove_file(&backup);
+        }
+    }
+    for written in &journal.written {
+        if !journal.backed_up.contains(written) {
+            let _ = fs::remove_file(written);
+        }
+    }
 }

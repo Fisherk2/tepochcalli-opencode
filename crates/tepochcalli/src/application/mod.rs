@@ -53,4 +53,4 @@ pub use phase8::{
 pub use preflight::payload_endpoint;
 pub use rollback::{rollback_install, InstallSnapshot};
 pub use swap::{run_swap, SwapDeps, SwapOptions, SwapReport};
-pub use update::{run_update, UpdateReport, UPDATE_SCOPES};
+pub use update::{rollback_overwrite, run_update, UpdateReport, UPDATE_SCOPES};

@@ -142,9 +142,9 @@ fn int_tests_do_not_spawn_a_process() {
 
 #[test]
 fn application_has_no_infra_imports() {
-    // `src/application/` monta los puertos y puede importar `adapters`
-    // (composition-root parcial: installer usa los extractores movidos),
-    // pero los módulos de infra y sus crates quedan detrás de `crate::adapters`.
+    // `src/application/` depende de `domain` + `ports`: nombrar `adapters`
+    // (en `use` o inline) es una violación, salvo el composition root
+    // explícito de abajo. Los crates de infra quedan vetados por nombre.
     let dir = manifest_dir().join("src").join("application");
     let files = std::fs::read_dir(&dir)
         .expect("src/application must exist")
@@ -161,11 +161,32 @@ fn application_has_no_infra_imports() {
         "use zip",
         "use flate2",
     ];
+    // Composition root: `installer.rs` (bootstrap de `uv`) y `prereqs.rs`
+    // (`find_tool_in`) son los dos puntos donde la aplicación construye infra
+    // a mano — decisión ya documentada. Cualquier otro fichero que nombre
+    // `crate::adapters` rompe la frontera.
+    const COMPOSITION_ROOT: &[&str] = &["installer.rs", "prereqs.rs"];
     let mut violations = Vec::new();
     for file in &files {
+        if COMPOSITION_ROOT.iter().any(|name| file_name(file) == *name) {
+            continue;
+        }
         let src = std::fs::read_to_string(file).expect("application file readable");
         for (n, line) in src.lines().enumerate() {
             let trimmed = line.trim_start();
+            if trimmed.starts_with("//") {
+                continue;
+            }
+            // `contains` (no `starts_with`): caza también la forma inline
+            // `crate::adapters::x` dentro de una expresión.
+            if trimmed.contains("crate::adapters") {
+                violations.push(format!(
+                    "{}:{}: application reaches `adapters` directly: {}",
+                    file.display(),
+                    n + 1,
+                    trimmed
+                ));
+            }
             if FORBIDDEN.iter().any(|p| trimmed.starts_with(p)) {
                 violations.push(format!(
                     "{}:{}: infra import escapes `adapters`: {}",
@@ -178,7 +199,7 @@ fn application_has_no_infra_imports() {
     }
     assert!(
         violations.is_empty(),
-        "application/ no import lamenaje infra directamente:\n{}",
+        "application/ no toca adapters ni infra; solo domain + ports:\n{}",
         violations.join("\n")
     );
 }

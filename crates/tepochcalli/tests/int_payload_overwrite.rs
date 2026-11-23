@@ -11,7 +11,8 @@ mod common;
 use std::path::{Path, PathBuf};
 
 use common::helpers::write_rel;
-use tepochcalli::adapters::payload::{merge_tree, overwrite_tree, rollback_overwrite};
+use tepochcalli::adapters::payload::{merge_tree, overwrite_tree};
+use tepochcalli::application::update::rollback_overwrite;
 use tepochcalli::domain::{CancelToken, WizardError};
 use tepochcalli::ports::OverwriteJournal;
 use tepochcalli::UPDATE_SCOPES;

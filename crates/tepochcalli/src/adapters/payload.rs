@@ -12,7 +12,7 @@ use std::path::{Component, Path, PathBuf};
 
 use crate::adapters::archive::extract_tar_gz;
 use crate::domain::{CancelToken, WizardError};
-use crate::ports::{HttpClient, MergeReport, OverwriteJournal, PayloadSource};
+use crate::ports::{backup_path, HttpClient, MergeReport, OverwriteJournal, PayloadSource};
 
 use super::http::UreqHttpClient;
 
@@ -461,13 +461,6 @@ pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
     Ok(report)
 }
 
-/// `<ruta>.bak`: the byte backup taken before an overwrite (H7).
-fn backup_path(target: &Path) -> PathBuf {
-    let mut name = target.as_os_str().to_os_string();
-    name.push(".bak");
-    PathBuf::from(name)
-}
-
 /// `true` when both files hold the same bytes (idempotent update: an
 /// unchanged file is neither rewritten nor backed up).
 fn same_bytes(left: &Path, right: &Path) -> bool {
@@ -501,7 +494,7 @@ fn overwrite_file(
         journal.backed_up.push(target.clone());
     }
     // Journal BEFORE the copy: a copy that dies half-way still leaves the
-    // partial deletable by `rollback_overwrite`.
+    // partial deletable by the caller's rollback.
     journal.written.push(target.clone());
     fs::copy(src, &target).map_err(map_io)?;
     Ok(())
@@ -512,7 +505,8 @@ fn overwrite_file(
 /// and nothing outside the scopes is even visited. Same defenses as
 /// [`merge_tree`] (join-checked against the canonical `dest`, symlinks never
 /// followed, `.obsidian/` never crossed). An error leaves `journal` with
-/// what was already done, for [`rollback_overwrite`]. A cancelled `cancel`
+/// what was already done, for rollback by the caller (H7
+/// [`crate::application::update::rollback_overwrite`]). A cancelled `cancel`
 /// aborts at the next entry with [`WizardError::UserAborted`] (journal intact,
 /// rollback restores the bytes already replaced).
 pub fn overwrite_tree(
@@ -570,26 +564,6 @@ pub fn overwrite_tree(
         }
     }
     Ok(())
-}
-
-/// Undo [`overwrite_tree`]: restore every `<ruta>.bak` over its original and
-/// delete every written file that had no backup. Best-effort — a rollback
-/// never panics on a vanished temp file.
-// shortcut: directories created for new files stay (possibly empty) — the
-// journal is file-scoped; upgrade only if an empty-dir residue ever matters.
-pub fn rollback_overwrite(journal: &OverwriteJournal) {
-    for original in &journal.backed_up {
-        let backup = backup_path(original);
-        // Keep the .bak when the restore failed: it is the last good copy.
-        if fs::copy(&backup, original).is_ok() {
-            let _ = fs::remove_file(&backup);
-        }
-    }
-    for written in &journal.written {
-        if !journal.backed_up.contains(written) {
-            let _ = fs::remove_file(written);
-        }
-    }
 }
 
 #[cfg(test)]
