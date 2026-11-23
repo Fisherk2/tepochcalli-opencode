@@ -318,6 +318,58 @@ fn rollback_no_borra_el_contenido_del_usuario_creado_tras_el_snapshot() {
     );
 }
 
+/// Hueco verificado: F3 escribe fuera del runtime (`.opencode/`,
+/// `10-templates/`, `AGENTS.md`, `.gitignore`) ANTES de que exista
+/// `.install-intent` (se escribe tras el ÉXITO de F3). Si F3 falla a mitad, la
+/// compensación por intent no tiene qué borrar: la verificación debe declarar
+/// esas raíces como resto, no afirmar «el vault quedó como estaba».
+#[test]
+fn rollback_declara_resto_cuando_f3_dejo_ficheros_sin_intent() {
+    let dir = tmp();
+    let vault = dir.path().join("vault");
+    std::fs::create_dir_all(&vault).expect("vault preexistente vacío");
+    let snapshot = InstallSnapshot::capture(&vault);
+
+    // F3 a medias: mergeó parte del payload y murió antes de write_intent.
+    write(&vault.join(".opencode/agents/x.md"), b"# agente\n");
+
+    let report = rollback_install(&vault, &snapshot);
+
+    assert!(
+        !report.is_complete(),
+        "un residuo sin intent no puede darse por limpio: {report:?}"
+    );
+    assert!(
+        report.leftovers.iter().any(|p| p == ".opencode"),
+        "la raíz gestionada que sobrevivió se declara como resto: {report:?}"
+    );
+}
+
+/// F8 escribe `opencode.json` FUERA del runtime; si la corrida lo pisó sin
+/// dejar `.bak` (fallo antes del backup), el rollback debe medir los bytes
+/// contra el snapshot y declarar el fichero como resto.
+#[test]
+fn rollback_detecta_opencode_json_modificado() {
+    let dir = tmp();
+    let vault = dir.path().join("vault");
+    write(&vault.join(OPENCODE_JSON), b"{\"mcp\":{\"servers\":{}}}\n");
+    let snapshot = InstallSnapshot::capture(&vault);
+
+    // Pisado tras el snapshot sin marcar F8 ni dejar .bak.
+    write(
+        &vault.join(OPENCODE_JSON),
+        b"{\"mcp\":{\"servers\":{\"otro\":{}}}}\n",
+    );
+
+    let report = rollback_install(&vault, &snapshot);
+
+    assert!(!report.is_complete(), "{report:?}");
+    assert!(
+        report.leftovers.iter().any(|p| p == OPENCODE_JSON),
+        "el opencode.json alterado se declara como resto: {report:?}"
+    );
+}
+
 /// P0-1: el informe es honesto — si el runtime no se puede borrar, lo declara
 /// incompleto en vez de afirmar que el vault quedó como estaba.
 #[cfg(unix)]

@@ -34,6 +34,14 @@ pub use super::resume::{
 /// Canonical resources dir (exact case the flow indexes:
 /// `citation.py: RESOURCES_DIR = "00-resources"`).
 pub const RESOURCES_DIR: &str = "00-resources";
+/// Harness root F3 merges and H7 overwrites (R-offline-3 verification).
+pub const OPENCODE_DIR: &str = ".opencode";
+/// Template tray F3 merges (never overwritten by H7).
+pub const TEMPLATES_DIR: &str = "10-templates";
+/// Vault instructions file F3 merges and H7 overwrites.
+pub const AGENTS_MD: &str = "AGENTS.md";
+/// Vault gitignore F3 merges and H7 overwrites.
+pub const GITIGNORE: &str = ".gitignore";
 /// F3 compensation basis (T14): exactly the files F3 wrote, one vault-
 /// relative path per line. The intent file itself is NOT listed (its path
 /// is this constant, so compensation removes it alongside the listing).

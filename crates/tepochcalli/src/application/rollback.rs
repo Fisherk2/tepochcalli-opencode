@@ -11,6 +11,7 @@
 //! quedó como estaba» sin haberlo comprobado.
 
 use std::collections::BTreeSet;
+use std::ffi::OsStr;
 use std::path::Path;
 
 use crate::domain::Phase;
@@ -18,11 +19,11 @@ use crate::domain::Phase;
 use super::embedder_gate::{models_snapshot, purge_partials};
 use super::embedder_menu::config_path;
 use super::installer::{
-    compensate_phase3, compensate_phase4, compensate_phase5, completed_phases, INSTALL_STATE_PATH,
-    RESOURCES_DIR, RUNTIME_DIR,
+    compensate_phase3, compensate_phase4, compensate_phase5, completed_phases, AGENTS_MD,
+    GITIGNORE, INSTALL_STATE_PATH, OPENCODE_DIR, RESOURCES_DIR, RUNTIME_DIR, TEMPLATES_DIR,
 };
 use super::phase7::{compensate_phase7, index_meta_path};
-use super::phase8::compensate_phase8;
+use super::phase8::{compensate_phase8, OPENCODE_JSON};
 
 /// Estado del vault justo ANTES del primer write de una corrida de install.
 #[derive(Debug)]
@@ -30,7 +31,10 @@ pub struct InstallSnapshot {
     vault_existed: bool,
     runtime_existed: bool,
     resources_existed: bool,
+    /// Raíces que F3/F8 escriben FUERA del runtime, con su existencia previa.
+    scopes: Vec<(&'static str, bool)>,
     config: Option<Vec<u8>>,
+    opencode_json: Option<Vec<u8>>,
     index_meta: Option<Vec<u8>>,
     state: Option<Vec<u8>>,
     completed: Vec<Phase>,
@@ -46,7 +50,12 @@ impl InstallSnapshot {
             vault_existed: vault.is_dir(),
             runtime_existed: vault.join(RUNTIME_DIR).is_dir(),
             resources_existed: vault.join(RESOURCES_DIR).is_dir(),
+            scopes: [OPENCODE_DIR, TEMPLATES_DIR, AGENTS_MD, GITIGNORE]
+                .into_iter()
+                .map(|scope| (scope, vault.join(scope).exists()))
+                .collect(),
             config: std::fs::read(config_path(vault)).ok(),
+            opencode_json: std::fs::read(vault.join(OPENCODE_JSON)).ok(),
             index_meta: std::fs::read(index_meta_path(vault)).ok(),
             state: std::fs::read(vault.join(INSTALL_STATE_PATH)).ok(),
             completed: completed_phases(vault),
@@ -102,6 +111,22 @@ fn relative(vault: &Path, path: &Path) -> String {
         .into_owned()
 }
 
+/// Raíces que escribe el instalador: una entrada así en el vault nunca es
+/// «contenido del usuario» (es un resto si sobrevive al rollback).
+fn is_managed_root(name: &OsStr) -> bool {
+    [
+        OPENCODE_DIR,
+        RUNTIME_DIR,
+        RESOURCES_DIR,
+        TEMPLATES_DIR,
+        AGENTS_MD,
+        GITIGNORE,
+        OPENCODE_JSON,
+    ]
+    .iter()
+    .any(|root| name == OsStr::new(root))
+}
+
 /// R-offline-3: deshace una instalación fallida o cancelada. En orden
 /// inverso: primero lo que escribe fuera del runtime (F8 → F3), después el
 /// runtime. Un `--resume` NO revierte lo que ya estaba: solo las fases que
@@ -148,11 +173,19 @@ pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) -> RollbackRep
     if !snapshot.vault_existed && vault.exists() {
         // P1-2: el vault lo creó esta corrida, pero puede haber ficheros del
         // usuario escritos DURANTE el install. Solo se borra si está vacío.
-        if let Ok(mut entries) = std::fs::read_dir(vault) {
-            if entries.next().is_some() {
-                preserved.push(format!("contenido del usuario en {}", vault.display()));
-            } else {
+        if let Ok(entries) = std::fs::read_dir(vault) {
+            let mut empty = true;
+            let mut managed = false;
+            for entry in entries.flatten() {
+                empty = false;
+                managed |= is_managed_root(&entry.file_name());
+            }
+            if empty {
                 let _ = std::fs::remove_dir(vault);
+            } else if !managed {
+                // Una raíz gestionada que sigue aquí es un resto, no
+                // contenido del usuario: la verificación de abajo lo declara.
+                preserved.push(format!("contenido del usuario en {}", vault.display()));
             }
         }
     }
@@ -165,6 +198,18 @@ pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) -> RollbackRep
     let resources_dir = vault.join(RESOURCES_DIR);
     if resources_dir.is_dir() != snapshot.resources_existed {
         leftovers.push(relative(vault, &resources_dir));
+    }
+    // F3/F8 escriben fuera del runtime: sin medirlo, un fichero suyo que
+    // sobreviva se daba por «vault como estaba».
+    for (scope, before) in &snapshot.scopes {
+        let path = vault.join(scope);
+        if path.exists() != *before {
+            leftovers.push(relative(vault, &path));
+        }
+    }
+    let opencode_json = vault.join(OPENCODE_JSON);
+    if !bytes_match(&opencode_json, snapshot.opencode_json.as_deref()) {
+        leftovers.push(relative(vault, &opencode_json));
     }
     for (path, before) in [
         (config_path(vault), snapshot.config.as_deref()),

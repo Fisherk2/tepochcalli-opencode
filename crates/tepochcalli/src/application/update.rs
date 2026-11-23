@@ -10,18 +10,18 @@ use crate::adapters::payload::rollback_overwrite;
 use crate::domain::{CancelToken, WizardError};
 use crate::ports::{OverwriteJournal, PayloadSource, Ui};
 
-use super::installer::RUNTIME_DIR;
+use super::installer::{AGENTS_MD, GITIGNORE, OPENCODE_DIR, RUNTIME_DIR};
 use super::phase8::OPENCODE_JSON;
 
 /// The only vault paths `update` may overwrite (H7): the payload files plus
 /// the two harness roots. Notes, trays, templates and `.obsidian/` are not
 /// listed, so they are never visited.
 pub const UPDATE_SCOPES: [&str; 5] = [
-    ".opencode",
+    OPENCODE_DIR,
     RUNTIME_DIR,
-    ".gitignore",
+    GITIGNORE,
     OPENCODE_JSON,
-    "AGENTS.md",
+    AGENTS_MD,
 ];
 
 /// What the overwrite established (basis of the closing panel).

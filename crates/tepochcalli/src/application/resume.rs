@@ -24,9 +24,13 @@ pub fn compensate_phase1(_vault: &Path) {}
 /// F2 compensation: no-op — F2 reuses the dir, never wipes (T7).
 pub fn compensate_phase2(_vault: &Path) {}
 
-/// F3 compensation: remove exactly the files `.install-intent` lists, then
-/// the intent file itself. Pre-existing user files were never listed, so
-/// they survive; missing entries are a no-op.
+/// F3 compensation: remove exactly the files `.install-intent` lists, prune
+/// the directories that quedaron vacíos y retira el intent. Pre-existing user
+/// files were never listed, so they survive; missing entries are a no-op.
+///
+/// Un residuo que el intent NO lista (F3 murió antes de escribirlo) no se
+/// puede distinguir desde aquí; por eso `rollback_install` lo mide contra el
+/// snapshot y lo reporta como resto.
 pub fn compensate_phase3(vault: &Path) {
     let intent = vault.join(INSTALL_INTENT_PATH);
     let body = std::fs::read_to_string(&intent).unwrap_or_default();
@@ -42,9 +46,24 @@ pub fn compensate_phase3(vault: &Path) {
             }
             target.push(part);
         }
-        let _ = std::fs::remove_file(&target);
+        if std::fs::remove_file(&target).is_ok() {
+            prune_empty_ancestors(vault, &target);
+        }
     }
     let _ = std::fs::remove_file(&intent);
+}
+
+/// Sube desde `target` podando directorios VACÍOS; `remove_dir` se niega si
+/// tienen algo, y esa negativa es la guarda que protege el contenido del
+/// usuario. Nunca toca el vault.
+fn prune_empty_ancestors(vault: &Path, target: &Path) {
+    let mut current = target.parent();
+    while let Some(dir) = current {
+        if dir == vault || std::fs::remove_dir(dir).is_err() {
+            break;
+        }
+        current = dir.parent();
+    }
 }
 
 /// Record `phase` as done in the marker (idempotent: no duplicate lines).
