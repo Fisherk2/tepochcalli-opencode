@@ -433,30 +433,27 @@ publicado.
 | **TD-52** | **Smoke de TTY/interacción bajo `uvx` en Windows nunca ejercitado**: el wizard depende de un TTY real y `uvx` no se ha probado ahí; el requisito de H5 en Windows queda `declarado`, no `medido` | Plan Phase 6.5 §8 R6; §D-b (Windows fuera de la matriz CI) | Una regresión de TUI específica de Windows (crossterm, códigos de consola) pasaría sin que CI la vea | Runner `windows-latest`: `uvx --from <rueda> tepochcalli` en una consola real, recorrer los 4 escenarios de H5 y archivar la evidencia; junto al smoke path-5 de D-b. **Sigue ABIERTA (2026-11-19):** la verificación de Phase 6.5 fue Linux/TTY real; Windows no se ejercitó |
 | **TD-53** | **`--payload` con el checkout completo arrastra `venv/` al vault**: apuntar el wizard al `obsidian-workspace/` del repo copia también los artefactos gitignored de runtime (venv de 2,1 GB, y con él `db/models/bin` si existen en el origen); el `update` posterior los respaldaría enteros. El asset de release sí los excluye, así que el fallo es del payload local, no del paquete | Verificación Phase 6.5 (T10, 2026-11-19): install con `--payload obsidian-workspace` ⇒ **19m10s** y **2,1 GB** copiados | Vault de desarrollo con ~2 GB de artefactos duplicados y `.bak` gigantes en cada update; nada de eso viaja al usuario que instala desde la rueda | Excluir los artefactos de runtime (`venv/`, `db/`, `models/`, `bin/`, `config/`, `__pycache__/`) en el adaptador `LocalPayload`, **o** validar el payload antes de materializar y abortar con mensaje accionable. Payload real de release medido como correcto; re-verificar con un `install` de punta a punta sobre el checkout tras el fix |
 
-### Deuda esperada de Phase 6.6 (2026-11-20, sin ID asignado)
+### Deudas con ID — cierre de Phase 6.5/6.6 (2026-11-20; IDs asignados 2026-11-23)
 
-Límites declarados al cerrar la Phase 6.6 (resiliencia offline y rollback cancelable en H6/H7/H9,
-[WORKFLOW.md](WORKFLOW.md) §Phase 6.6). Son límites de lo implementado, no defectos ocultos.
+Límites declarados al cerrar la Phase 6.6 y hallazgos de la auditoría posterior. La fila
+**TD-54 queda CERRADA** en esta pasada; el resto sigue abierta.
 
-| Deuda | Por qué no se cierra aquí |
-| --- | --- |
-| Ctrl+C y rollback en Windows | Requiere un runner `windows-latest` con consola real; hoy queda `declarado`, no `medido` |
-| TTY real y animación de progreso | No hay terminal interactiva en la suite; el render se verifica en `TestBackend` y la pantalla muestra estado, no avance |
-| Journal acumulativo de F3 en re-ejecución | El journal no es por fichero: los ficheros que esa pasada de F3 añadió pueden sobrevivir al rollback |
-| Byte-identidad dentro de `db/`, `bin/` y `venv/` en re-ejecución | Estado derivado: no se promete byte-identidad en esas rutas |
-| Directorios vacíos en un vault preexistente tras el rollback | El `remove_dir_all` final solo aplica al vault creado por la corrida |
+| Deuda | Qué es y por qué sigue abierta | Acción |
+| --- | --- | --- |
+| **TD-54** | **`e2e_swap.rs` > 1000 líneas** (1068; cruzó en T15, 999→1042 en `8874bf8`). **CERRADA 2026-11-23 (`c2bad3c`):** partido en `e2e_swap_cli.rs` (114, único spawn), `int_swap_run.rs` (367), `int_swap_external.rs` (295) e `int_swap_commit.rs` (320); 24 tests idénticos, 0 en banda >500 | Nada pendiente; el guard `int_architecture` sigue exigiendo spawn en `e2e_*` |
+| **TD-55** | **Ctrl+C y rollback bajo `uvx` en Windows**: el TTY/crossterm y el rollback cancelable no se han ejercitado en un runner Windows (extiende TD-52) | Runner `windows-latest` con consola real: cancelar a mitad de descarga y verificar rollback + backup |
+| **TD-56** | **TTY real y animación de progreso no medidos**: la barra se verifica en `TestBackend`; no hay medida de que el watcher redibuje a 100 ms en un terminal real | Smoke en TTY real (`script -qec`) que capture 2 frames separados durante una descarga |
+| **TD-57** | **Journal acumulativo de F3 en re-ejecución**: el journal no es por fichero; lo que esa pasada de F3 añadió puede sobrevivir al rollback | Journal por fichero (o snapshot del árbol F3) antes de prometer byte-identidad |
+| **TD-58** | **Byte-identidad dentro de `db/`, `bin/` y `venv/`** tras una re-ejecución: estado derivado, no se promete igualdad byte a byte | Comparar árboles derivados por fase o declararlo fuera del contrato de rollback |
+| **TD-59** | **Directorios vacíos en un vault preexistente** tras el rollback: el `remove_dir_all` final solo aplica al vault creado por la corrida | Verificar y podar directorios vacíos que la corrida creó, sin tocar los del usuario |
+| **TD-60** | **Wording «sin red» del preflight H6/H7**: el panel dice «sin red» para cualquier `NetDownload`, incluido un `--payload-url` muerto con internet viva | Distinguir «host inalcanzable» de «sin red» en el contexto del panel y cubrirlo con e2e |
+| **TD-61** | **`mirror_pending` sin sonda tras el consentimiento**: H6 espera al consentimiento TUI del mirror http, pero después no hay preflight; exige TTY interactivo | Sonda post-consentimiento cubierta por un e2e con TTY simulado o un test de la costura |
+| **TD-62** | **Carrera hijo-ya-muerto en `run_inner`**: «hijo sale ≠0 mientras el token se dispara» no es determinista; se cubrió «hijo vivo en el primer tick» | Puerto/reloj inyectable para hacer determinista el veredicto del watcher |
+| **TD-63** | **`split_once('\0')` sin ejercitador**: la rama local con clave embebida es inalcanzable desde la API pública (mutación verificada: sin el split el test sigue verde) | Extraer el empaquetado a un helper con test (o retirar la rama si el contrato no la necesita) |
+| **TD-64** | **Test #9 Linux-only**: `e2e_progress_no_tty.rs` depende de `setsid` (util-linux); Windows/macOS lo omiten por `cfg` | Sustituto portable para «sin terminal de control» o medirlo en Windows (TD-55) |
+| **TD-65** | **Progreso indeterminado y alcance de la barra**: la descarga del flow no reporta bytes, así que la barra pulsa y lo dice; H6 no muestra progreso de F3–F8 y H8 no comprueba cancelación dentro de un `remove_dir_all` grande | Feed de bytes en el contrato del flow (barra determinada) y checks de token por entrada en el borrado |
+| **TD-66** | **`config embedder --non-interactive` con guion agotado** cae en `report_failure` (línea `estado: cancelado`) en vez del panel de uso: falta distinguir «no hay respuesta» de «cancelación» | Mismo patrón que #10b: un contexto de uso para el guion agotado, sin tocar el exit 41 |
+| **TD-67** | **`payload.rs` 748 líneas (banda 701–1000) sin justificación declarada**; `merge_tree` y `overwrite_tree` comparten ~35 líneas de walker | Declarar la justificación en el próximo toque y extraer el walker con visitante, conservando symlink-skip, `join_checked` y prune de `.obsidian/` |
+| **TD-68** | **ENOSPC ⇒ `PermissionDenied`** en `copy_tree`/`overwrite_file` (convención T7): un disco lleno durante el backup de H8 se reporta como «permiso denegado» y oculta la causa | Mapear `ErrorKind::StorageFull`/`ENOSPC` a `DiskFull` (30) en las rutas nuevas de backup/borrado |
 
-El dueño asigna los IDs; no se inventan aquí.
-
-### Deuda de la ronda de tests de Phase 6.6 (2026-11-20, sin ID asignado)
-
-| Deuda | Por qué no se cierra aquí |
-| --- | --- |
-| **`e2e_swap.rs` > 1000 líneas (1068)** | El umbral CODE_STYLE `>1000` exige bajar a <500; lo cruzó T15 (999→1042 en `8874bf8`) sin declararlo y la ronda de tests lo llevó a 1068. Refactor en el próximo toque (mover scenarios a fichero nuevo; el único spawn `run_embedder_cli` debe quedarse en un `e2e_*` por `int_architecture`) |
-| **Wording «sin red» del preflight H7/H6** | El panel dice «sin red (preflight)» para cualquier `NetDownload`, incluido un `--payload-url` muerto con internet vivo; wording inexacto, no cubierto por test |
-| **`mirror_pending` sin preflight tras el consentimiento** | H6 espera al consentimiento TUI del mirror http, pero tras él no hay sonda; exige TTY interactivo para probarlo (hueco #13 de la auditoría) |
-| **Carrera hijo-ya-muerto en `run_inner`** | El caso «hijo sale con código ≠0 mientras el token se dispara» no es determinista; se cubrió la variante «hijo vivo en el primer tick» y la carrera queda declarada |
-| **`swap.rs:172` (`split_once('\0')`) sin ejercitador** | La rama local con clave embebida es inalcanzable desde la API pública (mutación verificada: sin el split el test sigue verde); código defensivo sin test que lo ponga en rojo |
-| **Test #9 Linux-only** | `e2e_progress_no_tty.rs` depende de `setsid` (util-linux); Windows/macOS lo omiten (`cfg`), deuda de TTY ya existente (TD-52) |
-
-El dueño asigna los IDs; no se inventan aquí.
+IDs asignados por orden del dueño en la pasada de cierre 2026-11-23. El resto de la tabla principal no se reescribe.
