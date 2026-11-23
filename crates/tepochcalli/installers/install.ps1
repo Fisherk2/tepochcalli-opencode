@@ -1,11 +1,9 @@
 # `tepochcalli` PowerShell installer (T19) — HAND-WRITTEN stand-in.
 #
-# Gap: the `cargo dist` binary is unavailable in this environment, so this
-# script (and `install.sh`) mirrors what `cargo dist build --artifacts=global`
-# will generate (`installers = ["shell", "powershell"]` in `dist.toml`).
-# Reconcile with `cargo dist generate --check` once `dist` is installed; M6
-# still holds (no release has been published, this was never executed
-# against a real release).
+# Gap: this beta publishes no binary assets (`release.yml` uploads only the
+# payload), so the tag this script downloads does not exist yet: the binary
+# ships in the `uvx tepochcalli` wheel and is compiled from source for now.
+# M6 still holds (never executed against a real release).
 #
 # Inspect-first caveat: NEVER run an unseen script from the internet. Fetch
 # this file, read it (`irm <url> -OutFile install.ps1; notepad install.ps1`),

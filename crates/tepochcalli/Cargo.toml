@@ -13,18 +13,6 @@ categories = ["command-line-utilities", "development-tools"]
 # `cargo install` no usa los tests; empaquetarlos solo infla el `.crate`.
 exclude = ["tests/"]
 
-# `cargo binstall tepochcalli` (ADR-013): los assets de cargo-dist viven bajo el
-# tag `tepochcalli-v<version>`, que no es el default de binstall (`<version>`/`v<version>`),
-# así que la URL se declara explícitamente. Ver .github/workflows/release.yml.
-[package.metadata.binstall]
-pkg-url = "{ repo }/releases/download/tepochcalli-v{ version }/{ name }-{ target }{ archive-suffix }"
-bin-dir = "{ name }-{ target }/{ bin }{ binary-ext }"
-
-# cargo-dist empaqueta Windows como `.zip` (`windows-archive` default) y el
-# `pkg-fmt` por defecto de binstall es `tgz`.
-[package.metadata.binstall.overrides.'cfg(windows)']
-pkg-fmt = "zip"
-
 [[bin]]
 name = "tepochcalli"
 path = "src/main.rs"
