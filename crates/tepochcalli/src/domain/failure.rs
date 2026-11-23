@@ -78,15 +78,19 @@ pub fn failure_body(
     redact(&body, secrets)
 }
 
-/// Panel de un fallo de USO en `install --non-interactive` sin `--vault`:
+/// Panel de un fallo de USO (`--non-interactive` sin el flag requerido):
 /// nadie canceló nada, así que la causa no es el Display de `UserAborted`
-/// («cancelled by user» sería mentira), no hay línea `estado:` y la acción
-/// correctiva es pasar el flag que falta — nunca `--resume`.
+/// («cancelled by user» sería mentira), no hay línea `estado:` ni `retry:` y
+/// la acción correctiva es pasar el flag que falta.
 ///
-/// La causa es solo `context` (sin `": {err}"`): el caller ya lleva el err
-/// tipado para el código de salida.
+/// La causa es `{command}: {context}` (el `context` llega SIN prefijo de
+/// comando): el caller ya lleva el err tipado para el código de salida.
+#[allow(clippy::too_many_arguments)]
 #[must_use]
 pub fn failure_body_usage(
+    command: &str,
+    missing: &str,
+    usage: &str,
     context: &str,
     phase: Option<Phase>,
     log_path: &Path,
@@ -99,10 +103,16 @@ pub fn failure_body_usage(
         body.push('\n');
     }
     body.push_str("cause: ");
+    body.push_str(command);
+    body.push_str(": ");
     body.push_str(context);
     body.push('\n');
-    body.push_str("falta: --vault <directorio>\n");
-    body.push_str("uso: tepochcalli install --vault <directorio> --non-interactive\n");
+    body.push_str("falta: ");
+    body.push_str(missing);
+    body.push('\n');
+    body.push_str("uso: ");
+    body.push_str(usage);
+    body.push('\n');
     body.push_str("log: ");
     body.push_str(&log_path.to_string_lossy());
     body.push('\n');
@@ -336,31 +346,41 @@ mod tests {
         assert!(body.contains("code: E_API_AUTH"), "{body}");
     }
 
-    /// #10b — panel de USO: `install --non-interactive` sin `--vault` es un
-    /// fallo de uso, NO una cancelación. Fija el shape completo con y sin
-    /// fase: `falta:` + `uso:` como acción correctiva, nunca `estado:`
-    /// cancelado, nunca el Display `cancelled by user` de `UserAborted`
-    /// (nadie canceló) y nunca `retry:` (--resume no arregla un flag ausente).
+    /// #10b / P0-2 — panel de USO: un flag ausente en `--non-interactive` es
+    /// un fallo de uso, NO una cancelación. Fija el shape completo con y sin
+    /// fase: `falta:` + `uso:` como acción correctiva, nunca `estado:`,
+    /// nunca el Display `cancelled by user` de `UserAborted` (nadie canceló)
+    /// y nunca `retry:` (--resume no arregla un flag ausente).
     #[test]
     fn body_usage_names_the_missing_flag_and_never_claims_a_cancel() {
         let log = Path::new("/tmp/state/install-9.log");
         for (phase, has_phase) in [(None, false), (Some(Phase::F2), true)] {
-            let body = failure_body_usage("install: vault selection failed", phase, log, &[]);
+            let body = failure_body_usage(
+                "tepochcalli",
+                "--vault <directorio>",
+                "tepochcalli --vault <directorio> --non-interactive <subcomando>",
+                "vault selection failed",
+                phase,
+                log,
+                &[],
+            );
             assert_eq!(
                 body.contains("phase:"),
                 has_phase,
                 "la línea phase: solo con fase conocida: {body}"
             );
             assert!(
-                body.contains("cause: install: vault selection failed"),
-                "cause sin el Display del err (el caller ya lo lleva para el exit code): {body}"
+                body.contains("cause: tepochcalli: vault selection failed"),
+                "cause = command: context (sin el Display del err): {body}"
             );
             assert!(body.contains("falta: --vault <directorio>"), "{body}");
             assert!(
-                body.contains("uso: tepochcalli install --vault <directorio> --non-interactive"),
+                body.contains(
+                    "uso: tepochcalli --vault <directorio> --non-interactive <subcomando>"
+                ),
                 "{body}"
             );
-            assert!(!body.contains("estado: cancelado"), "{body}");
+            assert!(!body.contains("estado:"), "{body}");
             assert!(!body.contains("cancelled by user"), "{body}");
             assert!(!body.contains(RETRY_COMMAND), "{body}");
             assert!(!body.contains("retry:"), "{body}");
@@ -372,8 +392,11 @@ mod tests {
     /// en cualquier string del panel, esté o no en un fallo de uso.
     #[test]
     fn body_usage_redacts_the_context() {
-        let context = format!("install: vault selection failed {SECRET}");
+        let context = format!("vault selection failed {SECRET}");
         let body = failure_body_usage(
+            "tepochcalli",
+            "--vault <directorio>",
+            "tepochcalli --vault <directorio> --non-interactive <subcomando>",
             &context,
             None,
             Path::new("/tmp/state/install-9.log"),

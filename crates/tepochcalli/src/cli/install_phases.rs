@@ -16,7 +16,7 @@ use tepochcalli::domain::{CancelToken, Phase, VaultPath, WizardError};
 use tepochcalli::ports::Ui;
 
 use super::install::{offline_map, run_f6_or_degraded};
-use super::report::report_failure;
+use super::report::{report_failure, report_usage_failure};
 use super::usage::VERSION;
 
 /// Marker-and-artifact skip for one phase: prints the resume note and
@@ -70,10 +70,13 @@ pub(crate) fn run_phases(
                 "install: mirror http no-loopback ({base}) exige transporte sin TLS; \
                  en --non-interactive no hay confirmación posible"
             );
-            return report_failure(
+            return report_usage_failure(
                 ui,
+                "install",
                 Some(Phase::F3),
-                "install: mirror http sin consentimiento",
+                "mirror http sin consentimiento",
+                "un transporte TLS o aceptar el mirror en interactivo",
+                "re-ejecuta sin --non-interactive o usa --payload/--payload-url https",
                 WizardError::UserAborted,
                 Some(path.as_path()),
             );

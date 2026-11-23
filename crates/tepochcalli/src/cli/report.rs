@@ -70,23 +70,42 @@ pub(crate) fn report_failure(
     report(ui, &title, body, &owned, &log_path, err.exit_code())
 }
 
-/// Usage-failure exit (#10b): mismo esqueleto compartido que
+/// Usage-failure exit (#10b, P0-2): mismo esqueleto compartido que
 /// [`report_failure`] (log redactado bajo el state dir + panel vía el puerto
-/// `Ui`), pero con [`failure_body_usage`] — `install --non-interactive` sin
-/// `--vault` es un fallo de USO, no una cancelación: sin línea `estado:`,
-/// sin el Display de `UserAborted` y con el flag ausente como correctivo
-/// (nunca `--resume`). El código de salida tipado del err se conserva.
+/// `Ui`), pero con [`failure_body_usage`] — un flag ausente en
+/// `--non-interactive` es un fallo de USO, no una cancelación: sin línea
+/// `estado:`, sin el Display de `UserAborted` y con el flag ausente como
+/// correctivo (nunca `--resume`). El código de salida tipado del err se
+/// conserva y el título lleva la fase entre paréntesis cuando se conoce.
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn report_usage_failure(
     ui: &dyn Ui,
+    command: &str,
     phase: Option<Phase>,
     context: &str,
+    missing: &str,
+    usage: &str,
     err: WizardError,
     vault: Option<&Path>,
 ) -> u8 {
     let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
     let masked: Vec<&str> = owned.iter().map(String::as_str).collect();
     let log_path = log_path_in(&state_dir(), now_secs());
-    let title = failure_title(phase);
-    let body = failure_body_usage(context, phase, &log_path, &masked);
+    let title = match phase {
+        Some(phase) => format!("{command}: uso incorrecto ({})", phase.name()),
+        None => format!("{command}: uso incorrecto"),
+    };
+    let body = failure_body_usage(command, missing, usage, context, phase, &log_path, &masked);
     report(ui, &title, body, &owned, &log_path, err.exit_code())
+}
+
+/// Cancelación genuina (Esc / Ctrl-C en interactivo): nadie falló, así que el
+/// panel no dice «failed» ni inventa un log. Devuelve el código de
+/// `UserAborted`.
+pub(crate) fn report_cancel(ui: &dyn Ui, command: &str) -> u8 {
+    ui.panel(
+        "Cancelado",
+        &format!("{command}: cancelado por el usuario; no se modificó nada."),
+    );
+    WizardError::UserAborted.exit_code()
 }

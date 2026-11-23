@@ -16,7 +16,9 @@ use tepochcalli::ports::{HttpClient, PayloadSource, Ui};
 
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install::validate_payload_flags;
-use super::report::{report_failure, report_maintenance_failure};
+use super::report::{
+    report_cancel, report_failure, report_maintenance_failure, report_usage_failure,
+};
 use super::usage::VERSION;
 
 const SWAP_SPEC: FlagSpec = FlagSpec {
@@ -81,15 +83,19 @@ pub(crate) fn run_config_embedder(
     };
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
-        Err(err) => {
-            return report_failure(
+        Err(err) if non_interactive => {
+            return report_usage_failure(
                 &*ui,
+                "config embedder",
                 None,
-                "config embedder: vault selection failed",
+                "vault selection failed",
+                "--vault <directorio>",
+                "tepochcalli config embedder --vault <directorio> --non-interactive --confirm",
                 err,
                 None,
             );
         }
+        Err(_) => return report_cancel(&*ui, "config embedder"),
     };
     let path = Path::new(&raw);
     let http = UreqHttpClient::new();
@@ -158,15 +164,19 @@ pub(crate) fn run_reindex_cmd(
     };
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
-        Err(err) => {
-            return report_maintenance_failure(
+        Err(err) if non_interactive => {
+            return report_usage_failure(
                 &*ui,
                 "reindex",
-                "reindex: vault selection failed",
+                None,
+                "vault selection failed",
+                "--vault <directorio>",
+                "tepochcalli reindex --vault <directorio> --non-interactive",
                 err,
                 None,
             );
         }
+        Err(_) => return report_cancel(&*ui, "reindex"),
     };
     let path = Path::new(&raw);
     match run_reindex(&StdCommandRunner, &*ui, path) {
@@ -225,15 +235,19 @@ pub(crate) fn run_uninstall_cmd(
     };
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
-        Err(err) => {
-            return report_maintenance_failure(
+        Err(err) if non_interactive => {
+            return report_usage_failure(
                 &*ui,
                 "uninstall",
-                "uninstall: vault selection failed",
+                None,
+                "vault selection failed",
+                "--vault <directorio>",
+                "tepochcalli uninstall --vault <directorio> --non-interactive --confirm",
                 err,
                 None,
             );
         }
+        Err(_) => return report_cancel(&*ui, "uninstall"),
     };
     let path = Path::new(&raw);
     match run_uninstall(&*ui, path) {
@@ -306,15 +320,19 @@ pub(crate) fn run_update_cmd(
     };
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
-        Err(err) => {
-            return report_maintenance_failure(
+        Err(err) if non_interactive => {
+            return report_usage_failure(
                 &*ui,
                 "update",
-                "update: vault selection failed",
+                None,
+                "vault selection failed",
+                "--vault <directorio>",
+                "tepochcalli update --vault <directorio> --non-interactive",
                 err,
                 None,
             );
         }
+        Err(_) => return report_cancel(&*ui, "update"),
     };
     let path = Path::new(&raw);
     let source: Box<dyn PayloadSource> = match (payload, payload_url, payload_sha256) {

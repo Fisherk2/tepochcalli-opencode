@@ -138,8 +138,11 @@ pub(crate) fn run_install(
         Err(err) if non_interactive => {
             return report_usage_failure(
                 &*ui,
+                "install",
                 Some(Phase::F2),
-                "install: vault selection failed",
+                "vault selection failed",
+                "--vault <directorio>",
+                "tepochcalli install --vault <directorio> --non-interactive",
                 err,
                 None,
             );

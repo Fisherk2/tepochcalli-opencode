@@ -16,7 +16,7 @@ use tepochcalli::ports::Ui;
 use super::commands::{run_config_embedder, run_uninstall_cmd, run_update_cmd};
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install::{run_install, validate_payload_flags};
-use super::report::report_maintenance_failure;
+use super::report::{report_cancel, report_usage_failure};
 
 const HOME_SPEC: FlagSpec = FlagSpec {
     prefix: "tepochcalli",
@@ -66,28 +66,36 @@ pub(crate) fn run_home_cmd(
     };
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
-        Err(err) => {
-            return report_maintenance_failure(
+        Err(err) if non_interactive => {
+            return report_usage_failure(
                 &*ui,
                 "tepochcalli",
+                None,
                 "vault selection failed",
+                "--vault <directorio>",
+                "tepochcalli --vault <directorio> --non-interactive <subcomando>",
                 err,
                 None,
             );
         }
+        Err(_) => return report_cancel(&*ui, "tepochcalli"),
     };
     let path = Path::new(&raw);
     let action = match choose_action(&*ui, path) {
         Ok(action) => action,
-        Err(err) => {
-            return report_maintenance_failure(
+        Err(err) if non_interactive => {
+            return report_usage_failure(
                 &*ui,
                 "tepochcalli",
+                None,
                 "menu selection failed",
+                "un subcomando",
+                "tepochcalli install|update|uninstall|config embedder …",
                 err,
                 Some(path),
             );
         }
+        Err(_) => return report_cancel(&*ui, "tepochcalli"),
     };
     let forward = Forwarded {
         vault: &raw,
