@@ -67,6 +67,12 @@ impl InstallSnapshot {
 /// Restores the snapshotted bytes or removes the file the run created; shared
 /// with the swap rollback (`swap::rollback`).
 pub(super) fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
+    // Un target que es un enlace no se toca: escribir a través de él
+    // contaminaría su destino fuera del vault (L2-8). Se deja el enlace y la
+    // verificación `bytes_match` lo reportará como resto.
+    if std::fs::symlink_metadata(target).is_ok_and(|m| m.file_type().is_symlink()) {
+        return;
+    }
     match before {
         Some(bytes) => {
             let _ = std::fs::write(target, bytes);

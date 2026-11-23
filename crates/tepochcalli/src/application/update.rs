@@ -93,6 +93,11 @@ pub fn run_update(
 pub fn rollback_overwrite(journal: &OverwriteJournal) {
     for original in &journal.backed_up {
         let backup = backup_path(original);
+        // Un `.bak` que es un enlace es ajeno: copiarlo metería bytes de fuera
+        // del vault en el destino. No lo leemos ni lo tocamos.
+        if fs::symlink_metadata(&backup).is_ok_and(|m| m.file_type().is_symlink()) {
+            continue;
+        }
         // Keep the .bak when the restore failed: it is the last good copy.
         if fs::copy(&backup, original).is_ok() {
             let _ = fs::remove_file(&backup);

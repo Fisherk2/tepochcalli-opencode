@@ -315,6 +315,8 @@ pub fn run_phase8(
         None
     };
     if let Some(bytes) = &original {
+        // Un `.bak` enlazado no debe recibir el backup (escribiría fuera).
+        let _ = std::fs::remove_file(vault.join(OPENCODE_BAK));
         std::fs::write(vault.join(OPENCODE_BAK), bytes)
             .map_err(|_| WizardError::PermissionDenied)?;
     }
@@ -386,6 +388,10 @@ fn merge_and_verify(
 pub fn compensate_phase8(vault: &Path) {
     let target = vault.join(OPENCODE_JSON);
     let backup = vault.join(OPENCODE_BAK);
+    // Un `.bak` enlazado es ajeno: no se lee; se deja y el panel lo reporta.
+    if std::fs::symlink_metadata(&backup).is_ok_and(|m| m.file_type().is_symlink()) {
+        return;
+    }
     match std::fs::read(&backup) {
         Ok(bytes) => {
             if std::fs::write(&target, &bytes).is_ok() {

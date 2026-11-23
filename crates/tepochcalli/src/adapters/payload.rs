@@ -490,6 +490,9 @@ fn overwrite_file(
             return Ok(());
         }
         let backup = backup_path(&target);
+        // Un `.bak` preexistente puede ser un enlace: borrarlo (el enlace, no su
+        // destino) antes del copy evita escribir a través de él fuera del vault.
+        let _ = fs::remove_file(&backup);
         fs::copy(&target, &backup).map_err(map_io)?;
         journal.backed_up.push(target.clone());
     }

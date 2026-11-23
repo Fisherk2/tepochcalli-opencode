@@ -188,6 +188,59 @@ fn midway_failure_leaves_the_journal_for_rollback() {
 
 #[cfg(unix)]
 #[test]
+fn update_no_escribe_a_traves_de_un_bak_symlink() {
+    // Un `.bak` que ya existía como enlace (puesto por otro) no puede ser el
+    // destino del backup: `fs::copy` escribiría a través de él, fuera del vault.
+    let payload = tmp();
+    let vault = tmp();
+    let outside = tmp();
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(vault.path(), "AGENTS.md", "viejo\n");
+    write_rel(outside.path(), "secret", "no tocar\n");
+    std::os::unix::fs::symlink(
+        outside.path().join("secret"),
+        vault.path().join("AGENTS.md.bak"),
+    )
+    .expect("symlink .bak");
+
+    let mut j = journal();
+    overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
+
+    assert_eq!(
+        read(outside.path(), "secret"),
+        "no tocar\n",
+        "el backup no se escribe a través del .bak enlazado"
+    );
+    assert_eq!(read(vault.path(), "AGENTS.md"), "nuevo\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn rollback_no_lee_a_traves_de_un_bak_symlink() {
+    // Restaurar desde un `.bak` enlazado copiaría contenido externo al vault.
+    let vault = tmp();
+    let outside = tmp();
+    write_rel(vault.path(), "AGENTS.md", "nuevo\n");
+    write_rel(outside.path(), "evil", "contenido externo\n");
+    std::os::unix::fs::symlink(
+        outside.path().join("evil"),
+        vault.path().join("AGENTS.md.bak"),
+    )
+    .expect("symlink .bak");
+
+    let mut j = journal();
+    j.backed_up.push(vault.path().join("AGENTS.md"));
+    rollback_overwrite(&j);
+
+    assert_eq!(
+        read(vault.path(), "AGENTS.md"),
+        "nuevo\n",
+        "no se restaura desde un .bak ajeno"
+    );
+}
+
+#[cfg(unix)]
+#[test]
 fn symlinks_are_never_followed() {
     let payload = tmp();
     let vault = tmp();
