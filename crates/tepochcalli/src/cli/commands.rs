@@ -9,8 +9,8 @@ use tepochcalli::adapters::{
 };
 use tepochcalli::application::text::or_fallback;
 use tepochcalli::application::{
-    resolve_vault_dir, run_reindex, run_swap, run_uninstall, run_update, SwapDeps, SwapOptions,
-    RUNTIME_DIR,
+    installed_version, resolve_vault_dir, run_reindex, run_swap, run_uninstall, run_update,
+    SwapDeps, SwapOptions,
 };
 use tepochcalli::domain::{CancelToken, WizardError};
 use tepochcalli::ports::{HttpClient, PayloadSource, Ui};
@@ -365,9 +365,10 @@ pub(crate) fn run_update_cmd(
         Err(code) => return code,
     };
     let path = Path::new(&raw);
-    // H7 actualiza un workspace ya instalado: sin runtime no hay nada que
-    // actualizar y el update NO siembra payload (eso es `install`).
-    if !path.join(RUNTIME_DIR).join("pyproject.toml").is_file() {
+    // H7 actualiza un workspace ya instalado (misma verdad que el menú H5:
+    // `.tepochcalli/pyproject.toml` con `[project] version`); sin él no hay nada
+    // que actualizar y el update NO siembra payload (eso es `install`).
+    if installed_version(path).is_none() {
         let _ = writeln!(
             stderr,
             "update: no hay instalación en {} — ejecuta `tepochcalli install` primero \

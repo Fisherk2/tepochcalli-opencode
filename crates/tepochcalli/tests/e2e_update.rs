@@ -257,6 +257,34 @@ fn update_into_a_non_installed_vault_is_a_usage_error() {
     );
 }
 
+/// Un `.tepochcalli/pyproject.toml` sin `[project] version` NO es un workspace
+/// instalado para el menú H5 (`installed_version` = None): mismo gate de uso que
+/// un vault vacío, exit 2 y nada del payload en el vault.
+#[test]
+fn update_with_a_versionless_pyproject_is_a_usage_error() {
+    let vault = tmp();
+    write_rel(
+        vault.path(),
+        ".tepochcalli/pyproject.toml",
+        "[project]\nname = \"tepochcalli-flow\"\n",
+    );
+    let payload = payload_fixture();
+    let before = snapshot(vault.path());
+
+    let out = run_update(vault.path(), payload.path());
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{stderr}");
+    assert!(
+        stderr.contains("install"),
+        "el error debe guiar al `install`, got:\n{stderr}"
+    );
+    assert_eq!(
+        snapshot(vault.path()),
+        before,
+        "el vault no gana ficheros del payload"
+    );
+}
+
 #[test]
 fn update_help_documents_its_flags() {
     let out = bin()

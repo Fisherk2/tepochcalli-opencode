@@ -272,6 +272,16 @@ fn uninstall_inner(
     })
 }
 
+/// ENOSPC es `DiskFull` (30), no `PermissionDenied` (31): la convención T7
+/// mapeaba todo io error a permiso y mentía sobre un disco lleno.
+fn map_fs(err: std::io::Error) -> WizardError {
+    if err.kind() == std::io::ErrorKind::StorageFull {
+        WizardError::DiskFull
+    } else {
+        WizardError::PermissionDenied
+    }
+}
+
 /// `<vault>/.tepochcalli-backup-<unix-ts>` (a `-N` suffix if that second is
 /// already taken by a previous run), created 0700 and self-ignored by its own
 /// `.gitignore` (`*`) — it holds `config/`, which may carry an API key.
@@ -289,12 +299,12 @@ fn create_backup_dir(vault: &Path) -> Result<PathBuf, WizardError> {
                 // `*` blocks the whole folder whatever the vault's .gitignore
                 // says; the payload's .gitignore is frozen, this one is ours.
                 let marker = dir.join(".gitignore");
-                std::fs::write(&marker, "*\n").map_err(|_| WizardError::PermissionDenied)?;
+                std::fs::write(&marker, "*\n").map_err(map_fs)?;
                 super::installer::set_user_private(&marker)?;
                 return Ok(dir);
             }
             Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(_) => return Err(WizardError::PermissionDenied),
+            Err(err) => return Err(map_fs(err)),
         }
     }
     Err(WizardError::PermissionDenied)
@@ -336,24 +346,24 @@ fn copy_tree(source: &Path, target: &Path, cancel: &CancelToken) -> Result<(), W
         return Err(WizardError::UserAborted);
     }
     let kind = std::fs::symlink_metadata(source)
-        .map_err(|_| WizardError::PermissionDenied)?
+        .map_err(map_fs)?
         .file_type();
     if kind.is_symlink() {
         return Ok(());
     }
     if kind.is_dir() {
-        std::fs::create_dir_all(target).map_err(|_| WizardError::PermissionDenied)?;
-        let entries = std::fs::read_dir(source).map_err(|_| WizardError::PermissionDenied)?;
+        std::fs::create_dir_all(target).map_err(map_fs)?;
+        let entries = std::fs::read_dir(source).map_err(map_fs)?;
         for entry in entries {
-            let entry = entry.map_err(|_| WizardError::PermissionDenied)?;
+            let entry = entry.map_err(map_fs)?;
             copy_tree(&entry.path(), &target.join(entry.file_name()), cancel)?;
         }
         return Ok(());
     }
     if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent).map_err(|_| WizardError::PermissionDenied)?;
+        std::fs::create_dir_all(parent).map_err(map_fs)?;
     }
-    std::fs::copy(source, target).map_err(|_| WizardError::PermissionDenied)?;
+    std::fs::copy(source, target).map_err(map_fs)?;
     Ok(())
 }
 
@@ -368,6 +378,18 @@ fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<Refreshed, Wiza
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn fs_errors_map_disk_full_apart_from_permission() {
+        assert_eq!(
+            map_fs(std::io::Error::from(std::io::ErrorKind::StorageFull)),
+            WizardError::DiskFull
+        );
+        assert_eq!(
+            map_fs(std::io::Error::from(std::io::ErrorKind::PermissionDenied)),
+            WizardError::PermissionDenied
+        );
+    }
 
     #[test]
     fn config_value_returns_some_empty_for_an_empty_value() {
