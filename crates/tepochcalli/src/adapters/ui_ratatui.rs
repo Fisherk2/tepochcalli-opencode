@@ -105,7 +105,7 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
 /// the Cancel row is enabled; the five menu actions stay visible, dimmed and
 /// with the reason, so a blocked action is never hidden (H5 rule).
 ///
-/// The download reports no bytes, so the bar is INDETERMINATE: `tick` only
+/// The operation reports no bytes, so the bar is INDETERMINATE: `tick` only
 /// moves a triangle and the screen says so. Never a fake percentage.
 pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
     let [header_area, gauge_area, detail_area] = Layout::vertical([
@@ -136,7 +136,7 @@ pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
     ] {
         lines.push(
             Line::from(format!(
-                "{} {}  — descarga en curso",
+                "{} {}  — operación en curso",
                 action.icon(),
                 action.label()
             ))
@@ -144,11 +144,11 @@ pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
         );
     }
     lines.push(
-        Line::from("Progreso indeterminado: la descarga no reporta bytes.")
+        Line::from("Progreso indeterminado: la operación no reporta bytes.")
             .style(Style::new().add_modifier(Modifier::DIM)),
     );
     lines.push(
-        Line::from("El workspace no se tocará: la cancelación deshace lo aplicado.")
+        Line::from("Cancelar revierte lo aplicado; si no es reversible, deja el backup nombrado.")
             .style(Style::new().add_modifier(Modifier::DIM)),
     );
     frame.render_widget(

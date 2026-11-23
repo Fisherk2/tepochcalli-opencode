@@ -69,16 +69,16 @@ fn every_menu_action_is_blocked_with_the_download_reason() {
         assert!(text.contains(label), "missing blocked row {label}:\n{text}");
     }
     assert_eq!(
-        text.matches("descarga en curso").count(),
+        text.matches("operación en curso").count(),
         5,
         "each of the five actions needs its visible reason:\n{text}"
     );
     assert!(
-        text.contains("El workspace no se tocará"),
+        text.contains("Cancelar revierte lo aplicado"),
         "the no-destruction notice must be visible:\n{text}"
     );
     assert!(
-        text.contains("Progreso indeterminado: la descarga no reporta bytes."),
+        text.contains("Progreso indeterminado: la operación no reporta bytes."),
         "the bar must say it is indeterminate, never fake a percentage:\n{text}"
     );
     assert!(
@@ -106,7 +106,7 @@ fn blocked_rows_are_dimmed_in_the_buffer() {
         let row: String = (area.left()..area.right())
             .filter_map(|x| buffer.cell((x, y)).and_then(|c| c.symbol().chars().next()))
             .collect();
-        if row.contains("descarga en curso") {
+        if row.contains("operación en curso") {
             let dim = (area.left()..area.right()).any(|x| {
                 buffer
                     .cell((x, y))
