@@ -132,6 +132,7 @@ fn is_rejection(err: &ArchiveError) -> bool {
             | ArchiveError::AbsolutePath { .. }
             | ArchiveError::WindowsPath { .. }
             | ArchiveError::UnsafeSymlink { .. }
+            | ArchiveError::UnsupportedEntry { .. }
     )
 }
 
@@ -234,6 +235,36 @@ fn zip_rejects_dotdot_prefix_member() {
     let err = extract_zip(std::io::Cursor::new(&data[..]), dir.path()).unwrap_err();
     assert!(is_rejection(&err), "unexpected: {err:?}");
     assert_dest_intact(&dir);
+}
+
+// --- symlinks are never materialized (they can escape the stage) ---
+
+/// `merge_tree` ya ignora los symlinks, así que extraerlos no aporta y abre
+/// cadenas (`l1 -> .`, `l2 -> l1/..`) que escapan del stage al escribir `l2/x`.
+#[test]
+fn tar_gz_rejects_symlink_entries_outright() {
+    let root = tempfile::tempdir().unwrap();
+    let stage = root.path().join("stage");
+    fs::create_dir_all(&stage).unwrap();
+    fs::write(stage.join("sentinel.txt"), "user data").unwrap();
+    let data = raw_tar_gz_bytes(&[
+        ("l1", Member::Symlink(".")),
+        ("l2", Member::Symlink("l1/..")),
+        ("l2/x", Member::File("pwned")),
+    ]);
+    let err = extract_tar_gz(&data[..], &stage).unwrap_err();
+    assert!(
+        matches!(err, ArchiveError::UnsupportedEntry { .. }),
+        "expected UnsupportedEntry, got: {err:?}"
+    );
+    assert_eq!(
+        fs::read_to_string(stage.join("sentinel.txt")).unwrap(),
+        "user data"
+    );
+    assert!(
+        !root.path().join("x").exists(),
+        "nada se materializa fuera del stage"
+    );
 }
 
 // --- bomb guards (L2-2/L2-9): member cap y cap total ---

@@ -130,7 +130,6 @@ fn validate_link_target(member_rel: &Path, target_raw: &str) -> Result<PathBuf, 
 enum Action {
     Dir(PathBuf),
     File(PathBuf, Vec<u8>),
-    Symlink(PathBuf, String),
     Hardlink(PathBuf, PathBuf),
 }
 
@@ -179,18 +178,6 @@ fn apply_actions(dest: &Path, actions: Vec<Action>) -> Result<(), ArchiveError> 
                 }
                 fs::write(path, bytes)?;
             }
-            Action::Symlink(path, target) => {
-                if let Some(parent) = path.parent() {
-                    fs::create_dir_all(parent)?;
-                }
-                #[cfg(unix)]
-                std::os::unix::fs::symlink(&target, &path)?;
-                #[cfg(not(unix))]
-                {
-                    let _ = (&target, &path);
-                    return Err(ArchiveError::SymlinksUnsupported);
-                }
-            }
             Action::Hardlink(path, resolved) => {
                 if let Some(parent) = path.parent() {
                     fs::create_dir_all(parent)?;
@@ -232,13 +219,12 @@ pub fn extract_tar_gz<R: Read>(reader: R, dest: &Path) -> Result<(), ArchiveErro
             }
             actions.push(Action::File(out, bytes));
         } else if kind.is_symlink() {
-            let target = entry.link_name()?.ok_or(ArchiveError::BadName)?;
-            let target_str = target.to_str().ok_or(ArchiveError::BadName)?;
-            validate_link_target(&rel, target_str)?;
-            if rel.as_os_str().is_empty() {
-                return Err(ArchiveError::BadName);
-            }
-            actions.push(Action::Symlink(out, target_str.to_string()));
+            // Un symlink no se materializa: `merge_tree` ya los ignora, y
+            // extraerlos abre cadenas (`l1 -> .`, `l2 -> l1/..`) que escapan.
+            return Err(ArchiveError::UnsupportedEntry {
+                member: raw_str.to_string(),
+                kind: "symlink".to_string(),
+            });
         } else if kind.is_hard_link() {
             let target = entry.link_name()?.ok_or(ArchiveError::BadName)?;
             let target_str = target.to_str().ok_or(ArchiveError::BadName)?;
@@ -268,17 +254,11 @@ pub fn extract_zip<R: Read + Seek>(reader: R, dest: &Path) -> Result<(), Archive
         if file.is_dir() {
             actions.push(Action::Dir(out));
         } else if file.is_symlink() {
-            let mut target = String::new();
-            file.read_to_string(&mut target)
-                .map_err(|_| ArchiveError::UnsafeSymlink {
-                    member: name.clone(),
-                    target: String::from("<unreadable>"),
-                })?;
-            validate_link_target(&rel, &target)?;
-            if rel.as_os_str().is_empty() {
-                return Err(ArchiveError::BadName);
-            }
-            actions.push(Action::Symlink(out, target));
+            // Un symlink no se materializa (ver `extract_tar_gz`).
+            return Err(ArchiveError::UnsupportedEntry {
+                member: name.clone(),
+                kind: "symlink".to_string(),
+            });
         } else {
             if rel.as_os_str().is_empty() {
                 return Err(ArchiveError::BadName);
