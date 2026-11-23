@@ -286,3 +286,66 @@ fn rollback_compens_f8_y_restaura_opencode_json_desde_su_backup() {
         "el resto del árbol queda byte-idéntico"
     );
 }
+
+/// P0-1 (P1-2): un fichero del usuario creado DESPUÉS del snapshot (mientras
+/// la instalación corría) sobrevive al rollback. Antes se hacía
+/// `remove_dir_all(vault)` y se lo llevaba por delante.
+#[test]
+fn rollback_no_borra_el_contenido_del_usuario_creado_tras_el_snapshot() {
+    let dir = tmp();
+    let vault = dir.path().join("vault");
+    let snapshot = InstallSnapshot::capture(&vault); // no existía
+
+    ensure_vault_dir(&vault).expect("vault nuevo");
+    write(&vault.join(".tepochcalli/bin/uv"), b"uv");
+    // El usuario guarda una nota mientras la instalación corre.
+    write(&vault.join("nota-usuario.md"), "# mía\n".as_bytes());
+
+    let report = rollback_install(&vault, &snapshot);
+
+    assert_eq!(
+        std::fs::read(vault.join("nota-usuario.md")).expect("la nota sobrevive"),
+        "# mía\n".as_bytes(),
+        "un fichero del usuario creado durante el install no se borra"
+    );
+    assert!(
+        !report.preserved.is_empty(),
+        "el informe debe declarar el contenido conservado: {report:?}"
+    );
+    assert!(
+        !report.leftovers.iter().any(|p| p.contains("nota-usuario")),
+        "lo conservado no es un resto: {report:?}"
+    );
+}
+
+/// P0-1: el informe es honesto — si el runtime no se puede borrar, lo declara
+/// incompleto en vez de afirmar que el vault quedó como estaba.
+#[cfg(unix)]
+#[test]
+fn rollback_incompleto_cuando_el_runtime_no_se_puede_borrar() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    let dir = tmp();
+    let vault = dir.path().join("vault");
+    let snapshot = InstallSnapshot::capture(&vault);
+    ensure_vault_dir(&vault).expect("vault nuevo");
+    let runtime = vault.join(".tepochcalli");
+    write(&runtime.join("bin/uv"), b"uv");
+    std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o555))
+        .expect("runtime de solo lectura");
+
+    let report = rollback_install(&vault, &snapshot);
+
+    // Restaurar permisos para que `tempfile` pueda limpiar su directorio.
+    let _ = std::fs::set_permissions(&runtime, std::fs::Permissions::from_mode(0o755));
+
+    assert!(
+        runtime.is_dir(),
+        "fixture: el runtime no se pudo borrar (0o555), así que sigue ahí"
+    );
+    assert!(
+        !report.is_complete(),
+        "un runtime que no se pudo borrar deja resto: {report:?}"
+    );
+    assert!(!report.leftovers.is_empty(), "{report:?}");
+}

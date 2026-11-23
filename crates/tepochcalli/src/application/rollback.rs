@@ -6,7 +6,9 @@
 //! añadió más allá del snapshot; lo ya hecho antes se respeta. F6 se
 //! restaura con los bytes del snapshot: `compensate_phase6` escribiría
 //! `provider = "none"` (instalación degradada), prohibido por R-offline-4.
-//! Los errores de fs se ignoran: es higiene tras un fallo ya reportado.
+//! Tras compensar, el rollback MIDE el resultado contra el snapshot y lo
+//! declara en un [`RollbackReport`]: quien lo llama ya no afirma «el vault
+//! quedó como estaba» sin haberlo comprobado.
 
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -64,11 +66,45 @@ fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
     }
 }
 
+/// Resultado MEDIDO del rollback contra el snapshot: qué sobrevivió sin ser
+/// del instalador y qué quedó sin poder compensar.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct RollbackReport {
+    /// Rutas relativas que siguen presentes y no deberían.
+    pub leftovers: Vec<String>,
+    /// Contenido del usuario que se conservó a propósito (no es un resto).
+    pub preserved: Vec<String>,
+}
+
+impl RollbackReport {
+    /// `true` cuando no quedó ningún resto del instalador.
+    #[must_use]
+    pub fn is_complete(&self) -> bool {
+        self.leftovers.is_empty()
+    }
+}
+
+/// `true` cuando el estado actual coincide con el del snapshot (`None` =
+/// ausente).
+fn bytes_match(path: &Path, before: Option<&[u8]>) -> bool {
+    match before {
+        Some(bytes) => std::fs::read(path).is_ok_and(|now| now == bytes),
+        None => !path.exists(),
+    }
+}
+
+fn relative(vault: &Path, path: &Path) -> String {
+    path.strip_prefix(vault)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned()
+}
+
 /// R-offline-3: deshace una instalación fallida o cancelada. En orden
 /// inverso: primero lo que escribe fuera del runtime (F8 → F3), después el
 /// runtime. Un `--resume` NO revierte lo que ya estaba: solo las fases que
 /// esta corrida añadió más allá de `snapshot.completed`.
-pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) {
+pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) -> RollbackReport {
     let executed: Vec<Phase> = completed_phases(vault)
         .into_iter()
         .filter(|phase| !snapshot.completed.contains(phase))
@@ -106,8 +142,77 @@ pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) {
         // `remove_dir` se niega si hay algo: el contenido del usuario manda.
         let _ = std::fs::remove_dir(vault.join(RESOURCES_DIR));
     }
-    if !snapshot.vault_existed {
-        // El vault entero lo creó esta corrida: ahí no había nada del usuario.
-        let _ = std::fs::remove_dir_all(vault);
+    let mut preserved = Vec::new();
+    if !snapshot.vault_existed && vault.exists() {
+        // P1-2: el vault lo creó esta corrida, pero puede haber ficheros del
+        // usuario escritos DURANTE el install. Solo se borra si está vacío.
+        if let Ok(mut entries) = std::fs::read_dir(vault) {
+            if entries.next().is_some() {
+                preserved.push(format!("contenido del usuario en {}", vault.display()));
+            } else {
+                let _ = std::fs::remove_dir(vault);
+            }
+        }
+    }
+    // R-offline-3 medido: no se afirma un estado sin comprobarlo.
+    let mut leftovers = Vec::new();
+    let runtime_dir = vault.join(RUNTIME_DIR);
+    if runtime_dir.is_dir() != snapshot.runtime_existed {
+        leftovers.push(relative(vault, &runtime_dir));
+    }
+    let resources_dir = vault.join(RESOURCES_DIR);
+    if resources_dir.is_dir() != snapshot.resources_existed {
+        leftovers.push(relative(vault, &resources_dir));
+    }
+    for (path, before) in [
+        (config_path(vault), snapshot.config.as_deref()),
+        (index_meta_path(vault), snapshot.index_meta.as_deref()),
+        (vault.join(INSTALL_STATE_PATH), snapshot.state.as_deref()),
+    ] {
+        if !bytes_match(&path, before) {
+            leftovers.push(relative(vault, &path));
+        }
+    }
+    if models_snapshot(vault) != snapshot.models {
+        leftovers.push(relative(vault, &runtime_dir.join("models")));
+    }
+    RollbackReport {
+        leftovers,
+        preserved,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::bytes_match;
+    use std::path::Path;
+
+    #[test]
+    fn bytes_match_compares_bytes_and_absence() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("config");
+        std::fs::write(&path, b"viejo").expect("fixture");
+        assert!(bytes_match(&path, Some(b"viejo")), "mismos bytes");
+        assert!(!bytes_match(&path, Some(b"nuevo")), "bytes distintos");
+        assert!(
+            !bytes_match(&path, None),
+            "existe pero el snapshot lo daba por ausente"
+        );
+        let missing = dir.path().join("no-existe");
+        assert!(bytes_match(&missing, None), "ausente como en el snapshot");
+        assert!(
+            !bytes_match(&missing, Some(b"x")),
+            "falta lo que el snapshot tenía"
+        );
+    }
+
+    #[test]
+    fn relative_keeps_the_path_readable_inside_the_vault() {
+        let vault = Path::new("/vault");
+        let path = Path::new("/vault/.tepochcalli/config/tepochcalli.toml");
+        assert_eq!(
+            super::relative(vault, path),
+            ".tepochcalli/config/tepochcalli.toml"
+        );
     }
 }

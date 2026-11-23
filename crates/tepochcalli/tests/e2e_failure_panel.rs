@@ -55,8 +55,8 @@ fn user_aborted_panel_states_the_workspace_was_untouched_and_drops_retry() {
         &[],
     );
     assert!(
-        body.contains("estado: cancelado por el usuario — el workspace quedó como estaba"),
-        "a cancellation must state the workspace survived: {body}"
+        body.contains("estado: cancelado por el usuario — deshaciendo los cambios aplicados"),
+        "a cancellation must state it is undoing the changes: {body}"
     );
     assert!(
         !body.contains("retry:"),

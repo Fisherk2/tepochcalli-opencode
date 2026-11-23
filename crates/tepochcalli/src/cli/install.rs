@@ -207,6 +207,10 @@ pub(crate) fn run_install(
     let vault_path = match ensure_vault_dir(Path::new(&raw)) {
         Ok(path) => path,
         Err(err) => {
+            // P0-1: si el directorio quedó a medias, se deshace y se declara
+            // el resultado medido antes del panel.
+            let report = rollback_install(Path::new(&raw), &snapshot);
+            announce_rollback(stderr, &report.leftovers, &report.preserved);
             return report_failure(
                 &*ui,
                 Some(Phase::F2),
@@ -232,13 +236,44 @@ pub(crate) fn run_install(
     );
     // Punto único de rollback: cualquier salida no-cero deshace lo aplicado.
     if code != 0 {
-        rollback_install(vault_path.as_path(), &snapshot);
-        let _ = writeln!(
-            stderr,
-            "install: rollback aplicado — el vault quedó como estaba"
-        );
+        let report = rollback_install(vault_path.as_path(), &snapshot);
+        if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
+            // P0-1: no se afirma lo que no se midió; si quedan restos, se
+            // devuelve el código de fase fallida, no el del fallo original.
+            return WizardError::PhaseFailed.exit_code();
+        }
     }
     code
+}
+
+/// Escribe el resultado MEDIDO del rollback (P0-1). Devuelve `true` cuando no
+/// quedó ningún resto; `preserved` nunca cuenta como resto.
+fn announce_rollback(
+    stderr: &mut dyn std::io::Write,
+    leftovers: &[String],
+    preserved: &[String],
+) -> bool {
+    if !preserved.is_empty() {
+        let _ = writeln!(
+            stderr,
+            "install: se conservó {} (no era del instalador)",
+            preserved.join(", ")
+        );
+    }
+    if leftovers.is_empty() {
+        let _ = writeln!(
+            stderr,
+            "install: rollback aplicado — el vault quedó como estaba (verificado)"
+        );
+        true
+    } else {
+        let _ = writeln!(
+            stderr,
+            "install: rollback INCOMPLETO — quedan restos: {}",
+            leftovers.join(", ")
+        );
+        false
+    }
 }
 
 /// Shared `--payload*` usage validation (`install` + `update`, exit 2, no

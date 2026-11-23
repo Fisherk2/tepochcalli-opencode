@@ -66,9 +66,7 @@ pub fn failure_body(
     // R-offline-3: tras una cancelación deliberada la acción correctiva no es
     // reintentar, sino confirmar que el workspace quedó intacto.
     if err == WizardError::UserAborted {
-        body.push_str(
-            "estado: cancelado por el usuario — el workspace quedó como estaba (cambios deshechos)\n",
-        );
+        body.push_str("estado: cancelado por el usuario — deshaciendo los cambios aplicados\n");
     } else {
         body.push_str("retry: ");
         body.push_str(RETRY_COMMAND);
@@ -210,11 +208,33 @@ mod tests {
             &[],
         );
         assert!(
-            body.contains("estado: cancelado por el usuario — el workspace quedó como estaba"),
+            body.contains("estado: cancelado por el usuario — deshaciendo los cambios aplicados"),
             "{body}"
+        );
+        assert!(
+            !body.contains("quedó como estaba"),
+            "el panel no puede afirmar un resultado que no midió: {body}"
         );
         assert!(!body.contains("retry:"), "{body}");
         assert!(body.contains("log: /tmp/state/install-4.log"), "{body}");
+    }
+
+    /// P0-1: la línea de cancelación es progresiva — dice lo que se está
+    /// haciendo, no lo que (quizá) se logró.
+    #[test]
+    fn cancel_panel_never_claims_the_workspace_was_restored() {
+        let body = failure_body(
+            "install: cancelled",
+            Some(Phase::F6),
+            WizardError::UserAborted,
+            Path::new("/tmp/state/install-4.log"),
+            &[],
+        );
+        assert!(
+            !body.contains("quedó como estaba"),
+            "afirmación no medida en el panel: {body}"
+        );
+        assert!(body.contains("deshaciendo los cambios aplicados"), "{body}");
     }
 
     /// Hueco #10a(a) — panel con fase AUSENTE (`phase: None`) y cancelación:
@@ -244,7 +264,7 @@ mod tests {
             "sin fase conocida no hay línea phase: {body}"
         );
         assert!(
-            body.contains("estado: cancelado por el usuario — el workspace quedó como estaba"),
+            body.contains("estado: cancelado por el usuario — deshaciendo los cambios aplicados"),
             "{body}"
         );
         assert!(!body.contains("retry:"), "{body}");
