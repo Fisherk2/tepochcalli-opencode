@@ -55,6 +55,18 @@ jobs:
           maturin-version: v1.15.0
           args: --release --out dist
 
+      - name: Ejecuta la rueda construida (solo Linux; macOS/Windows sin `uvx`)
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Versión de `Cargo.toml`, nunca un literal: one-version rule.
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/tepochcalli/Cargo.toml | head -1)"
+          out="$(uvx --from crates/tepochcalli/dist/*.whl tepochcalli --version)"
+          test "${out}" = "tepochcalli ${version}" \
+            || { echo "FALLO: '${out}' != 'tepochcalli ${version}'" >&2; exit 1; }
+          echo "OK: ${out}"
+
       - name: Sube la rueda como artefacto de CI
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

@@ -6,7 +6,7 @@
 # como script de rueda por sí solo. `dynamic = ["version"]` = one-version rule:
 # la versión sale siempre de `Cargo.toml`, nunca de un tercer sitio que desincronizar.
 [build-system]
-requires = ["maturin>=1.15,<2.0"]
+requires = ["maturin==1.15.0"]
 build-backend = "maturin"
 
 [project]

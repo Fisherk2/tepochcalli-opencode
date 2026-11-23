@@ -406,31 +406,33 @@ rust-wheel target_dir=cargo_target:
     # copias staged hace la receta idempotente (maturin 1.15). Quitar al subir
     # de versión si el fallo «Cannot repair wheel» ya no aparece.
     rm -f "{{target_dir}}/maturin/tepochcalli" {{target_dir}}/release/build/tepochcalli/*/out/tepochcalli
-    CARGO_TARGET_DIR="{{target_dir}}" uvx --from 'maturin[patchelf]' maturin build --release --out dist
+    CARGO_TARGET_DIR="{{target_dir}}" uvx --from 'maturin[patchelf]==1.15.0' maturin build --release --out dist
 
 # Acepta las dos formas de maturin: ELF directo en `*.data/scripts/` o stub
 # Python + binario en `tepochcalli.scripts/` (lo que pasa cuando el binario
-# enlaza libs externas). Comprueba nombre 0.1.0, contenido y ejecución real.
-# Verifica la rueda construida con `uvx --from <rueda>`: contenido y versión.
+# enlaza libs externas). La versión sale de `Cargo.toml` (one-version rule):
+# maturin la normaliza a PEP 440 en el nombre (`0.1.0-beta.1` -> `0.1.0b1`).
 rust-wheel-verify: rust-wheel
     #!/usr/bin/env bash
     set -euo pipefail
+    version="$(sed -n 's/^version = "\(.*\)"$/\1/p' {{crate_dir}}/Cargo.toml | head -1)"
+    core="${version%%-*}"
     wheel="$(ls -t {{crate_dir}}/dist/*.whl | head -1)"
-    echo "rueda: ${wheel}"
+    echo "rueda: ${wheel} (versión ${version})"
     case "$(basename "${wheel}")" in
-        *0.1.0*) ;;
-        *) echo "FALLO: el nombre de la rueda no lleva la versión 0.1.0" >&2; exit 1 ;;
+        *"tepochcalli-${core}"*) ;;
+        *) echo "FALLO: el nombre de la rueda no lleva la versión ${core}" >&2; exit 1 ;;
     esac
     python3 -m zipfile -l "${wheel}"
-    if python3 -m zipfile -l "${wheel}" | awk 'NR > 2 { print $1 }' \
-        | grep -qxE 'tepochcalli(-0\.1\.0\.data/scripts|\.scripts)/tepochcalli'; then
+    if python3 -m zipfile -l "${wheel}" | awk '{ print $1 }' \
+        | grep -qE '(\.data/scripts|\.scripts)/tepochcalli$'; then
         echo "contenido OK: binario presente en la rueda"
     else
         echo "FALLO: la rueda no contiene el binario tepochcalli" >&2; exit 1
     fi
     out="$(uvx --from "${wheel}" tepochcalli --version)"
-    test "${out}" = "tepochcalli 0.1.0" \
-        || { echo "FALLO: '${out}' != 'tepochcalli 0.1.0'" >&2; exit 1; }
+    test "${out}" = "tepochcalli ${version}" \
+        || { echo "FALLO: '${out}' != 'tepochcalli ${version}'" >&2; exit 1; }
     echo "uvx OK: ${out}"
 
 # Path 5: `--skip-model`, sin descargar modelos de 470 MB; la red solo se usa
