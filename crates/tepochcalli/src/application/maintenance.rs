@@ -208,9 +208,17 @@ pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, Wizar
         match outcome {
             Ok(()) => {}
             Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            // shortcut: every fs failure maps to `PermissionDenied` (T7 convention;
-            // T15 refines the panel).
-            Err(_) => return Err(WizardError::PermissionDenied),
+            Err(_) => {
+                ui.panel(
+                    "Desinstall interrumpido",
+                    &format!(
+                        "Se eliminó parte del payload. El backup con lo irreemplazable está en {} \
+                         (contiene .tepochcalli/config/, posible API key): no lo commitees.",
+                        backup_dir.display()
+                    ),
+                );
+                return Err(WizardError::PermissionDenied);
+            }
         }
     }
     ui.panel(
