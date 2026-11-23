@@ -87,7 +87,8 @@ pub struct Phase6Deps<'a> {
     pub proc: &'a dyn CommandRunner,
     /// HF API estimates for free ids (D8.1).
     pub http: &'a dyn HttpClient,
-    /// Cancelación de la descarga en curso (R-offline-2; T16 la dispara).
+    /// Cancelación de la descarga en curso (R-offline-2): la dispara el
+    /// watcher de `Ui::run_cancellable`; la UI no decide el resultado.
     /// Clon del token de la corrida.
     pub cancel: CancelToken,
 }
