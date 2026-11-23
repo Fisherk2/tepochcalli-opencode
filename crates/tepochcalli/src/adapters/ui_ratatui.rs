@@ -273,7 +273,17 @@ impl Drop for RestoreOnDrop {
 pub fn run_menu(view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
     let spec = view.spec;
     let mut selected = first_enabled(spec);
-    let mut terminal = ratatui::init();
+    // `try_init` (mismo criterio que `run_progress`): `init` paniquea con
+    // `expect` ante un terminal inservible, y el contrato de este wizard es
+    // abortar tipado, nunca reventar. `restore()` es idempotente y cubre el
+    // init a medias (raw mode aplicado, alt screen no).
+    let mut terminal = match ratatui::try_init() {
+        Ok(terminal) => terminal,
+        Err(_) => {
+            ratatui::restore();
+            return Err(WizardError::UserAborted);
+        }
+    };
     let _restore = RestoreOnDrop;
     loop {
         terminal
