@@ -126,12 +126,8 @@ fn line_menu_plan(view: &MenuView<'_>) -> Option<LineMenuPlan> {
         return None;
     }
 
-    let mut body = format!(
-        "Tepochcalli {} · instalada: {} · embedder: {}\n",
-        view.wizard,
-        view.installed.unwrap_or("—"),
-        view.embedder
-    );
+    let mut body = view.header();
+    body.push('\n');
     for button in spec.buttons.iter().filter(|button| !button.enabled) {
         if let Some(reason) = button.reason {
             body.push_str(&format!(

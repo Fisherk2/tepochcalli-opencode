@@ -46,17 +46,32 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
     ])
     .areas(frame.area());
 
-    let header = Paragraph::new(Line::from(format!(
-        "Tepochcalli {} · instalada: {} · embedder: {}",
-        view.wizard,
-        view.installed.unwrap_or("—"),
-        view.embedder
-    )))
-    .style(Style::new().add_modifier(Modifier::BOLD));
+    let header =
+        Paragraph::new(Line::from(view.header())).style(Style::new().add_modifier(Modifier::BOLD));
     frame.render_widget(header, header_area);
 
-    let items: Vec<ListItem> = spec
-        .buttons
+    let list = List::new(menu_items(spec))
+        .highlight_symbol("› ")
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut state = ListState::default().with_selected(Some(selected));
+    frame.render_stateful_widget(list, list_area, &mut state);
+
+    if let Some(notice) = spec.notice {
+        let paragraph = Paragraph::new(notice_text(notice))
+            .style(Style::new().add_modifier(Modifier::BOLD))
+            .wrap(Wrap { trim: true });
+        frame.render_widget(paragraph, notice_area);
+    }
+
+    let contact = Paragraph::new(Text::from(vec![Line::from(REPO), Line::from(CONTACT)]))
+        .style(Style::new().add_modifier(Modifier::DIM))
+        .wrap(Wrap { trim: true });
+    frame.render_widget(contact, contact_area);
+}
+
+/// One row per button: icon, label, and the visible reason when disabled.
+fn menu_items(spec: &MenuSpec) -> Vec<ListItem<'_>> {
+    spec.buttons
         .iter()
         .map(|button| {
             let mut line = Line::from(vec![
@@ -73,32 +88,18 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
             };
             ListItem::new(line).style(style)
         })
-        .collect();
-    let list = List::new(items)
-        .highlight_symbol("› ")
-        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
-    let mut state = ListState::default().with_selected(Some(selected));
-    frame.render_stateful_widget(list, list_area, &mut state);
+        .collect()
+}
 
-    if let Some(notice) = spec.notice {
-        // El comando entre backticks va en su propia línea para poder
-        // copiarlo entero aunque el ancho lo partiese a la mitad.
-        let (before, tail) = notice.split_once('`').unwrap_or((notice, ""));
-        let body = if tail.is_empty() {
-            Text::from(notice)
-        } else {
-            Text::from(vec![Line::from(before), Line::from(format!("`{tail}"))])
-        };
-        let paragraph = Paragraph::new(body)
-            .style(Style::new().add_modifier(Modifier::BOLD))
-            .wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, notice_area);
+fn notice_text(notice: &str) -> Text<'_> {
+    // El comando entre backticks va en su propia línea para poder
+    // copiarlo entero aunque el ancho lo partiese a la mitad.
+    let (before, tail) = notice.split_once('`').unwrap_or((notice, ""));
+    if tail.is_empty() {
+        Text::from(notice)
+    } else {
+        Text::from(vec![Line::from(before), Line::from(format!("`{tail}"))])
     }
-
-    let contact = Paragraph::new(Text::from(vec![Line::from(REPO), Line::from(CONTACT)]))
-        .style(Style::new().add_modifier(Modifier::DIM))
-        .wrap(Wrap { trim: true });
-    frame.render_widget(contact, contact_area);
 }
 
 /// R-offline-2: the download screen. Pure (no I/O) like `render_menu`: only
