@@ -4,7 +4,8 @@
 //! los adaptadores de captura de la `TapUi`.
 //!
 //! Es soporte de test, no un target (Cargo solo compila `tests/*.rs`; lo
-//! consumen `e2e_swap.rs` y `int_swap_preflight.rs`).
+//! consumen `e2e_swap_cli.rs`, `int_swap_{run,external,commit}.rs` y
+//! `int_swap_preflight.rs`).
 
 use std::cell::RefCell;
 use std::collections::{HashMap, VecDeque};
