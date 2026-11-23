@@ -46,8 +46,8 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
     ])
     .areas(frame.area());
 
-    let header =
-        Paragraph::new(Line::from(view.header())).style(Style::new().add_modifier(Modifier::BOLD));
+    let header = Paragraph::new(Line::from(super::ui::header_line(view)))
+        .style(Style::new().add_modifier(Modifier::BOLD));
     frame.render_widget(header, header_area);
 
     let list = List::new(menu_items(spec))

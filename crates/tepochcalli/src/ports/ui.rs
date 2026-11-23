@@ -19,19 +19,6 @@ pub struct MenuView<'a> {
     pub embedder: &'a str,
 }
 
-impl MenuView<'_> {
-    /// Header line shared by the full-screen menu and the line fallback.
-    #[must_use]
-    pub fn header(&self) -> String {
-        format!(
-            "Tepochcalli {} · instalada: {} · embedder: {}",
-            self.wizard,
-            self.installed.unwrap_or("—"),
-            self.embedder
-        )
-    }
-}
-
 /// Installer dialogue. `panel` only renders (errors surface via `Result`
 /// returns), and every answer method fails with a typed error instead of
 /// guessing when input is missing.
@@ -63,4 +50,6 @@ pub trait Ui {
         let _ = (title, cancel);
         work();
     }
+    /// H11: bloquea hasta una tecla; por defecto no-op (headless).
+    fn wait_key(&self) {}
 }

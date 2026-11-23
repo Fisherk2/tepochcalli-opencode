@@ -77,6 +77,10 @@ impl Ui for TtyUi {
             work();
         }
     }
+
+    fn wait_key(&self) {
+        super::ui_ratatui::wait_any_key();
+    }
 }
 
 impl TtyUi {
@@ -113,6 +117,17 @@ struct LineMenuPlan {
     body: String,
 }
 
+/// Header line shared by the full-screen menu and the line fallback.
+#[must_use]
+pub fn header_line(view: &MenuView<'_>) -> String {
+    format!(
+        "Tepochcalli {} · instalada: {} · embedder: {}",
+        view.wizard,
+        view.installed.unwrap_or("—"),
+        view.embedder
+    )
+}
+
 fn line_menu_plan(view: &MenuView<'_>) -> Option<LineMenuPlan> {
     let spec = view.spec;
     let enabled: Vec<usize> = spec
@@ -126,7 +141,7 @@ fn line_menu_plan(view: &MenuView<'_>) -> Option<LineMenuPlan> {
         return None;
     }
 
-    let mut body = view.header();
+    let mut body = header_line(view);
     body.push('\n');
     for button in spec.buttons.iter().filter(|button| !button.enabled) {
         if let Some(reason) = button.reason {

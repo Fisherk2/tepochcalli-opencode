@@ -7,7 +7,6 @@
 
 use std::path::Path;
 
-use tepochcalli::adapters::ui_ratatui::wait_any_key;
 use tepochcalli::adapters::{HeadlessUi, TtyUi};
 use tepochcalli::application::choose_action;
 use tepochcalli::domain::{MenuAction, WizardError};
@@ -124,7 +123,7 @@ pub(crate) fn run_home_cmd(
     };
     // H11: any action but Exit closes on any key, whatever its outcome.
     if write_farewell(action, stdout) {
-        wait_any_key();
+        ui.wait_key();
     }
     code
 }
@@ -327,13 +326,13 @@ mod tests {
     }
 
     #[test]
-    fn wait_any_key_returns_when_there_is_no_terminal() {
+    fn wait_key_returns_when_there_is_no_terminal() {
         // Smoke guard (no RED possible: the no-op is already the behaviour).
         // Sin TTY la sonda es no-op; con TTY esperaría una tecla real y
         // colgaría la suite, así que solo se ejercita el camino sin terminal.
         if std::io::stdin().is_terminal() {
             return;
         }
-        wait_any_key();
+        TtyUi.wait_key();
     }
 }
