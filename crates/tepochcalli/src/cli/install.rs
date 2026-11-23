@@ -295,7 +295,12 @@ fn capture_and_ensure(
                 None,
             );
             let report = rollback_install(Path::new(raw), &snapshot);
-            if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
+            if !announce_rollback(
+                stderr,
+                &report.compensated,
+                &report.leftovers,
+                &report.preserved,
+            ) {
                 return Err(WizardError::PhaseFailed.exit_code());
             }
             Err(code)
@@ -317,7 +322,12 @@ fn run_phases_and_rollback(
     let code = run_phases(vault_path, payload, flags, ui, stdout, stderr);
     if code != 0 {
         let report = rollback_install(vault_path.as_path(), snapshot);
-        if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
+        if !announce_rollback(
+            stderr,
+            &report.compensated,
+            &report.leftovers,
+            &report.preserved,
+        ) {
             // P0-1: no se afirma lo que no se midió; si quedan restos, se
             // devuelve el código de fase fallida, no el del fallo original.
             return WizardError::PhaseFailed.exit_code();
@@ -330,9 +340,13 @@ fn run_phases_and_rollback(
 /// quedó ningún resto; `preserved` nunca cuenta como resto.
 fn announce_rollback(
     stderr: &mut dyn std::io::Write,
+    compensated: &[String],
     leftovers: &[String],
     preserved: &[String],
 ) -> bool {
+    if !compensated.is_empty() {
+        let _ = writeln!(stderr, "install: deshecho: {}", compensated.join(", "));
+    }
     if !preserved.is_empty() {
         let _ = writeln!(
             stderr,

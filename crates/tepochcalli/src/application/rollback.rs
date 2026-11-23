@@ -83,10 +83,12 @@ pub(super) fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
     }
 }
 
-/// Resultado MEDIDO del rollback contra el snapshot: qué sobrevivió sin ser
-/// del instalador y qué quedó sin poder compensar.
+/// Resultado MEDIDO del rollback contra el snapshot: qué se deshizo, qué
+/// sobrevivió sin ser del instalador y qué quedó sin poder compensar.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct RollbackReport {
+    /// Rótulos de lo que esta corrida deshizo (vacío = no había nada).
+    pub compensated: Vec<String>,
     /// Rutas relativas que siguen presentes y no deberían.
     pub leftovers: Vec<String>,
     /// Contenido del usuario que se conservó a propósito (no es un resto).
@@ -133,48 +135,89 @@ fn is_managed_root(name: &OsStr) -> bool {
     .any(|root| name == OsStr::new(root))
 }
 
-/// R-offline-3: deshace una instalación fallida o cancelada. En orden
-/// inverso: primero lo que escribe fuera del runtime (F8 → F3), después el
-/// runtime. Un `--resume` NO revierte lo que ya estaba: solo las fases que
-/// esta corrida añadió más allá de `snapshot.completed`.
+/// R-offline-3: deshace una instalación fallida o cancelada y MIDE el
+/// resultado. En orden inverso: primero lo que escribe fuera del runtime
+/// (F8 → F3), después el runtime. Un `--resume` NO revierte lo que ya estaba:
+/// solo las fases que esta corrida añadió más allá de `snapshot.completed`.
 pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) -> RollbackReport {
+    let compensated = compensate(vault, snapshot);
+    let (leftovers, preserved) = verify(vault, snapshot);
+    RollbackReport {
+        compensated,
+        leftovers,
+        preserved,
+    }
+}
+
+/// Deshace lo que esta corrida añadió más allá del snapshot y devuelve los
+/// rótulos de lo que efectivamente se deshizo.
+fn compensate(vault: &Path, snapshot: &InstallSnapshot) -> Vec<String> {
     let executed: Vec<Phase> = completed_phases(vault)
         .into_iter()
         .filter(|phase| !snapshot.completed.contains(phase))
         .collect();
+    let mut compensated = Vec::new();
     // F8/F7/F3 dejan rastro fuera (o antes) del runtime: compensan primero.
     if executed.contains(&Phase::F8) {
         compensate_phase8(vault);
+        compensated.push("F8".to_string());
     }
     if executed.contains(&Phase::F7) {
         compensate_phase7(vault);
+        compensated.push("F7".to_string());
     }
     if executed.contains(&Phase::F3) {
         compensate_phase3(vault);
+        compensated.push("F3".to_string());
     }
     if !snapshot.runtime_existed {
         // Todo el runtime (F4/F5/F6/F7, `bin/`, `venv/`, `db/`, `models/`,
         // `config/`, markers) lo creó esta corrida: se va entero.
-        let _ = std::fs::remove_dir_all(vault.join(RUNTIME_DIR));
+        if std::fs::remove_dir_all(vault.join(RUNTIME_DIR)).is_ok() {
+            compensated.push("runtime".to_string());
+        }
     } else {
         // Config/meta/state van SIEMPRE a los bytes del snapshot: escribirlos
         // iguales no es un cambio, y `completed_phases` no distingue una fase
         // re-ejecutada de una que ya estaba (los artefactos también cuentan).
-        restore_or_remove(&config_path(vault), snapshot.config.as_deref());
+        let config = config_path(vault);
+        if !bytes_match(&config, snapshot.config.as_deref()) {
+            compensated.push("config".to_string());
+        }
+        restore_or_remove(&config, snapshot.config.as_deref());
         if executed.contains(&Phase::F5) {
             compensate_phase5(vault);
         }
         if executed.contains(&Phase::F4) {
             compensate_phase4(vault);
         }
+        if models_snapshot(vault) != snapshot.models {
+            compensated.push("models".to_string());
+        }
         purge_partials(vault, &snapshot.models);
-        restore_or_remove(&index_meta_path(vault), snapshot.index_meta.as_deref());
-        restore_or_remove(&vault.join(INSTALL_STATE_PATH), snapshot.state.as_deref());
+        let index_meta = index_meta_path(vault);
+        if !bytes_match(&index_meta, snapshot.index_meta.as_deref()) {
+            compensated.push("index-meta".to_string());
+        }
+        restore_or_remove(&index_meta, snapshot.index_meta.as_deref());
+        let state = vault.join(INSTALL_STATE_PATH);
+        if !bytes_match(&state, snapshot.state.as_deref()) {
+            compensated.push("state".to_string());
+        }
+        restore_or_remove(&state, snapshot.state.as_deref());
     }
     if !snapshot.resources_existed {
         // `remove_dir` se niega si hay algo: el contenido del usuario manda.
-        let _ = std::fs::remove_dir(vault.join(RESOURCES_DIR));
+        let resources = vault.join(RESOURCES_DIR);
+        if resources.is_dir() && std::fs::remove_dir(&resources).is_ok() {
+            compensated.push("resources".to_string());
+        }
     }
+    compensated
+}
+
+/// Mide el resultado contra el snapshot: (`leftovers`, `preserved`).
+fn verify(vault: &Path, snapshot: &InstallSnapshot) -> (Vec<String>, Vec<String>) {
     let mut preserved = Vec::new();
     if !snapshot.vault_existed && vault.exists() {
         // P1-2: el vault lo creó esta corrida, pero puede haber ficheros del
@@ -229,10 +272,7 @@ pub fn rollback_install(vault: &Path, snapshot: &InstallSnapshot) -> RollbackRep
     if models_snapshot(vault) != snapshot.models {
         leftovers.push(relative(vault, &runtime_dir.join("models")));
     }
-    RollbackReport {
-        leftovers,
-        preserved,
-    }
+    (leftovers, preserved)
 }
 
 #[cfg(test)]

@@ -96,8 +96,12 @@ fn install_fresco_fallido_no_deja_ni_el_directorio() {
         b"nuevo",
     );
 
-    rollback_install(&vault, &snapshot);
+    let report = rollback_install(&vault, &snapshot);
 
+    assert!(
+        report.compensated.iter().any(|label| label == "runtime"),
+        "el runtime creado por la corrida se declara deshecho: {report:?}"
+    );
     assert!(
         !vault.exists(),
         "un install fresco fallido no deja ni el directorio"
@@ -222,8 +226,12 @@ fn rollback_sin_fases_ejecutadas_es_un_no_op_byte_identico() {
     let before = tree(&vault);
     let snapshot = InstallSnapshot::capture(&vault);
 
-    rollback_install(&vault, &snapshot);
+    let report = rollback_install(&vault, &snapshot);
 
+    assert!(
+        report.compensated.is_empty(),
+        "sin fases ejecutadas no se deshizo nada: {report:?}"
+    );
     assert_eq!(
         tree(&vault),
         before,
