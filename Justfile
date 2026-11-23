@@ -523,9 +523,14 @@ bench-search-scale args="": (python-bench-search-scale args)
 # Destino del bench del criterio 6 (brazos 10 % vs 100 % + fuseblk) desde la raíz.
 bench-scale-ratio args="": (python-bench-scale-ratio args)
 
-# Markdown lint de docs/specs/AGENTS.md/SPEC.md (markdownlint-cli2 vía npx).
+# Markdown lint de docs/specs/AGENTS.md/SPEC.md/README.md/CHANGELOG.md (markdownlint-cli2 vía npx).
 md-lint:
-    npx --yes markdownlint-cli2 docs specs AGENTS.md SPEC.md
+    npx --yes markdownlint-cli2 docs specs AGENTS.md SPEC.md README.md CHANGELOG.md
+
+# Genera THIRD-PARTY.md desde el grafo del binario (licencias del `Cargo.lock`).
+# Se regenera al subir de versión; el fichero va commiteado.
+third-party target_dir=cargo_target:
+    cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo tree -e normal --format '{p}|{l}' --prefix none | sort -u > ../../THIRD-PARTY.md
 
 # Gate local: lint → fmt-check → typecheck → unit (corta en el primer fallo).
 # Cubre los dos lenguajes (Python + wizard Rust): no hay gate parcial de un solo lado.
