@@ -4,7 +4,8 @@
 //! needs a shell passes it explicitly as `program` (e.g. `sh`, `-c`, …).
 
 use std::path::Path;
-use std::process::Command;
+use std::process::{Child, ChildStderr, ChildStdout, Command};
+use std::sync::mpsc::Receiver;
 use std::sync::{mpsc, Arc, Mutex};
 
 use crate::domain::{CancelToken, WizardError};
@@ -118,6 +119,59 @@ enum Verdict {
     Cancelled,
 }
 
+/// Lector: drena stdout y stderr (EOF al morir el hijo, natural o killed).
+/// Abandonado pasado el plazo — los buffers no se fugan.
+fn spawn_reader(
+    stdout_pipe: Option<ChildStdout>,
+    stderr_pipe: Option<ChildStderr>,
+) -> Receiver<(String, String)> {
+    let (text_tx, text_rx) = mpsc::channel::<(String, String)>();
+    std::thread::spawn(move || {
+        let mut out = String::new();
+        let mut err = String::new();
+        if let Some(mut pipe) = stdout_pipe {
+            use std::io::Read as _;
+            let _ = pipe.read_to_string(&mut out);
+        }
+        if let Some(mut pipe) = stderr_pipe {
+            use std::io::Read as _;
+            let _ = pipe.read_to_string(&mut err);
+        }
+        let _ = text_tx.send((out, err));
+    });
+    text_rx
+}
+
+/// Watcher: sondea el status con el lock tomado en ráfagas (así el padre
+/// puede tomar el lock para el kill pasado el plazo). Con token, primero
+/// mira la cancelación: disparada ⇒ kill + veredicto `Cancelled`. El token
+/// es un `Arc`: llega clonado (la UI conserva el suyo).
+fn spawn_watcher(child: Arc<Mutex<Child>>, cancel: Option<CancelToken>) -> Receiver<Verdict> {
+    let (status_tx, status_rx) = mpsc::channel::<Verdict>();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        if cancel.as_ref().is_some_and(CancelToken::is_cancelled) {
+            if let Ok(mut guard) = child.lock() {
+                let _ = guard.kill();
+                let _ = guard.wait();
+            }
+            let _ = status_tx.send(Verdict::Cancelled);
+            return;
+        }
+        let verdict = match child.lock() {
+            Ok(mut guard) => guard.try_wait().unwrap_or_default(),
+            Err(_) => return,
+        };
+        if let Some(status) = verdict {
+            // El padre pudo vencer el plazo y soltar el canal: send(si llega)
+            // falla y salimos — ningun thread queda eterno.
+            let _ = status_tx.send(Verdict::Exited(status.code().unwrap_or(-1)));
+            return;
+        }
+    });
+    status_rx
+}
+
 /// Trunk único de `run_with_timeout`/`run_cancellable` (mismo lector y
 /// watcher); `cancel: None` es el comportamiento byte-idéntico anterior.
 fn run_inner(
@@ -140,55 +194,8 @@ fn run_inner(
     let stderr_pipe = child.stderr.take();
     let child = Arc::new(Mutex::new(child));
 
-    // Lector: drena stdout y stderr (EOF al morir el hijo, natural o
-    // killed). Abandonado pasar el plazo — los buffers nueno fugan.
-    let (text_tx, text_rx) = mpsc::channel::<(String, String)>();
-    std::thread::spawn(move || {
-        let mut out = String::new();
-        let mut err = String::new();
-        if let Some(mut pipe) = stdout_pipe {
-            use std::io::Read as _;
-            let _ = pipe.read_to_string(&mut out);
-        }
-        if let Some(mut pipe) = stderr_pipe {
-            use std::io::Read as _;
-            let _ = pipe.read_to_string(&mut err);
-        }
-        let _ = text_tx.send((out, err));
-    });
-
-    // Watcher: sondea el status con el lock tomado en ráfagas (so el
-    // padreNavLink puede tomar el lock para kill pasa del plazo). Con token,
-    // primero mira la cancelación: disparada ⇒ kill + veredicto `Cancelled`.
-    // El token es un `Arc`: se clona para el hilo (la UI conserva el suyo).
-    let (status_tx, status_rx) = mpsc::channel::<Verdict>();
-    let slot_for_watcher = Arc::clone(&child);
-    let cancel = cancel.cloned();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-        if cancel.as_ref().is_some_and(CancelToken::is_cancelled) {
-            if let Ok(mut guard) = slot_for_watcher.lock() {
-                let _ = guard.kill();
-                let _ = guard.wait();
-            }
-            let _ = status_tx.send(Verdict::Cancelled);
-            return;
-        }
-        let verdict = match slot_for_watcher.lock() {
-            Ok(mut guard) => guard.try_wait().unwrap_or_default(),
-            Err(_) => return,
-        };
-        if let Some(status) = verdict {
-            // El padre pudo vencer el plazo y soltar el canal: send(si llega)
-            // falla y salimos — ningun thread queda eterno.
-            if status_tx
-                .send(Verdict::Exited(status.code().unwrap_or(-1)))
-                .is_err()
-            {
-                return;
-            }
-        }
-    });
+    let text_rx = spawn_reader(stdout_pipe, stderr_pipe);
+    let status_rx = spawn_watcher(Arc::clone(&child), cancel.cloned());
 
     match status_rx.recv_timeout(timeout) {
         Ok(Verdict::Exited(status)) => {

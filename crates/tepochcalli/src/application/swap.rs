@@ -15,12 +15,9 @@
 //! no se toca antes del commit, así cualquier fallo se arrolla con el
 //! snapshot byte-identical (rollback + temps fuera, cero estado).
 //!
-//! Umbral de líneas (810, tramo 701-1000, justificado): dominio único — el
-//! swap atómico D8.4 de 6 pasos con su rollback por snapshot — con ~25 % de
-//! unit tests Tier 1 en el propio módulo; partirlo repartiría un solo
-//! invariante (conmutar-vivo-antes-del-gate + arrollar-al-fallo) entre
-//! ficheros que ya no se leerían por sí solos. El paso 6 (GC del cache) sí
-//! quedó fuera, en `embedder_gc`.
+//! Umbral de líneas (tramo 701-1000, justificado): dominio único — el swap
+//! atómico D8.4 con su rollback por snapshot y ~25 % de unit tests Tier 1; el
+//! paso 6 (GC del cache) quedó fuera, en `embedder_gc`.
 
 use std::path::Path;
 
@@ -28,7 +25,7 @@ use crate::config::{default_and_large, parse_presets, Preset};
 use crate::domain::{CancelToken, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
 
-use super::embedder_estimate::BYTES_PER_MB;
+use super::embedder_estimate::{BYTES_PER_MB, HF_API_BASE};
 use super::embedder_gate::run_gate_cancellable;
 use super::embedder_gc::gc_old_model;
 use super::embedder_menu::{
@@ -54,8 +51,6 @@ const SWAP_EXTERNAL_HEADER: &str =
 const SWAP_NONE_HEADER: &str =
     "generado por `tepochcalli config embedder` (swap D8.4, salida 5) — re-entrada con el mismo comando";
 
-/// HF API base for the free-id pre-check (D8.1; the gate stays ground truth).
-const HF_API_BASE: &str = "https://huggingface.co/api/models/";
 /// Staged sidecar (not yet live): renamed into place only on success.
 const META_SWAP_SUFFIX: &str = "index-meta.json.swap";
 
@@ -156,24 +151,9 @@ pub fn run_swap(
     // (3) Explicit full-reindex warning + estimate; `--confirm` is mandatory.
     deps.ui
         .panel("Advertencia de re-index", &warning(&picked, &current));
-    if !opts.confirm {
-        deps.ui.panel(
-            "Falta --confirm",
-            "El swap exige un re-index completo (irreversible: LanceDB no mezcla \
-             dimensiones, el índice se reconstruye con el nuevo embedder). \
-             Re-ejecuta con `--confirm` para proceder; sin ese flag no se cambia nada.",
-        );
-        return Err(WizardError::UserAborted);
-    }
-    // R-offline-1 (T13): sin red no se escribe ni la config elegida (C1). Solo
-    // modelos locales: la ruta 5 no descarga y el provider externo no tiene
-    // endpoint declarado en el TOML (LiteLLM lo deriva del prefijo de `model`).
-    if picked.provider == "local" {
-        if let Some(model) = picked.model.as_deref() {
-            let name = model.split_once('\u{0}').map_or(model, |(name, _)| name);
-            deps.http.probe(&format!("{HF_API_BASE}{name}"))?;
-        }
-    }
+    confirm_or_abort(deps.ui, opts.confirm)?;
+    // C1: sin red no se escribe ni la config elegida.
+    probe_local_model(deps.http, &picked)?;
     // C1 (D7.3): la config ELEGIDA queda VIVA (tmp+rename, mismo tramo del
     // write_config de F6) ANTES del gate/refresh — el refresh reconstruye ya
     // con el nuevo embedder. La guarda E1-S3: un fallo aquí comparte el mismo
@@ -211,23 +191,7 @@ pub fn run_swap(
             };
             deps.ui.panel(
                 "Swap completo",
-                &format!(
-                    "modelo {} · dims {} · RSS pico {}MB ({})\n\
-                     config y metadatos conmutados atómicamente{}",
-                    partial.model,
-                    or_fallback(partial.dims),
-                    or_fallback(
-                        partial
-                            .rss_peak_bytes
-                            .map(|rss| (rss as f64 / BYTES_PER_MB) as u64)
-                    ),
-                    Provenance::Measured.label(),
-                    if opts.keep_previous {
-                        "; modelo anterior retenido (--keep-previous)"
-                    } else {
-                        "; modelo anterior purgado de models/"
-                    },
-                ),
+                &success_panel(&partial, opts.keep_previous),
             );
             Ok(SwapReport {
                 model: partial.model,
@@ -239,6 +203,30 @@ pub fn run_swap(
             })
         }
     }
+}
+
+fn confirm_or_abort(ui: &dyn Ui, confirm: bool) -> Result<(), WizardError> {
+    if !confirm {
+        ui.panel(
+            "Falta --confirm",
+            "El swap exige un re-index completo (irreversible: LanceDB no mezcla \
+             dimensiones, el índice se reconstruye con el nuevo embedder). \
+             Re-ejecuta con `--confirm` para proceder; sin ese flag no se cambia nada.",
+        );
+        return Err(WizardError::UserAborted);
+    }
+    Ok(())
+}
+
+/// R-offline-1 (T13): solo modelos locales (la ruta 5 no descarga).
+fn probe_local_model(http: &dyn HttpClient, picked: &Phase6Report) -> Result<(), WizardError> {
+    if picked.provider == "local" {
+        if let Some(model) = picked.model.as_deref() {
+            let name = model.split_once('\u{0}').map_or(model, |(name, _)| name);
+            http.probe(&format!("{HF_API_BASE}{name}"))?;
+        }
+    }
+    Ok(())
 }
 
 impl Snapshot {
@@ -505,6 +493,26 @@ struct PartialReport {
     rows: u64,
 }
 
+fn success_panel(partial: &PartialReport, keep_previous: bool) -> String {
+    let previous = if keep_previous {
+        "; modelo anterior retenido (--keep-previous)"
+    } else {
+        "; modelo anterior purgado de models/"
+    };
+    format!(
+        "modelo {} · dims {} · RSS pico {}MB ({})\n\
+         config y metadatos conmutados atómicamente{previous}",
+        partial.model,
+        or_fallback(partial.dims),
+        or_fallback(partial.rss_peak_bytes.map(measured_mb)),
+        Provenance::Measured.label(),
+    )
+}
+
+fn measured_mb(bytes: u64) -> u64 {
+    (bytes as f64 / BYTES_PER_MB) as u64
+}
+
 fn download_gate_and_reindex(
     deps: &SwapDeps<'_>,
     vault: &Path,
@@ -541,7 +549,7 @@ fn download_gate_and_reindex(
                 "modelo {} · dims {} · RSS pico {}MB ({})",
                 gate.model,
                 gate.dims,
-                (gate.rss_peak_bytes as f64 / BYTES_PER_MB) as u64,
+                measured_mb(gate.rss_peak_bytes),
                 Provenance::Measured.label()
             ),
         );
