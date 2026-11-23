@@ -81,6 +81,22 @@ pub(crate) fn run_config_embedder(
     } else {
         Box::new(TtyUi)
     };
+    // Un `--confirm` ausente es uso, no cancelación: sin él `run_swap` no
+    // escribe ni descarga, pero el panel debe nombrar el flag (mismo
+    // contrato que install/update/uninstall). En interactivo lo explica el
+    // propio run_swap antes de abortar.
+    if non_interactive && !confirm {
+        return report_usage_failure(
+            &*ui,
+            "config embedder",
+            None,
+            "falta el consentimiento del re-index",
+            "--confirm",
+            "tepochcalli config embedder --vault <directorio> --non-interactive --confirm",
+            WizardError::UserAborted,
+            None,
+        );
+    }
     let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
         Err(err) if non_interactive => {
@@ -131,6 +147,7 @@ pub(crate) fn run_config_embedder(
             );
             0
         }
+        Err(WizardError::UserAborted) => report_cancel(&*ui, "config embedder"),
         Err(err) => report_failure(&*ui, None, "config embedder failed", err, Some(path)),
     }
 }
@@ -302,6 +319,7 @@ pub(crate) fn run_uninstall_cmd(
             }
             0
         }
+        Err(WizardError::UserAborted) => report_cancel(&*ui, "uninstall"),
         Err(err) => {
             report_maintenance_failure(&*ui, "uninstall", "uninstall failed", err, Some(path))
         }
@@ -412,6 +430,7 @@ pub(crate) fn run_update_cmd(
             );
             0
         }
+        Err(WizardError::UserAborted) => report_cancel(&*ui, "update"),
         Err(err) => report_maintenance_failure(&*ui, "update", "update failed", err, Some(path)),
     }
 }
