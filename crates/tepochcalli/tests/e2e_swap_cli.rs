@@ -3,7 +3,6 @@
 //! Único target del split del swap con spawn: el resto quedó en `int_swap_*`.
 //! El hijo nace con la red tirada (ver `run_embedder_cli`).
 
-#[allow(dead_code)]
 mod common;
 
 use std::path::Path;

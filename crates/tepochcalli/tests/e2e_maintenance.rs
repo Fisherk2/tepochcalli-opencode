@@ -8,7 +8,6 @@
 //! replican los contratos T11/T12. El gate `--confirm` y los flags
 //! `--vault`/`--non-interactive` se prueban contra el binario real.
 
-#[allow(dead_code)]
 mod common;
 
 use std::path::{Path, PathBuf};

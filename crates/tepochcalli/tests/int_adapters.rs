@@ -3,7 +3,6 @@
 //! Proc and HTTP tests run against the real OS / loopback only — no
 //! internet, no shell spawned by the adapter, no `unwrap` in `src/`.
 
-#[allow(dead_code)]
 mod common;
 
 use std::io::{Read, Write};

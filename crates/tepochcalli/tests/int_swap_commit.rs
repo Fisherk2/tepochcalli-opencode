@@ -3,7 +3,6 @@
 //! modelo, y la conservación del `device` manual (TD-47/ADR-015).
 //! Fakes y fixtures en `common/swap_support.rs`.
 
-#[allow(dead_code)]
 mod common;
 
 use common::gate_ok;

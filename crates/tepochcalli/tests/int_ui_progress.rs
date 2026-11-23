@@ -4,7 +4,6 @@
 //! the headless UI inherits (no screen, no token fired) and the same inline
 //! fallback behind `TtyUi`'s no-TTY guard.
 
-#[allow(dead_code)]
 mod common;
 
 use std::cell::Cell;

@@ -7,7 +7,6 @@
 //! `#[ignore]`d and never syncs (torch would be ~1 GB).
 
 // Shared fakes: this target only needs two of them.
-#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;

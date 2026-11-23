@@ -5,7 +5,6 @@
 //! is never fetched, and no test touches the real network.
 
 // Shared fakes: this target reuses one of them.
-#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;

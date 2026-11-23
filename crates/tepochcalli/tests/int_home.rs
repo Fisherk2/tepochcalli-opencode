@@ -6,7 +6,6 @@
 //! is read from the spec, never hardcoded here.
 
 // `common` es módulo compartido: este target no toca los fakes de fases.
-#[allow(dead_code)]
 mod common;
 
 use std::collections::VecDeque;

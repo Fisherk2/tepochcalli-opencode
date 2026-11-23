@@ -5,7 +5,6 @@
 //! artifacts survive, a second run is a no-op, and a mid-flight failure
 //! leaves the vault with its ORIGINAL bytes (rollback).
 
-#[allow(dead_code)]
 mod common;
 
 use std::path::{Path, PathBuf};

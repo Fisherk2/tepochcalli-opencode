@@ -30,12 +30,12 @@ fn run_progress_sin_terminal_de_control_degrada_a_work() {
         .env("TEPOCHCALLI_PROGRESS_CHILD", "1")
         .stdin(std::process::Stdio::null())
         .output();
-    let Ok(out) = out else {
-        eprintln!(
-            "setsid ausente (¿no util-linux?): test omitido, \
-             sin forma determinista de quitar el ctty"
-        );
-        return;
+    let out = match out {
+        Ok(out) => out,
+        Err(err) => {
+            eprintln!("skipped: `setsid` not available (TD-64): {err}");
+            return;
+        }
     };
     // El hijo sin ctty igual escupe el escape de restore (ESC[?1049l) por su
     // stdout capturado: se filtra el byte ESC para que el mensaje del assert

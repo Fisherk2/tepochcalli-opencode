@@ -2,7 +2,6 @@
 //! usage errors, and the T17 ownership of `reindex`/`uninstall`
 //! (the old T7+ stubs are gone: each explains its own usage now).
 
-#[allow(dead_code)]
 mod common;
 
 use std::process::Stdio;

@@ -21,7 +21,6 @@
 //! contract tests (`tests/e2e/test_mcp_contract.py`), which own the wire
 //! shape.
 
-#[allow(dead_code)]
 mod common;
 
 use std::cell::RefCell;

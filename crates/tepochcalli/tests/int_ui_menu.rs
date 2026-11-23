@@ -3,7 +3,6 @@
 //! every button, the reason of each disabled one, the uvx refresh command and
 //! the contact block.
 
-#[allow(dead_code)]
 mod common;
 
 use ratatui::backend::TestBackend;

@@ -3,7 +3,6 @@
 //! RED-first: this file must FAIL to compile before `src/config/` exists.
 
 // Shared fakes: this target only needs one of them.
-#[allow(dead_code)]
 mod common;
 
 use common::FakeHost;

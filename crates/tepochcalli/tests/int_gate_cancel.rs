@@ -9,7 +9,6 @@
 //! del producto.
 
 // Shared fakes: this target reuses four of them.
-#[allow(dead_code)]
 mod common;
 
 use std::cell::RefCell;

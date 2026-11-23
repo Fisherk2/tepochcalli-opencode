@@ -14,7 +14,6 @@
 //! No test touches the real network; no dependency beyond the crate's existing
 //! `sha2` / `tar` / `flate2` / `tempfile`.
 
-#[allow(dead_code)]
 mod common;
 
 use std::io::{Read, Write};

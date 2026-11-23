@@ -4,7 +4,6 @@
 //! `installer::run_phase3` existed. Real `tempfile` vaults (D26: no FS
 //! port); loopback HTTP only — never the internet.
 
-#[allow(dead_code)]
 mod common;
 
 use std::io::{Read, Write};

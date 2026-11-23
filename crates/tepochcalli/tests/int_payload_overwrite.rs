@@ -5,7 +5,6 @@
 //! change leaves `.bak` with the previous bytes, a mid-flight failure can be
 //! undone by the caller, and nothing outside the 5 scopes is even visited.
 
-#[allow(dead_code)]
 mod common;
 
 use std::path::{Path, PathBuf};

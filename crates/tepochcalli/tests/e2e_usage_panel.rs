@@ -3,7 +3,6 @@
 //! el Display `cancelled by user` de `UserAborted` (nadie canceló) ni una
 //! línea `estado:` de cancelación.
 
-#[allow(dead_code)]
 mod common;
 
 use std::process::Stdio;

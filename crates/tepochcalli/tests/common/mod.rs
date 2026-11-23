@@ -6,6 +6,11 @@
 //! de vault instalado con caches HF, familias de aserción del GC y el fake
 //! `CheckingProc` (soporte de test, no un target).
 
+// `common` es módulo compartido: cada target usa un subconjunto de los fakes,
+// así que lo no usado en ese target no es código muerto. Un único allow aquí
+// cubre el módulo y sus submódulos (helpers, swap_support).
+#![allow(dead_code)]
+
 pub mod helpers;
 pub mod swap_support;
 

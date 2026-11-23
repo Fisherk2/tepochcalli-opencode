@@ -3,7 +3,6 @@
 // sentinel-secret redaction, exit-code/`E_*` preservation, and
 // stderr/stdout separation.
 
-#[allow(dead_code)]
 mod common;
 
 use std::io::IsTerminal as _;

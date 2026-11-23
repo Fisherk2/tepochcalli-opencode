@@ -2,7 +2,6 @@
 //! HuggingFace (metadata, `gated`, no-embeddings). Fakes y fixtures en
 //! `common/swap_support.rs`.
 
-#[allow(dead_code)]
 mod common;
 
 use common::gate_ok;

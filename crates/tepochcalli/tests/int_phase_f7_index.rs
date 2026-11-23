@@ -8,7 +8,6 @@
 //! fixtures (`gate_ok`-style JSON) stand in for the flow, exactly like the
 //! T11 `FakeProc` stands in for `embed-check` before the CLI existed.
 
-#[allow(dead_code)]
 mod common;
 
 use std::path::{Path, PathBuf};

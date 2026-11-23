@@ -1,7 +1,6 @@
 //! Downloader spike tests: SHA-256 verified fetch, no remote scripts.
 //! All traffic goes to a localhost TcpListener — no external network.
 
-#[allow(dead_code)]
 mod common;
 
 use std::io::{Read, Write};

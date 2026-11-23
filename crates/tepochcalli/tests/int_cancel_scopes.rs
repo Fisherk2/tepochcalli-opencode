@@ -3,7 +3,6 @@
 //! cambia. Cubre las dos operaciones de escritura con alcance fijo de ficheros.
 
 // `common` es módulo compartido: este target no toca la mayoría de fakes.
-#[allow(dead_code)]
 mod common;
 
 use common::{CancellingUi, FakePayload};

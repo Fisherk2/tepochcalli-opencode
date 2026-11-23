@@ -5,7 +5,6 @@
 //! (`compensate_phase3/6/7`, install-state marker, offline guard) exists.
 //! Real `tempfile` vaults (D26: no FS port); fakes only.
 
-#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;

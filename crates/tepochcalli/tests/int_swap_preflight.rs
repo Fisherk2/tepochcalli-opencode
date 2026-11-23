@@ -7,7 +7,6 @@
 //! rastro). Sin red real: fakes y fixtures de `swap_support`.
 
 // Shared fakes: this target reuses the swap fixtures and four of them.
-#[allow(dead_code)]
 mod common;
 
 use std::cell::RefCell;

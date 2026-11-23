@@ -7,7 +7,6 @@
 //! `FakeHttp`, `FakeHost`).
 
 // Shared fakes: this target reuses three of them.
-#[allow(dead_code)]
 mod common;
 
 use std::collections::HashMap;

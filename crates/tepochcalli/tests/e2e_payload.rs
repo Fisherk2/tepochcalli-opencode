@@ -6,7 +6,6 @@
 //! `installers/install.sh` documents for mirrors — points at a local server,
 //! so nothing here touches the real network or a real release.
 
-#[allow(dead_code)]
 mod common;
 
 use std::io::{BufRead, BufReader, Write};

@@ -1,7 +1,6 @@
 //! UI tests (T6): `HeadlessUi` scripted answers + typed errors, and the
 //! `install --non-interactive` binary path never blocking on closed stdin.
 
-#[allow(dead_code)]
 mod common;
 
 use std::collections::VecDeque;

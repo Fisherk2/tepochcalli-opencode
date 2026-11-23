@@ -4,7 +4,6 @@
 //! Vaults `tempfile` reales (D26: sin puerto FS) y sin procesos hijo.
 
 // `common` es módulo compartido: este target no toca la mayoría de fakes.
-#[allow(dead_code)]
 mod common;
 
 use std::collections::BTreeMap;

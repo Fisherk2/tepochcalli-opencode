@@ -4,7 +4,6 @@
 //! F1/F2 never touch user data, so they have no compensation (todo T7).
 
 // Shared fakes: this target only needs three of them.
-#[allow(dead_code)]
 mod common;
 
 use std::path::Path;

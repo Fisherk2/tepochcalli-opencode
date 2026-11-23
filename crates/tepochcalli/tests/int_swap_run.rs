@@ -1,7 +1,6 @@
 //! Swap atómico D8.4 (T16): caminos del flujo que acaban en éxito o en
 //! rollback a estado cero. Fakes y fixtures en `common/swap_support.rs`.
 
-#[allow(dead_code)]
 mod common;
 
 use common::swap_support::{

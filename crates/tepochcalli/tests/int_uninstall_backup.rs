@@ -1,7 +1,6 @@
 //! H8 partial desinstall: cuando el borrado falla a mitad, el error tipado
 //! debe seguir diciendo DÓNDE está el backup ya creado con lo irreemplazable.
 
-#[allow(dead_code)]
 mod common;
 
 use common::helpers;

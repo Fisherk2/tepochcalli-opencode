@@ -78,13 +78,42 @@ fn has_tier_prefix(name: &str) -> bool {
 }
 
 /// Built at compile time so this file does not contain the marker it forbids.
-/// El spawn compartido de los e2e vive en `tests/common/helpers.rs`; un fichero
-/// que importa ese `bin` lanza un proceso aunque no construya el suyo.
+/// Un fichero e2e lanza un proceso con `bin()` (el helper compartido de
+/// `tests/common/helpers.rs`) o con `Command::new`.
+///
+/// El guard es TEXTUAL (substring por línea): no parsea Rust. Busca el marcador
+/// en cualquier línea que no sea comentario (`//`) y exige que no venga pegado
+/// a un identificador (así `..._no_bin()` no cuenta como llamada a `bin()`).
+/// Límite declarado: un alias o una macro que esconda el spawn no se detecta.
 const SPAWN_MARKERS: &[&str] = &[
     concat!("Command", "::new"),
     concat!("std::process", "::Command"),
-    concat!("helpers", "::bin"),
+    concat!("bin", "()"),
 ];
+
+/// `true` si `line` contiene `marker` sin ir pegado a un identificador.
+fn has_marker(line: &str, marker: &str) -> bool {
+    let mut from = 0;
+    while let Some(pos) = line[from..].find(marker) {
+        let at = from + pos;
+        let glued = line[..at]
+            .chars()
+            .next_back()
+            .is_some_and(|c| c.is_ascii_alphanumeric() || c == '_');
+        if !glued {
+            return true;
+        }
+        from = at + marker.len();
+    }
+    false
+}
+
+/// `true` si el target lanza un proceso (marcadores, ignorando comentarios).
+fn source_spawns(src: &str) -> bool {
+    src.lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .any(|line| SPAWN_MARKERS.iter().any(|marker| has_marker(line, marker)))
+}
 
 #[test]
 fn tests_layout_uses_tier_prefix() {
@@ -110,7 +139,7 @@ fn e2e_tests_spawn_a_process() {
         .filter(|f| file_name(f).starts_with("e2e_"))
         .filter(|f| {
             let src = std::fs::read_to_string(f).expect("test target readable");
-            !SPAWN_MARKERS.iter().any(|m| src.contains(m))
+            !source_spawns(&src)
         })
         .map(|f| file_name(f))
         .collect::<Vec<_>>();
@@ -129,7 +158,7 @@ fn int_tests_do_not_spawn_a_process() {
         .filter(|f| file_name(f).starts_with("int_"))
         .filter(|f| {
             let src = std::fs::read_to_string(f).expect("test target readable");
-            SPAWN_MARKERS.iter().any(|m| src.contains(m))
+            source_spawns(&src)
         })
         .map(|f| file_name(f))
         .collect::<Vec<_>>();
