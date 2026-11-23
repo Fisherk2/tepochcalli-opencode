@@ -58,9 +58,9 @@ pub(crate) fn resolve_vault_or_report(
     non_interactive: bool,
     vault: Option<&str>,
     command: &str,
-    context: &str,
     usage: &str,
 ) -> Result<String, u8> {
+    let context = format!("{command}: vault selection failed");
     match resolve_vault_dir(ui, vault) {
         Ok(raw) => Ok(raw),
         Err(err) if non_interactive => Err(report_usage_failure(
@@ -74,7 +74,7 @@ pub(crate) fn resolve_vault_or_report(
             None,
         )),
         Err(WizardError::UserAborted) => Err(report_cancel(ui, command)),
-        Err(err) => Err(report_maintenance_failure(ui, command, context, err, None)),
+        Err(err) => Err(report_maintenance_failure(ui, command, &context, err, None)),
     }
 }
 
@@ -134,7 +134,6 @@ pub(crate) fn run_config_embedder(
         non_interactive,
         vault.as_deref(),
         "config embedder",
-        "config embedder: vault selection failed",
         "tepochcalli config embedder --vault <directorio> --non-interactive --confirm",
     ) {
         Ok(raw) => raw,
@@ -211,7 +210,6 @@ pub(crate) fn run_reindex_cmd(
         non_interactive,
         vault.as_deref(),
         "reindex",
-        "reindex: vault selection failed",
         "tepochcalli reindex --vault <directorio> --non-interactive --confirm",
     ) {
         Ok(raw) => raw,
@@ -277,7 +275,6 @@ pub(crate) fn run_uninstall_cmd(
         non_interactive,
         vault.as_deref(),
         "uninstall",
-        "uninstall: vault selection failed",
         "tepochcalli uninstall --vault <directorio> --non-interactive --confirm",
     ) {
         Ok(raw) => raw,
@@ -358,7 +355,6 @@ pub(crate) fn run_update_cmd(
         non_interactive,
         vault.as_deref(),
         "update",
-        "update: vault selection failed",
         "tepochcalli update --vault <directorio> --non-interactive",
     ) {
         Ok(raw) => raw,

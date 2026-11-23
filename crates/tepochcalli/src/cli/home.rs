@@ -70,7 +70,6 @@ pub(crate) fn run_home_cmd(
         non_interactive,
         vault.as_deref(),
         "tepochcalli",
-        "vault selection failed",
         "tepochcalli --vault <directorio> --non-interactive <subcomando>",
     ) {
         Ok(raw) => raw,
