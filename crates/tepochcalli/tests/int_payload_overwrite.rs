@@ -100,7 +100,7 @@ fn rollback_restores_the_original_and_removes_created_files() {
     overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
     assert!(vault.path().join("AGENTS.md.bak").is_file());
 
-    rollback_overwrite(vault.path(), &j);
+    rollback_overwrite(&j);
 
     assert_eq!(
         read(vault.path(), "AGENTS.md"),
@@ -181,7 +181,7 @@ fn midway_failure_leaves_the_journal_for_rollback() {
         "el diario conserva lo hecho hasta el fallo: {j:?}"
     );
 
-    rollback_overwrite(vault.path(), &j);
+    rollback_overwrite(&j);
     assert_eq!(read(vault.path(), "AGENTS.md"), "viejo\n");
     assert!(
         vault.path().join(".opencode/agents.md").is_dir(),

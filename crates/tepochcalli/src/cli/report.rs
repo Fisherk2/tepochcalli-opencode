@@ -2,7 +2,7 @@
 //! (T17): best-effort redacted log under the OS state dir + redacted
 //! stderr panel via the `Ui` port.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use tepochcalli::application::failure::{
     log_path_in, now_secs, secrets_from_vault, state_dir, write_failure_log,
@@ -10,6 +10,26 @@ use tepochcalli::application::failure::{
 use tepochcalli::domain::failure::{failure_body, failure_body_usage, failure_title, redact};
 use tepochcalli::domain::{Phase, WizardError};
 use tepochcalli::ports::Ui;
+
+/// Lo que los tres informes de fallo piden por igual: los secretos a redactar
+/// del vault (si se conoce) y el log bajo el state dir de esta corrida.
+struct ReportInputs {
+    secrets: Vec<String>,
+    log: PathBuf,
+}
+
+impl ReportInputs {
+    fn capture(vault: Option<&Path>) -> Self {
+        Self {
+            secrets: vault.map(secrets_from_vault).unwrap_or_default(),
+            log: log_path_in(&state_dir(), now_secs()),
+        }
+    }
+
+    fn masked(&self) -> Vec<&str> {
+        self.secrets.iter().map(String::as_str).collect()
+    }
+}
 
 /// T17 failure exit (reindex/uninstall): same shared `report()` shape
 /// (panel on stderr + redacted log outside the vault), but the title/body
@@ -22,15 +42,21 @@ pub(crate) fn report_maintenance_failure(
     err: WizardError,
     vault: Option<&Path>,
 ) -> u8 {
-    let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
-    let log_path = log_path_in(&state_dir(), now_secs());
+    let inputs = ReportInputs::capture(vault);
     let title = format!("{command} failed");
     let mut body = format!("cause: {context}: {err}\n");
     if let Some(code) = err.e_star() {
         body.push_str(&format!("code: {code}\n"));
     }
-    body.push_str(&format!("log: {}\n", log_path.display()));
-    report(ui, &title, body, &owned, &log_path, err.exit_code())
+    body.push_str(&format!("log: {}\n", inputs.log.display()));
+    report(
+        ui,
+        &title,
+        body,
+        &inputs.secrets,
+        &inputs.log,
+        err.exit_code(),
+    )
 }
 
 /// Shared T15/T17 failure exit (S-3): best-effort redacted log under the OS
@@ -62,12 +88,18 @@ pub(crate) fn report_failure(
     err: WizardError,
     vault: Option<&Path>,
 ) -> u8 {
-    let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
-    let masked: Vec<&str> = owned.iter().map(String::as_str).collect();
-    let log_path = log_path_in(&state_dir(), now_secs());
+    let inputs = ReportInputs::capture(vault);
+    let masked = inputs.masked();
     let title = failure_title(phase);
-    let body = failure_body(context, phase, err, &log_path, &masked);
-    report(ui, &title, body, &owned, &log_path, err.exit_code())
+    let body = failure_body(context, phase, err, &inputs.log, &masked);
+    report(
+        ui,
+        &title,
+        body,
+        &inputs.secrets,
+        &inputs.log,
+        err.exit_code(),
+    )
 }
 
 /// Usage-failure exit (#10b, P0-2): mismo esqueleto compartido que
@@ -88,15 +120,29 @@ pub(crate) fn report_usage_failure(
     err: WizardError,
     vault: Option<&Path>,
 ) -> u8 {
-    let owned: Vec<String> = vault.map(secrets_from_vault).unwrap_or_default();
-    let masked: Vec<&str> = owned.iter().map(String::as_str).collect();
-    let log_path = log_path_in(&state_dir(), now_secs());
+    let inputs = ReportInputs::capture(vault);
+    let masked = inputs.masked();
     let title = match phase {
         Some(phase) => format!("{command}: uso incorrecto ({})", phase.name()),
         None => format!("{command}: uso incorrecto"),
     };
-    let body = failure_body_usage(command, missing, usage, context, phase, &log_path, &masked);
-    report(ui, &title, body, &owned, &log_path, err.exit_code())
+    let body = failure_body_usage(
+        command,
+        missing,
+        usage,
+        context,
+        phase,
+        &inputs.log,
+        &masked,
+    );
+    report(
+        ui,
+        &title,
+        body,
+        &inputs.secrets,
+        &inputs.log,
+        err.exit_code(),
+    )
 }
 
 /// Cancelación genuina (Esc / Ctrl-C en interactivo): nadie falló, así que el

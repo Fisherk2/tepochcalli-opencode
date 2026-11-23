@@ -61,7 +61,7 @@ pub fn run_update(
     match outcome {
         Some(Ok(())) => {}
         Some(Err(err)) => {
-            rollback_overwrite(vault, &journal);
+            rollback_overwrite(&journal);
             return Err(err);
         }
         None => return Err(WizardError::Internal),

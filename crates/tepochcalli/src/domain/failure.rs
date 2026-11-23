@@ -48,11 +48,7 @@ pub fn failure_body(
     secrets: &[&str],
 ) -> String {
     let mut body = String::new();
-    if let Some(phase) = phase {
-        body.push_str("phase: ");
-        body.push_str(phase.name());
-        body.push('\n');
-    }
+    push_phase(&mut body, phase);
     body.push_str("cause: ");
     body.push_str(context);
     body.push_str(": ");
@@ -72,9 +68,7 @@ pub fn failure_body(
         body.push_str(RETRY_COMMAND);
         body.push('\n');
     }
-    body.push_str("log: ");
-    body.push_str(&log_path.to_string_lossy());
-    body.push('\n');
+    push_log(&mut body, log_path);
     redact(&body, secrets)
 }
 
@@ -97,11 +91,7 @@ pub fn failure_body_usage(
     secrets: &[&str],
 ) -> String {
     let mut body = String::new();
-    if let Some(phase) = phase {
-        body.push_str("phase: ");
-        body.push_str(phase.name());
-        body.push('\n');
-    }
+    push_phase(&mut body, phase);
     body.push_str("cause: ");
     body.push_str(command);
     body.push_str(": ");
@@ -113,10 +103,24 @@ pub fn failure_body_usage(
     body.push_str("uso: ");
     body.push_str(usage);
     body.push('\n');
-    body.push_str("log: ");
-    body.push_str(&log_path.to_string_lossy());
-    body.push('\n');
+    push_log(&mut body, log_path);
     redact(&body, secrets)
+}
+
+/// `phase:` line — only when the failed phase is known.
+fn push_phase(out: &mut String, phase: Option<Phase>) {
+    if let Some(phase) = phase {
+        out.push_str("phase: ");
+        out.push_str(phase.name());
+        out.push('\n');
+    }
+}
+
+/// `log:` line — the panel always names the file it wrote.
+fn push_log(out: &mut String, log_path: &Path) {
+    out.push_str("log: ");
+    out.push_str(&log_path.to_string_lossy());
+    out.push('\n');
 }
 
 #[cfg(test)]

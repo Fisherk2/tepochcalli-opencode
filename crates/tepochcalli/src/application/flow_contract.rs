@@ -5,9 +5,9 @@
 //! parsers casi byte-idénticos (S5); este módulo los define UNA vez: los
 //! literales del contrato (`FLOW_MODULE`, `GATE_SUBCOMMAND`,
 //! `REFRESH_SUBCOMMAND`), los payloads tipados y los parsers. Los callers
-//! componen `spawn_*` + su parser (la variante reducida de reindex pide solo
-//! `dims`; el swap solo `scanned`) — el trunk y la lógica de veredicto ya no
-//! se copian.
+//! componen `spawn_*` + su parser (reindex y swap reutilizan el gate/variante
+//! completa; el swap solo lee `scanned` del refresh) — el trunk y la lógica de
+//! veredicto ya no se copian.
 
 use std::path::Path;
 
@@ -86,13 +86,6 @@ pub(super) fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
         dims: json_u32(body, "dims").ok_or(WizardError::Internal)?,
         rss_peak_bytes: json_u64(body, "rss_peak_bytes").ok_or(WizardError::Internal)?,
     })
-}
-
-/// Variante reducida del gate (reindex): solo las dims medidas importan —
-/// el modelo es el configurado y el RSS no se reporta.
-pub(super) fn parse_gate_dims(body: &str) -> Result<u32, WizardError> {
-    gate_verdict(body)?;
-    json_u32(body, "dims").ok_or(WizardError::Internal)
 }
 
 /// `ok:true` ⇒ sigue el parser del caller; `ok:false` ⇒ portero

@@ -55,7 +55,9 @@ impl InstallSnapshot {
     }
 }
 
-fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
+/// Restores the snapshotted bytes or removes the file the run created; shared
+/// with the swap rollback (`swap::rollback`).
+pub(super) fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
     match before {
         Some(bytes) => {
             let _ = std::fs::write(target, bytes);

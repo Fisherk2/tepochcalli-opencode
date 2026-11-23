@@ -570,7 +570,7 @@ pub fn overwrite_tree(
 /// never panics on a vanished temp file.
 // shortcut: directories created for new files stay (possibly empty) — the
 // journal is file-scoped; upgrade only if an empty-dir residue ever matters.
-pub fn rollback_overwrite(_dest: &Path, journal: &OverwriteJournal) {
+pub fn rollback_overwrite(journal: &OverwriteJournal) {
     for original in &journal.backed_up {
         let backup = backup_path(original);
         // Keep the .bak when the restore failed: it is the last good copy.

@@ -39,6 +39,7 @@ use super::flow_contract::spawn_refresh;
 use super::installer::{set_user_private, RUNTIME_DIR};
 use super::phase7::index_meta_path;
 use super::phase8::RagHealth;
+use super::rollback::restore_or_remove;
 use super::text::{
     config_value, is_plausible_hf_id, json_escape, json_string, json_u32, or_fallback,
 };
@@ -594,17 +595,6 @@ fn map_fs_err(_: std::io::Error) -> WizardError {
 fn rollback(vault: &Path, before: &Snapshot) {
     restore_or_remove(&config_path(vault), before.config.as_deref());
     restore_or_remove(&index_meta_path(vault), before.meta.as_deref());
-}
-
-fn restore_or_remove(target: &Path, before: Option<&[u8]>) {
-    match before {
-        Some(bytes) => {
-            let _ = std::fs::write(target, bytes);
-        }
-        None => {
-            let _ = std::fs::remove_file(target);
-        }
-    }
 }
 
 fn cleanup_staged(vault: &Path) {

@@ -14,8 +14,9 @@ use std::path::{Path, PathBuf};
 use crate::domain::{CancelToken, WizardError};
 use crate::ports::{CommandRunner, Ui};
 
+use super::embedder_gate::run_gate;
 use super::embedder_menu::config_path;
-use super::flow_contract::{parse_gate_dims, parse_refresh, spawn_gate, spawn_refresh, Refreshed};
+use super::flow_contract::{parse_refresh, spawn_refresh, Refreshed};
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::{index_meta_path, write_index_meta};
 use super::phase8::OPENCODE_JSON;
@@ -130,7 +131,7 @@ pub fn run_reindex(
         json_u32(&raw_meta, "dims"),
     ) {
         (true, Some(dims)) => Some(dims),
-        _ if provider == "local" => Some(run_gate(proc, vault, &model)?.dims),
+        _ if provider == "local" => Some(run_gate(proc, vault, &model, None, None, None)?.dims),
         _ => None,
     };
     let refreshed = run_refresh(proc, vault)?;
@@ -356,33 +357,12 @@ fn copy_tree(source: &Path, target: &Path, cancel: &CancelToken) -> Result<(), W
     Ok(())
 }
 
-/// Gate success payload of the reindex (variante reducida del contrato
-/// compartido): only the measured dims matter here — the model is the
-/// configured one.
-#[derive(Debug, PartialEq, Eq)]
-struct GateOk {
-    dims: u32,
-}
-
-/// Gate del reindex (trunk compartido, T11): sin revisión ni token — las
-/// variantes son parámetros explícitos de `spawn_gate`. `ok:false` is the
-/// portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
-/// `PhaseFailed`.
-fn run_gate(proc: &dyn CommandRunner, vault: &Path, model: &str) -> Result<GateOk, WizardError> {
-    let out = spawn_gate(proc, vault, model, None, None, None)?;
-    parse_gate(&out.stdout)
-}
-
 /// Replacement `refresh` (T12 contract, parser compartido). `ok:false` maps
 /// to `ModelInvalid`, matching the F7 portero parity; anything else
 /// unparseable is `PhaseFailed`.
 fn run_refresh(proc: &dyn CommandRunner, vault: &Path) -> Result<Refreshed, WizardError> {
     let out = spawn_refresh(proc, vault)?;
     parse_refresh(&out.stdout)
-}
-
-fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
-    parse_gate_dims(body).map(|dims| GateOk { dims })
 }
 
 #[cfg(test)]
@@ -395,24 +375,6 @@ mod tests {
         // `None` via filter): aquí el valor es el modelo/provider, no un
         // secreto a borrar.
         assert_eq!(config_value("model = \"\"\n", "model").as_deref(), Some(""));
-    }
-
-    #[test]
-    fn parse_gate_returns_measured_dims_only() {
-        match parse_gate("{\"ok\":true,\"model\":\"m\",\"dims\":384,\"rss_peak_bytes\":1}") {
-            Ok(gate) => assert_eq!(gate.dims, 384),
-            Err(err) => panic!("gate válido debe parsear, got: {err:?}"),
-        }
-        assert_eq!(
-            parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
-            Err(WizardError::ModelInvalid)
-        );
-        assert_eq!(parse_gate("garabato"), Err(WizardError::PhaseFailed));
-        assert_eq!(
-            parse_gate("{\"ok\":true,\"model\":\"m\"}"),
-            Err(WizardError::Internal),
-            "sin dims no hay medida que reportar"
-        );
     }
 
     #[test]
