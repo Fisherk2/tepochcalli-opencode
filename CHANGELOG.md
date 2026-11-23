@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Sin cambios todavía
+
+## [0.1.0-beta.1] - 2026-11-23
+
+### Added
+
+- **Phase 6.6 — resiliencia offline del wizard (ADR-016, 2026-11-20):** preflight de red antes del
+  primer escrito (sin red ⇒ cancelación tipada con rollback, nunca instalación parcial),
+  cancelación de la descarga del modelo desde el TUI y con Ctrl+C con purga de artefactos
+  parciales, rollback de la instalación fallida o cancelada (backup + journal) y pantalla de
+  descarga cancelable. Sin dependencias nuevas.
+
 ### Added (Phase 6.5 — flujo destino materializado, 2026-11-19)
 
 - **FTR del dueño firmado:** [ADR-014](docs/adr/adr-014-distribucion-uvx-pypi.md) y
@@ -386,6 +398,40 @@ Windows sigue sin probar. Detalle en `docs/WORKFLOW.md` §Phase 3.5.
   leía el PDF como UTF-8 y absorbía el `UnicodeDecodeError` en `skipped` con `rc=0` —
   ahora delega la lectura en `extract_text` (Docling), con guardia TOCTOU preservada y
   offsets F1 byte-idénticos para md/txt.
+
+### Changed (versión y README del beta, 2026-11-23)
+
+- **Versión del árbol a `0.1.0-beta.1`** en `crates/tepochcalli/Cargo.toml` + `Cargo.lock`,
+  `.tepochcalli/pyproject.toml` del payload y `__version__` del MCP; `uv.lock` normalizado por uv
+  a `0.1.0b1`. `just rust-wheel-verify` verde ⇒ `uvx OK: tepochcalli 0.1.0-beta.1`.
+- **`README.md`:** nueva sección «Instalación (beta 0.1.0-beta.1)» con el canal real (desde el
+  código fuente) y el estado del canal `uvx`.
+
+### Fixed (segunda revisión de Phase 6.5/6.6, 2026-11-23)
+
+- **Rollback completo y medido** sobre todo lo que escribe el instalador (`.opencode/`,
+  `10-templates/`, `AGENTS.md`, `.gitignore`, `opencode.json`), con journal antes del `fs::copy` y
+  `compensate_phase3` que poda directorios vacíos.
+- **Guardas de estado:** `run_menu` con `try_init` (sin panic fuera de TTY), frontera
+  `application→adapters` cerrada moviendo `rollback_overwrite` al puerto, `config embedder` sin
+  `--confirm` ⇒ exit 2 y `update` exige un workspace instalado.
+- **Seguridad de ficheros:** symlinks rechazados en `.bak`, raíz del vault y miembros del tar;
+  `ENOSPC` mapeado a `DiskFull` (exit 30).
+
+### Security
+
+- **`zip` 2.6.1 → 9.8.2** por `CVE-2026-115905` (CVSS4 crítico, corregido en 9.0.5) y 8 advisories
+  más (verificado contra OSV el 2026-11-23). El único uso es `extract_zip`, con
+  `validate_member` y extracción en dos fases.
+
+### Known limitations
+
+- **Sin rueda en PyPI ni binarios en el release:** `uvx tepochcalli` (canal objetivo de ADR-014)
+  todavía no funciona; la instalación es **desde el código fuente** y el `install.sh` del repo
+  solo sirve cuando existan assets de binario.
+- **6 plugins npm del payload en `@latest`:** riesgo de supply-chain aceptado por el dueño.
+- **Windows y TTY real:** declarados, no medidos.
+- **C3 y C6:** benchmarks manuales, fuera del gate.
 
 ---
 
