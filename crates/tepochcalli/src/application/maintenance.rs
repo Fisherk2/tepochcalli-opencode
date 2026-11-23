@@ -11,7 +11,7 @@
 
 use std::path::{Path, PathBuf};
 
-use crate::domain::WizardError;
+use crate::domain::{CancelToken, WizardError};
 use crate::ports::{CommandRunner, Ui};
 
 use super::embedder_menu::config_path;
@@ -166,7 +166,9 @@ pub fn run_reindex(
 /// `.obsidian/` survive by construction: they are never enumerated). Before
 /// removing, the IRREPLACEABLE subset ([`UNINSTALL_BACKUP_SCOPES`]) is copied
 /// to `<vault>/.tepochcalli-backup-<ts>/` preserving its relative path.
-/// Absent scopes ⇒ no-op `Ok` (idempotencia).
+/// Absent scopes ⇒ no-op `Ok` (idempotencia). R-offline-2: the work runs under
+/// the cancel screen; cancelling before the backup touches nothing, cancelling
+/// mid-delete leaves a PARTIAL workspace recoverable from the named backup.
 pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, WizardError> {
     let present: Vec<(&str, PathBuf)> = UNINSTALL_SCOPES
         .iter()
@@ -190,13 +192,48 @@ pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, Wizar
             vault.display()
         ),
     );
+    let cancel = CancelToken::new();
+    let mut outcome: Option<Result<UninstallReport, WizardError>> = None;
+    ui.run_cancellable("Desinstalando (H8)", &cancel, &mut || {
+        outcome = Some(uninstall_inner(ui, vault, &present, &cancel));
+    });
+    match outcome {
+        Some(result) => result,
+        None => Err(WizardError::Internal),
+    }
+}
+
+/// H8 under the cancel token: [cancelar antes del backup] no toca nada; a
+/// mitad del backup se descarta el backup parcial (best effort) y el vault
+/// sigue intacto; a mitad del borrado el workspace queda parcial, recuperable
+/// desde `backup_dir` — que el panel «Desinstall interrumpido» nombra.
+fn uninstall_inner(
+    ui: &dyn Ui,
+    vault: &Path,
+    present: &[(&str, PathBuf)],
+    cancel: &CancelToken,
+) -> Result<UninstallReport, WizardError> {
+    if cancel.is_cancelled() {
+        return Err(WizardError::UserAborted);
+    }
     // Backup FIRST: a failed copy aborts with the vault still complete.
     let backup_dir = create_backup_dir(vault)?;
-    if let Err(err) = copy_into_backup(vault, &backup_dir) {
+    if let Err(err) = copy_into_backup(vault, &backup_dir, cancel) {
         let _ = std::fs::remove_dir_all(&backup_dir);
         return Err(err);
     }
-    for (scope, path) in &present {
+    for (scope, path) in present {
+        if cancel.is_cancelled() {
+            ui.panel(
+                "Desinstall interrumpido",
+                &format!(
+                    "Se eliminó parte del payload. El backup con lo irreemplazable está en {} \
+                     (contiene .tepochcalli/config/, posible API key): no lo commitees.",
+                    backup_dir.display()
+                ),
+            );
+            return Err(WizardError::UserAborted);
+        }
         // Scope → kind is fixed: the two roots are dirs, `opencode.json` is a
         // file. A corrupted tree (a file named `.tepochcalli`) fails typed
         // instead of silently deleting the wrong thing.
@@ -277,21 +314,26 @@ fn create_private_dir(dir: &Path) -> std::io::Result<()> {
 }
 
 /// Copy the irreplaceable scopes under `backup` preserving vault-relative
-/// paths; a scope that does not exist is simply absent.
-fn copy_into_backup(vault: &Path, backup: &Path) -> Result<(), WizardError> {
+/// paths; a scope that does not exist is simply absent. A cancelled `cancel`
+/// stops at the next entry (`UserAborted`): the caller discards the partial
+/// backup and the vault is still whole.
+fn copy_into_backup(vault: &Path, backup: &Path, cancel: &CancelToken) -> Result<(), WizardError> {
     for scope in UNINSTALL_BACKUP_SCOPES {
         let source = vault.join(scope);
         if !source.exists() {
             continue;
         }
-        copy_tree(&source, &backup.join(scope))?;
+        copy_tree(&source, &backup.join(scope), cancel)?;
     }
     Ok(())
 }
 
 /// Recursive copy that never follows symlinks (a symlinked model dir must
-/// not drag the backup outside the vault).
-fn copy_tree(source: &Path, target: &Path) -> Result<(), WizardError> {
+/// not drag the backup outside the vault). Checks `cancel` per entry.
+fn copy_tree(source: &Path, target: &Path, cancel: &CancelToken) -> Result<(), WizardError> {
+    if cancel.is_cancelled() {
+        return Err(WizardError::UserAborted);
+    }
     let kind = std::fs::symlink_metadata(source)
         .map_err(|_| WizardError::PermissionDenied)?
         .file_type();
@@ -303,7 +345,7 @@ fn copy_tree(source: &Path, target: &Path) -> Result<(), WizardError> {
         let entries = std::fs::read_dir(source).map_err(|_| WizardError::PermissionDenied)?;
         for entry in entries {
             let entry = entry.map_err(|_| WizardError::PermissionDenied)?;
-            copy_tree(&entry.path(), &target.join(entry.file_name()))?;
+            copy_tree(&entry.path(), &target.join(entry.file_name()), cancel)?;
         }
         return Ok(());
     }
