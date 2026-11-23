@@ -8,7 +8,7 @@
 #
 # Linux construye en contenedor manylinux (`manylinux: auto`) para que la rueda
 # no dependa del glibc del runner; macOS y Windows compilan nativos y el input
-# `manylinux` se ignora allí. No colisiona con `release.yml` (cargo-dist, TD-51).
+# `manylinux` se ignora allí. Sin publicación: ver la cabecera de arriba.
 name: Wheels
 
 on:

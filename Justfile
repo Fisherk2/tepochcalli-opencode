@@ -530,7 +530,19 @@ md-lint:
 # Genera THIRD-PARTY.md desde el grafo del binario (licencias del `Cargo.lock`).
 # Se regenera al subir de versión; el fichero va commiteado.
 third-party target_dir=cargo_target:
-    cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo tree -e normal --format '{p}|{l}' --prefix none | sort -u > ../../THIRD-PARTY.md
+    #!/usr/bin/env bash
+    set -euo pipefail
+    rows="$(cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo tree -e normal --format '{p}|{l}' --prefix none | sort -u)"
+    {
+        echo '# Third-party licenses — wizard `tepochcalli`'
+        echo
+        echo 'El binario distribuido enlaza estáticamente las crates listadas abajo (generado'
+        echo 'con `just third-party` desde el grafo de `Cargo.lock`). Todas son permisivas'
+        echo '(MIT/Apache-2.0/BSD/ISC/Zlib/Unicode/MPL) y los textos completos de sus'
+        echo 'licencias viajan con cada crate en crates.io; el `LICENSE` de la raíz es MIT.'
+        echo
+        echo "${rows}"
+    } > ../../THIRD-PARTY.md
 
 # Gate local: lint → fmt-check → typecheck → unit (corta en el primer fallo).
 # Cubre los dos lenguajes (Python + wizard Rust): no hay gate parcial de un solo lado.
