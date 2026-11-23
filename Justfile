@@ -325,6 +325,13 @@ rust-fmt:
 rust-lint target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo clippy --locked --all-targets -- -D warnings
 
+# Borra los artefactos Rust del target externo. Necesario cuando dos checkouts
+# (p. ej. un worktree de verificación) comparten CARGO_TARGET_DIR: los
+# fingerprints reutilizan un rlib con el mismo nombre de paquete y el binario
+# recompilado puede enlazar contra una API obsoleta. Nunca se ejecuta en gates.
+rust-clean target_dir=cargo_target:
+    cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo clean
+
 # Suite del wizard (cubre los 5 caminos del menú con fakes, sin red).
 rust-test target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo test --locked
