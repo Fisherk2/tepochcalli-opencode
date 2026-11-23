@@ -7,7 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
-use tepochcalli::adapters::payload::{overwrite_tree, rollback_overwrite};
+use tepochcalli::adapters::payload::{merge_tree, overwrite_tree, rollback_overwrite};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::OverwriteJournal;
 use tepochcalli::UPDATE_SCOPES;
@@ -211,6 +211,77 @@ fn symlinks_are_never_followed() {
     );
     assert!(j.written.is_empty() && j.backed_up.is_empty(), "got: {j:?}");
     assert_eq!(read(outside.path(), "secreto.md"), "no debe copiarse\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_destination_file_is_rejected() {
+    let payload = tmp();
+    let vault = tmp();
+    let outside = tmp();
+    write(payload.path(), "AGENTS.md", "nuevo\n");
+    write(outside.path(), "secreto.md", "no tocar\n");
+    std::os::unix::fs::symlink(
+        outside.path().join("secreto.md"),
+        vault.path().join("AGENTS.md"),
+    )
+    .expect("symlink de destino");
+
+    let mut j = journal();
+    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j)
+        .expect_err("un destino enlazado escribiría fuera del vault");
+    assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
+    assert_eq!(
+        read(outside.path(), "secreto.md"),
+        "no tocar\n",
+        "el fichero externo queda byte-intacto"
+    );
+    assert!(j.written.is_empty() && j.backed_up.is_empty(), "got: {j:?}");
+}
+
+#[cfg(unix)]
+#[test]
+fn symlink_destination_dir_is_rejected() {
+    let payload = tmp();
+    let vault = tmp();
+    let outside = tmp();
+    write(payload.path(), ".opencode/x.md", "nuevo\n");
+    std::fs::create_dir_all(outside.path().join("dir")).expect("outside dir");
+    std::os::unix::fs::symlink(outside.path().join("dir"), vault.path().join(".opencode"))
+        .expect("symlink de directorio");
+
+    let mut j = journal();
+    let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j)
+        .expect_err("un directorio enlazado escribiría fuera del vault");
+    assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
+    assert!(
+        !outside.path().join("dir/x.md").exists(),
+        "nada se materializa a través del enlace"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn merge_tree_rejects_a_dangling_symlink_destination() {
+    let payload = tmp();
+    let vault = tmp();
+    let outside = tmp();
+    write(payload.path(), "AGENTS.md", "nuevo\n");
+    // Enlace a una ruta INEXISTENTE: `target.exists()` es `false` y `fs::copy`
+    // crearía el fichero a través del enlace, fuera del vault.
+    std::os::unix::fs::symlink(
+        outside.path().join("ausente"),
+        vault.path().join("AGENTS.md"),
+    )
+    .expect("symlink colgante");
+
+    let err = merge_tree(payload.path(), vault.path())
+        .expect_err("un destino enlazado no puede materializarse");
+    assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
+    assert!(
+        !outside.path().join("ausente").exists(),
+        "el destino externo NO se crea"
+    );
 }
 
 #[test]

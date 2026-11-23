@@ -364,6 +364,26 @@ fn join_checked(root: &Path, rel: &Path) -> Result<PathBuf, WizardError> {
     }
 }
 
+/// Rechaza cualquier componente de `rel` que ya exista como symlink bajo
+/// `root`: `join_checked` es léxico y `fs::copy`/`create_dir_all` siguen
+/// enlaces, así que un destino enlazado escribiría fuera del vault (L2-8).
+fn reject_symlink_ancestors(root: &Path, rel: &Path) -> Result<(), WizardError> {
+    let mut current = root.to_path_buf();
+    for component in rel.components() {
+        let Component::Normal(part) = component else {
+            continue;
+        };
+        current.push(part);
+        match fs::symlink_metadata(&current) {
+            Ok(meta) if meta.file_type().is_symlink() => return Err(WizardError::PayloadCorrupt),
+            Ok(_) => {}
+            Err(err) if err.kind() == ErrorKind::NotFound => return Ok(()),
+            Err(_) => return Err(WizardError::PayloadCorrupt),
+        }
+    }
+    Ok(())
+}
+
 /// Merge the tree at `src` into `dest` without overwrite: pre-existing files
 /// stay byte-intact (recorded in `skipped`), `.obsidian/` and symlinks never
 /// cross, and every target is join-checked against the canonical `dest`.
@@ -408,12 +428,14 @@ pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
             }
             if kind.is_dir() {
                 let target = join_checked(&root, &rel)?;
+                reject_symlink_ancestors(&root, &rel)?;
                 fs::create_dir_all(&target).map_err(map_io)?;
                 stack.push(entry.path());
                 continue;
             }
             if kind.is_file() {
                 let target = join_checked(&root, &rel)?;
+                reject_symlink_ancestors(&root, &rel)?;
                 if target.exists() {
                     report.skipped.push(target);
                 } else {
@@ -458,6 +480,7 @@ fn overwrite_file(
     journal: &mut OverwriteJournal,
 ) -> Result<(), WizardError> {
     let target = join_checked(root, rel)?;
+    reject_symlink_ancestors(root, rel)?;
     if let Some(parent) = target.parent() {
         fs::create_dir_all(parent).map_err(map_io)?;
     }
@@ -520,6 +543,7 @@ pub fn overwrite_tree(
             }
             if kind.is_dir() {
                 let target = join_checked(&root, &rel)?;
+                reject_symlink_ancestors(&root, &rel)?;
                 fs::create_dir_all(&target).map_err(map_io)?;
                 stack.push(entry.path());
                 continue;
