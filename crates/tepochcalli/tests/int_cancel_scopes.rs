@@ -14,6 +14,40 @@ fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir para la cancelación")
 }
 
+/// Payload que completa UNA escritura (con su `.bak` y su journal, como
+/// `overwrite_file`) y cancela antes de la siguiente: el caso «cancelé a mitad».
+struct CancelAfterOneWrite {
+    src: std::path::PathBuf,
+}
+
+impl tepochcalli::ports::PayloadSource for CancelAfterOneWrite {
+    fn materialize_report(
+        &self,
+        dest: &std::path::Path,
+    ) -> Result<tepochcalli::ports::MergeReport, WizardError> {
+        tepochcalli::ports::PayloadSource::materialize_report(&FakePayload::new(&self.src), dest)
+    }
+
+    fn materialize_overwrite(
+        &self,
+        dest: &std::path::Path,
+        scopes: &[&str],
+        journal: &mut tepochcalli::ports::OverwriteJournal,
+        cancel: Option<&tepochcalli::domain::CancelToken>,
+    ) -> Result<(), WizardError> {
+        // Mismo journal que `overwrite_file`: backup + written antes del copy.
+        let target = dest.join("AGENTS.md");
+        let original = std::fs::read(&target).map_err(|_| WizardError::DiskFull)?;
+        std::fs::write(tepochcalli::ports::backup_path(&target), original)
+            .map_err(|_| WizardError::DiskFull)?;
+        journal.backed_up.push(target.clone());
+        std::fs::write(&target, b"nuevo\n").map_err(|_| WizardError::DiskFull)?;
+        journal.written.push(target);
+        cancel.expect("run_update pasa token").cancel();
+        tepochcalli::adapters::payload::overwrite_tree(&self.src, dest, scopes, journal, cancel)
+    }
+}
+
 #[test]
 fn update_cancelado_antes_de_escribir_deja_el_vault_intacto() {
     let payload = tmp();
@@ -37,6 +71,35 @@ fn update_cancelado_antes_de_escribir_deja_el_vault_intacto() {
     assert!(
         !vault.path().join("AGENTS.md.bak").exists(),
         "sin escritura no hay backup"
+    );
+}
+
+#[test]
+fn update_cancelado_tras_una_escritura_revierte_esa_escritura() {
+    let payload = tmp();
+    let vault = tmp();
+    std::fs::write(payload.path().join("AGENTS.md"), "nuevo\n").expect("fixture payload");
+    std::fs::write(payload.path().join("otro.md"), "otro\n").expect("fixture payload");
+    std::fs::write(vault.path().join("AGENTS.md"), "mío\n").expect("fixture vault");
+
+    let err = run_update(
+        &CancelAfterOneWrite {
+            src: payload.path().to_path_buf(),
+        },
+        &CancellingUi::default(),
+        vault.path(),
+    )
+    .expect_err("un update cancelado a mitad debe abortar tipado");
+
+    assert!(matches!(err, WizardError::UserAborted), "got: {err:?}");
+    assert_eq!(
+        std::fs::read_to_string(vault.path().join("AGENTS.md")).expect("leer AGENTS.md"),
+        "mío\n",
+        "el journal conserva la escritura y rollback_overwrite la revierte"
+    );
+    assert!(
+        !vault.path().join("AGENTS.md.bak").exists(),
+        "el rollback retira el backup tras restaurar"
     );
 }
 

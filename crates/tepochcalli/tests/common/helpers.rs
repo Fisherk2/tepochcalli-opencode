@@ -7,6 +7,16 @@ use std::process::{Command, Output};
 
 use sha2::Digest as _;
 
+/// `true` bajo root en Linux (`/proc/self/status`): los tests que dependen de
+/// que `0o555` impida borrar deben saltarse. Sin dependencias nuevas.
+pub fn running_as_root() -> bool {
+    std::fs::read_to_string("/proc/self/status")
+        .ok()
+        .and_then(|s| s.lines().find(|l| l.starts_with("Uid:")).map(str::to_owned))
+        .and_then(|l| l.split_whitespace().nth(1).map(str::to_owned))
+        .is_some_and(|uid| uid == "0")
+}
+
 /// Hash hex SHA-256 de `bytes` (fixtures de payload/checksum).
 pub fn sha256_hex(bytes: &[u8]) -> String {
     format!("{:x}", sha2::Sha256::digest(bytes))

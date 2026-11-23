@@ -3,8 +3,14 @@
 //!
 //! Vaults `tempfile` reales (D26: sin puerto FS) y sin procesos hijo.
 
+// `common` es módulo compartido: este target no toca la mayoría de fakes.
+#[allow(dead_code)]
+mod common;
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
+
+use common::helpers;
 
 use tepochcalli::adapters::LocalPayload;
 use tepochcalli::application::{ensure_vault_dir, rollback_install, run_phase3, InstallSnapshot};
@@ -376,6 +382,11 @@ fn rollback_detecta_opencode_json_modificado() {
 #[test]
 fn rollback_incompleto_cuando_el_runtime_no_se_puede_borrar() {
     use std::os::unix::fs::PermissionsExt as _;
+
+    if helpers::running_as_root() {
+        eprintln!("skipped: running as root (CAP_DAC_OVERRIDE)");
+        return;
+    }
 
     let dir = tmp();
     let vault = dir.path().join("vault");

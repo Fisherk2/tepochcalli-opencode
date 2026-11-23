@@ -4,6 +4,7 @@
 #[allow(dead_code)]
 mod common;
 
+use common::helpers;
 use common::TapUi;
 use tepochcalli::application::maintenance::run_uninstall;
 use tepochcalli::domain::WizardError;
@@ -12,6 +13,11 @@ use tepochcalli::domain::WizardError;
 #[test]
 fn partial_desinstall_names_the_backup_dir() {
     use std::os::unix::fs::PermissionsExt as _;
+
+    if helpers::running_as_root() {
+        eprintln!("skipped: running as root (CAP_DAC_OVERRIDE)");
+        return;
+    }
 
     let vault = tempfile::tempdir().expect("tempdir for the uninstall fixture");
     let opencode = vault.path().join(".opencode");
