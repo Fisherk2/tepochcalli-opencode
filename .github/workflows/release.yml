@@ -1,41 +1,22 @@
-# Release del wizard `tepochcalli` (T18) — cargo-dist + GitHub Releases.
+# Release del wizard `tepochcalli` — SOLO el payload (desde `0.1.0-beta.1`).
 #
-# Estructura de `dist init --ci=github` (plan → build-local por target →
-# build-global → publish), ESCRITA A MANO: el binario `dist` no está
-# disponible en este entorno, así que no se pudo generar ni verificar con
-# `dist plan`/`dist generate --check`. Reconciliar cuando `dist` esté
-# instalado (`dist.toml` lleva `allow-dirty = ["ci"]` para proteger las
-# divergencias deliberadas); el asset versionado del payload (T19) se
-# empaqueta en el job `global`.
+# Este workflow NO construye binarios ni usa cargo-dist: el backend de
+# ADR-003 está retirado (ADR-014 / TD-51). El canal de instalación es la rueda
+# `uvx tepochcalli` (publicación manual pendiente, ver `wheels.yml`) y el
+# binario compilado desde el fuente baja su payload de ESTA release:
+# `releases/download/tepochcalli-v<ver>/tepochcalli-workspace-<ver>.tar.gz`
+# (`src/adapters/payload.rs`). El asset es lo único que el wizard necesita.
 #
-# Divergencias deliberadas (documentadas, no olvidos):
-# * Un solo action de terceros (`actions/checkout`, pineado por SHA como en
-#   `phase1.yml`): toolchain via `rustup` y release via `gh` CLI (ya en el
-#   runner) en vez de `dtolnay/*` / `softprops/*` — menos superficie supply-chain.
-# * `cargo-dist` se instala con su installer oficial pineado a la misma
-#   versión que `dist.toml` (`0.33.1`); el tag (`v*` o `tepochcalli-v*`) lo
-#   valida `cargo dist plan` en el job `draft`.
+# El release se marca `--prerelease`: `releases/latest` NO apunta a él, así que
+# toda descarga DEBE fijar el tag `tepochcalli-v<ver>` (regla one-version).
 #
-# T19: el asset del payload (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`)
-# se empaqueta en el job `global` con `<ver>` = `version` del crate. Regla
-# one-version: el binario pide `releases/download/tepochcalli-v<ver>/…`, así
-# que las releases del wizard DEBEN etiquetarse `tepochcalli-vX.Y.Z` (el
-# patrón `v*` sigue aceptado por compatibilidad con `cargo dist plan`, pero
-# un tag `vX.Y.Z` dejaría el asset fuera del alcance del binario).
-#
-# D-b: `x86_64-pc-windows-msvc` SE compila aquí (para que exista el
-# instalador `powershell`), pero Windows sigue fuera de la matriz de
-# verificación (`phase3.yml`).
-#
-# M6 (sin cambio): este workflow NUNCA se ha ejecutado en GitHub Actions —
-# no se declara «release funcional» en ninguna parte.
+# M6 (sin cambio): este workflow NUNCA se ha ejecutado en GitHub Actions.
 
 name: Release
 
 on:
   push:
     tags:
-      - "v[0-9]*"
       - "tepochcalli-v[0-9]*"
   workflow_dispatch:
     inputs:
@@ -47,140 +28,31 @@ permissions:
   contents: write
 
 env:
-  # Debe coincidir con `cargo-dist-version` de `crates/tepochcalli/dist.toml`.
-  CARGO_DIST_VERSION: 0.33.1
-  # Misma toolchain que el desarrollo local (verificada con `just rust-ci`).
-  RUST_TOOLCHAIN: 1.99.1
   TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
-  # Falla ruidosamente si el tag no casa con la versión del crate, y deja el
-  # draft donde los jobs de build suben sus artefactos.
-  draft:
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Instala la toolchain Rust pineada
-        run: |
-          set -euo pipefail
-          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
-          rustup default "${RUST_TOOLCHAIN}"
-
-      - name: Instala cargo-dist pineado
-        run: |
-          set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${CARGO_DIST_VERSION}/cargo-dist-installer.sh" | sh
-          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
-
-      - name: cargo dist plan (el tag debe casar con el crate)
-        working-directory: crates/tepochcalli
-        run: cargo dist plan
-
-      - name: Crea el draft release (idempotente)
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh release view "${TAG}" >/dev/null 2>&1 \
-            || gh release create "${TAG}" --draft --title "${TAG}" \
-              --notes "Wizard tepochcalli ${TAG}. Ver CHANGELOG.md. (M6: release sin ejecutar.)"
-
-  # Un runner NATIVO por target: sin cross-linkers (D-b: Windows compila aquí
-  # aunque no se verifique en `phase3.yml`).
-  build:
-    needs: draft
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - target: x86_64-unknown-linux-gnu
-            runner: ubuntu-latest
-          - target: aarch64-unknown-linux-gnu
-            runner: ubuntu-24.04-arm
-          - target: x86_64-apple-darwin
-            runner: macos-15-intel
-          - target: aarch64-apple-darwin
-            runner: macos-latest
-          - target: x86_64-pc-windows-msvc
-            runner: windows-latest
-    runs-on: ${{ matrix.runner }}
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-
-      - name: Instala la toolchain Rust pineada
-        run: |
-          set -euo pipefail
-          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
-          rustup default "${RUST_TOOLCHAIN}"
-
-      - name: Instala cargo-dist pineado (unix)
-        if: runner.os != 'Windows'
-        run: |
-          set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${CARGO_DIST_VERSION}/cargo-dist-installer.sh" | sh
-          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
-
-      - name: Instala cargo-dist pineado (windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: irm "https://github.com/axodotdev/cargo-dist/releases/download/v${env:CARGO_DIST_VERSION}/cargo-dist-installer.ps1" | iex
-
-      - name: cargo dist build (artefactos locales del target)
-        working-directory: crates/tepochcalli
-        run: cargo dist build --artifacts=local --target="${{ matrix.target }}"
-
-      - name: Sube los artefactos al draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh release upload "${TAG}" crates/tepochcalli/target/distrib/* --clobber
-
-  # Installers `shell`/`powershell` + tarball de fuentes + asset versionado
-  # del payload: plantillas puras + empaquetado del árbol del repo, sin
-  # binarios — basta un runner.
-  #
-  # T19 (one-version): el payload viaja como asset de la MISMA release
-  # (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`, con `<ver>` =
-  # `version` de `crates/tepochcalli/Cargo.toml`). El binario lo descarga con
-  # verificación de checksum (`ReleasePayload::for_current_version`); el
-  # árbol empaquetado es el template COMPLETO `obsidian-workspace/` (raíz del
-  # tar = contenido del vault: `AGENTS.md`, `opencode.json`, `.opencode/`,
-  # bandejas y `.tepochcalli/`), no solo el runtime Python.
-  global:
-    needs: build
+  payload:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Al configurar revisores en el repo, este environment convierte la
+    # publicación en un acto aprobado; hoy se crea al vuelo, sin bloquear.
+    environment: release
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Instala la toolchain Rust pineada
+      - name: Verifica tag, versión y changelog
         run: |
           set -euo pipefail
-          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
-          rustup default "${RUST_TOOLCHAIN}"
-
-      - name: Instala cargo-dist pineado
-        run: |
-          set -euo pipefail
-          curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${CARGO_DIST_VERSION}/cargo-dist-installer.sh" | sh
-          echo "${HOME}/.cargo/bin" >> "${GITHUB_PATH}"
-
-      - name: cargo dist build (artefactos globales)
-        working-directory: crates/tepochcalli
-        run: cargo dist build --artifacts=global
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          if [ "${TAG}" != "tepochcalli-v${version}" ]; then
+            echo "::error::tag '${TAG}' != 'tepochcalli-v${version}' (Cargo.toml)"
+            exit 1
+          fi
+          grep -q "^## \[${version}\]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md sin sección '## [${version}]'"; exit 1; }
 
       # T19: asset versionado del payload + sidecar SHA-256 (one-version).
       # El payload es el template COMPLETO (`obsidian-workspace/`) con la raíz
@@ -249,32 +121,20 @@ jobs:
           fi
           echo "payload OK: $(wc -l < "${listing}") entradas en ${PAYLOAD_ASSET}"
 
-      - name: Sube el payload al draft release
+      - name: Crea o reutiliza el release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          gh release view "${TAG}" >/dev/null 2>&1 \
+            || gh release create "${TAG}" --prerelease --title "${TAG}" \
+              --notes "Beta ${version} del wizard tepochcalli. Ver CHANGELOG.md."
+
+      - name: Sube el asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           gh release upload "${TAG}" "${RUNNER_TEMP}/${PAYLOAD_ASSET}" \
             "${RUNNER_TEMP}/${PAYLOAD_ASSET}.sha256" --clobber
-
-      - name: Sube los installers al draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh release upload "${TAG}" crates/tepochcalli/target/distrib/* --clobber
-
-  publish:
-    needs: [build, global]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Publica el draft release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          set -euo pipefail
-          gh release edit "${TAG}" --draft=false
