@@ -5,6 +5,10 @@
 //! Second Writing-Outside-Dir surface after T2 (`archive.rs`): the merge
 //! itself is join-checked against the canonical vault, and payload symlinks
 //! are never followed — only regular files are copied as plain files.
+//!
+//! Umbral de líneas (tramo 701-1000, justificado): dominio único — adapters
+//! de payload, contrato de rutas/URLs y pruebas Tier 1 del guard de escape;
+//! el walker compartido con `merge_tree` queda como TD-67.
 
 use std::fs;
 use std::io::ErrorKind;

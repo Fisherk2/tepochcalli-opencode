@@ -65,7 +65,8 @@ pub struct SwapDeps<'a> {
     pub proc: &'a dyn CommandRunner,
     /// HF API pre-check for free ids (D8.1).
     pub http: &'a dyn HttpClient,
-    /// Cancelación de la descarga en curso (R-offline-2; T16 la dispara).
+    /// Cancelación de la descarga en curso (R-offline-2). El watcher de
+    /// `Ui::run_cancellable` dispara el token; la UI no decide el resultado.
     /// Clon del token de la corrida.
     pub cancel: CancelToken,
 }
@@ -222,7 +223,8 @@ fn confirm_or_abort(ui: &dyn Ui, confirm: bool) -> Result<(), WizardError> {
 fn probe_local_model(http: &dyn HttpClient, picked: &Phase6Report) -> Result<(), WizardError> {
     if picked.provider == "local" {
         if let Some(model) = picked.model.as_deref() {
-            let name = model.split_once('\u{0}').map_or(model, |(name, _)| name);
+            // Solo `local` llega aquí: `model\0key` solo lo empaqueta el externo.
+            let name = model;
             http.probe(&format!("{HF_API_BASE}{name}"))?;
         }
     }

@@ -151,7 +151,7 @@ pub(crate) fn report_usage_failure(
 pub(crate) fn report_cancel(ui: &dyn Ui, command: &str) -> u8 {
     ui.panel(
         "Cancelado",
-        &format!("{command}: cancelado por el usuario; no se modificó nada."),
+        &format!("{command}: operación cancelada o sin respuesta; no se modificó nada."),
     );
     WizardError::UserAborted.exit_code()
 }

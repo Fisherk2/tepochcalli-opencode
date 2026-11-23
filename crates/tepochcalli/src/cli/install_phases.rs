@@ -256,7 +256,7 @@ pub(crate) fn run_phases(
         host: &SysHostProbe,
         proc: &proc,
         http: &http,
-        // T16 conectará el disparo (botón TUI / Ctrl+C) a este token.
+        // El watcher de `Ui::run_cancellable` dispara el token; la UI no decide el resultado.
         cancel: CancelToken::new(),
     };
     let cached = if flags.resume && is_phase_done(path.as_path(), Phase::F6) {
