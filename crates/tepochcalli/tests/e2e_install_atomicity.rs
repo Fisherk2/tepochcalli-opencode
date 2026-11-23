@@ -11,6 +11,7 @@ mod common;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+use common::helpers::write_path;
 use common::{host_16gb, FakeHost, FakeHttp, FakeProc, FakeUiScript, ScriptedUi};
 use tepochcalli::application::embedder_menu::Phase6Deps;
 use tepochcalli::application::installer::{
@@ -26,16 +27,9 @@ fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T14 fixtures")
 }
 
-fn write(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("fixture parents");
-    }
-    std::fs::write(path, body).expect("fixture write");
-}
-
 fn payload_tree(base: &Path) {
-    write(&base.join("a.md"), "# payload version\n");
-    write(&base.join("b.md"), "# fresh file\n");
+    write_path(&base.join("a.md"), "# payload version\n");
+    write_path(&base.join("b.md"), "# fresh file\n");
 }
 
 fn refresh_ok(indexed: u64) -> Result<CommandOutput, WizardError> {
@@ -102,7 +96,7 @@ fn snapshot_tree(root: &Path) -> Vec<(PathBuf, Vec<u8>)> {
 fn f1_f2_failures_touch_no_user_data() {
     let dir = tmp();
     let sentinel = dir.path().join("notes.md");
-    write(&sentinel, "# keep me\n");
+    write_path(&sentinel, "# keep me\n");
     let before = snapshot_tree(dir.path());
 
     // Induced F1 failure (4 GB RAM aborts, exit 10).
@@ -117,7 +111,7 @@ fn f1_f2_failures_touch_no_user_data() {
 
     // Induced F2 failure (a file is not a vault dir).
     let file = dir.path().join("not-a-dir");
-    write(&file, "x");
+    write_path(&file, "x");
     ensure_vault_dir(&file).expect_err("file must fail F2");
     let _ = std::fs::remove_file(&file);
 
@@ -137,8 +131,8 @@ fn f3_compensation_removes_written_and_keeps_user_files() {
     let payload = tmp();
     payload_tree(payload.path());
     let vault = tmp();
-    write(&vault.path().join("a.md"), "# USER version\n");
-    write(&vault.path().join("keep.md"), "# mine\n");
+    write_path(&vault.path().join("a.md"), "# USER version\n");
+    write_path(&vault.path().join("keep.md"), "# mine\n");
 
     run_phase3(&LocalPayload::new(payload.path()), vault.path()).expect("F3 must succeed");
     assert!(vault.path().join("b.md").is_file());
@@ -182,11 +176,11 @@ fn f4_f5_failures_compensate_without_touching_user_data() {
     use tepochcalli::application::installer::{compensate_phase4, compensate_phase5, run_phase5};
 
     let vault = tmp();
-    write(&vault.path().join("notes.md"), "# user research\n");
+    write_path(&vault.path().join("notes.md"), "# user research\n");
     let before_user = std::fs::read(vault.path().join("notes.md")).expect("sentinel");
     // Runtime data the compensations must never touch.
     for dir in ["models", "db", "config"] {
-        write(
+        write_path(
             &vault
                 .path()
                 .join(".tepochcalli")
@@ -299,7 +293,7 @@ fn f7_failure_leaves_no_index_and_keeps_placeholders() {
     let vault = tmp();
     let dir = vault.path().join("00-resources");
     std::fs::create_dir_all(&dir).expect("resources fixture");
-    write(&dir.join("ejemplo.md"), "# Ejemplo\n");
+    write_path(&dir.join("ejemplo.md"), "# Ejemplo\n");
     venv_python(vault.path());
     let report = Phase6Report {
         provider: "local".to_string(),
@@ -340,7 +334,7 @@ fn f7_failure_leaves_no_index_and_keeps_placeholders() {
 fn f8_failure_restores_user_config_byte_identical() {
     let vault = tmp();
     let original = "{\"mcp\":{\"servers\":{\"excel\":{\"type\":\"local\",\"command\":[\"uvx\",\"x\"],\"disabled\":true}}}}\n";
-    write(&vault.path().join("opencode.json"), original);
+    write_path(&vault.path().join("opencode.json"), original);
     venv_python(vault.path());
     let proc = FakeProc::scripted([Ok(CommandOutput {
         status: 1,
@@ -415,7 +409,7 @@ fn resume_deduces_completed_phases_and_skips_them() {
 
     // Full-artifact vault reads as done for F6/F8 without any marker.
     venv_python(vault.path());
-    write(
+    write_path(
         &vault
             .path()
             .join(".tepochcalli")
@@ -423,7 +417,7 @@ fn resume_deduces_completed_phases_and_skips_them() {
             .join("tepochcalli.toml"),
         "[embedding]\nprovider = \"none\"\n",
     );
-    write(
+    write_path(
         &vault.path().join("opencode.json"),
         "{\"mcp\":{\"servers\":{\"tepochcalli-rag\":{}}}}",
     );
@@ -489,7 +483,7 @@ fn rerun_is_idempotent_with_zero_dupes() {
 
     // F8 rerun: byte-identical file, single managed entry.
     venv_python(vault.path());
-    write(
+    write_path(
         &vault.path().join("opencode.json"),
         "{\"mcp\":{\"servers\":{}}}",
     );
@@ -651,26 +645,26 @@ fn resume_reruns_phases_whose_artifact_was_deleted() {
     let dir = tmp();
     let payload = dir.path().join("payload-t14");
     std::fs::create_dir_all(&payload).expect("payload dir (local source, no network)");
-    write(&payload.join("keep.md"), "# payload\n");
+    write_path(&payload.join("keep.md"), "# payload\n");
     let vault = dir.path().join("v-t14");
     let rt = vault.join(".tepochcalli");
     std::fs::create_dir_all(rt.join("config")).expect("runtime config dir");
-    write(
+    write_path(
         &vault.join(".tepochcalli").join(".install-intent"),
         "keep.md\n",
     );
-    write(
+    write_path(
         &vault.join(".tepochcalli").join(".install-state"),
         "F1\nF2\nF3\nF4\nF5\nF6\nF7\nF8\n",
     );
     let uv_bin = rt.join("bin").join("uv");
     std::fs::create_dir_all(rt.join("bin")).expect("bin dir");
     std::fs::write(&uv_bin, b"fake-uv").expect("uv artifact fixture");
-    write(
+    write_path(
         &rt.join("config").join("tepochcalli.toml"),
         "[embedding]\nprovider = \"none\"\n",
     );
-    write(
+    write_path(
         &vault.join("opencode.json"),
         "{\"mcp\":{\"servers\":{\"tepochcalli-rag\":{}}}}",
     );

@@ -5,23 +5,17 @@
 //! artifacts survive, a second run is a no-op, and a mid-flight failure
 //! leaves the vault with its ORIGINAL bytes (rollback).
 
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+#[allow(dead_code)]
+mod common;
 
-fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-}
+use std::path::{Path, PathBuf};
+use std::process::Stdio;
+
+use common::helpers::bin;
+use common::helpers::write_rel;
 
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for the H7 fixtures")
-}
-
-fn write(root: &Path, rel: &str, body: &str) {
-    let path = root.join(rel);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("fixture parent dir");
-    }
-    std::fs::write(path, body).expect("fixture write");
 }
 
 fn read(root: &Path, rel: &str) -> String {
@@ -32,39 +26,39 @@ fn read(root: &Path, rel: &str) -> String {
 /// never copy (`00-resources/`, `10-templates/`, `.obsidian/`).
 fn payload_fixture() -> tempfile::TempDir {
     let dir = tmp();
-    write(dir.path(), ".opencode/agents/itzamna.md", "nuevo agente\n");
-    write(
+    write_rel(dir.path(), ".opencode/agents/itzamna.md", "nuevo agente\n");
+    write_rel(
         dir.path(),
         ".tepochcalli/pyproject.toml",
         "version = \"0.1.0\"\n",
     );
-    write(dir.path(), ".gitignore", "*.bak\n");
-    write(dir.path(), "opencode.json", "{\"nuevo\": true}\n");
-    write(dir.path(), "AGENTS.md", "# AGENTS nuevo\n");
-    write(dir.path(), "00-resources/ejemplo.md", "# placeholder\n");
-    write(dir.path(), "10-templates/base.md", "# plantilla\n");
-    write(dir.path(), ".obsidian/app.json", "{}\n");
+    write_rel(dir.path(), ".gitignore", "*.bak\n");
+    write_rel(dir.path(), "opencode.json", "{\"nuevo\": true}\n");
+    write_rel(dir.path(), "AGENTS.md", "# AGENTS nuevo\n");
+    write_rel(dir.path(), "00-resources/ejemplo.md", "# placeholder\n");
+    write_rel(dir.path(), "10-templates/base.md", "# plantilla\n");
+    write_rel(dir.path(), ".obsidian/app.json", "{}\n");
     dir
 }
 
 /// Vault fixture: old payload files + user material + runtime artifacts.
 fn vault_fixture() -> tempfile::TempDir {
     let dir = tmp();
-    write(dir.path(), ".opencode/agents/itzamna.md", "viejo agente\n");
-    write(dir.path(), ".opencode/skills/vieja/SKILL.md", "solo aquí\n");
-    write(
+    write_rel(dir.path(), ".opencode/agents/itzamna.md", "viejo agente\n");
+    write_rel(dir.path(), ".opencode/skills/vieja/SKILL.md", "solo aquí\n");
+    write_rel(
         dir.path(),
         ".tepochcalli/pyproject.toml",
         "version = \"0.0.9\"\n",
     );
-    write(dir.path(), ".tepochcalli/venv/bin/python", "fake-python\n");
-    write(dir.path(), ".tepochcalli/db/chunks.lance", "indice\n");
-    write(dir.path(), ".gitignore", "/venv\n");
-    write(dir.path(), "opencode.json", "{\"viejo\": true}\n");
-    write(dir.path(), "AGENTS.md", "# AGENTS viejo\n");
-    write(dir.path(), "00-resources/nota.md", "# mi nota\n");
-    write(dir.path(), "10-templates/mia.md", "# mi plantilla\n");
-    write(dir.path(), ".obsidian/app.json", "{\"theme\": \"dark\"}\n");
+    write_rel(dir.path(), ".tepochcalli/venv/bin/python", "fake-python\n");
+    write_rel(dir.path(), ".tepochcalli/db/chunks.lance", "indice\n");
+    write_rel(dir.path(), ".gitignore", "/venv\n");
+    write_rel(dir.path(), "opencode.json", "{\"viejo\": true}\n");
+    write_rel(dir.path(), "AGENTS.md", "# AGENTS viejo\n");
+    write_rel(dir.path(), "00-resources/nota.md", "# mi nota\n");
+    write_rel(dir.path(), "10-templates/mia.md", "# mi plantilla\n");
+    write_rel(dir.path(), ".obsidian/app.json", "{\"theme\": \"dark\"}\n");
     dir
 }
 
@@ -217,7 +211,7 @@ fn midway_failure_restores_the_original_vault() {
     std::fs::remove_file(vault.path().join(".opencode/agents/itzamna.md"))
         .expect("remove fixture file");
     std::fs::create_dir_all(vault.path().join(".opencode/agents/itzamna.md")).expect("trap dir");
-    write(
+    write_rel(
         vault.path(),
         ".opencode/agents/itzamna.md/hijo.md",
         "trampa\n",

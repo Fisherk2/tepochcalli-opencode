@@ -78,9 +78,12 @@ fn has_tier_prefix(name: &str) -> bool {
 }
 
 /// Built at compile time so this file does not contain the marker it forbids.
+/// El spawn compartido de los e2e vive en `tests/common/helpers.rs`; un fichero
+/// que importa ese `bin` lanza un proceso aunque no construya el suyo.
 const SPAWN_MARKERS: &[&str] = &[
     concat!("Command", "::new"),
     concat!("std::process", "::Command"),
+    concat!("helpers", "::bin"),
 ];
 
 #[test]

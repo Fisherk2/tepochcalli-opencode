@@ -1,18 +1,18 @@
 //! UI tests (T6): `HeadlessUi` scripted answers + typed errors, and the
 //! `install --non-interactive` binary path never blocking on closed stdin.
 
+#[allow(dead_code)]
+mod common;
+
 use std::collections::VecDeque;
 use std::io::IsTerminal;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::Duration;
 
+use common::helpers::bin;
 use tepochcalli::adapters::{HeadlessUi, TtyUi};
 use tepochcalli::domain::WizardError;
 use tepochcalli::ports::Ui;
-
-fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-}
 
 #[test]
 fn headless_returns_scripted_answers_in_order() {

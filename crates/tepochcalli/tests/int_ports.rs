@@ -10,15 +10,11 @@ mod common;
 
 use std::collections::{HashMap, VecDeque};
 
+use common::helpers::sha256_hex;
 use common::{menu_view, FakeHost, FakeHttp, FakeProc, FakeUiScript, ScriptedUi};
-use sha2::{Digest, Sha256};
 use tepochcalli::adapters::HeadlessUi;
 use tepochcalli::ports::{CommandRunner, GpuInfo, HostProbe, HttpClient, PayloadSource, Ui};
 use tepochcalli::WizardError;
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
 
 #[test]
 fn proc_returns_scripted_output() {

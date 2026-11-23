@@ -4,6 +4,9 @@
 //! the headless UI inherits (no screen, no token fired) and the same inline
 //! fallback behind `TtyUi`'s no-TTY guard.
 
+#[allow(dead_code)]
+mod common;
+
 use std::cell::Cell;
 use std::io::IsTerminal;
 
@@ -13,6 +16,7 @@ use ratatui::buffer::Buffer;
 use ratatui::style::Modifier;
 use ratatui::Terminal;
 
+use common::helpers::buffer_text;
 use tepochcalli::adapters::ui_ratatui::{is_cancel_key, render_progress};
 use tepochcalli::adapters::{HeadlessUi, TtyUi};
 use tepochcalli::domain::CancelToken;
@@ -31,27 +35,9 @@ fn draw(width: u16, height: u16) -> Buffer {
     draw_at(width, height, 0)
 }
 
-/// Flattens the buffer grid into searchable text (one line per row).
-fn text(buffer: &Buffer) -> String {
-    let area = buffer.area();
-    (area.top()..area.bottom())
-        .map(|y| {
-            (area.left()..area.right())
-                .map(|x| {
-                    buffer
-                        .cell((x, y))
-                        .and_then(|cell| cell.symbol().chars().next())
-                        .unwrap_or(' ')
-                })
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 #[test]
 fn progress_shows_the_title_and_the_enabled_cancel_row() {
-    let text = text(&draw(80, 24));
+    let text = buffer_text(&draw(80, 24));
     assert!(
         text.contains("Tepochcalli · Descargando modelo de embeddings"),
         "header must carry the title:\n{text}"
@@ -64,7 +50,7 @@ fn progress_shows_the_title_and_the_enabled_cancel_row() {
 
 #[test]
 fn every_menu_action_is_blocked_with_the_download_reason() {
-    let text = text(&draw(80, 24));
+    let text = buffer_text(&draw(80, 24));
     for label in ["Install", "Update", "Change Embedder", "Desinstall", "Exit"] {
         assert!(text.contains(label), "missing blocked row {label}:\n{text}");
     }
@@ -89,8 +75,8 @@ fn every_menu_action_is_blocked_with_the_download_reason() {
 
 #[test]
 fn la_barra_anima_entre_ticks() {
-    let start = text(&draw_at(80, 24, 0));
-    let mid = text(&draw_at(80, 24, 10));
+    let start = buffer_text(&draw_at(80, 24, 0));
+    let mid = buffer_text(&draw_at(80, 24, 10));
     assert_ne!(
         start, mid,
         "the gauge must move between ticks (indeterminate animation)"

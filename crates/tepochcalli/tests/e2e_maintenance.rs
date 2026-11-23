@@ -12,8 +12,10 @@
 mod common;
 
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
+use common::helpers::bin;
+use common::helpers::{stderr_text, stdout_text};
 use common::{gate_ok, seed_runtime, FakeProc, RecordingProc, TapUi, UiEvent};
 use tepochcalli::application::maintenance::{run_reindex, run_uninstall};
 use tepochcalli::domain::WizardError;
@@ -139,18 +141,6 @@ fn tree_snapshot(root: &Path) -> Vec<(String, Vec<u8>)> {
     let mut out = Vec::new();
     walk(root, root, &mut out);
     out
-}
-
-fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-}
-
-fn stderr_text(output: &std::process::Output) -> String {
-    String::from_utf8_lossy(&output.stderr).into_owned()
-}
-
-fn stdout_text(output: &std::process::Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
 fn no_stray_meta_temps(vault: &Path) {

@@ -6,6 +6,9 @@
 //! `installers/install.sh` documents for mirrors — points at a local server,
 //! so nothing here touches the real network or a real release.
 
+#[allow(dead_code)]
+mod common;
+
 use std::io::{BufRead, BufReader, Write};
 use std::net::TcpListener;
 use std::process::Command;
@@ -14,17 +17,13 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use sha2::{Digest as _, Sha256};
+use common::helpers::sha256_hex;
 use tepochcalli::adapters::payload::{
     payload_asset_name, payload_asset_url_from, payload_checksum_name, payload_release_tag,
     release_base_url_from,
 };
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
 
 fn tar_gz(files: &[(&str, &[u8])]) -> Vec<u8> {
     let mut tar_buf = Vec::new();

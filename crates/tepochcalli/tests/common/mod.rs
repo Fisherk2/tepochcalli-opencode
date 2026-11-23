@@ -6,6 +6,7 @@
 //! de vault instalado con caches HF, familias de aserción del GC y el fake
 //! `CheckingProc` (soporte de test, no un target).
 
+pub mod helpers;
 pub mod swap_support;
 
 use std::cell::RefCell;

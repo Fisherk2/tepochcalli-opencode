@@ -1,16 +1,15 @@
 //! Downloader spike tests: SHA-256 verified fetch, no remote scripts.
 //! All traffic goes to a localhost TcpListener — no external network.
 
+#[allow(dead_code)]
+mod common;
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use sha2::{Digest, Sha256};
+use common::helpers::sha256_hex;
 use tepochcalli::adapters::fetch::{fetch_verified, make_executable, run_version, FetchError};
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
 
 /// Minimal HTTP server: serves `routes` once each, then exits.
 /// Each route is (path, status_line, body). Unknown path -> 404.

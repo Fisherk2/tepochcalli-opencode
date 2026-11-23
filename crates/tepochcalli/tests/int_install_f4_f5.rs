@@ -14,8 +14,8 @@ use std::collections::HashMap;
 use std::io::Write as _;
 use std::path::Path;
 
+use common::helpers::sha256_hex;
 use common::{FakeHttp, FakeProc, RecordingProc};
-use sha2::{Digest as _, Sha256};
 use tepochcalli::adapters::fetch::{self, UvAsset};
 use tepochcalli::adapters::{StdCommandRunner, UreqHttpClient};
 use tepochcalli::application::installer::{
@@ -26,10 +26,6 @@ use tepochcalli::WizardError;
 
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T9 fixtures")
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Minimal `.tar.gz` with a single `member` file (mirrors `phases_f3.rs`).

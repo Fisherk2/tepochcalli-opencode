@@ -14,6 +14,9 @@
 //! No test touches the real network; no dependency beyond the crate's existing
 //! `sha2` / `tar` / `flate2` / `tempfile`.
 
+#[allow(dead_code)]
+mod common;
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
@@ -21,11 +24,7 @@ use std::process::{Command, Output, Stdio};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
-use sha2::{Digest as _, Sha256};
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
+use common::helpers::sha256_hex;
 
 fn installer(name: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))

@@ -3,11 +3,15 @@
 //! every button, the reason of each disabled one, the uvx refresh command and
 //! the contact block.
 
+#[allow(dead_code)]
+mod common;
+
 use ratatui::backend::TestBackend;
 use ratatui::buffer::Buffer;
 use ratatui::style::Modifier;
 use ratatui::Terminal;
 
+use common::helpers::buffer_text;
 use tepochcalli::adapters::ui_ratatui::render_menu;
 use tepochcalli::domain::{menu_spec, InstalledState};
 use tepochcalli::ports::MenuView;
@@ -46,29 +50,11 @@ fn draw_view(
     terminal.backend().buffer().clone()
 }
 
-/// Flattens the buffer grid into searchable text (one line per row).
-fn text(buffer: &Buffer) -> String {
-    let area = buffer.area();
-    (area.top()..area.bottom())
-        .map(|y| {
-            (area.left()..area.right())
-                .map(|x| {
-                    buffer
-                        .cell((x, y))
-                        .and_then(|cell| cell.symbol().chars().next())
-                        .unwrap_or(' ')
-                })
-                .collect::<String>()
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-}
-
 #[test]
 fn header_shows_the_resolved_versions_and_embedder_never_a_placeholder() {
     // T9: the caller resolves every fact (`home_view`); the render only
     // paints what it is given. `None` is the single "not installed" case.
-    let up_to_date = text(&draw_view(
+    let up_to_date = buffer_text(&draw_view(
         InstalledState::UpToDate,
         80,
         24,
@@ -83,7 +69,7 @@ fn header_shows_the_resolved_versions_and_embedder_never_a_placeholder() {
         "header must carry all three facts:\n{up_to_date}"
     );
 
-    let absent = text(&draw_view(
+    let absent = buffer_text(&draw_view(
         InstalledState::NotInstalled,
         80,
         24,
@@ -105,7 +91,7 @@ fn header_paints_each_embedder_label_in_its_own_header() {
         "local (.tepochcalli/models/)",
         "sin configurar",
     ] {
-        let text = text(&draw_view(
+        let text = buffer_text(&draw_view(
             InstalledState::UpToDate,
             80,
             24,
@@ -123,7 +109,7 @@ fn header_paints_each_embedder_label_in_its_own_header() {
 
 #[test]
 fn ahead_shows_every_button_its_reason_the_uvx_command_and_contact() {
-    let text = text(&draw(InstalledState::Ahead, 80, 24));
+    let text = buffer_text(&draw(InstalledState::Ahead, 80, 24));
     for label in ["Update", "Change Embedder", "Desinstall", "Install", "Exit"] {
         assert!(text.contains(label), "missing button {label}:\n{text}");
     }
@@ -141,7 +127,7 @@ fn ahead_shows_every_button_its_reason_the_uvx_command_and_contact() {
 
 #[test]
 fn not_installed_shows_the_no_install_reason_and_the_ready_notice() {
-    let text = text(&draw(InstalledState::NotInstalled, 80, 24));
+    let text = buffer_text(&draw(InstalledState::NotInstalled, 80, 24));
     assert_eq!(
         text.matches("no hay instalación aún").count(),
         3,
@@ -153,7 +139,7 @@ fn not_installed_shows_the_no_install_reason_and_the_ready_notice() {
 
 #[test]
 fn up_to_date_blocks_update_and_install_with_the_same_reason() {
-    let text = text(&draw(InstalledState::UpToDate, 80, 24));
+    let text = buffer_text(&draw(InstalledState::UpToDate, 80, 24));
     assert_eq!(text.matches("versión al día").count(), 2, "{text}");
 }
 
@@ -182,7 +168,7 @@ fn disabled_rows_are_dimmed_in_the_buffer() {
 #[test]
 fn narrow_terminal_still_shows_buttons_reason_and_contact() {
     // 40x12: the smallest supported width must keep the actionable content.
-    let text = text(&draw(InstalledState::Ahead, 40, 12));
+    let text = buffer_text(&draw(InstalledState::Ahead, 40, 12));
     for label in ["Update", "Change Embedder", "Desinstall", "Install", "Exit"] {
         assert!(text.contains(label), "missing {label} at 40x12:\n{text}");
     }

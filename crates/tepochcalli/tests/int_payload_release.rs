@@ -12,8 +12,8 @@ use std::collections::HashMap;
 use std::io::{Read, Write};
 use std::net::TcpListener;
 
+use common::helpers::sha256_hex;
 use common::FakeHttp;
-use sha2::{Digest as _, Sha256};
 use tepochcalli::adapters::release_payload_from_sidecar;
 use tepochcalli::adapters::{
     fetch_release_payload, is_loopback_base, mirror_http_non_loopback, payload_asset_name,
@@ -21,10 +21,6 @@ use tepochcalli::adapters::{
     sidecar_url_for, ReleasePayload, PAYLOAD_ASSET_STEM, PAYLOAD_RELEASE_REPO,
 };
 use tepochcalli::WizardError;
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
 
 #[test]
 fn asset_names_are_versioned_and_pinned() {

@@ -3,12 +3,15 @@
 //! Proc and HTTP tests run against the real OS / loopback only — no
 //! internet, no shell spawned by the adapter, no `unwrap` in `src/`.
 
+#[allow(dead_code)]
+mod common;
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::PathBuf;
 use std::thread;
 
-use sha2::Digest as _;
+use common::helpers::sha256_hex;
 use tepochcalli::adapters::{find_tool_in, StdCommandRunner, SysHostProbe, UreqHttpClient};
 use tepochcalli::ports::{CommandRunner, HostProbe, HttpClient};
 use tepochcalli::WizardError;
@@ -74,10 +77,6 @@ fn serve_once(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
         stream.write_all(&body).expect("write body");
     });
     (format!("http://127.0.0.1:{port}/asset"), handle)
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", sha2::Sha256::digest(bytes))
 }
 
 #[test]

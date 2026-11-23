@@ -3,10 +3,15 @@
 // sentinel-secret redaction, exit-code/`E_*` preservation, and
 // stderr/stdout separation.
 
+#[allow(dead_code)]
+mod common;
+
 use std::io::IsTerminal as _;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 
+use common::helpers::bin;
+use common::helpers::{stderr_text, stdout_text};
 use tepochcalli::domain::{Phase, WizardError};
 
 const SENTINEL: &str = "sk-t15-sentinel-9f8a2c-key-must-never-leak";
@@ -337,18 +342,6 @@ const MODEL: &str = "text-embedding-3-small";
 /// Fichero del fixture que sí contiene la clave por construcción (config
 /// gitignored donde `secrets_from_vault` la busca).
 const CONFIG_REL: &str = ".tepochcalli/config/tepochcalli.toml";
-
-fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-}
-
-fn stderr_text(output: &std::process::Output) -> String {
-    String::from_utf8_lossy(&output.stderr).into_owned()
-}
-
-fn stdout_text(output: &std::process::Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
 
 /// Vault instalado con el proveedor externo (path 4): la clave vive en el
 /// config gitignored, el sidecar conoce el modelo (sin drift, sin panel

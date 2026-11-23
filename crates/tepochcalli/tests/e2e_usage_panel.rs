@@ -3,11 +3,12 @@
 //! el Display `cancelled by user` de `UserAborted` (nadie canceló) ni una
 //! línea `estado:` de cancelación.
 
-use std::process::{Command, Stdio};
+#[allow(dead_code)]
+mod common;
 
-fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-}
+use std::process::Stdio;
+
+use common::helpers::bin;
 
 fn state() -> tempfile::TempDir {
     tempfile::tempdir().expect("state home fixture")

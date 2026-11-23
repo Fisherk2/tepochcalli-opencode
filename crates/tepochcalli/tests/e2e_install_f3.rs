@@ -4,11 +4,14 @@
 //! `installer::run_phase3` existed. Real `tempfile` vaults (D26: no FS
 //! port); loopback HTTP only — never the internet.
 
+#[allow(dead_code)]
+mod common;
+
 use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::Path;
 
-use sha2::{Digest as _, Sha256};
+use common::helpers::{sha256_hex, write_path};
 use tepochcalli::adapters::{LocalPayload, ReleasePayload};
 use tepochcalli::application::installer::run_phase3;
 use tepochcalli::ports::PayloadSource;
@@ -18,20 +21,13 @@ fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for T8 fixtures")
 }
 
-fn write(path: &Path, body: &str) {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("fixture parents");
-    }
-    std::fs::write(path, body).expect("fixture write");
-}
-
 /// Fake payload tree: `a.md` collides with the user's file, `b.md` and
 /// `sub/c.md` are new, `.obsidian/` must never cross the merge.
 fn payload_tree(base: &Path) {
-    write(&base.join("a.md"), "# payload version\n");
-    write(&base.join("b.md"), "# fresh file\n");
-    write(&base.join("sub").join("c.md"), "# nested fresh file\n");
-    write(
+    write_path(&base.join("a.md"), "# payload version\n");
+    write_path(&base.join("b.md"), "# fresh file\n");
+    write_path(&base.join("sub").join("c.md"), "# nested fresh file\n");
+    write_path(
         &base.join(".obsidian").join("app.json"),
         "{\"payload\":true}",
     );
@@ -50,7 +46,7 @@ fn merge_copies_new_files_and_leaves_user_files_intact() {
     let payload = tmp();
     payload_tree(payload.path());
     let vault = tmp();
-    write(
+    write_path(
         &vault.path().join("a.md"),
         "# USER version — do not touch\n",
     );
@@ -97,7 +93,7 @@ fn merge_never_touches_obsidian() {
     let payload = tmp();
     payload_tree(payload.path());
     let vault = tmp();
-    write(
+    write_path(
         &vault.path().join(".obsidian").join("app.json"),
         "{\"user\":true}",
     );
@@ -138,7 +134,7 @@ fn merge_skips_symlinks_without_following_them() {
     // A hostile payload symlink pointing outside the tree.
     let outside = tmp();
     let sentinel = outside.path().join("secret.txt");
-    write(&sentinel, "outside-secret");
+    write_path(&sentinel, "outside-secret");
     symlink(&sentinel, payload.path().join("evil-link")).expect("fixture symlink");
 
     let vault = tmp();
@@ -197,7 +193,7 @@ fn existing_placeholders_are_not_overwritten() {
     let payload = tmp();
     payload_tree(payload.path());
     let vault = tmp();
-    write(
+    write_path(
         &vault.path().join("00-resources").join("ejemplo.md"),
         "# mine\n",
     );
@@ -320,10 +316,6 @@ fn serve_bytes_once(body: Vec<u8>) -> (String, std::thread::JoinHandle<()>) {
         stream.write_all(&body).expect("write body");
     });
     (format!("http://127.0.0.1:{port}/asset"), handle)
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Raw tar builder: the `tar` crate refuses to *write* `..` names (like the

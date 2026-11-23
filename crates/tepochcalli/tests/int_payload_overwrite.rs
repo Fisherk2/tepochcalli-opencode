@@ -5,8 +5,12 @@
 //! change leaves `.bak` with the previous bytes, a mid-flight failure can be
 //! undone by the caller, and nothing outside the 5 scopes is even visited.
 
+#[allow(dead_code)]
+mod common;
+
 use std::path::{Path, PathBuf};
 
+use common::helpers::write_rel;
 use tepochcalli::adapters::payload::{merge_tree, overwrite_tree, rollback_overwrite};
 use tepochcalli::domain::{CancelToken, WizardError};
 use tepochcalli::ports::OverwriteJournal;
@@ -14,14 +18,6 @@ use tepochcalli::UPDATE_SCOPES;
 
 fn tmp() -> tempfile::TempDir {
     tempfile::tempdir().expect("tempdir for the overwrite fixtures")
-}
-
-fn write(root: &Path, rel: &str, body: &str) {
-    let path = root.join(rel);
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).expect("fixture parent dir");
-    }
-    std::fs::write(path, body).expect("fixture write");
 }
 
 fn read(root: &Path, rel: &str) -> String {
@@ -36,10 +32,10 @@ fn journal() -> OverwriteJournal {
 fn identical_content_is_a_noop_without_bak() {
     let payload = tmp();
     let vault = tmp();
-    write(payload.path(), "AGENTS.md", "mismo\n");
-    write(payload.path(), "opencode.json", "{}\n");
-    write(vault.path(), "AGENTS.md", "mismo\n");
-    write(vault.path(), "opencode.json", "{}\n");
+    write_rel(payload.path(), "AGENTS.md", "mismo\n");
+    write_rel(payload.path(), "opencode.json", "{}\n");
+    write_rel(vault.path(), "AGENTS.md", "mismo\n");
+    write_rel(vault.path(), "opencode.json", "{}\n");
 
     let mut j = journal();
     overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
@@ -56,13 +52,13 @@ fn identical_content_is_a_noop_without_bak() {
 fn changed_content_is_written_after_a_bak_of_the_original() {
     let payload = tmp();
     let vault = tmp();
-    write(payload.path(), "AGENTS.md", "nuevo\n");
-    write(
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(
         payload.path(),
         ".opencode/agents/itzamna.md",
         "nuevo agente\n",
     );
-    write(vault.path(), "AGENTS.md", "viejo\n");
+    write_rel(vault.path(), "AGENTS.md", "viejo\n");
 
     let mut j = journal();
     overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
@@ -86,14 +82,14 @@ fn changed_content_is_written_after_a_bak_of_the_original() {
 fn rollback_restores_the_original_and_removes_created_files() {
     let payload = tmp();
     let vault = tmp();
-    write(payload.path(), "AGENTS.md", "nuevo\n");
-    write(payload.path(), "opencode.json", "{\"nuevo\":1}\n");
-    write(
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(payload.path(), "opencode.json", "{\"nuevo\":1}\n");
+    write_rel(
         payload.path(),
         ".opencode/agents/itzamna.md",
         "nuevo agente\n",
     );
-    write(vault.path(), "AGENTS.md", "viejo\n");
+    write_rel(vault.path(), "AGENTS.md", "viejo\n");
     // `opencode.json` no existe en el vault: es un fichero creado.
 
     let mut j = journal();
@@ -125,15 +121,15 @@ fn rollback_restores_the_original_and_removes_created_files() {
 fn paths_outside_the_scopes_are_ignored() {
     let payload = tmp();
     let vault = tmp();
-    write(
+    write_rel(
         payload.path(),
         "00-resources/payload.md",
         "no debe llegar\n",
     );
-    write(payload.path(), "10-templates/base.md", "no debe llegar\n");
-    write(payload.path(), ".obsidian/app.json", "{}\n");
-    write(payload.path(), "AGENTS.md", "sí\n");
-    write(vault.path(), "00-resources/nota.md", "# mía\n");
+    write_rel(payload.path(), "10-templates/base.md", "no debe llegar\n");
+    write_rel(payload.path(), ".obsidian/app.json", "{}\n");
+    write_rel(payload.path(), "AGENTS.md", "sí\n");
+    write_rel(vault.path(), "00-resources/nota.md", "# mía\n");
 
     let mut j = journal();
     overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
@@ -159,15 +155,15 @@ fn midway_failure_leaves_the_journal_for_rollback() {
     // El primer fichero se escribe bien; el fallo llega dentro de `.opencode/`,
     // donde el destino es un DIRECTORIO con el nombre que el payload trae como
     // fichero (fs::copy falla con EISDIR: determinista, sin depender del uid).
-    write(payload.path(), "AGENTS.md", "nuevo\n");
-    write(
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(
         payload.path(),
         ".opencode/agents.md",
         "fichero del payload\n",
     );
-    write(vault.path(), "AGENTS.md", "viejo\n");
+    write_rel(vault.path(), "AGENTS.md", "viejo\n");
     std::fs::create_dir_all(vault.path().join(".opencode/agents.md")).expect("dir trampa");
-    write(vault.path(), ".opencode/agents.md/hijo.md", "x\n");
+    write_rel(vault.path(), ".opencode/agents.md/hijo.md", "x\n");
 
     let mut j = journal();
     let err = overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None)
@@ -195,7 +191,7 @@ fn symlinks_are_never_followed() {
     let payload = tmp();
     let vault = tmp();
     let outside = tmp();
-    write(outside.path(), "secreto.md", "no debe copiarse\n");
+    write_rel(outside.path(), "secreto.md", "no debe copiarse\n");
     std::os::unix::fs::symlink(
         outside.path().join("secreto.md"),
         payload.path().join("AGENTS.md"),
@@ -219,8 +215,8 @@ fn symlink_destination_file_is_rejected() {
     let payload = tmp();
     let vault = tmp();
     let outside = tmp();
-    write(payload.path(), "AGENTS.md", "nuevo\n");
-    write(outside.path(), "secreto.md", "no tocar\n");
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(outside.path(), "secreto.md", "no tocar\n");
     std::os::unix::fs::symlink(
         outside.path().join("secreto.md"),
         vault.path().join("AGENTS.md"),
@@ -245,7 +241,7 @@ fn symlink_destination_dir_is_rejected() {
     let payload = tmp();
     let vault = tmp();
     let outside = tmp();
-    write(payload.path(), ".opencode/x.md", "nuevo\n");
+    write_rel(payload.path(), ".opencode/x.md", "nuevo\n");
     std::fs::create_dir_all(outside.path().join("dir")).expect("outside dir");
     std::os::unix::fs::symlink(outside.path().join("dir"), vault.path().join(".opencode"))
         .expect("symlink de directorio");
@@ -266,7 +262,7 @@ fn merge_tree_rejects_a_dangling_symlink_destination() {
     let payload = tmp();
     let vault = tmp();
     let outside = tmp();
-    write(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
     // Enlace a una ruta INEXISTENTE: `target.exists()` es `false` y `fs::copy`
     // crearía el fichero a través del enlace, fuera del vault.
     std::os::unix::fs::symlink(
@@ -290,8 +286,8 @@ fn scope_entries_match_whole_components_only() {
     // otro componente: el alcance es por componente, no por prefijo de texto.
     let payload = tmp();
     let vault = tmp();
-    write(payload.path(), ".opencode-evil/x.md", "fuera\n");
-    write(payload.path(), ".opencode/x.md", "dentro\n");
+    write_rel(payload.path(), ".opencode-evil/x.md", "fuera\n");
+    write_rel(payload.path(), ".opencode/x.md", "dentro\n");
 
     let mut j = journal();
     overwrite_tree(payload.path(), vault.path(), &UPDATE_SCOPES, &mut j, None).expect("overwrite");
@@ -307,8 +303,8 @@ fn cancelled_before_the_walk_touches_nothing() {
     // entrada del walk — sin escritura, sin `.bak`, journal intacto.
     let payload = tmp();
     let vault = tmp();
-    write(payload.path(), "AGENTS.md", "nuevo\n");
-    write(vault.path(), "AGENTS.md", "viejo\n");
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(vault.path(), "AGENTS.md", "viejo\n");
     let cancel = CancelToken::new();
     cancel.cancel();
 

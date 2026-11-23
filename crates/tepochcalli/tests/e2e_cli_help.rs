@@ -2,19 +2,13 @@
 //! usage errors, and the T17 ownership of `reindex`/`uninstall`
 //! (the old T7+ stubs are gone: each explains its own usage now).
 
-use std::process::{Command, Stdio};
+#[allow(dead_code)]
+mod common;
 
-fn bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-}
+use std::process::Stdio;
 
-fn stdout_text(output: &std::process::Output) -> String {
-    String::from_utf8_lossy(&output.stdout).into_owned()
-}
-
-fn stderr_text(output: &std::process::Output) -> String {
-    String::from_utf8_lossy(&output.stderr).into_owned()
-}
+use common::helpers::bin;
+use common::helpers::{stderr_text, stdout_text};
 
 #[test]
 fn top_level_help_mentions_all_subcommands() {
