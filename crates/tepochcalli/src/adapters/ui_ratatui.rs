@@ -127,13 +127,7 @@ pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
 
     let mut lines = vec![Line::from("⏹ Cancelar — Esc / Ctrl+C")
         .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED))];
-    for action in [
-        MenuAction::Install,
-        MenuAction::Update,
-        MenuAction::ChangeEmbedder,
-        MenuAction::Desinstall,
-        MenuAction::Exit,
-    ] {
+    for action in MenuAction::ALL {
         lines.push(
             Line::from(format!(
                 "{} {}  — operación en curso",

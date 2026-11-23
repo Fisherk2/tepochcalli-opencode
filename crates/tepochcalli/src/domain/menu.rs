@@ -18,6 +18,15 @@ pub enum MenuAction {
 }
 
 impl MenuAction {
+    /// The five H5 buttons in menu order (single source for every renderer).
+    pub const ALL: [MenuAction; 5] = [
+        MenuAction::Install,
+        MenuAction::Update,
+        MenuAction::ChangeEmbedder,
+        MenuAction::Desinstall,
+        MenuAction::Exit,
+    ];
+
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {

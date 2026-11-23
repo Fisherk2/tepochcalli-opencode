@@ -9,9 +9,10 @@ use tepochcalli::adapters::{
     SysHostProbe, TtyUi, UreqHttpClient,
 };
 use tepochcalli::application::{
-    check_prereqs_on, compensate_phase6, ensure_vault_dir, guard_offline_before_touch,
-    is_phase_done, litellm_config_present, mark_phase_done, payload_endpoint, payload_local_ready,
-    resolve_vault_dir, rollback_install, run_phase6, InstallSnapshot, Phase6Deps, Phase6Report,
+    check_prereqs_on, compensate_phase6, embedder_presence, ensure_vault_dir,
+    guard_offline_before_touch, is_phase_done, litellm_config_present, mark_phase_done,
+    payload_endpoint, payload_local_ready, resolve_vault_dir, rollback_install, run_phase6,
+    EmbedderPresence, InstallSnapshot, Phase6Deps, Phase6Report,
 };
 use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
 use tepochcalli::ports::{HttpClient, Ui};
@@ -225,7 +226,8 @@ fn offline_guard(
         return Ok(());
     }
     let vault = Path::new(raw);
-    let cache_ready = skip_model || models_cached(vault) || litellm_config_present(vault);
+    let local_model_cached = embedder_presence(vault) == EmbedderPresence::LocalModel;
+    let cache_ready = skip_model || local_model_cached || litellm_config_present(vault);
     let resume_payload_local = resume && is_phase_done(vault, Phase::F3);
     guard_offline_before_touch(
         true,
@@ -394,14 +396,6 @@ pub(crate) fn validate_payload_flags(
         return Err(2);
     }
     Ok(())
-}
-
-/// `true` when the vault already holds downloaded models (offline resume).
-fn models_cached(vault: &Path) -> bool {
-    match std::fs::read_dir(vault.join(".tepochcalli/models")) {
-        Ok(mut entries) => entries.next().is_some(),
-        Err(_) => false,
-    }
 }
 
 /// Offline mapping: a network failure under `--offline` is the typed offline

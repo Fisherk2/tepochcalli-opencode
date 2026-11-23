@@ -28,6 +28,7 @@ use crate::config::{default_and_large, parse_presets, Preset};
 use crate::domain::{CancelToken, EmbedderChoice, WizardError};
 use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
 
+use super::embedder_estimate::BYTES_PER_MB;
 use super::embedder_gate::run_gate_cancellable;
 use super::embedder_gc::gc_old_model;
 use super::embedder_menu::{
@@ -55,7 +56,6 @@ const SWAP_NONE_HEADER: &str =
 
 /// HF API base for the free-id pre-check (D8.1; the gate stays ground truth).
 const HF_API_BASE: &str = "https://huggingface.co/api/models/";
-const BYTES_PER_MB: f64 = 1_000_000.0;
 /// Staged sidecar (not yet live): renamed into place only on success.
 const META_SWAP_SUFFIX: &str = "index-meta.json.swap";
 

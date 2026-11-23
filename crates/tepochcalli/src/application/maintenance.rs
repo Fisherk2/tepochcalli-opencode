@@ -44,7 +44,7 @@ pub struct ReindexReport {
 
 /// `.tepochcalli/` (runtime) is one of the three H8 scopes; the two others
 /// are the harness root and its registration file.
-pub const UNINSTALL_SCOPES: [&str; 3] = [".opencode", ".tepochcalli", "opencode.json"];
+pub const UNINSTALL_SCOPES: [&str; 3] = [".opencode", RUNTIME_DIR, OPENCODE_JSON];
 /// What the backup keeps (owner's decision 2026-11-19): only the
 /// irreplaceable. `venv/`, `db/`, `models/` and `bin/` are regenerable
 /// (re-sync / re-index / re-download) and copying them can burn GB and abort
