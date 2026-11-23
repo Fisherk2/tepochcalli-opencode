@@ -9,11 +9,13 @@ use std::path::Path;
 
 use tepochcalli::adapters::ui_ratatui::wait_any_key;
 use tepochcalli::adapters::{HeadlessUi, TtyUi};
-use tepochcalli::application::{choose_action, resolve_vault_dir};
+use tepochcalli::application::choose_action;
 use tepochcalli::domain::{MenuAction, WizardError};
 use tepochcalli::ports::Ui;
 
-use super::commands::{run_config_embedder, run_uninstall_cmd, run_update_cmd};
+use super::commands::{
+    resolve_vault_or_report, run_config_embedder, run_uninstall_cmd, run_update_cmd,
+};
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install::{run_install, validate_payload_flags};
 use super::report::{report_cancel, report_maintenance_failure, report_usage_failure};
@@ -64,30 +66,16 @@ pub(crate) fn run_home_cmd(
     } else {
         Box::new(TtyUi)
     };
-    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+    let raw = match resolve_vault_or_report(
+        &*ui,
+        non_interactive,
+        vault.as_deref(),
+        "tepochcalli",
+        "vault selection failed",
+        "tepochcalli --vault <directorio> --non-interactive <subcomando>",
+    ) {
         Ok(raw) => raw,
-        Err(err) if non_interactive => {
-            return report_usage_failure(
-                &*ui,
-                "tepochcalli",
-                None,
-                "vault selection failed",
-                "--vault <directorio>",
-                "tepochcalli --vault <directorio> --non-interactive <subcomando>",
-                err,
-                None,
-            );
-        }
-        Err(WizardError::UserAborted) => return report_cancel(&*ui, "tepochcalli"),
-        Err(err) => {
-            return report_maintenance_failure(
-                &*ui,
-                "tepochcalli",
-                "vault selection failed",
-                err,
-                None,
-            )
-        }
+        Err(code) => return code,
     };
     let path = Path::new(&raw);
     let action = match choose_action(&*ui, path) {

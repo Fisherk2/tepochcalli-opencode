@@ -49,6 +49,34 @@ const UPDATE_SPEC: FlagSpec = FlagSpec {
     boolean: &["--non-interactive"],
 };
 
+/// One vault resolver for every non-install command: `--non-interactive`
+/// without a resolved vault is a usage failure (the missing flag is the fix),
+/// Esc is a genuine cancel, anything else is a maintenance failure.
+pub(crate) fn resolve_vault_or_report(
+    ui: &dyn Ui,
+    non_interactive: bool,
+    vault: Option<&str>,
+    command: &str,
+    context: &str,
+    usage: &str,
+) -> Result<String, u8> {
+    match resolve_vault_dir(ui, vault) {
+        Ok(raw) => Ok(raw),
+        Err(err) if non_interactive => Err(report_usage_failure(
+            ui,
+            command,
+            None,
+            "vault selection failed",
+            "--vault <directorio>",
+            usage,
+            err,
+            None,
+        )),
+        Err(WizardError::UserAborted) => Err(report_cancel(ui, command)),
+        Err(err) => Err(report_maintenance_failure(ui, command, context, err, None)),
+    }
+}
+
 /// `config embedder` (T16, D8.4): six-step atomic swap on an installed vault —
 /// current-state display, same D7.1 menu, `--confirm` warning, gate + reindex,
 /// atomic config/metadata switch, auto-GC unless `--keep-previous`.
@@ -97,30 +125,16 @@ pub(crate) fn run_config_embedder(
             None,
         );
     }
-    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+    let raw = match resolve_vault_or_report(
+        &*ui,
+        non_interactive,
+        vault.as_deref(),
+        "config embedder",
+        "config embedder: vault selection failed",
+        "tepochcalli config embedder --vault <directorio> --non-interactive --confirm",
+    ) {
         Ok(raw) => raw,
-        Err(err) if non_interactive => {
-            return report_usage_failure(
-                &*ui,
-                "config embedder",
-                None,
-                "vault selection failed",
-                "--vault <directorio>",
-                "tepochcalli config embedder --vault <directorio> --non-interactive --confirm",
-                err,
-                None,
-            );
-        }
-        Err(WizardError::UserAborted) => return report_cancel(&*ui, "config embedder"),
-        Err(err) => {
-            return report_maintenance_failure(
-                &*ui,
-                "config embedder",
-                "config embedder: vault selection failed",
-                err,
-                None,
-            )
-        }
+        Err(code) => return code,
     };
     let path = Path::new(&raw);
     let http = UreqHttpClient::new();
@@ -188,30 +202,16 @@ pub(crate) fn run_reindex_cmd(
     } else {
         Box::new(TtyUi)
     };
-    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+    let raw = match resolve_vault_or_report(
+        &*ui,
+        non_interactive,
+        vault.as_deref(),
+        "reindex",
+        "reindex: vault selection failed",
+        "tepochcalli reindex --vault <directorio> --non-interactive --confirm",
+    ) {
         Ok(raw) => raw,
-        Err(err) if non_interactive => {
-            return report_usage_failure(
-                &*ui,
-                "reindex",
-                None,
-                "vault selection failed",
-                "--vault <directorio>",
-                "tepochcalli reindex --vault <directorio> --non-interactive --confirm",
-                err,
-                None,
-            );
-        }
-        Err(WizardError::UserAborted) => return report_cancel(&*ui, "reindex"),
-        Err(err) => {
-            return report_maintenance_failure(
-                &*ui,
-                "reindex",
-                "reindex: vault selection failed",
-                err,
-                None,
-            )
-        }
+        Err(code) => return code,
     };
     let path = Path::new(&raw);
     match run_reindex(&StdCommandRunner, &*ui, path) {
@@ -268,30 +268,16 @@ pub(crate) fn run_uninstall_cmd(
     } else {
         Box::new(TtyUi)
     };
-    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+    let raw = match resolve_vault_or_report(
+        &*ui,
+        non_interactive,
+        vault.as_deref(),
+        "uninstall",
+        "uninstall: vault selection failed",
+        "tepochcalli uninstall --vault <directorio> --non-interactive --confirm",
+    ) {
         Ok(raw) => raw,
-        Err(err) if non_interactive => {
-            return report_usage_failure(
-                &*ui,
-                "uninstall",
-                None,
-                "vault selection failed",
-                "--vault <directorio>",
-                "tepochcalli uninstall --vault <directorio> --non-interactive --confirm",
-                err,
-                None,
-            );
-        }
-        Err(WizardError::UserAborted) => return report_cancel(&*ui, "uninstall"),
-        Err(err) => {
-            return report_maintenance_failure(
-                &*ui,
-                "uninstall",
-                "uninstall: vault selection failed",
-                err,
-                None,
-            )
-        }
+        Err(code) => return code,
     };
     let path = Path::new(&raw);
     match run_uninstall(&*ui, path) {
@@ -363,30 +349,16 @@ pub(crate) fn run_update_cmd(
     } else {
         Box::new(TtyUi)
     };
-    let raw = match resolve_vault_dir(&*ui, vault.as_deref()) {
+    let raw = match resolve_vault_or_report(
+        &*ui,
+        non_interactive,
+        vault.as_deref(),
+        "update",
+        "update: vault selection failed",
+        "tepochcalli update --vault <directorio> --non-interactive",
+    ) {
         Ok(raw) => raw,
-        Err(err) if non_interactive => {
-            return report_usage_failure(
-                &*ui,
-                "update",
-                None,
-                "vault selection failed",
-                "--vault <directorio>",
-                "tepochcalli update --vault <directorio> --non-interactive",
-                err,
-                None,
-            );
-        }
-        Err(WizardError::UserAborted) => return report_cancel(&*ui, "update"),
-        Err(err) => {
-            return report_maintenance_failure(
-                &*ui,
-                "update",
-                "update: vault selection failed",
-                err,
-                None,
-            )
-        }
+        Err(code) => return code,
     };
     let path = Path::new(&raw);
     let source: Box<dyn PayloadSource> = match (payload, payload_url, payload_sha256) {
