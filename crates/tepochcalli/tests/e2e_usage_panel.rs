@@ -80,3 +80,34 @@ fn update_non_interactive_without_vault_reports_usage_not_cancel() {
     assert!(!stderr.contains("estado: cancelado"), "{stderr}");
     assert!(!stderr.contains("cancelled by user"), "{stderr}");
 }
+
+/// `config embedder --non-interactive` sin `--confirm`: el flag ausente es uso
+/// (2, como `reindex`/`uninstall`), no cancelación (41). El panel sigue
+/// nombrando `--confirm` como correctivo.
+#[test]
+fn config_embedder_non_interactive_without_confirm_reports_usage() {
+    let state = state();
+    let vault = tempfile::tempdir().expect("vault fixture");
+    let out = bin()
+        .args([
+            "config",
+            "embedder",
+            "--non-interactive",
+            "--vault",
+            vault.path().to_str().expect("utf8 vault path"),
+        ])
+        .env("XDG_STATE_HOME", state.path())
+        .env("LOCALAPPDATA", state.path())
+        .stdin(Stdio::null())
+        .output()
+        .expect("spawn binary");
+
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(2), "stderr:\n{stderr}");
+    assert!(
+        stderr.contains("falta:") && stderr.contains("--confirm"),
+        "el panel debe nombrar el flag que falta:\n{stderr}"
+    );
+    assert!(!stderr.contains("cancelado"), "{stderr}");
+    assert!(!stderr.contains("cancelled by user"), "{stderr}");
+}

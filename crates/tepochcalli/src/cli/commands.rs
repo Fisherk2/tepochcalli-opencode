@@ -115,7 +115,7 @@ pub(crate) fn run_config_embedder(
     // contrato que install/update/uninstall). En interactivo lo explica el
     // propio run_swap antes de abortar.
     if non_interactive && !confirm {
-        return report_usage_failure(
+        let _ = report_usage_failure(
             &*ui,
             "config embedder",
             None,
@@ -125,6 +125,9 @@ pub(crate) fn run_config_embedder(
             WizardError::UserAborted,
             None,
         );
+        // `--confirm` es un gate de USO (como reindex/uninstall = 2); la falta
+        // de `--vault` sigue en 41 por #10b.
+        return 2;
     }
     let raw = match resolve_vault_or_report(
         &*ui,
