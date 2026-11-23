@@ -34,7 +34,7 @@ crossterm = "0.29"
 dialoguer = "0.12"
 ratatui = "0.30"
 tar = "0.4"
-zip = "2"
+zip = "9"
 flate2 = "1"
 serde_json = { version = "1", features = ["preserve_order"] }
 sha2 = "0.10"

@@ -316,6 +316,14 @@ rust-build target_dir=cargo_target:
 rust-lock:
     cd {{crate_dir}} && cargo metadata --format-version 1 >/dev/null
 
+# Refresca `Cargo.lock` (no es un gate; requiere red). Usar tras cambiar deps.
+rust-update name target_dir=cargo_target:
+    cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo update -p {{name}}
+
+# Reescribe la entrada del propio crate en `Cargo.lock` tras cambiar `version`
+# (no es un gate; `--locked` no lo detecta solo). Es exactamente `rust-lock`.
+rust-lock-refresh: rust-lock
+
 # Formato del wizard (falla si algo habría que reescribir). No compila, así que
 # no necesita el directorio de destino.
 rust-fmt:

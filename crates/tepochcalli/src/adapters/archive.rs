@@ -248,7 +248,8 @@ pub fn extract_zip<R: Read + Seek>(reader: R, dest: &Path) -> Result<(), Archive
     let mut total_bytes = 0u64;
     for i in 0..archive.len() {
         let mut file = archive.by_index(i)?;
-        let name = file.name().to_string();
+        // zip 9: `name()` es fallible (nombre decodificable o `ZipError`).
+        let name = file.name()?.to_string();
         let rel = validate_member(&name)?;
         let out = dest.join(&rel);
         if file.is_dir() {
