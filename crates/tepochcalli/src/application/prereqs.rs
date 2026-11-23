@@ -108,6 +108,11 @@ pub fn resolve_vault_dir(ui: &dyn Ui, flag: Option<&str>) -> Result<String, Wiza
 // shortcut: every `create_dir_all` failure maps to `PermissionDenied`; T15 refines the panel.
 pub fn ensure_vault_dir(path: &Path) -> Result<VaultPath, WizardError> {
     std::fs::create_dir_all(path).map_err(|_| WizardError::PermissionDenied)?;
+    // `--vault` como enlace (x -> /) escribiría el probe fuera del vault: se
+    // rechaza. Un ancestro enlazado (p. ej. /tmp) sí es legítimo.
+    if path.exists() && std::fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(WizardError::PermissionDenied);
+    }
     if !path.is_dir() {
         return Err(WizardError::PermissionDenied);
     }

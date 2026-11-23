@@ -394,6 +394,10 @@ fn reject_symlink_ancestors(root: &Path, rel: &Path) -> Result<(), WizardError> 
 // materialized; T14 owns the richer compensation policy.
 pub fn merge_tree(src: &Path, dest: &Path) -> Result<MergeReport, WizardError> {
     fs::create_dir_all(dest).map_err(map_io)?;
+    // La raíz del vault no puede ser un enlace: escribiría el payload fuera.
+    if fs::symlink_metadata(dest).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(WizardError::PayloadCorrupt);
+    }
     // Canonicalize once: every target below is checked against this root.
     let root = dest
         .canonicalize()
@@ -520,6 +524,9 @@ pub fn overwrite_tree(
     cancel: Option<&CancelToken>,
 ) -> Result<(), WizardError> {
     fs::create_dir_all(dest).map_err(map_io)?;
+    if fs::symlink_metadata(dest).is_ok_and(|m| m.file_type().is_symlink()) {
+        return Err(WizardError::PayloadCorrupt); // raíz enlazada: escribiría fuera
+    }
     let root = dest
         .canonicalize()
         .map_err(|_| WizardError::PermissionDenied)?;

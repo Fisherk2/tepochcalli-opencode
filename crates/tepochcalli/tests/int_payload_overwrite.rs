@@ -334,6 +334,51 @@ fn merge_tree_rejects_a_dangling_symlink_destination() {
     );
 }
 
+#[cfg(unix)]
+#[test]
+fn merge_tree_rejects_a_symlinked_vault_root() {
+    // La raíz del vault no puede ser ella misma un enlace (x -> /): escribiría
+    // todo el payload fuera. Un ancestro enlazado sí es legítimo.
+    let payload = tmp();
+    let outside = tmp();
+    let parent = tmp();
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(outside.path(), "sentinel.txt", "externo\n");
+    let dest = parent.path().join("vault");
+    std::os::unix::fs::symlink(outside.path(), &dest).expect("raíz enlazada");
+
+    let err = merge_tree(payload.path(), &dest).expect_err("la raíz enlazada se rechaza");
+    assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
+    assert!(
+        !outside.path().join("AGENTS.md").exists(),
+        "nada se escribe a través de la raíz enlazada"
+    );
+    assert_eq!(read(outside.path(), "sentinel.txt"), "externo\n");
+}
+
+#[cfg(unix)]
+#[test]
+fn overwrite_tree_rejects_a_symlinked_vault_root() {
+    let payload = tmp();
+    let outside = tmp();
+    let parent = tmp();
+    write_rel(payload.path(), "AGENTS.md", "nuevo\n");
+    write_rel(outside.path(), "sentinel.txt", "externo\n");
+    let dest = parent.path().join("vault");
+    std::os::unix::fs::symlink(outside.path(), &dest).expect("raíz enlazada");
+
+    let mut j = journal();
+    let err = overwrite_tree(payload.path(), &dest, &UPDATE_SCOPES, &mut j, None)
+        .expect_err("la raíz enlazada se rechaza");
+    assert!(matches!(err, WizardError::PayloadCorrupt), "got: {err:?}");
+    assert!(
+        !outside.path().join("AGENTS.md").exists(),
+        "nada se escribe a través de la raíz enlazada"
+    );
+    assert_eq!(read(outside.path(), "sentinel.txt"), "externo\n");
+    assert!(j.written.is_empty() && j.backed_up.is_empty(), "got: {j:?}");
+}
+
 #[test]
 fn scope_entries_match_whole_components_only() {
     // `.opencode-evil/` empieza por el mismo texto que `.opencode` pero es
