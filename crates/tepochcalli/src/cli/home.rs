@@ -16,7 +16,7 @@ use tepochcalli::ports::Ui;
 use super::commands::{run_config_embedder, run_uninstall_cmd, run_update_cmd};
 use super::flags::{parse_flags, tty_ok, FlagSpec};
 use super::install::{run_install, validate_payload_flags};
-use super::report::{report_cancel, report_usage_failure};
+use super::report::{report_cancel, report_maintenance_failure, report_usage_failure};
 
 const HOME_SPEC: FlagSpec = FlagSpec {
     prefix: "tepochcalli",
@@ -78,7 +78,16 @@ pub(crate) fn run_home_cmd(
                 None,
             );
         }
-        Err(_) => return report_cancel(&*ui, "tepochcalli"),
+        Err(WizardError::UserAborted) => return report_cancel(&*ui, "tepochcalli"),
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "tepochcalli",
+                "vault selection failed",
+                err,
+                None,
+            )
+        }
     };
     let path = Path::new(&raw);
     let action = match choose_action(&*ui, path) {
@@ -95,7 +104,16 @@ pub(crate) fn run_home_cmd(
                 Some(path),
             );
         }
-        Err(_) => return report_cancel(&*ui, "tepochcalli"),
+        Err(WizardError::UserAborted) => return report_cancel(&*ui, "tepochcalli"),
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "tepochcalli",
+                "menu selection failed",
+                err,
+                Some(path),
+            )
+        }
     };
     let forward = Forwarded {
         vault: &raw,

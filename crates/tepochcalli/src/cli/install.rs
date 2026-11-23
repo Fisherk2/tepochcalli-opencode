@@ -213,7 +213,9 @@ pub(crate) fn run_install(
             // P0-1: si el directorio quedó a medias, se deshace y se declara
             // el resultado medido antes del panel.
             let report = rollback_install(Path::new(&raw), &snapshot);
-            announce_rollback(stderr, &report.leftovers, &report.preserved);
+            if !announce_rollback(stderr, &report.leftovers, &report.preserved) {
+                return WizardError::PhaseFailed.exit_code();
+            }
             return report_failure(
                 &*ui,
                 Some(Phase::F2),

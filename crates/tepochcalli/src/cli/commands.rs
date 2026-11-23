@@ -95,7 +95,16 @@ pub(crate) fn run_config_embedder(
                 None,
             );
         }
-        Err(_) => return report_cancel(&*ui, "config embedder"),
+        Err(WizardError::UserAborted) => return report_cancel(&*ui, "config embedder"),
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "config embedder",
+                "config embedder: vault selection failed",
+                err,
+                None,
+            )
+        }
     };
     let path = Path::new(&raw);
     let http = UreqHttpClient::new();
@@ -171,12 +180,21 @@ pub(crate) fn run_reindex_cmd(
                 None,
                 "vault selection failed",
                 "--vault <directorio>",
-                "tepochcalli reindex --vault <directorio> --non-interactive",
+                "tepochcalli reindex --vault <directorio> --non-interactive --confirm",
                 err,
                 None,
             );
         }
-        Err(_) => return report_cancel(&*ui, "reindex"),
+        Err(WizardError::UserAborted) => return report_cancel(&*ui, "reindex"),
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "reindex",
+                "reindex: vault selection failed",
+                err,
+                None,
+            )
+        }
     };
     let path = Path::new(&raw);
     match run_reindex(&StdCommandRunner, &*ui, path) {
@@ -247,7 +265,16 @@ pub(crate) fn run_uninstall_cmd(
                 None,
             );
         }
-        Err(_) => return report_cancel(&*ui, "uninstall"),
+        Err(WizardError::UserAborted) => return report_cancel(&*ui, "uninstall"),
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "uninstall",
+                "uninstall: vault selection failed",
+                err,
+                None,
+            )
+        }
     };
     let path = Path::new(&raw);
     match run_uninstall(&*ui, path) {
@@ -332,7 +359,16 @@ pub(crate) fn run_update_cmd(
                 None,
             );
         }
-        Err(_) => return report_cancel(&*ui, "update"),
+        Err(WizardError::UserAborted) => return report_cancel(&*ui, "update"),
+        Err(err) => {
+            return report_maintenance_failure(
+                &*ui,
+                "update",
+                "update: vault selection failed",
+                err,
+                None,
+            )
+        }
     };
     let path = Path::new(&raw);
     let source: Box<dyn PayloadSource> = match (payload, payload_url, payload_sha256) {
