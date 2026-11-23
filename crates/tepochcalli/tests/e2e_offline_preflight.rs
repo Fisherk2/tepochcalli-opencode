@@ -39,24 +39,17 @@ fn install_sin_red_no_escribe_nada() {
     let vault = dir.path().join("vault");
     std::fs::create_dir_all(&vault).expect("vault vacío");
 
-    let out = Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-        .args([
-            "install",
-            "--non-interactive",
-            "--vault",
-            vault.to_str().expect("utf8 tmp"),
-        ])
-        .env("TEPOCHCALLI_RELEASE_BASE_URL", dead_base_url())
-        // Los proxies del entorno no deben interceptar el loopback muerto.
-        .env("NO_PROXY", "*")
-        .env_remove("ALL_PROXY")
-        .env_remove("all_proxy")
-        .env_remove("HTTPS_PROXY")
-        .env_remove("https_proxy")
-        .env_remove("HTTP_PROXY")
-        .env_remove("http_proxy")
-        .output()
-        .expect("spawn install");
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tepochcalli"));
+    cmd.args([
+        "install",
+        "--non-interactive",
+        "--vault",
+        vault.to_str().expect("utf8 tmp"),
+    ])
+    .env("TEPOCHCALLI_RELEASE_BASE_URL", dead_base_url());
+    // Los proxies del entorno no deben interceptar el loopback muerto.
+    scrub_proxies(&mut cmd);
+    let out = cmd.output().expect("spawn install");
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(
@@ -92,26 +85,19 @@ fn update_sin_red_no_escribe_nada() {
     let url = format!("{}/p.tar.gz", dead_base_url());
     let sha = "0".repeat(64);
 
-    let out = Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-        .args([
-            "update",
-            "--non-interactive",
-            "--vault",
-            vault.to_str().expect("utf8 tmp"),
-            "--payload-url",
-            &url,
-            "--payload-sha256",
-            &sha,
-        ])
-        .env("NO_PROXY", "*")
-        .env_remove("ALL_PROXY")
-        .env_remove("all_proxy")
-        .env_remove("HTTPS_PROXY")
-        .env_remove("https_proxy")
-        .env_remove("HTTP_PROXY")
-        .env_remove("http_proxy")
-        .output()
-        .expect("spawn update");
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_tepochcalli"));
+    cmd.args([
+        "update",
+        "--non-interactive",
+        "--vault",
+        vault.to_str().expect("utf8 tmp"),
+        "--payload-url",
+        &url,
+        "--payload-sha256",
+        &sha,
+    ]);
+    scrub_proxies(&mut cmd);
+    let out = cmd.output().expect("spawn update");
 
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert_eq!(

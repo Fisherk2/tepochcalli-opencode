@@ -44,11 +44,26 @@ fn read_http_headers(socket: &TcpStream) {
     }
 }
 
+/// Restaura `ALL_PROXY` al valor previo al soltar: `set_var` muta el padre
+/// de TODOS los tests del binario, así que no puede quedar pegado.
+struct AllProxyGuard {
+    previous: Option<std::ffi::OsString>,
+}
+
+impl Drop for AllProxyGuard {
+    fn drop(&mut self) {
+        match self.previous.take() {
+            Some(value) => std::env::set_var("ALL_PROXY", value),
+            None => std::env::remove_var("ALL_PROXY"),
+        }
+    }
+}
+
 /// Proxy http vivo en loopback + `ALL_PROXY` apuntando a él: cualquier
 /// petición `http://` no-loopback que ESCAPE del guard termina aquí y
 /// contesta 200. Devuelve el addr (para desbloquear un `accept` que el
-/// guard impidió) y el hilo servidor.
-fn live_mirror_proxy() -> (SocketAddr, std::thread::JoinHandle<()>) {
+/// guard impidió), el hilo servidor y el guard que restaura `ALL_PROXY`.
+fn live_mirror_proxy() -> (SocketAddr, std::thread::JoinHandle<()>, AllProxyGuard) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind mirror proxy");
     let addr = listener.local_addr().expect("mirror proxy addr");
     let server = std::thread::spawn(move || {
@@ -62,8 +77,9 @@ fn live_mirror_proxy() -> (SocketAddr, std::thread::JoinHandle<()>) {
         read_http_headers(&socket);
         let _ = socket.write_all(b"HTTP/1.1 200 OK\r\ncontent-length: 0\r\n\r\n");
     });
+    let previous = std::env::var_os("ALL_PROXY");
     std::env::set_var("ALL_PROXY", format!("http://{addr}"));
-    (addr, server)
+    (addr, server, AllProxyGuard { previous })
 }
 
 /// Petición completa para desbloquear el `accept` del proxy cuando el guard
@@ -128,7 +144,7 @@ fn probe_http_no_loopback_se_rechaza_sin_tocar_la_red() {
     let _gate = PROXY_ENV
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (proxy, server) = live_mirror_proxy();
+    let (proxy, server, _env) = live_mirror_proxy();
 
     let result = UreqHttpClient::new().probe("http://mirror-public.test/x");
 
@@ -155,7 +171,7 @@ fn probe_con_mirror_http_autorizado_sondea_ok() {
     let _gate = PROXY_ENV
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let (proxy, server) = live_mirror_proxy();
+    let (proxy, server, _env) = live_mirror_proxy();
 
     let result = UreqHttpClient::with_https_only(false).probe("http://mirror-public.test/x");
 

@@ -331,14 +331,46 @@ fn run_with_timeout_returns_output_of_prompt_children() {
     assert_eq!(out.stdout, "hola-plazo\n");
 }
 
+/// Restaura al soltar las variables que el test mutó en el proceso padre
+/// (`set_var` es global a los tests del binario, así que no puede quedar pegado).
+struct EnvRestore {
+    previous: Vec<(&'static str, Option<std::ffi::OsString>)>,
+}
+
+impl EnvRestore {
+    fn set(vars: &[(&'static str, &str)]) -> Self {
+        let previous = vars
+            .iter()
+            .map(|(key, _)| (*key, std::env::var_os(key)))
+            .collect();
+        for (key, value) in vars {
+            std::env::set_var(key, value);
+        }
+        Self { previous }
+    }
+}
+
+impl Drop for EnvRestore {
+    fn drop(&mut self) {
+        for (key, previous) in self.previous.drain(..) {
+            match previous {
+                Some(value) => std::env::set_var(key, value),
+                None => std::env::remove_var(key),
+            }
+        }
+    }
+}
+
 /// L3-7 (4b-B): el env del hijo es allowlist — un PYTHONPATH hostil y un
 /// HF_TOKEN fantasma del padre no viajan al hijo; lo benigno sí (PATH).
 #[test]
 fn child_env_is_allowlisted_hostile_vars_do_not_travel() {
     // Rellenado brutal de env hostil del proceso test (no hay fixtures —
     // set_var muta literalmente el padre; el hijo no puede heredarlo).
-    std::env::set_var("PYTHONPATH", "/tmp/tepochcalli-injection-4bb");
-    std::env::set_var("HF_TOKEN", "not-a-real-token-4bb");
+    let _env = EnvRestore::set(&[
+        ("PYTHONPATH", "/tmp/tepochcalli-injection-4bb"),
+        ("HF_TOKEN", "not-a-real-token-4bb"),
+    ]);
     let runner = StdCommandRunner;
     let dir = tempfile::tempdir().expect("tempdir");
     let out = runner

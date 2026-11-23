@@ -201,10 +201,10 @@ fn second_update_is_a_noop() {
         before,
         "un segundo update idéntico no escribe nada (ni .bak nuevos)"
     );
+    let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
-        String::from_utf8_lossy(&out.stdout).contains("0"),
-        "el resumen declara cero escrituras:\n{}",
-        String::from_utf8_lossy(&out.stdout)
+        stdout.contains("update: 0 ficheros escritos · 0 backups (.bak)"),
+        "el resumen declara cero escrituras:\n{stdout}"
     );
 }
 
