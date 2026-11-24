@@ -96,6 +96,10 @@ python-typecheck:
 # pyproject del vault y se perderían `-n 3` y `-m "not slow"` (medido 2026-11-16).
 # Listas EXPLÍCITAS, no globs: `test_mcp_*.py` arrastraría los tests del
 # conversor, que pertenecen a otro módulo.
+# Nombres de test ÚNICOS entre los ficheros de una misma receta: con args
+# sueltos pytest recorta el filename del nodeid (`::test_nombre`) y dos
+# homónimos colisionan — xdist ejecuta solo uno (medido 2026-11-23: 82
+# recolectados, 81 ejecutados en test-mcp-tools).
 # Sin `set -e`: el tiempo se informa aunque la suite salga en rojo, y el exit
 # code se propaga igual.
 
@@ -543,6 +547,25 @@ third-party target_dir=cargo_target:
         echo
         echo "${rows}"
     } > ../../THIRD-PARTY.md
+
+# --- Hooks de git y etiquetas del repo (soporte de CI/CD) ---
+
+# Instala el hook de commit mínimo (ruff check + format --check): el script
+# versionado vive en `.githooks/pre-commit` y se activa vía core.hooksPath
+# (cero dependencias extra). OJO: en este montaje fuseblk/NTFS el bit exec no
+# se puede fijar, así que git lo salta con un hint — limitación del filesystem
+# (ver AGENTS.md); en cualquier clone normal el hook sí dispara.
+hooks-install:
+    git config core.hooksPath .githooks
+
+# Desinstala el hook: git vuelve a mirar `.git/hooks/`.
+hooks-uninstall:
+    git config --unset core.hooksPath || true
+
+# Sincroniza las etiquetas del repo vía gh (hotfix, release, ci, dependencies);
+# idempotente con --force. NO corre en gates: muta el remoto bajo demanda.
+labels-sync:
+    bash scripts/create-labels.sh
 
 # Gate local: lint → fmt-check → typecheck → unit (corta en el primer fallo).
 # Cubre los dos lenguajes (Python + wizard Rust): no hay gate parcial de un solo lado.
