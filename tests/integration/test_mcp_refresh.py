@@ -289,7 +289,7 @@ def test_two_concurrent_refreshes_both_yield_locked_and_write_nothing(
 # --- higiene del payload -------------------------------------------------------------------------
 
 
-def test_payload_db_and_models_are_never_created_by_the_tool() -> None:
+def test_refresh_never_creates_payload_db_and_models() -> None:
     """Ningún refresh de este módulo materializa `db/` ni `models/` en el payload."""
     payload = Path(__file__).parents[2] / "obsidian-workspace" / ".tepochcalli"
     assert not (payload / "db").exists()
