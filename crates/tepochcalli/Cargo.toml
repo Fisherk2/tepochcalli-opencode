@@ -1,0 +1,34 @@
+[package]
+name = "tepochcalli"
+version = "0.1.0-beta.1"
+edition = "2021"
+description = "Distributable Obsidian workspace with cited semantic search over notes and PDFs (OpenCode V2 + CocoIndex + LanceDB)"
+license = "MIT"
+repository = "https://github.com/Fisherk2/tepochcalli-opencode"
+homepage = "https://github.com/Fisherk2/tepochcalli-opencode"
+# El README raíz es el del producto: `cargo package` lo copia al `.crate`.
+readme = "../../README.md"
+keywords = ["obsidian", "rag", "semantic-search", "knowledge-base", "installer"]
+categories = ["command-line-utilities", "development-tools"]
+# `cargo install` no usa los tests; empaquetarlos solo infla el `.crate`.
+exclude = ["tests/"]
+
+[[bin]]
+name = "tepochcalli"
+path = "src/main.rs"
+
+[dependencies]
+crossterm = "0.29"
+dialoguer = "0.12"
+ratatui = "0.30"
+tar = "0.4"
+zip = "9"
+flate2 = "1"
+serde_json = { version = "1", features = ["preserve_order"] }
+sha2 = "0.10"
+sysinfo = "0.36"
+thiserror = "2"
+ureq = "3"
+
+[dev-dependencies]
+tempfile = "3"

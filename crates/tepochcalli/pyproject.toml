@@ -1,0 +1,19 @@
+# Empaqueta el binario `tepochcalli` como rueda Python para el canal `uvx tepochcalli`
+# (ADR-014). Esta fase NO publica en PyPI: la rueda se construye y verifica en local.
+#
+# Sin `[project.scripts]`: con `bindings = "bin"` maturin rechaza el build
+# («Defining scripts and working with a binary doesn't mix well»); el binario entra
+# como script de rueda por sí solo. `dynamic = ["version"]` = one-version rule:
+# la versión sale siempre de `Cargo.toml`, nunca de un tercer sitio que desincronizar.
+[build-system]
+requires = ["maturin==1.15.0"]
+build-backend = "maturin"
+
+[project]
+name = "tepochcalli"
+description = "Distributable Obsidian workspace with cited semantic search (installer wizard)"
+requires-python = ">=3.8"
+dynamic = ["version"]
+
+[tool.maturin]
+bindings = "bin"

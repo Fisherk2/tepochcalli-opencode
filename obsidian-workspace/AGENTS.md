@@ -1,79 +1,127 @@
-# AGENTS.md — [Project Name]
+# Agent Guide — Obsidian Vault
 
-> Rules for AI coding assistants.
-> Read this file before making any changes to the project.
+> Required reference for any agent operating in this vault.
 
-## Project Context
+This guide defines how to create, edit, organize, and connect Markdown notes so the vault stays consistent, searchable, and fully rendered in Obsidian.
 
-<!-- What does this project do? What is its purpose? -->
-<!-- What tech stack does it use? -->
-<!-- What is the primary language and framework? -->
+## 1. Vault Principles
 
-[Describe the project's purpose and scope here]
+- One concept per note; keep notes atomic and self-contained.
+- Prefer structure over prose: headers, lists, tables, and visuals.
+- Every note is discoverable: frontmatter, tags, and links to related notes.
+- Never break existing links when renaming or moving notes.
+- Write for reading view: what renders in Obsidian is the source of truth.
 
-## Architecture Rules
+## 2. Naming (Files, Dirs, Tags)
 
-<!-- Layer boundaries, dependency rules, module organization -->
-<!-- Example: "Dependencies point inward: infrastructure → application → domain" -->
-<!-- What are the main modules or layers? -->
-<!-- How should imports be organized? -->
+### Files
 
-- [Rule 1 — describe the rule and its rationale]
-- [Rule 2 — describe the rule and its rationale]
-- [Rule 3]
+- Lowercase with hyphens: `postgresql-setup.md`
+- No spaces or special characters.
+- Shape: `descriptive-name.md`
 
-## Code Style Rules
+### Directories
 
-<!-- Naming conventions, formatting standards, patterns to follow -->
-<!-- Reference docs/CODE_STYLE.md for details, but summarize key rules here -->
-<!-- What naming conventions are used? (camelCase, PascalCase, etc.) -->
-<!-- What formatting rules must be followed? -->
+- Numbered from 10 upward, two digits: `10-templates`, `20-projects`, `21-aws`
+- Lowercase with hyphens: `20-devops-docker`
+- No spaces or special characters.
+- Numbers `00-09` are reserved for system workflows; do not create new dirs in that range.
 
-- [Rule 1]
-- [Rule 2]
-- [Rule 3]
+### Tags
 
-## Security Rules
+- Hierarchical: `#databases/postgresql`, `#devops/docker`
+- Simple: `#recipe`, `#resources`
+- Place tags in frontmatter or inline.
 
-<!-- Prohibited actions, never-do list, sensitive data handling -->
-<!-- Be specific: "Never hardcode API keys", "Never log passwords" -->
-<!-- What must never be committed? -->
-<!-- What environment variables are sensitive? -->
+## 3. Write notes with Obsidian syntax
 
-- [Rule 1]
-- [Rule 2]
-- [Rule 3]
+Do not inline syntax in this guide. Always load the skill for current syntax.
 
-## Pre-Commit Checklist
+- MUST **Load** `obsidian-markdown` and `obsidian-vault` for every vault write.
+- **Load** `markdown-mermaid-writing` only when diagrams are needed.
+- **Load** `math-typesetting-guide` only when LaTeX sintax is needed.
 
-<!-- Quality gates that must pass before committing -->
-<!-- Example: tests pass, linter clean, types valid -->
-<!-- What commands should be run before committing? -->
-<!-- What is the minimum coverage threshold? -->
+## 4. Frontmatter Contract
 
-- [ ] [Quality gate 1 — e.g., "All tests pass"]
-- [ ] [Quality gate 2 — e.g., "Linter shows no errors"]
-- [ ] [Quality gate 3 — e.g., "TypeScript compiles without errors"]
+Every note starts with this block:
 
-## Documentation Index
+```yaml
+---
+title: Descriptive Name
+date: YYYY-MM-DD
+tags: [category, subcategory]
+aliases: [alternative name]
+---
+```
 
-<!-- Link to all project documentation for quick reference -->
-<!-- Keep this list updated as docs are added or removed -->
+> No frontmatter means no metadata, so the note will not appear in filtered searches.
 
-| Document | Purpose |
-|----------|---------|
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | Architecture overview and ADR index |
-| [CODE_STYLE.md](docs/CODE_STYLE.md) | Coding conventions |
-| [SPEC.md](SPEC.md) | Technical specifications index |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | Contribution guidelines |
-| [WORKFLOW.md](docs/WORKFLOW.md) | Implementation workflow |
+## 5. Templates
 
-## Delegation Patterns
+- Create every new note from `10-templates/` using the matching template.
+- Do not modify the originals in `10-templates/` unless the user explicitly asks.
 
-<!-- How should AI agents invoke subagents? -->
-<!-- Sequential only? Parallel allowed? When to delegate vs act directly? -->
-<!-- What tasks should be delegated vs handled inline? -->
-<!-- Are there specific agents with specialized roles? -->
+Keep both blocks short, factual, and inside the note body or a dedicated section.
 
-- [Pattern 1 — describe when and how to delegate]
-- [Pattern 2 — describe when and how to delegate]
+## 6. Operation Rules
+
+### Always
+
+1. Search for an existing note before creating a new one.
+2. Use the matching template from `10-templates/`.
+3. Include complete frontmatter.
+4. Connect to related notes with wikilinks.
+5. Use the full Obsidian rendering: tables, callouts, code blocks, diagrams.
+6. Design visually: less dense prose, more structure and graphics.
+
+### Never
+
+1. Create duplicate notes.
+2. Break existing wikilinks when renaming or moving.
+3. Write text-only notes with no structural or visual aids.
+4. Skip frontmatter.
+5. Read, analyze, or modify excluded files (see section 9).
+
+> **Note:** If the user needs to perform a specialized tasks, **Delegate** CLI operations to the `obsidian-vault-writer` subagent and **Load** `obsidian-cli` skill, execute `obsidian help` to see available commands before using them (if are available).
+
+## 7. Search and Linking
+
+Vault-native methods only:
+
+1. **By name:** follow or type `[[note-name]]` and use backlinks to find references.
+2. **By tag:** browse `#category` or `#category/subcategory` via the tag pane.
+3. **By text:** use the obsidian cli search (if are available) for phrases and headings or use glob/grep tools.
+4. **By folder:** browse the numbered directory structure top-down.
+5. **By graph:** use graph view to spot clusters, orphans, and missing links.
+6. Link every new note to at least one related note; add backlinks at the bottom when useful.
+
+## 8. Excluded Files
+
+> Ignore these completely: do not read, analyze, or modify them. Extend this placeholder table as needed.
+
+| Pattern | Reason |
+|---|---|
+| `.obsidian/` | Obsidian settings and cache |
+| `.gitignore` | Version control exclusions |
+| `.opencode/` | OpenCode settings |
+ `.tepochcalli/` | Tepochcalli RAG settings |
+| `.git/` | Version control metadata |
+| `.DS_Store` | OS metadata file |
+| `*.tmp`, `*.bak`, `*.swp` | Temporary and backup files |
+
+## 9. Note writing workflow
+
+1. **Receive** the user request.
+2. **Search** for an existing note before creating one.
+3. **Apply** the matching template from `10-templates/` (if applicable).
+4. **Write** the note with full frontmatter and Obsidian rendering.
+5. **Connect** to related notes with wikilinks.
+6. **Verify** no existing links are broken.
+
+---
+
+## REFERENCES
+
+Use this reliable resources to support your notes:
+
+- [Insert your references here]

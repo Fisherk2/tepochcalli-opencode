@@ -1,0 +1,65 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R /F2 5 0 R >> >> /Contents 6 0 R >>
+endobj
+4 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>
+endobj
+6 0 obj
+<< /Length 2575 >>
+stream
+BT /F1 20 Tf 54 720 Td (Tepochcalli Fixture Document) Tj ET
+BT /F2 11 Tf 54 694 Td (Documento de prueba para la ruta PDF con Docling en CPU.) Tj ET
+BT /F1 14 Tf 54 660 Td (Metodo de prueba) Tj ET
+BT /F2 11 Tf 54 636 Td (Este documento PDF de una pagina sirve como fixture real de la ruta PDF del) Tj ET
+BT /F2 11 Tf 54 620 Td (flow: Docling lo convierte a markdown conservando la jerarquia de headings, y) Tj ET
+BT /F2 11 Tf 54 604 Td (los offsets de cita se miden sobre ese markdown extraido, nunca sobre el) Tj ET
+BT /F2 11 Tf 54 588 Td (binario del PDF. La prosa es deliberadamente simple y continua para producir) Tj ET
+BT /F2 11 Tf 54 572 Td (mas de un chunk de texto bajo el presupuesto de bytes del splitter canonico.) Tj ET
+BT /F2 11 Tf 54 546 Td (Segundo apartado: la identidad F1 exige que el slice del markdown extraido) Tj ET
+BT /F2 11 Tf 54 530 Td (reproduzca exactamente cada chunk citado, por lo que este bloque de prosa) Tj ET
+BT /F2 11 Tf 54 514 Td (permite verificar solapes y cortes entre chunks de un documento con estructura) Tj ET
+BT /F2 11 Tf 54 498 Td (de secciones bien definida.) Tj ET
+BT /F1 14 Tf 54 458 Td (Resultados) Tj ET
+BT /F2 11 Tf 54 434 Td (Los chunks producidos citan la seccion que los contiene: el heading se deriva) Tj ET
+BT /F2 11 Tf 54 418 Td (escaneando las lineas ATX previas al offset de inicio de cada chunk, con el) Tj ET
+BT /F2 11 Tf 54 402 Td (mismo cursor incremental que para Markdown y txt.) Tj ET
+BT /F2 11 Tf 54 376 Td (Tercer apartado: el parseo corre en CPU sin opciones GPU, dentro del alcance) Tj ET
+BT /F2 11 Tf 54 360 Td (v1 que solo promete el texto embebido del PDF; el OCR completo queda fuera de) Tj ET
+BT /F2 11 Tf 54 344 Td (scope y los PDFs grandes se excluyen del presupuesto del delta.) Tj ET
+BT /F1 14 Tf 54 304 Td (Implicaciones) Tj ET
+BT /F2 11 Tf 54 280 Td (Cuarto apartado: el markdown extraido es el texto de referencia de los offsets) Tj ET
+BT /F2 11 Tf 54 264 Td (de cita, por lo que la identidad F1 se cumple sobre la salida de Docling y no) Tj ET
+BT /F2 11 Tf 54 248 Td (sobre los bytes del archivo PDF. Esta referencia unica es lo que permite) Tj ET
+BT /F2 11 Tf 54 232 Td (re-parsear el documento en una backfill y obtener exactamente los mismos) Tj ET
+BT /F2 11 Tf 54 216 Td (chunks citados.) Tj ET
+BT /F2 11 Tf 54 190 Td (Quinto apartado: la memoizacion del parseo por contenido evita repetir el) Tj ET
+BT /F2 11 Tf 54 174 Td (coste del layout model sobre un PDF inmutable, de modo que solo los documentos) Tj ET
+BT /F2 11 Tf 54 158 Td (nuevos o modificados pagan el parseo completo.) Tj ET
+
+endstream
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000000359 00000 n 
+0000000456 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+3083
+%%EOF

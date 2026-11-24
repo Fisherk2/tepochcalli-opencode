@@ -1,0 +1,571 @@
+"""T6: dialecto `E_*` completo — contrato por código, precedencia y la clave que jamás se filtra.
+
+Fuentes: specs/spec-mcp-server.md §Códigos de error estructurados (los 5 `E_*`
+y sus payloads) + §Manejo de errores (legacy vs `E_*`); tasks/todo.md → T6 AC;
+plan §9 riesgo crítico «el traceback de litellm filtra la clave de API».
+
+Arquitectura de los tests (y de la implementación), documentada:
+
+* **Cero red por construcción:** el «proveedor falso» se inyecta con
+  `monkeypatch.setitem(sys.modules, "litellm", SimpleNamespace(embedding=…))`
+  (el wrapper importa litellm perezoso ⇒ ni siquiera se carga el paquete real)
+  y con `sentence_transformers.SentenceTransformer` parcheado para la rama
+  local. Ninguna llamada a API real.
+* **La precedencia se prueba por pares adyacentes** —
+  `E_NO_EMBEDDER > INDEX_EMPTY > E_MODEL_MISMATCH > E_API_AUTH` — con el
+  siguiente eslabón COMPROBANDO que el paso anterior ni se invocó (fábrica o
+  `cited_chunks` con registro de llamadas): transitiva por construcción.
+* **Clave (plan §9):** el valor solo existe dentro del wrapper de litellm; se
+  scrubea con `str.replace(valor, "***")` ANTES de elevar y se eleva `from
+  None` (sin cadena) ⇒ ni payload, ni `repr`, ni el `logger.exception` del
+  guard pueden contenerlo — testado con `caplog`.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import logging
+from pathlib import Path
+
+import pytest
+from tepochcalli_flow.config import (
+    DEFAULT_API_KEY_ENV,
+    DEFAULT_EMBEDDING_MODEL,
+    Config,
+    EmbeddingConfig,
+)
+from tepochcalli_flow.ports import CitedChunk
+from tepochcalli_mcp import embedder, errors
+from tepochcalli_mcp.tools import add_source as add_source_handler
+from tepochcalli_mcp.tools import index_refresh as refresh_handler
+from tepochcalli_mcp.tools import json_result
+from tepochcalli_mcp.tools import search as search_handler
+
+FAKE_KEY = "sk-t6-sup-secreto-999"
+LEAK_SECRET = "sk-LEAK-TEST-fichero-mcp"
+LITELLM_MODEL = "openai/text-embedding-3-small"
+
+
+def _config(
+    provider: str = "local", *, model: str = DEFAULT_EMBEDDING_MODEL, api_key: str | None = None
+) -> Config:
+    """Config de prueba directa (el loader real lo cubre `test_d15_provider_none`)."""
+    return Config(
+        models_dir=Path("/vault/.tepochcalli/models"),
+        embedding=EmbeddingConfig(provider=provider, model=model, api_key=api_key),
+    )
+
+
+class _Backend:
+    """Doble de `SearchBackend` con registro de llamadas y error inyectable."""
+
+    def __init__(
+        self,
+        *,
+        models: set[str] | None = None,
+        cited_error: Exception | None = None,
+        expected_model: str = DEFAULT_EMBEDDING_MODEL,
+    ) -> None:
+        self._models = {DEFAULT_EMBEDDING_MODEL} if models is None else models
+        self._cited_error = cited_error
+        self._expected = expected_model
+        self.cited_calls = 0
+
+    @property
+    def expected_model(self) -> str:
+        return self._expected
+
+    async def index_models(self) -> set[str]:
+        return self._models
+
+    async def cited_chunks(
+        self, query: str, top_k: int, path_filter: str | None
+    ) -> list[CitedChunk]:
+        self.cited_calls += 1
+        if self._cited_error is not None:
+            raise self._cited_error
+        text = "chunk"
+        return [
+            CitedChunk(
+                text=text,
+                source_path="00-resources/a.md",
+                heading=None,
+                char_start=0,
+                char_end=len(text),
+                score=1.0,
+            )
+        ]
+
+
+def _search(
+    *,
+    available: bool = True,
+    backend: _Backend | None = None,
+    backend_factory_raises: Exception | None = None,
+) -> dict[str, object]:
+    """Corre `search` con seams de doble; por defecto, backend sano y disponible."""
+    real_backend = backend if backend is not None else _Backend()
+
+    def _factory() -> _Backend:
+        if backend_factory_raises is not None:
+            raise backend_factory_raises
+        return real_backend
+
+    return asyncio.run(
+        search_handler.search(
+            "consulta",
+            backend_factory=_factory,
+            embedder_available=lambda: available,
+        )
+    )
+
+
+# --- precedencia: E_NO_EMBEDDER > INDEX_EMPTY > E_MODEL_MISMATCH > E_API_AUTH ----------
+
+
+def test_no_embedder_precedes_everything_and_the_backend_is_never_built() -> None:
+    """R1: `search` emite `E_NO_EMBEDDER` SIN construir el backend ni mirar el índice."""
+    payload = _search(available=False, backend_factory_raises=AssertionError("no debe construir"))
+
+    assert payload == errors.no_embedder()
+
+
+def test_index_empty_precedes_model_mismatch() -> None:
+    """Índice vacío ⇒ `INDEX_EMPTY`, no `E_MODEL_MISMATCH` (vacío ≠ desalineado)."""
+    backend = _Backend(models=set())
+
+    payload = _search(backend=backend)
+
+    assert payload["error"]["code"] == "INDEX_EMPTY"  # type: ignore[index]
+
+
+class _UnreadableIndex(_Backend):
+    """Índice ilegible en el borde: `index_models` lanza el `ValueError` de lancedb."""
+
+    async def index_models(self) -> set[str]:
+        raise ValueError("tabla chunks ilegible")
+
+
+def test_unreadable_index_state_escalates_to_internal_not_validation_error() -> None:
+    """`ValueError` al leer el estado del índice ⇒ `INTERNAL` (roto ≠ validación del usuario).
+
+    Review Phase 2 (2026-10-27): un esquema incompatible NO es un argumento
+    inválido del usuario — fingir `VALIDATION_ERROR` disfrazaba un fallo
+    nuestro; ahora el `ValueError` del backend escala y el guard lo vuelve
+    `INTERNAL` canónico. El handler dejó de mapear esa rama.
+    """
+    payload = _search(backend=_UnreadableIndex())
+
+    assert payload == errors.internal()
+
+
+def test_model_mismatch_precedes_api_auth_and_never_embeds_the_query() -> None:
+    """Mismatch ⇒ `E_MODEL_MISMATCH` ANTES de cruzar dims: `cited_chunks` NO se invoca.
+
+    (La pierna de API ni siquiera se alcanza — es el «antes de cruzar dims»
+    de spec §E_MODEL_MISMATCH.)
+    """
+    backend = _Backend(models={"modelo-viejo"}, cited_error=embedder.EmbedderAuthError("ENV"))
+
+    payload = _search(backend=backend)
+
+    assert payload["error"]["code"] == "E_MODEL_MISMATCH"  # type: ignore[index]
+    assert backend.cited_calls == 0, "el embed de la query jamás debe ocurrir con mismatch"
+
+
+def test_api_auth_is_emitted_when_all_prior_gates_pass() -> None:
+    """Con índice sano y modelo alineado, el fallo de credenciales ⇒ `E_API_AUTH`."""
+    backend = _Backend(cited_error=embedder.EmbedderAuthError(DEFAULT_API_KEY_ENV))
+
+    payload = _search(backend=backend)
+
+    result = json_result(payload)
+    assert result.is_error is True
+    error = json.loads(result.content[0].text)["error"]
+    assert error["code"] == "E_API_AUTH"
+    assert DEFAULT_API_KEY_ENV in error["message"]
+    assert error["fix_hint"] == errors.FIX_API_AUTH
+    assert backend.cited_calls == 1
+
+
+# --- los E_* de modelo/offline mapeados desde el camino de lectura ----------------------
+
+
+def test_offline_model_failure_maps_to_e_offline_no_cache() -> None:
+    """Fallo de carga local con modo offline ⇒ `E_OFFLINE_NO_CACHE` (no INTERNAL)."""
+    payload = _search(
+        backend=_Backend(cited_error=embedder.EmbedderOfflineError("LocalEntryNotFound: x"))
+    )
+
+    assert payload["error"]["code"] == "E_OFFLINE_NO_CACHE"  # type: ignore[index]
+    assert payload["error"]["fix_hint"] == errors.FIX_OFFLINE_NO_CACHE  # type: ignore[index]
+
+
+def test_model_materialization_failure_maps_to_e_model_invalid() -> None:
+    """Fallo de carga local SIN offline (descarga o no-es-modelo) ⇒ `E_MODEL_INVALID`."""
+    payload = _search(
+        backend=_Backend(cited_error=embedder.EmbedderModelError("ValueError: no es un modelo"))
+    )
+
+    assert payload["error"]["code"] == "E_MODEL_INVALID"  # type: ignore[index]
+
+
+def test_unavailable_embedder_maps_to_e_no_embedder_as_defensive_second_layer() -> None:
+    """Si alguien construyera un corte con config `none` (bypass del seam) ⇒ `E_NO_EMBEDDER`.
+
+    Segunda capa del R1: el seam `embedder_available` es la primaria; esta
+    demuestra que ni siquiera un bypass puede devolver algo distinto del
+    dialecto correcto.
+    """
+    payload = _search(
+        backend=_Backend(cited_error=embedder.EmbedderUnavailableError("provider none"))
+    )
+
+    assert payload == errors.no_embedder()
+
+
+def test_api_throttling_failure_is_internal_with_scrubbed_log(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Fallo de API no cubierto (rate limit/timeout/red) ⇒ `INTERNAL` legado + log SIN la clave.
+
+    El wrapper de litellm scrubea antes de elevar (`***`), así que lo único
+    que el guard loggea ya está limpio; `details` queda `null` (legado) y el
+    detalle vive solo en el log.
+    """
+    scrubbed = f"RateLimitError 429 durante embed de {FAKE_KEY} con retry"
+    backend = _Backend(cited_error=embedder.EmbedderApiError(scrubbed.replace(FAKE_KEY, "***")))
+
+    with caplog.at_level(logging.ERROR):
+        payload = _search(backend=backend)
+
+    error = payload["error"]
+    assert error["code"] == "INTERNAL"  # type: ignore[index]
+    assert list(error) == ["code", "message", "details"]
+    assert error["details"] is None  # type: ignore[index]
+    assert FAKE_KEY not in json.dumps(payload)
+    assert FAKE_KEY not in caplog.text, "el valor de la clave jamás llega al log"
+    assert "***" in caplog.text, "el detalle scrubbeado SÍ está en el log (accionable)"
+
+
+# --- la fábrica de lectura: ops inyectadas (cocoindex vive en el composition root) ----
+
+
+class _AsyncOp:
+    """Doble de la op de cocoindex: `async embed` con resultado o error inyectable."""
+
+    def __init__(self, *, result: object = None, error: BaseException | None = None) -> None:
+        self._result = result
+        self._error = error
+        self.calls: list[str] = []
+
+    async def embed(self, text: str) -> object:
+        self.calls.append(text)
+        if self._error is not None:
+            raise self._error
+        return self._result
+
+
+def _never_local(_path: Path, _device: str) -> _AsyncOp:
+    raise AssertionError("la rama api no debe construir la op local")
+
+
+def _never_api(_model: str, _key: str) -> _AsyncOp:
+    raise AssertionError("no debe construir la op de API sin clave")
+
+
+def _api_cut(
+    op: _AsyncOp,
+    *,
+    config: Config | None = None,
+    calls: list[tuple[str, str]] | None = None,
+) -> object:
+    """Corte de API con la op doble inyectada (misma estrategia que `server`)."""
+
+    def _factory(model: str, api_key: str) -> _AsyncOp:
+        if calls is not None:
+            calls.append((model, api_key))
+        return op
+
+    return embedder.build_read_cut(
+        config or _config("litellm", model=LITELLM_MODEL),
+        local_op_factory=_never_local,
+        api_op_factory=_factory,
+    )
+
+
+def _local_cut(op: _AsyncOp, monkeypatch: pytest.MonkeyPatch) -> object:
+    """Corte local con el path estable simulado (sin tocar disco ni torch)."""
+    monkeypatch.setattr(embedder, "require_local_model", lambda _config: Path("/models/estable"))
+    return embedder.build_read_cut(
+        _config(),
+        local_op_factory=lambda _path, _device: op,
+        api_op_factory=_never_api,
+    )
+
+
+def test_require_local_model_missing_snapshot_raises_model_error_with_guide(
+    tmp_path: Path,
+) -> None:
+    """AC (d): snapshot ausente ⇒ `EmbedderModelError` con la guía, sin red."""
+    config = Config(
+        models_dir=tmp_path / ".tepochcalli" / "models",
+        embedding=EmbeddingConfig(provider="local"),
+    )
+
+    with pytest.raises(embedder.EmbedderModelError, match="tepochcalli config embedder"):
+        embedder.require_local_model(config)
+
+
+def test_litellm_read_wrapper_raises_auth_error_on_401_without_key_in_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """401 de la op ⇒ `EmbedderAuthError` con SOLO el nombre de la env var."""
+    monkeypatch.setenv(DEFAULT_API_KEY_ENV, FAKE_KEY)
+
+    class _Fake401Error(Exception):
+        status_code = 401
+
+    op = _AsyncOp(error=_Fake401Error(f"unauthorized con {FAKE_KEY}"))
+    calls: list[tuple[str, str]] = []
+    cut = _api_cut(op, calls=calls)
+
+    with pytest.raises(embedder.EmbedderAuthError) as exc_info:
+        cut("una consulta")
+
+    assert str(exc_info.value) == DEFAULT_API_KEY_ENV
+    assert FAKE_KEY not in str(exc_info.value)
+    assert FAKE_KEY not in repr(exc_info.value)
+    assert calls == [(LITELLM_MODEL, FAKE_KEY)], "la op se construyó con la clave"
+
+
+def test_litellm_read_wrapper_returns_the_embedding_as_floats() -> None:
+    """Camino de éxito: el vector de la op se normaliza a `list[float]`."""
+    monkeypatch_env = pytest.MonkeyPatch()
+    try:
+        monkeypatch_env.setenv(DEFAULT_API_KEY_ENV, FAKE_KEY)
+        op = _AsyncOp(result=[0.25, 1, "2.5"])
+        cut = _api_cut(op)
+
+        vector = cut("una consulta")
+
+        assert vector == [0.25, 1.0, 2.5]
+        assert all(type(value) is float for value in vector)
+        assert op.calls == ["una consulta"]
+    finally:
+        monkeypatch_env.undo()
+
+
+def test_litellm_read_wrapper_reads_the_key_from_the_toml_when_the_env_is_unset(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Sin env var, la clave sale de `[embedding].api_key` (lo que escribe el wizard)."""
+    monkeypatch.delenv(DEFAULT_API_KEY_ENV, raising=False)
+    op = _AsyncOp(result=[0.5])
+    calls: list[tuple[str, str]] = []
+    cut = _api_cut(
+        op,
+        config=_config("litellm", model=LITELLM_MODEL, api_key=LEAK_SECRET),
+        calls=calls,
+    )
+
+    assert cut("una consulta") == [0.5]
+    assert calls == [(LITELLM_MODEL, LEAK_SECRET)]
+    assert LEAK_SECRET not in caplog.text
+
+
+def test_litellm_read_wrapper_never_calls_the_provider_without_the_key(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sin clave ⇒ `EmbedderAuthError` ANTES de construir la op (cero red)."""
+    monkeypatch.delenv(DEFAULT_API_KEY_ENV, raising=False)
+    calls: list[object] = []
+
+    def _factory(_model: str, _key: str) -> _AsyncOp:
+        calls.append((_model, _key))
+        return _AsyncOp()
+
+    with pytest.raises(embedder.EmbedderAuthError) as exc_info:
+        embedder.build_read_cut(
+            _config("litellm", model=LITELLM_MODEL),
+            local_op_factory=_never_local,
+            api_op_factory=_factory,
+        )
+
+    assert str(exc_info.value) == DEFAULT_API_KEY_ENV
+    assert calls == [], "el chequeo de clave es local: la op ni se construye"
+
+
+def test_litellm_read_wrapper_scrubs_the_key_from_non_auth_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Rate limit u otro fallo ⇒ `EmbedderApiError` con la clave SCRUBEADA y `from None`."""
+    monkeypatch.setenv(DEFAULT_API_KEY_ENV, FAKE_KEY)
+
+    class _Fake429Error(Exception):
+        status_code = 429
+
+    op = _AsyncOp(error=_Fake429Error(f"429 rate limit con la clave {FAKE_KEY} en el cuerpo"))
+    cut = _api_cut(op)
+
+    with pytest.raises(embedder.EmbedderApiError) as exc_info:
+        cut("una consulta")
+
+    error = exc_info.value
+    assert FAKE_KEY not in str(error)
+    assert FAKE_KEY not in repr(error)
+    assert "***" in str(error)
+    assert error.__cause__ is None, "`from None`: la causa con la clave no se encadena"
+
+
+@pytest.mark.parametrize("error_name", ["AuthenticationError", "PermissionDeniedError"])
+def test_litellm_auth_errors_are_classified_by_class_name_without_status_code(
+    monkeypatch: pytest.MonkeyPatch, error_name: str
+) -> None:
+    """401/403 que llegan SOLO por nombre de clase (sin `status_code`) ⇒ `EmbedderAuthError`."""
+    monkeypatch.setenv(DEFAULT_API_KEY_ENV, FAKE_KEY)
+    fake_error = type(error_name, (Exception,), {})
+    cut = _api_cut(_AsyncOp(error=fake_error(f"rechazado con {FAKE_KEY}")))
+
+    with pytest.raises(embedder.EmbedderAuthError) as exc_info:
+        cut("una consulta")
+
+    assert str(exc_info.value) == DEFAULT_API_KEY_ENV, "solo el nombre de la env var"
+    assert FAKE_KEY not in str(exc_info.value)
+
+
+def test_local_embedder_offline_failure_is_classified_as_offline_no_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Carga local que falla CON `HF_HUB_OFFLINE=1` ⇒ `EmbedderOfflineError` (por flag)."""
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    cut = _local_cut(
+        _AsyncOp(error=OSError("cannot find the files in the disk cache and traffic is disabled")),
+        monkeypatch,
+    )
+
+    with pytest.raises(embedder.EmbedderOfflineError):
+        cut("una consulta")
+
+
+def test_local_embedder_failure_without_offline_is_classified_as_model_invalid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Carga local que falla SIN offline ⇒ `EmbedderModelError` (corrupto/no-embeddings)."""
+    monkeypatch.delenv("HF_HUB_OFFLINE", raising=False)
+    monkeypatch.delenv("TRANSFORMERS_OFFLINE", raising=False)
+    cut = _local_cut(
+        _AsyncOp(error=ValueError("modelo corrupto o no es un embedding model")),
+        monkeypatch,
+    )
+
+    with pytest.raises(embedder.EmbedderModelError):
+        cut("una consulta")
+
+
+# --- cadena completa: composición REAL op → handler --------------------------------------
+
+
+def test_real_offline_factory_failure_surfaces_as_e_offline_in_search(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """El corte local falla ⇒ el handler responde `E_OFFLINE_NO_CACHE` (composición real)."""
+    monkeypatch.setenv("HF_HUB_OFFLINE", "1")
+    monkeypatch.setattr(embedder, "require_local_model", lambda _config: Path("/models/estable"))
+    config = _config()
+
+    class _RealCutoffBackend(_Backend):
+        async def cited_chunks(
+            self, query: str, top_k: int, path_filter: str | None
+        ) -> list[CitedChunk]:
+            self.cited_calls += 1
+            cut = embedder.build_read_cut(
+                config,
+                local_op_factory=lambda _path, _device: _AsyncOp(
+                    error=OSError("sin cache y sin red")
+                ),
+                api_op_factory=_never_api,
+            )
+            # El lector real ejecuta el corte en un hilo (`asyncio.to_thread`);
+            # así `asyncio.run` de la op tiene un loop propio (no el del handler).
+            await asyncio.to_thread(cut, query)
+            return []
+
+    payload = _search(backend=_RealCutoffBackend())
+
+    assert payload["error"]["code"] == "E_OFFLINE_NO_CACHE"  # type: ignore[index]
+
+
+# --- E_API_AUTH desde index_refresh y add_source (mismo seam de refresh) -----------------
+
+
+def _auth_refresh(_roots: tuple[str, ...] = ()) -> dict[str, object]:
+    """El seam de refresh del composition root tradujo la clave ausente (server._refresh_once)."""
+    raise embedder.EmbedderAuthError(DEFAULT_API_KEY_ENV)
+
+
+def test_index_refresh_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
+    """`index_refresh` emite `E_API_AUTH` cuando el flow rechaza la clave faltante."""
+    (tmp_path / "00-resources").mkdir()
+    payload = asyncio.run(
+        refresh_handler.index_refresh(
+            vault_root=lambda: tmp_path,
+            default_roots=lambda: ("00-resources",),
+            refresh=_auth_refresh,
+            embedder_available=lambda: True,
+            index_exists=lambda: True,
+        )
+    )
+
+    error = payload["error"]
+    assert error["code"] == "E_API_AUTH"  # type: ignore[index]
+    assert error["fix_hint"] == errors.FIX_API_AUTH  # type: ignore[index]
+    assert FAKE_KEY not in json.dumps(payload)
+
+
+def test_add_source_maps_key_missing_to_e_api_auth(tmp_path: Path) -> None:
+    """`add_source` también emite `E_API_AUTH` (spec §Códigos lo lista) — mismo seam de refresh."""
+    payload = asyncio.run(
+        add_source_handler.add_source(
+            "https://example.org/paper",
+            None,
+            vault_root=lambda: tmp_path,
+            convert=lambda uri: "# convertido\n",
+            refresh=_auth_refresh,
+            embedder_available=lambda: True,
+            allowed_roots=lambda: ("00-resources",),
+        )
+    )
+
+    error = payload["error"]
+    assert error["code"] == "E_API_AUTH"  # type: ignore[index]
+    assert error["fix_hint"] == errors.FIX_API_AUTH  # type: ignore[index]
+
+
+# --- los 5 payloads juntos: el dialecto completo -----------------------------------------
+
+
+def test_all_five_e_codes_share_the_three_key_shape() -> None:
+    """Los 5 `E_*` con `{code,message,fix_hint}` y orden exacto (contract test D7.3)."""
+    payloads = [
+        errors.no_embedder(),
+        errors.api_auth(DEFAULT_API_KEY_ENV),
+        errors.model_invalid(),
+        errors.offline_no_cache(),
+        errors.model_mismatch({"viejo"}, DEFAULT_EMBEDDING_MODEL),
+    ]
+    codes = []
+    for payload in payloads:
+        error = payload["error"]
+        assert list(error)[:3] == ["code", "message", "fix_hint"], list(error)
+        assert isinstance(error["fix_hint"], str) and error["fix_hint"]
+        codes.append(error["code"])
+
+    assert codes == [
+        "E_NO_EMBEDDER",
+        "E_API_AUTH",
+        "E_MODEL_INVALID",
+        "E_OFFLINE_NO_CACHE",
+        "E_MODEL_MISMATCH",
+    ]

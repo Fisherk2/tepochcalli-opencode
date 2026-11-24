@@ -1,0 +1,23 @@
+{
+  "command": "TEPOCHCALLI_CITATIONS_EVIDENCE=\"/mnt/HDDFish/Documents/Programacion/PROYECTOS/14-tepochcalli-opencode/docs/acceptance/citations.json\" just python-test-file spot_check",
+  "vault": "tests/fixtures/golden_vault (md + txt + pdf)",
+  "spot_check_requested": 100,
+  "read_only": "snapshot (mtime_ns, size) de db/ igual antes/después en las 3 corridas",
+  "clean": {
+    "rows_sampled": 6,
+    "source_rows": 4,
+    "extract_rows": 2,
+    "rate": "6/6 (100.0%)",
+    "broken": 0,
+    "exit_code": 0
+  },
+  "after_external_edit": {
+    "edited_file": "00-Resources/nota_dorada.md",
+    "rows_sampled": 6,
+    "source_rows": 4,
+    "extract_rows": 2,
+    "rate": "3/6 (50.0%)",
+    "broken": 3,
+    "exit_code": 1
+  }
+}
