@@ -1,0 +1,207 @@
+# CI — gate único de push/PR de Tepochcalli (v0.1.0-beta.1).
+#
+# Composición del gate (aprobada por el dueño, 2026-11-23):
+#   * job `python`   — la mitad Python de `just quality` + `test-acceptance` + `md-lint`
+#   * job `rust`     — `just rust-ci` (fmt + clippy + test)
+#   * job `gitleaks` — escaneo de secretos sobre TODO el historial (en paralelo)
+# El lado Rust de `just quality` (clippy/fmt) lo cubre el job `rust`, así que
+# clippy y rustfmt corren EXACTAMENTE una vez por corrida (sin doble gate).
+#
+# Presupuesto: < 10 min wall-clock (requisito duro del dueño) — `timeout-minutes:
+# 10` en CADA job es el corte duro. Tiempos medidos que componen el gate:
+#   * `python-test-unit` 702 tests / 52-76 s (AGENTS.md:87; 707 tests / 69,45 s
+#     medidos en docs/WORKFLOW.md:371)
+#   * `test-acceptance` 10 tests / 4 s (AGENTS.md:96)
+#   * `rust-ci` 2m45s en caliente (docs/WORKFLOW.md:368-369)
+#   * `md-lint` 0 issues sobre 63 ficheros (docs/WORKFLOW.md:372)
+# El gate COMPLETO `just ci` (20:58-36:58 medidos, AGENTS.md:91-92) está
+# PROHIBIDO en CI por regla del dueño: es una corrida LOCAL de cierre de fase.
+# Nota honesta: la PRIMERA corrida sin caches (modelos ~1.6 GB + torch) queda
+# fuera del envelope medido; el timeout de 10 min la corta en seco (diseño
+# aprobado — el presupuesto es duro, no maquillado).
+#
+# Triggers: `pull_request` (todas las ramas) + `push` SOLO a develop/main — así
+# un PR no dispara dos veces (el flaw de phase1/phase3: push + pull_request en
+# cada workflow = 4 corridas por PR). `phase1.yml`/`phase3.yml` pasaron a
+# `workflow_dispatch` el 2026-11-23 en favor de este fichero.
+#
+# `just` NO viene preinstalado en ubuntu-latest: se instala explícitamente en
+# cada job que lo usa (binario musl precompilado, ver paso `Instala just`).
+
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - develop
+      - main
+
+# Cancela corridas superseded del mismo ref (espejo de phase1.yml:44-46).
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # Misma toolchain que phase3.yml:41 y el desarrollo local (verificada con `just rust-ci`).
+  RUST_TOOLCHAIN: 1.99.1
+
+jobs:
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # fetch-depth: 0 ⇒ historial completo: el gate escanea secretos en TODO
+      # el historial, no solo en el diff de la PR (requisito del README de
+      # gitleaks-action).
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Repo personal (Fisherk2): no hace falta GITLEAKS_LICENSE. Los
+          # comentarios de PR se desactivan porque el workflow es
+          # `permissions: contents: read`: el gate es el exit code, no el hilo.
+          GITLEAKS_ENABLE_COMMENTS: "false"
+
+  python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        # `shell: bash` = `bash --noprofile --norc -eo pipefail` (estilo phase3.yml).
+        shell: bash
+    env:
+      # uv 0.12.9 ignora [tool.uv] project-environment: solo env var (Justfile:42).
+      UV_PROJECT_ENVIRONMENT: venv
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # setup-uv instala uv 0.12.9 (misma spec pineada de phase1.yml:63-69) y
+      # cachea ~/.cache/uv: `enable-cache` es "auto" por defecto (action.yml de
+      # esa revisión) ⇒ activo en pull_request/push sobre runners de GitHub.
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version: "0.12.9"
+
+      - name: Instala CPython 3.12 (gestionado por uv)
+        # Patrón documentado por setup-uv (FAQ «Do I still need setup-python»):
+        # https://github.com/astral-sh/setup-uv#do-i-still-need-actionssetup-python-alongside-setup-uv
+        run: uv python install 3.12
+
+      # Espejo exacto de phase1.yml:81-89: `~` NO se expande en `env:`, por eso
+      # se exporta vía $GITHUB_ENV con $HOME resuelto por el shell.
+      - name: Fija los caches de modelo FUERA del repo
+        run: |
+          set -euo pipefail
+          {
+            echo "HF_HOME=${HOME}/.cache/huggingface"
+            echo "SENTENCE_TRANSFORMERS_HOME=${HOME}/.cache/huggingface"
+            echo "DOCLING_CACHE_DIR=${HOME}/.cache/docling"
+          } >> "${GITHUB_ENV}"
+
+      # Claves y restore-keys idénticos a phase1.yml:102-110 (mismo key
+      # basado en uv.lock + id del modelo; restore-keys reutiliza blobs previos
+      # ante un bump de lock — son content-addressed).
+      - name: Cache de modelos (HF + Docling) por revisión pineada
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cache/huggingface
+            ~/.cache/docling
+          key: models-v1-${{ runner.os }}-paraphrase-multilingual-MiniLM-L12-v2-${{ hashFiles('obsidian-workspace/.tepochcalli/uv.lock') }}
+          restore-keys: |
+            models-v1-${{ runner.os }}-paraphrase-multilingual-MiniLM-L12-v2-
+
+      # `just` NO está en ubuntu-latest (verificado: hay que instalarlo). El
+      # binario musl precompilado de la release es el método más rápido y
+      # determinista: `cargo install just` compila ~2 min en frío y `apt` no
+      # garantiza versión. Versión 1.59.0 = la del desarrollo local (misma que
+      # cita el Justfile:516); checksum fijado para que el paso sea
+      # reproducible ante cualquier sorpresa del CDN.
+      - name: Instala just (binario musl precompilado, 1.59.0)
+        run: |
+          set -euo pipefail
+          just_ver="1.59.0"
+          archive="${RUNNER_TEMP}/just-${just_ver}.tar.gz"
+          curl --proto '=https' --tlsv1.2 -sSfL --retry 3 -o "${archive}" \
+            "https://github.com/casey/just/releases/download/${just_ver}/just-${just_ver}-x86_64-unknown-linux-musl.tar.gz"
+          printf '%s  %s\n' \
+            "409044617b6f06517c1035e55ca38c8c856ff8b650e41bc2aa1ef82d5903a23e" \
+            "${archive}" | sha256sum --check -
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf "${archive}" -C "${HOME}/.local/bin" just
+          # GITHUB_PATH aplica al SIGUIENTE paso; aquí se verifica en sitio.
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          "${HOME}/.local/bin/just" --version
+
+      - name: uv sync --frozen (deps exactas de uv.lock)
+        working-directory: obsidian-workspace/.tepochcalli
+        run: uv sync --frozen
+
+      # Mitad Python del gate (recetas del Justfile raíz; en orden y cortando
+      # en el primer fallo). NO se invoca `just quality` completo: su mitad
+      # Rust (clippy/fmt) la cubre el job `rust`, así clippy y rustfmt corren
+      # exactamente una vez por corrida. md-lint usa npx, que ya viene en
+      # ubuntu-latest (Node preinstalado).
+      - name: Gate Python (lint -> fmt -> tipos -> unit -> aceptación -> md-lint)
+        run: just python-lint python-fmt-check python-typecheck python-test-unit test-acceptance md-lint
+
+  rust:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      # Espejo exacto de phase3.yml:57-61 (clippy + rustfmt son los componentes
+      # que exigen `rust-ci`).
+      - name: Instala la toolchain Rust pineada
+        run: |
+          set -euo pipefail
+          rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal --component clippy rustfmt
+          rustup default "${RUST_TOOLCHAIN}"
+
+      # Mismo paso de `just` que el job python (ver comentario allí).
+      - name: Instala just (binario musl precompilado, 1.59.0)
+        run: |
+          set -euo pipefail
+          just_ver="1.59.0"
+          archive="${RUNNER_TEMP}/just-${just_ver}.tar.gz"
+          curl --proto '=https' --tlsv1.2 -sSfL --retry 3 -o "${archive}" \
+            "https://github.com/casey/just/releases/download/${just_ver}/just-${just_ver}-x86_64-unknown-linux-musl.tar.gz"
+          printf '%s  %s\n' \
+            "409044617b6f06517c1035e55ca38c8c856ff8b650e41bc2aa1ef82d5903a23e" \
+            "${archive}" | sha256sum --check -
+          mkdir -p "${HOME}/.local/bin"
+          tar -xzf "${archive}" -C "${HOME}/.local/bin" just
+          echo "${HOME}/.local/bin" >> "${GITHUB_PATH}"
+          "${HOME}/.local/bin/just" --version
+
+      # Mitigación crítica del presupuesto: sin esta cache `rust-ci` compilaba
+      # TODO en frío (phase3.yml nunca tuvo cache de cargo). Registry + git de
+      # cargo y CARGO_TARGET_DIR (default del Justfile:304, el mismo que usa
+      # `just rust-ci` sin argumentos) rotan con Cargo.lock; restore-keys
+      # reutiliza los artefactos previos ante un bump de lock.
+      - name: Cache de cargo (registry + git + CARGO_TARGET_DIR)
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            /tmp/opencode/cargo-target
+          key: cargo-v1-${{ runner.os }}-${{ hashFiles('crates/tepochcalli/Cargo.lock') }}
+          restore-keys: |
+            cargo-v1-${{ runner.os }}-
+
+      # fmt + clippy + test (Justfile:382). Sin argumentos: usa el directorio
+      # default de CARGO_TARGET_DIR (Justfile:304) — el mismo cacheado arriba.
+      - name: just rust-ci (fmt + clippy + test)
+        run: just rust-ci

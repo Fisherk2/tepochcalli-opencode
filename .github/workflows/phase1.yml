@@ -1,3 +1,8 @@
+# RETIRADO del path de push/PR el 2026-11-23 en favor de `.github/workflows/ci.yml`:
+# duplicaba el gate, se disparaba 4× por PR (push + pull_request en phase1 y
+# phase3) y su suite completa excedía el presupuesto de 10 min del gate. Se
+# conserva como herramienta MANUAL (workflow_dispatch) de suite completa.
+#
 # CI de Phase 1 (T11) — quality gate de la suite Phase 1.
 #
 # Fuentes de verdad:
@@ -34,8 +39,7 @@
 name: Phase 1
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 # Cancela corridas superseded del mismo ref. push y PR tienen refs distintas
 # (refs/heads/x vs refs/pull/N/merge), así que un PR puede correr ambas

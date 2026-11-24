@@ -1,3 +1,9 @@
+# RETIRADO del path de push/PR el 2026-11-23 en favor de `.github/workflows/ci.yml`:
+# duplicaba el gate (junto con phase1 se disparaba 4× por PR: push +
+# pull_request en cada workflow). Se conserva como herramienta MANUAL
+# (workflow_dispatch): matriz rust ubuntu+macos + jobs `network` y `smoke`,
+# que el gate de 10 min de ci.yml no incluye.
+#
 # CI del wizard `tepochcalli` (T18) — Phase 3.
 #
 # Gates (mismo orden que el AC de T18):
@@ -24,8 +30,7 @@
 name: Phase 3
 
 on:
-  push:
-  pull_request:
+  workflow_dispatch:
 
 # Igual que `phase1.yml`: la corrida superseded se cancela; push y PR corren
 # ambas superficies en paralelo.
@@ -94,7 +99,9 @@ jobs:
           rustup toolchain install "${RUST_TOOLCHAIN}" --profile minimal
           rustup default "${RUST_TOOLCHAIN}"
 
-      - name: cargo test -- --ignored (red real: uv + CPython gestionado)
+      # Comillas: el `: ` de «red real: uv…» rompía el YAML (actionlint
+      # syntax-check; preexistente a este retiro, igual en HEAD).
+      - name: "cargo test -- --ignored (red real: uv + CPython gestionado)"
         working-directory: crates/tepochcalli
         run: cargo test --locked -- --ignored
 
