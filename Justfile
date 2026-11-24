@@ -381,7 +381,7 @@ rust-test-filter name target_dir=cargo_target:
 rust-model-check target_dir=cargo_target:
     cd {{crate_dir}} && CARGO_TARGET_DIR="{{target_dir}}" cargo test --locked --test int_model_availability -- --ignored --nocapture
 
-# Gate Rust local: espejo del job `rust` de `.github/workflows/phase3.yml`.
+# Gate Rust local: fmt + clippy + tests. El job `rust` de `.github/workflows/ci.yml` invoca esta misma receta.
 # Reenvía el directorio a las dos recetas que compilan; `rust-fmt` no lo usa.
 rust-ci target_dir=cargo_target: rust-fmt (rust-lint target_dir) (rust-test target_dir)
 
@@ -440,8 +440,7 @@ rust-wheel-verify: rust-wheel
     echo "uvx OK: ${out}"
 
 # Path 5: `--skip-model`, sin descargar modelos de 470 MB; la red solo se usa
-# para `uv` y `uv sync`. Espejo del job `smoke` de `phase3.yml` con el payload
-# local del repo.
+# para `uv` y `uv sync`, con el payload local del repo.
 # Smoke local del instalador en un vault efímero.
 rust-smoke target_dir=cargo_target:
     #!/usr/bin/env bash

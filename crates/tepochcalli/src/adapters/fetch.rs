@@ -48,7 +48,7 @@ pub struct UvAsset {
 /// Official release base (astral-sh/uv GitHub releases, no remote scripts).
 pub const UV_RELEASE_BASE: &str = "https://github.com/astral-sh/uv/releases/download";
 
-/// Pinned `uv` (repo canonical: Justfile + `phase1.yml` pin **0.12.9**).
+/// Pinned `uv` (repo canonical: Justfile + `ci.yml` pin **0.12.9**).
 pub const UV_VERSION: &str = "0.12.9";
 
 pub const UV_ASSETS: &[UvAsset] = &[

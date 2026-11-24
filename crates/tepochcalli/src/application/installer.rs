@@ -166,7 +166,7 @@ pub const VENV_DIR_NAME: &str = "venv";
 /// the F4 compensation (hygiene, never user data).
 pub const UV_STAGE_DIR: &str = ".uv-stage";
 /// Quirk uv 0.12.9: the project venv location is ONLY honored via env var
-/// (same quirk the repo's own Justfile + `phase1.yml` work around).
+/// (same quirk the repo's own Justfile + `ci.yml` work around).
 pub const UV_PROJECT_ENVIRONMENT: (&str, &str) = ("UV_PROJECT_ENVIRONMENT", "venv");
 /// Managed CPython the installer boots (repo canonical: pyproject + workflow
 /// pin the 3.12 series).
