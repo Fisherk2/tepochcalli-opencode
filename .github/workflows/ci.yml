@@ -33,9 +33,6 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - develop
-      - main
 
 # Cancela corridas superseded del mismo ref (espejo de phase1.yml:44-46).
 concurrency:
