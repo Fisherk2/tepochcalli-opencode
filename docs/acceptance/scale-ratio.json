@@ -1,0 +1,330 @@
+{
+  "metric": "criterio 6 — brazos 10 % vs 100 % (Δ p95 n=20 y search p95 n=100) en btrfs y en fuseblk/NTFS-3G",
+  "verdict": "FAIL",
+  "criterion": {
+    "rule": "p95(100 %) / p95(10 %) ≤ 2.0",
+    "delta": {
+      "ratio_100_over_10": 6.172,
+      "threshold": 2.0,
+      "pass": false
+    },
+    "search": {
+      "ratio_100_over_10": 1.706,
+      "threshold": 2.0,
+      "pass": true
+    },
+    "decided_by": "Δ p95 (índice 100 % = T4, índice 10 % propio en frío)",
+    "deciding_filesystem": "btrfs (/tmp/opencode, NVMe) — D-P6-3"
+  },
+  "delta": {
+    "budget_ms": 30000,
+    "percentile_definition": "nearest-rank: sorted[ceil(0.95*n)-1] = 19.º valor de 20",
+    "arms": {
+      "b100": {
+        "arm": "b100",
+        "label": "btrfs · 11 000 entradas (índice de T4)",
+        "chunks": [
+          "delta-b100-0.json",
+          "delta-b100-10.json",
+          "delta-b100-15.json",
+          "delta-b100-5.json"
+        ],
+        "n": 20,
+        "modified_per_run": 10,
+        "samples_ms": [
+          14458,
+          14451,
+          15695,
+          14550,
+          14654,
+          14564,
+          13812,
+          12325,
+          11787,
+          12109,
+          14778,
+          16051,
+          13627,
+          13325,
+          13299,
+          12186,
+          12448,
+          11805,
+          13295,
+          13326
+        ],
+        "p95_ms": 15695,
+        "min_ms": 11787,
+        "median_ms": 13627,
+        "max_ms": 16051
+      },
+      "b10": {
+        "arm": "b10",
+        "label": "btrfs · 1 100 entradas (subconjunto, índice propio)",
+        "chunks": [
+          "delta-b10-0.json",
+          "delta-b10-10.json",
+          "delta-b10-15.json",
+          "delta-b10-5.json"
+        ],
+        "n": 20,
+        "modified_per_run": 10,
+        "samples_ms": [
+          2363,
+          2680,
+          2233,
+          2543,
+          2516,
+          1949,
+          2266,
+          2389,
+          2155,
+          1970,
+          2010,
+          1991,
+          2048,
+          2201,
+          1959,
+          2101,
+          2101,
+          2210,
+          1863,
+          2028
+        ],
+        "p95_ms": 2543,
+        "min_ms": 1863,
+        "median_ms": 2155,
+        "max_ms": 2680
+      },
+      "ntfs": {
+        "arm": "ntfs",
+        "label": "fuseblk/NTFS-3G · 11 000 entradas (índice construido en frío en ese FS)",
+        "chunks": [
+          "delta-ntfs-0.json",
+          "delta-ntfs-10.json",
+          "delta-ntfs-15.json",
+          "delta-ntfs-5.json"
+        ],
+        "n": 20,
+        "modified_per_run": 10,
+        "samples_ms": [
+          38491,
+          41861,
+          48550,
+          51978,
+          48846,
+          53533,
+          52996,
+          44524,
+          46894,
+          43000,
+          41487,
+          44614,
+          42836,
+          45769,
+          47834,
+          48784,
+          42894,
+          49759,
+          51387,
+          46782
+        ],
+        "p95_ms": 52996,
+        "min_ms": 38491,
+        "median_ms": 46894,
+        "max_ms": 53533
+      }
+    },
+    "baseline_p02": {
+      "btrfs_p95_ms": 26967,
+      "measured_p95_ms": 15695,
+      "difference_ms": -11272,
+      "difference_pct": -41.8,
+      "source": "docs/TECH_DEBT.md §Review 5-ejes Phase 3.5 (bench P-02, bench_delta_scale.py, corpus sin manifiesto)"
+    }
+  },
+  "search": {
+    "budget_ms": 500,
+    "n": 100,
+    "query_seed": 20261112,
+    "queries": "las 100 de T4 (mismo muestreo y mismo texto)",
+    "arms": {
+      "b10": {
+        "p95_client_ms": 51.0,
+        "p95_server_took_ms": 49.0,
+        "n": 100,
+        "chunks_indexed": 1101
+      },
+      "b100": {
+        "p95_client_ms": 87.0,
+        "p95_server_took_ms": 84.0,
+        "n": 100,
+        "chunks_indexed": 11006
+      }
+    },
+    "verdict": "PASS"
+  },
+  "walk_only": {
+    "b100": {
+      "phase": "walk-b100",
+      "arm": "b100",
+      "label": "btrfs · 11 000 entradas (índice de T4)",
+      "vault": "/tmp/opencode/t4-scale/vault",
+      "entries": 11000,
+      "n": 5,
+      "walk_ms": [
+        6487.5,
+        6114.7,
+        5839.6,
+        5974.3,
+        6916.1
+      ],
+      "min_ms": 5839.6,
+      "median_ms": 6114.7,
+      "max_ms": 6916.1,
+      "note": "warm page cache tras la 1.ª muestra; sin embed y sin ciclo Δ",
+      "host": {
+        "cpu_model": "Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz",
+        "cpu_count_logical": 12,
+        "mem_total_kb": 16207884,
+        "swap_total_kb": 8103932,
+        "swap_free_kb_at_start": 6563292,
+        "vault_filesystem": "btrfs",
+        "vault_device": "/dev/nvme0n1p3",
+        "platform": "Linux-7.3.1-1-cachyos-x86_64-with-glibc2.44"
+      }
+    },
+    "b10": {
+      "phase": "walk-b10",
+      "arm": "b10",
+      "label": "btrfs · 1 100 entradas (subconjunto, índice propio)",
+      "vault": "/tmp/opencode/phase6-scale-ratio/vault10",
+      "entries": 1100,
+      "n": 5,
+      "walk_ms": [
+        562.8,
+        552.0,
+        590.6,
+        555.1,
+        554.5
+      ],
+      "min_ms": 552.0,
+      "median_ms": 555.1,
+      "max_ms": 590.6,
+      "note": "warm page cache tras la 1.ª muestra; sin embed y sin ciclo Δ",
+      "host": {
+        "cpu_model": "Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz",
+        "cpu_count_logical": 12,
+        "mem_total_kb": 16207884,
+        "swap_total_kb": 8103932,
+        "swap_free_kb_at_start": 6563292,
+        "vault_filesystem": "btrfs",
+        "vault_device": "/dev/nvme0n1p3",
+        "platform": "Linux-7.3.1-1-cachyos-x86_64-with-glibc2.44"
+      }
+    },
+    "ntfs": {
+      "phase": "walk-ntfs",
+      "arm": "ntfs",
+      "label": "fuseblk/NTFS-3G · 11 000 entradas (copia del índice de T4)",
+      "vault": "/mnt/HDDFish/Documents/Programacion/PROYECTOS/14-tepochcalli-opencode/benchmarks/t5-ntfs/vault",
+      "entries": 11000,
+      "n": 5,
+      "walk_ms": [
+        21964.6,
+        22705.9,
+        23978.8,
+        24217.5,
+        22945.3
+      ],
+      "min_ms": 21964.6,
+      "median_ms": 22945.3,
+      "max_ms": 24217.5,
+      "note": "warm page cache tras la 1.ª muestra; sin embed y sin ciclo Δ",
+      "host": {
+        "cpu_model": "Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz",
+        "cpu_count_logical": 12,
+        "mem_total_kb": 16207884,
+        "swap_total_kb": 8103932,
+        "swap_free_kb_at_start": 6580808,
+        "vault_filesystem": "fuseblk",
+        "vault_device": "/dev/sda1",
+        "platform": "Linux-7.3.1-1-cachyos-x86_64-with-glibc2.44"
+      }
+    }
+  },
+  "cold_index": {
+    "b10_btrfs_ms": 60716,
+    "b100_btrfs_ms": 543645,
+    "ntfs_fuseblk_ms": 944019,
+    "note": "indexación en frío de las 11 000 entradas: btrfs = T4, fuseblk = este bench. El coste del FS se ve aquí, no en el Δ de 10 ficheros"
+  },
+  "ntfs_limit": {
+    "measured": true,
+    "decides_criterion": false,
+    "note": "LÍMITE CONOCIDO (D-P6-3): no decide el criterio 6. El vault vive en el montaje fuseblk/NTFS-3G y su índice se construyó en frío ahí (mismo corpus y método que el brazo btrfs de 11 000).",
+    "cause": "walk de 11 000 entradas en NTFS-3G: 22 945 ms de mediana aquí (17,6 s en P-02); el ciclo de update lo domina el walk + el stat/memo del árbol sobre FUSE, no el embed de los 10 documentos",
+    "recommendation": "el presupuesto de 30 s es de un FS local rápido (btrfs/ext4/APFS); un vault en NTFS-3G, unidad de red o carpeta sincronizada (OneDrive/Dropbox) degrada el Δ por encima del presupuesto — mantener el vault en el disco local del sistema",
+    "label": "fuseblk/NTFS-3G · 11 000 entradas (índice construido en frío en ese FS)",
+    "p95_ms": 52996,
+    "budget_ms": 30000,
+    "verdict": "FAIL",
+    "walk_median_ms": 22945.3,
+    "cold_index_ms": 944019,
+    "discarded_attempt": "copiar el índice de btrfs al montaje fuseblk: el memo del engine no cruza el cambio de ruta y CADA refresh re-extrae y re-embebe las 11 000 entradas (96-204 s por ciclo, con indexed=0); se descartó y se indexó en frío en el FS",
+    "samples_ms": [
+      38491,
+      41861,
+      48550,
+      51978,
+      48846,
+      53533,
+      52996,
+      44524,
+      46894,
+      43000,
+      41487,
+      44614,
+      42836,
+      45769,
+      47834,
+      48784,
+      42894,
+      49759,
+      51387,
+      46782
+    ]
+  },
+  "method": {
+    "host": {
+      "cpu_model": "Intel(R) Core(TM) i7-8750H CPU @ 2.20GHz",
+      "cpu_count_logical": 12,
+      "mem_total_kb": 16207884,
+      "swap_total_kb": 8103932,
+      "swap_free_kb_at_start": 6051792,
+      "vault_filesystem": "btrfs",
+      "vault_device": "/dev/nvme0n1p3",
+      "platform": "Linux-7.3.1-1-cachyos-x86_64-with-glibc2.44"
+    },
+    "modified_per_run": 10,
+    "why_constant_rewrite": "10 ficheros en AMBOS brazos: el embed queda constante y el ratio aísla el walk/engine a escala (lo que pregunta el criterio 6)",
+    "arm_isolation": "el brazo 100 % usa el índice de T4 (11 006 chunks) y el 10 % su propio índice en frío (1 100 entradas): no se compara un índice contra sí mismo; ambos brazos se miden en el mismo host con el mismo método",
+    "order": "prepare → index10 → search (índices intactos) → delta b100 → delta b10 → walk → ntfs → delta ntfs → report",
+    "documents": "los PDF de 30+ páginas van APARTE (D51, T2: 3 144 ms p50 / 4 172 ms p95, n=3, documents.md): no se mezclan con el Δ de texto",
+    "top_k": 5
+  },
+  "generated_utc": "2026-11-13T07:30:38.047805+00:00",
+  "commands": [
+    "just python-bench-scale-ratio --phase prepare",
+    "just python-bench-scale-ratio --phase index10",
+    "just python-bench-scale-ratio --phase search",
+    "just python-bench-scale-ratio --phase ntfs",
+    "just python-bench-scale-ratio --phase walk --arm b100",
+    "just python-bench-scale-ratio --phase delta --arm b100",
+    "just python-bench-scale-ratio --phase walk --arm b10",
+    "just python-bench-scale-ratio --phase delta --arm b10",
+    "just python-bench-scale-ratio --phase walk --arm ntfs",
+    "just python-bench-scale-ratio --phase delta --arm ntfs",
+    "just python-bench-scale-ratio --phase report"
+  ]
+}

@@ -1,0 +1,34 @@
+# Gitleaks v8.24.3 — configuración del gate `gitleaks` de CI.
+#
+# `useDefault = true` es OBLIGATORIO aquí: sin él, gitleaks trata ESTE fichero
+# como la configuración completa y las reglas por defecto dejan de aplicar,
+# es decir el gate no detectaría nada. Fuente: README de gitleaks v8.24.3
+# §Configuration — «1. define your own configuration, default rules do not
+# apply» / «2. extend a configuration … useDefault will extend the default
+# gitleaks config built in to the binary».
+[extend]
+useDefault = true
+
+# Falsos positivos VERIFICADOS el 2026-11-24 sobre el historial completo y el
+# árbol de trabajo (9 hallazgos en historial, 2 en árbol). Ninguno es una
+# credencial real: son fixtures de test y prosa del payload. Se allowlista SOLO
+# por ruta (las reglas quedan activas para el resto del código); no se
+# desactiva ninguna regla ni se excluye ningún patrón de producción.
+[allowlist]
+description = "Falsos positivos verificados 2026-11-24: fixtures de test y prosa del payload (sin credenciales reales)"
+paths = [
+  # Fixture falsa del wizard: cadena con forma de clave (`sk-test-…-must-never-leak`)
+  # que el test necesita para ejercitar el redactado. Hallazgos:
+  # crates/tepochcalli/tests/int_embedder_menu.rs:471 (y su nombre anterior
+  # embedder_menu.rs:465, renombrado en 42ba832).
+  '''crates/[^/]+/tests/''',
+  # Prosa del payload: la línea 42 de este comando menciona «`.env` API keys»
+  # como prerrequisito de Paper2All; gitleaks la confunde con una clave
+  # (regla generic-api-key, entropy 3.5766). Hallazgos en 47b0136 y en el
+  # squash 93688c0.
+  '''obsidian-workspace/\.opencode/commands/transform\.md''',
+  # Doc de referencia de la skill RETIRADA database-lookup (ya no está en el
+  # árbol, solo en el historial): ejemplos `curl -H "Token: YOUR_TOKEN"` con
+  # placeholder (regla curl-auth-header, 5 hallazgos en 47bba82).
+  '''obsidian-workspace/\.opencode/skills/database-lookup/references/noaa\.md''',
+]

@@ -1,40 +1,106 @@
-# Product Requirements Document – [Product Name] v[MVP]
-**Date:** [YYYY-MM-DD] | **Author:** [Name] | **Status:** [Draft/Reviewed/Approved]
+# Product Requirements Document — Tepochcalli v1 (MVP)
+
+**Date:** 2026-10-21 | **Author:** Arquitecto (entrevista /spec) | **Status:** Approved (requisitos: docs/BACKLOG.md)
 
 ## 0. General Description
-[Brief description of the product and its purpose]
 
-## 1. Vision and Problem
-- Problem it solves:
-- Value proposition:
-- MVP scope (In/Out):
+Tepochcalli es un **workspace de Obsidian para investigación y estudio, potenciado con
+OpenCode V2 y un motor RAG local**. Permite consultas semánticas sobre notas de investigación,
+PDFs académicos y documentación técnica, minimizando el consumo de tokens del LLM mediante
+indexación incremental y recuperación precisa de fragmentos. Se instala con un wizard (TUI en
+Rust) que deja el vault listo-para-usar sin que el usuario instale Python, Node ni dependencias
+nativas.
 
-## 2. Target Audience & Personas
-| Persona | Role | Primary Need | Usage Frequency |
-|---------|------|--------------|-----------------|
+## 1. Usuario objetivo
 
-## 3. User Stories / Use Cases (Prioritized)
-| ID | As [role] | I want [action] | So that [benefit] | Priority | Acceptance Criteria |
-|----|-----------|-----------------|--------------------|----------|---------------------|
+* **Investigador/a o estudiante de posgrado** con vault de Obsidian propio (cientos–miles de
+  notas, PDFs en español e inglés), sin perfil DevOps, que ya usa (o adoptará) OpenCode como
+  harness de agente.
+* Contexto de uso: laptop con 8GB RAM, CPU sin GPU dedicada, disco razonablemente libre.
 
-## 4. Functional Requirements
-| REQ-ID | Description | Business Rules | Status | Traceability (TRD/Flow) |
-|--------|-------------|----------------|--------|-------------------------|
+## 2. Problema
 
-## 5. Non-Functional Requirements
-- Performance:
-- Security:
-- Usability/Accessibility:
-- Availability/Recovery:
+* Los RAG-as-a-service y los pipelines "hazlo tú mismo" obligan a (a) instalar/cuidar toolchains,
+  (b) pagar tokens en indexación/consulta, (c) exponer el material de investigación, o (d) aceptar
+  respuestas sin citas verificables.
+* Obsidian es una carpeta: cualquier sistema que meta demonios, puertos o archivos visibles
+  interfiere con la herramienta principal del usuario.
 
-## 6. Success Metrics (KPIs)
-- Metric | Target Value | Measurement Method
+## 3. Objetivos (éxito = criterios de §6)
 
-## 7. Assumptions, Constraints, and Dependencies
-- Assumptions:
-- Technical/business constraints:
-- External dependencies:
+1. Búsqueda semántica **con citas precisas** al archivo/encabezado/offset original.
+2. Coste de tokens mínimo: indexación sin LLM; respuesta con contexto acotado (≤2000 tokens).
+3. Transparencia cero: el vault sigue siendo un vault de Obsidian normal.
+4. Instalación de un comando; actualización de índice en segundos cuando el agente lo pide.
+5. Metodología de investigación completa (9 comandos, 5 agentes) sobre la base RAG.
 
-## 8. Change Control
-| Version | Date | Author | Change | Approved by |
-|---------|------|--------|--------|-------------|
+## 4. Features
+
+| # | Feature | Descripción | Spec |
+| --- | --- | --- | --- |
+| F1 | Vault plantillado | Carpetas numeradas `00-resources/` (indexable, anidamiento libre), `01-tasks/`, `02-drafts/`, `03-citations/`; `.opencode/` con agentes+comandos+skills; `AGENTS.md` con regla MCP-first; muestras md+PDF | spec-vault-structure, spec-agent-workflow |
+| F2 | Motor RAG incremental | CocoIndex flow: live-watch `00-resources/**`, chunking RecursiveSplitter, embeddings locales MiniLM, LanceDB ANN+FTS; Δ-only | spec-rag-engine |
+| F3 | Herramientas MCP | `tepochcalli-rag`: `search` (chunks citables), `index_refresh()` (delta del conjunto declarado en `INDEXER_DIR` + reporte), `add_source` (ingesta convertida), `rag_status` (diagnóstico) | spec-mcp-server |
+| F4 | Conversor Markdown | markitdown **como librería en proceso** en el venv: `convert_document`/`convert_base64`/`list_formats` escriben a disco y devuelven solo el resumen (summary-only); URL/DOCX/PPTX/XLSX/XLS/PDF/HTML → Markdown indexable; fallback `anydoc` deshabilitado (criterio 7) | spec-markitdown, ADR-009, ADR-011 |
+| F5 | Wizard atomico | TUI Rust (`ratatui`+`crossterm`), 8 fases con rollback, bootstrap uv→venv→modelo→índice→config MCP; flags `--offline`, `--skip-model`; menú H5 con botones por estado | spec-installer-wizard, ADR-014 |
+| F6 | Distribución versionada | Canal único `uvx tepochcalli` (rueda PyPI vía maturin, ADR-014); canal heredado `cargo binstall` + cargo-dist en retiro (TD-51); instalación en un comando; payload y wizard versionan juntos | ADR-014, ADR-013 |
+| F7 | Metodología de investigación | `/rubric /research /validate /synthesize /cite /draft /review /transform /update` con agentes Itzamná/Nezahualcóyotl/Pochteca/Chilam/Tlacuilo | spec-agent-workflow |
+
+### Nota destino 2026-11-18 (aprobada por FTR el 2026-11-19 — estado vigente)
+
+La evolución `/evolve` sobre [docs/BACKLOG.md §"Wizard de instalación: flujo destino"](BACKLOG.md) (H5-H11)
+fija el estado **vigente** de F5/F6, aprobado por el FTR del dueño el 2026-11-19:
+
+* **Canal único `uvx tepochcalli`** (rueda de PyPI vía maturin `bindings = "bin"`; refresco
+  `uvx --refresh tepochcalli`) — [ADR-014](adr/adr-014-distribucion-uvx-pypi.md), **Accepted
+  2026-11-19**: preparado y verificado en local, **sin publicar** (0 releases, PyPI 404);
+  `cargo binstall` + cargo-dist quedan como canal heredado en retiro (TD-51).
+* **TUI full-screen con botones por estado** (4 escenarios de versión, H5; bloqueo = botón
+  deshabilitado con razón visible) en lugar del `dialoguer` line-based (D23).
+* **Update (H7) y Desinstall (H8)**: operaciones nuevas/ampliadas que sobrescriben o remueven
+  material del vault **con backup obligatorio y advertencia visible** (excepción del dueño
+  2026-11-18 en [docs/CODE_STYLE.md](CODE_STYLE.md)).
+* **Device de inferencia explícito** (`cpu`/`cuda`/`cuda:N`, H9) —
+  [ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md).
+
+Implementación y cierre: [docs/WORKFLOW.md](WORKFLOW.md) Phase 6.5 (**COMPLETADA 2026-11-19**), con las salvedades declaradas (Windows/TD-52, `uvx` desde PyPI, Change Embedder e2e, payload completo/TD-53).
+
+### Nota 2026-11-20 — resiliencia offline del wizard (F5, H6/H7/H9)
+
+Orden del dueño ([BACKLOG.md §4 D-009](BACKLOG.md), ADR-016): en **Install, Update y Change Embedder**, el usuario ve que **sin red la operación se cancela**: el wizard comprueba la conexión antes de escribir nada, muestra un error tipado con la razón y qué hacer, y deja el vault **exactamente como estaba** — ni modo degradado ni instalación a medias en tiempo de instalación. Si la descarga del modelo ya empezó, el usuario puede **cancelar en cualquier momento desde el TUI o con Ctrl+C**: se detiene la descarga, se borran los parciales y se deshace todo lo ya aplicado; no queda un modelo a medias en `.tepochcalli/models/`. El degradado de `rag_status` es solo de **runtime** y no cambia; un `sin dato` en la estimación de requisitos no autoriza una descarga sin red. Notas, PDFs y `.obsidian/` nunca se tocan.
+
+## 5. Out of scope (v1)
+
+* **Implementar un motor RAG propio** — se incorpora CocoIndex (decisión D1/ADR-001).
+* **Sincronización/cloud/multi-usuario del índice** — el índice es local al vault (ADR-002).
+* **UI propia** (app, web, plugin gráfico) — la UI del usuario es Obsidian + TUI de OpenCode.
+* Indexar `01/02/03` por defecto; OCR de imágenes; plugin OpenCode sustituto del AGENTS.md (futuro).
+* Gestión de referencias tipo Zotero completo (eso lo aporta el flujo `/cite` + skills).
+
+## 6. Acceptance Criteria (textuales de docs/BACKLOG.md — contrato de v1)
+
+1. El vault de Obsidian funciona normalmente sin interferencias
+2. Los archivos nuevos se indexan automáticamente en menos de 30 segundos cuando Opencode invoca la función del MCP correspondiente
+3. Las búsquedas semánticas devuelven resultados relevantes en menos de 500ms
+4. El consumo de tokens por consulta es inferior a 2000 tokens (incluyendo contexto)
+5. Las respuestas del agente incluyen citas precisas a las fuentes originales
+6. El sistema puede manejar vaults de hasta 10,000 notas y 1,000 PDFs sin degradación de rendimiento
+7. Pueda procesar distintos formatos de texto, si no, utilizar el convertidor Markdown para que pueda manipularse adecuadamente.
+
+Verificación: metodología y fixtures en [docs/TRD.md](TRD.md); gate final en
+[docs/WORKFLOW.md](WORKFLOW.md) Phase 6 (E2E); enlaces de cobertura en [SPEC.md](../SPEC.md).
+
+## 7. Métricas de producto
+
+* Tiempo primera-instalación→primera-respuesta-citada < 15 min en HW mínimo.
+* % de respuestas sin cita estructural ≈ 0 (garantizado por contrato, no por prompt).
+* Re-index delta p95 < 30s; latencia `search` p95 < 500ms; tokens/consulta p95 < 2000.
+
+## 8. Riesgos principales (con dueños)
+
+| Riesgo | Mitigación | Dónde |
+| --- | --- | --- |
+| CocoIndex API inestable (early-stage) | pin de versión en pyproject; escape hatch documentado | ADR-001/004, spec-rag-engine |
+| Documentos binarios lentos de extraer | medidos aparte del criterio de 30s; el Δ de texto se publica separado del de documentos; TD-2 | TECH_DEBT |
+| Payload de skills inflado (208) | auditoría Anexo A → matriz de conflictos Phase 4 (blueprint) → aseo ejecutado en Phase 5 | spec-agent-workflow |
+| Usuario espera funcionamiento offline total | comunicación clara: primer arranque requiere internet; `--offline` solo con caché | TRD, wizard UX |

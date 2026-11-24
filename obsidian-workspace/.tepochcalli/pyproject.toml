@@ -1,0 +1,168 @@
+[project]
+name = "tepochcalli-flow"
+# Con guion a propósito: PEP 440 también acepta `0.1.0b1`, pero el comparador
+# semver del wizard (`domain/version.rs`) solo parsea `X.Y.Z[-pre]`.
+version = "0.1.0-beta.1"
+description = "Tepochcalli RAG flow: incremental CocoIndex pipeline for the Obsidian vault"
+requires-python = ">=3.12"
+dependencies = [
+    # Pins verified by the T1 spike on 2026-10-21 (uv 0.12.9, CPython 3.12.14).
+    # Extras are hyphenated; lancedb/pyarrow come from the [lancedb] extra
+    # (docs/TRD.md §4: never pin them directly -> avoid version divergence).
+    # [litellm] aporta la op `cocoindex.ops.litellm`; su pin de seguridad
+    # (GHSA-92x9-889m-jgmw) vive en [tool.uv] constraint-dependencies, no aquí.
+    "cocoindex[lancedb,sentence-transformers,litellm]==1.0.25",
+    # Torch: transitive via sentence-transformers, but declared direct so
+    # [tool.uv.sources] routes it to the CPU index below — uv ignores source
+    # pins on transitive deps (uv 0.12.9; astral-sh/uv#9446). PyPI's Linux
+    # wheels drag in the CUDA stack (19 pkgs, ~5 GB) we cannot use (E1: no
+    # sm_61 kernels). Direct pin keeps the T1-verified 2.14.1 (docs/TRD.md §3
+    # venv budget 1-2 GB). Source: https://docs.astral.sh/uv/concepts/indexes/
+    # #pinning-a-package-to-an-index
+    "torch==2.14.1",
+    # SDK MCP oficial v2 — spike T1 (2026-10-26, plan §3 «omen mayor»): en la v2
+    # `FastMCP` se renombró a `MCPServer` (`mcp.server.fastmcp.*` ->
+    # `mcp.server.mcpserver.*`; el import viejo lanza ModuleNotFoundError), el
+    # transporte se configura en `run()` y `ToolError` mete texto libre (no
+    # sirve para nuestro contrato) -> los handlers construyen `CallToolResult`
+    # explícito. Pin exacto: la API es reciente y volátil (plan §9).
+    "mcp==2.3.0",
+    # markitdown: único extractor documento→markdown del motor (ADR-011 D52/D53).
+    # Extras granulares en vez de [all] (sin audio/YouTube/Azure: −125 MB); los
+    # .doc/.ppt legacy y .rtf/.odt/.epub quedan fuera de alcance v1. Pin exacto:
+    # la API 0.x es inestable (plan §9 «La API de markitdown cambia»).
+    "markitdown[docx,pptx,xlsx,xls,pdf]==0.1.9",
+]
+
+[project.scripts]
+# Forma real de invocación: `python -m tepochcalli_mcp` (D17: el bit de
+# ejecución se pierde en NTFS/fuseblk). El console script existe porque el AC
+# de T1 lo exige; `opencode.json` NO lo usa.
+tepochcalli-mcp = "tepochcalli_mcp.__main__:main"
+
+# Only torch may resolve from this index; everything else stays on PyPI.
+# Source: https://docs.astral.sh/uv/guides/integration/pytorch/
+# #using-a-pytorch-index
+[tool.uv.sources]
+torch = { index = "pytorch-cpu" }
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
+
+# El extra `cocoindex[litellm]` declara `litellm>=1.81.0` SIN techo: sin esta
+# restricción, uv resolvería la serie comprometida. No es una dependencia: es
+# la restricción de resolución de TODA la gráfica (D56). GHSA-92x9-889m-jgmw:
+# la serie 1.107.0 publicó malware roba-credenciales; no re-abrir el rango
+# hasta que una serie se declare limpia.
+[tool.uv]
+constraint-dependencies = ["litellm>=1.106.2,<1.107.0"]
+
+[dependency-groups]
+dev = [
+    "mypy==1.20.2",
+    "pytest",
+    "coverage",
+    "ruff",
+    "pytest-xdist>=3.8.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+# ANN: strict type hints (docs/CODE_STYLE.md). D: docstrings. N: naming.
+# I: import sorting. B: bugbear. UP: pyupgrade. E/W/F: pycodestyle+pyflakes.
+select = ["E", "W", "F", "I", "ANN", "B", "D", "N", "UP"]
+# Conflicting pydocstyle pairs: keep D211 over D203, D212 over D213/D214.
+ignore = ["D203", "D213", "D214"]
+
+# Type checker del server + flow. `strict` es el CONTRATO (docs/CODE_STYLE.md):
+# no se relaja con `disallow_*_defs = false` ni con overrides por módulo. El
+# gate es `uv run python -m mypy` SIN argumentos (lee `files` de este
+# bloque) desde `.tepochcalli/` — local vía `just typecheck` y en CI; forma
+# `python -m` para no depender del bit exec del entrypoint en NTFS.
+# La superficie tipada pasa a `flow` + `mcp` con la creación del paquete
+# `tepochcalli_mcp` (Phase 2 T1; lo anunciaba docs/CODE_STYLE.md).
+[tool.mypy]
+python_version = "3.12"
+files = ["flow", "mcp"]
+strict = true
+# cocoindex, lancedb, docling y torch se publican sin stubs utilizables: sin
+# esto, `--strict` reportaría cada import de terceros como error no accionable.
+# Los bordes que sí quedan sin tipos se acotan con `cast`/`type: ignore` puntuales
+# (nunca un override de módulo completo).
+ignore_missing_imports = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+show_error_codes = true
+pretty = true
+
+[tool.pytest.ini_options]
+testpaths = [
+    "../../tests/unit",
+    "../../tests/integration",
+    "../../tests/e2e",
+    "../../tests/support",
+]
+# Suite de CORRECCION por defecto: los tests `slow` (mediciones de latencia)
+# quedan fuera. Es el filtro que docs/WORKFLOW.md §Phase 2/§Testing ya
+# prescribe para CI (`pytest -m "not slow"`); ver `tasks/todo.md` T11.
+# Para el día a día usa `python-test-unit` o `python-test-file`.
+#
+# Paralelismo pytest-xdist (R1 aprobada por el dueño 2026-11-16):
+#   - `-n 3` fijos, JAMÁS `auto` (auto = 12 y provocaría OOM): el host tiene
+#     15 GiB totales / ~8,2 GiB disponibles y cada worker que carga
+#     MiniLM/torch cuesta ~1,5-2 GiB ⇒ techo seguro = 4 workers; con 4 la
+#     corrida completa de 2026-11-16 tropezó (verify CLI agotó su timeout de
+#     300 s por contención/swap) ⇒ estable a 3.
+#   - `--dist loadfile` agrupa por fichero y garantiza que todo un fichero
+#     corre en UN solo worker (doc: pytest-xdist docs/distribution.rst):
+#     mantiene los fixtures module-scope con índices caros en un único proceso
+#     y evita re-indexar por worker.
+# Medido 2026-11-16: 914 tests en 2 corridas verdes (36:58 y 27:53) frente a
+# 45:25 en serial; unit (702) en 76 s. El coste sigue repartido en integración/
+# e2e, no concentrado: marcar subconjuntos no paga.
+# Doc: https://github.com/pytest-dev/pytest-xdist/blob/master/docs/distribution.rst
+addopts = "-m 'not slow' -n 3 --dist loadfile"
+markers = [
+    "slow: medicion de latencia/bench — no pertenece a la suite de correccion",
+]
+
+# Cobertura REAL: `parallel` + sitecustomize hacen que los subprocesos
+# (refresh, CLI de verify) escriban su propio `.coverage.<host>.<pid>`, que
+# `coverage combine` une. Sin esto el informe miente: mide solo el padre.
+#
+# `tepochcalli_mcp` entra en el gate con la Phase 2 (decisión del usuario
+# 2026-10-27): 1.760 LOC y los 4 handlers quedaban fuera de todo umbral, así
+# que `just coverage` podía seguir verde con el server sin ejercitar.
+[tool.coverage.run]
+branch = true
+parallel = true
+source = ["tepochcalli_flow", "tepochcalli_mcp"]
+
+[tool.coverage.report]
+show_missing = true
+# Gate: por debajo de 95 % la receta falla. Es el umbral acordado con el usuario.
+fail_under = 95
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+# Empaquetado de DOS paquetes en un solo pyproject (D-c, plan §2). Layout en
+# disco: `flow/tepochcalli_flow/` (Phase 1) + `mcp/tepochcalli_mcp/` (Phase 2).
+#
+# Corrección empírica del plan (spike T1, setuptools 84.2.1):
+# `build_py.get_package_dir()` devuelve VERBATIM el valor de la clave exacta
+# del paquete, así que el `package-dir` del plan (`"tepochcalli_mcp": "mcp"`)
+# habría puesto los ficheros del paquete en `mcp/__init__.py`, contradiciendo
+# el layout §5 del plan (`mcp/tepochcalli_mcp/…`). Solo uno de los dos podía
+# ser cierto: se conserva el LAYOUT del plan y se mapa el paquete a su
+# directorio literal `mcp/tepochcalli_mcp`. La raíz `""` sigue siendo `flow`
+# para que `tepochcalli_flow[.adapters]` resuelva igual que en Phase 1.
+[tool.setuptools]
+packages = ["tepochcalli_flow", "tepochcalli_flow.adapters", "tepochcalli_mcp", "tepochcalli_mcp.tools"]
+package-dir = {"" = "flow", "tepochcalli_mcp" = "mcp/tepochcalli_mcp"}

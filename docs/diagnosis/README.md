@@ -1,34 +1,44 @@
-# Technical Diagnoses
+# Diagnósticos técnicos
 
-This directory documents technical diagnoses for issues identified in the project. Each diagnosis follows a structured format for consistency and traceability.
+Este directorio contiene **solo diagnósticos de issues** del proyecto: análisis de causa raíz
+de bugs, incidentes y problemas técnicos, con un formato común para que sean trazables.
 
-## Purpose
+La **evidencia de aceptación** (mediciones E2E de los 7 criterios de [BACKLOG.md](../BACKLOG.md)) **no vive
+aquí**: se publica en [`docs/acceptance/`](../acceptance/README.md).
 
-- Capture root cause analysis for bugs, incidents, and technical issues
-- Provide a searchable record of past diagnoses for future reference
-- Track recurring patterns that may need automation or systemic fixes
+## Propósito
 
-## Index
+- Capturar el análisis de causa raíz de bugs, incidentes y problemas técnicos
+- Dejar un registro buscable de diagnósticos pasados para consulta futura
+- Detectar patrones recurrentes que merezcan automatización o una corrección sistémica
 
-| File | Issue | Date | Severity |
-|------|-------|------|----------|
-<!-- Add entries here as diagnoses are created -->
+## Índice
 
-## Workflow
+| Fichero | Issue | Fecha | Severidad |
+| --- | --- | --- | --- |
+| [fix01-conversor-satura-contexto-llm.md](fix01-conversor-satura-contexto-llm.md) | El conversor satura el contexto del LLM | 2026-10-30 | — |
 
-1. An issue is identified (user report, automated alert, code review)
-2. Run `/diagnosis` to analyze and document the root cause
-3. Run `/plan` to create an execution plan for the fix
-4. Update the diagnosis if the fix reveals additional insights
+<!-- Añadir aquí las entradas según se creen diagnósticos. La evidencia de aceptación
+     (Phase 6: criterios 1-7) no vive aquí: se publica en `docs/acceptance/`. -->
 
-## Template
+## Flujo de trabajo
 
-Use `diagnosis-template.md` as a starting point for new diagnoses.
+1. Se identifica un issue (reporte de usuario, alerta automatizada, revisión de código)
+2. Se ejecuta `/diagnosis` para analizar y documentar la causa raíz
+3. Se ejecuta `/plan` para crear el plan de ejecución de la corrección
+4. Se actualiza el diagnóstico si la corrección revela información adicional
 
-## Naming Convention
+## Plantilla
 
+Usa `diagnosis-template.md` como punto de partida para nuevos diagnósticos.
+
+## Convención de nombres
+
+<!-- markdownlint-disable MD040 -->
 ```
 fix<NNN>-<short-description>.md
 ```
+<!-- markdownlint-enable MD040 -->
 
-Where `<NNN>` is a sequential number (01, 02, ...) and `<short-description>` is a kebab-case summary of the issue.
+Donde `<NNN>` es un número secuencial (01, 02, ...) y `<short-description>` es un resumen
+kebab-case del issue.

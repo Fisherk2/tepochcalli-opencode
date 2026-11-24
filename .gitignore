@@ -104,7 +104,10 @@ build/
 
 # Python - Testing and Coverage
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
 .coverage
+.coverage.*
 htmlcov/
 coverage.xml
 *.cover
@@ -113,7 +116,8 @@ junit.xml
 .tox/
 
 # Configuration - Secrets and local files
-#.env*
+.env*
+!.env.example
 config/*secret*.yaml
 config/*local*.yaml
 *.secret.yaml
@@ -169,6 +173,12 @@ aws-config.json
 # SSH
 *.pem
 *.key
+id_rsa
+# Credential stores (auditoría de secretos 2026-11-23): aún no existen en el
+# repo; la regla por archivo cierra la trampa si aparecen por accidente.
+.pypirc
+.netrc
+credentials.json
 # GCP
 *.json.key
 service-account*.json
@@ -194,3 +204,20 @@ local.gradle
 *.override
 
 # To add a new rule: identify a specific category, avoid overly broad patterns
+
+# Benchmarks — artefactos de medición LOCALES (vaults y corpus copiados, 45M+):
+# no se versionan. El código de los benches vive en `tests/benchmarks/` y la
+# evidencia de cada medición en `docs/acceptance/`; aquí solo caen los datos de
+# trabajo que un bench materializa en disco.
+/benchmarks/*
+!/benchmarks/README.md
+
+# Tepochcalli runtime (specs/spec-vault-structure.md §Estrategia gitignore)
+# `venv/` (regla Python de arriba) ya cubre el entorno; estas reglas ancladas
+# cubren db/models/bin/config (que no estaban cubiertos a esa profundidad).
+# flow/, pyproject.toml, uv.lock y .python-version SON código fuente: se versionan.
+obsidian-workspace/.tepochcalli/venv/
+obsidian-workspace/.tepochcalli/db/
+obsidian-workspace/.tepochcalli/models/
+obsidian-workspace/.tepochcalli/bin/
+obsidian-workspace/.tepochcalli/config/

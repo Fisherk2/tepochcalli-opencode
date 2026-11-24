@@ -1,0 +1,18 @@
+Registro de campo de la brújula dorada
+
+Durante la travesía del paso Vellocino, el equipo anotó el rumbo magnético
+cada seis horas con la brújula de inclinación patrón. La aguja quedó
+desviada una fracción de grado tras el cruce del glaciar, y esa desviación
+se repite en todas las lecturas de la tarde, así que el cuaderno la trata
+como un sesgo del instrumento y no como una anomalía del terreno.
+
+El texto de este registro no lleva encabezados de ningún tipo: es prosa
+continua a propósito, para que su cita no pueda apoyarse en un heading y
+tenga que reproducirse contra el archivo original con offsets de carácter
+exactos. Cada medición de rumbo se contrastó después con la bitácora del
+segundo equipo, que remontaba el mismo paso por la ladera opuesta.
+
+La corrección final se aplicó sobre las tablas de rumbo antes de publicar
+el itinerario definitivo del paso, con la incertidumbre declarada en grados
+y la fecha de cada observación. Ninguna línea de este registro se reescribe
+en tiempo de corrida: los offsets de cita se miden sobre estos mismos bytes.

@@ -1,0 +1,140 @@
+# Release del wizard `tepochcalli` — SOLO el payload (desde `0.1.0-beta.1`).
+#
+# Este workflow NO construye binarios ni usa cargo-dist: el backend de
+# ADR-003 está retirado (ADR-014 / TD-51). El canal de instalación es la rueda
+# `uvx tepochcalli` (publicación manual pendiente, ver `wheels.yml`) y el
+# binario compilado desde el fuente baja su payload de ESTA release:
+# `releases/download/tepochcalli-v<ver>/tepochcalli-workspace-<ver>.tar.gz`
+# (`src/adapters/payload.rs`). El asset es lo único que el wizard necesita.
+#
+# El release se marca `--prerelease`: `releases/latest` NO apunta a él, así que
+# toda descarga DEBE fijar el tag `tepochcalli-v<ver>` (regla one-version).
+#
+# M6 (sin cambio): este workflow NUNCA se ha ejecutado en GitHub Actions.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "tepochcalli-v[0-9]*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag a publicar (p. ej. tepochcalli-v0.1.0-beta.1)"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ github.event.inputs.tag || github.ref_name }}
+
+jobs:
+  payload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Al configurar revisores en el repo, este environment convierte la
+    # publicación en un acto aprobado; hoy se crea al vuelo, sin bloquear.
+    environment: release
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Verifica tag, versión y changelog
+        run: |
+          set -euo pipefail
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          if [ "${TAG}" != "tepochcalli-v${version}" ]; then
+            echo "::error::tag '${TAG}' != 'tepochcalli-v${version}' (Cargo.toml)"
+            exit 1
+          fi
+          grep -q "^## \[${version}\]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md sin sección '## [${version}]'"; exit 1; }
+
+      # T19: asset versionado del payload + sidecar SHA-256 (one-version).
+      # El payload es el template COMPLETO (`obsidian-workspace/`) con la raíz
+      # del tar = contenido del vault, para que extraerlo en un directorio de
+      # vault reproduzca `<vault>/AGENTS.md`, `<vault>/opencode.json`, etc.
+      # F3 (`installer.rs`) funde este árbol en el vault y crea `00-resources/`
+      # + sus 2 placeholders por su cuenta (D22): esa carpeta NO viaja aquí.
+      # Exclusiones = solo artefactos de runtime/desarrollo (spec-vault-
+      # structure §gitignore): nunca se publican `venv/ db/ models/ bin/
+      # config/`, caches de Python ni `target/`.
+      - name: Empaqueta el payload versionado (+ sha256)
+        run: |
+          set -euo pipefail
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          asset="tepochcalli-workspace-${version}.tar.gz"
+          tar -czf "${RUNNER_TEMP}/${asset}" -C obsidian-workspace \
+            --exclude='./.obsidian' \
+            --exclude='./.tepochcalli/venv' \
+            --exclude='./.tepochcalli/db' \
+            --exclude='./.tepochcalli/models' \
+            --exclude='./.tepochcalli/bin' \
+            --exclude='./.tepochcalli/config' \
+            --exclude='./.tepochcalli/.venv' \
+            --exclude='./.tepochcalli/.uv-stage' \
+            --exclude='./.tepochcalli/.payload-stage' \
+            --exclude='./.tepochcalli/.install-intent' \
+            --exclude='./.tepochcalli/.coverage' \
+            --exclude='./.tepochcalli/.mypy_cache' \
+            --exclude='./.tepochcalli/.pytest_cache' \
+            --exclude='./.tepochcalli/.ruff_cache' \
+            --exclude='__pycache__' \
+            --exclude='*.pyc' \
+            --exclude='target' \
+            --sort=name --mtime='UTC 2020-01-01' --owner=0 --group=0 --numeric-owner \
+            .
+          (cd "${RUNNER_TEMP}" && sha256sum "${asset}" > "${asset}.sha256")
+          (cd "${RUNNER_TEMP}" && sha256sum -c "${asset}.sha256")
+          echo "PAYLOAD_ASSET=${asset}" >> "${GITHUB_ENV}"
+
+      # Guarda de contenido: un payload hueco falla la release en vez de
+      # publicarse (el merge de F3 no puede inventar el workflow de agentes).
+      # Las entradas usan el prefijo `./` que imprime `tar -tzf` para
+      # `-C obsidian-workspace .`; las de directorio terminan en `/`.
+      - name: Verifica el contenido del payload
+        run: |
+          set -euo pipefail
+          listing="${RUNNER_TEMP}/payload-listing.txt"
+          tar -tzf "${RUNNER_TEMP}/${PAYLOAD_ASSET}" > "${listing}"
+          for path in \
+            './AGENTS.md' \
+            './opencode.json' \
+            './01-tasks/' \
+            './.opencode/agents/' \
+            './.opencode/commands/' \
+            './.opencode/skills/' \
+            './.tepochcalli/pyproject.toml' \
+            './.tepochcalli/uv.lock' \
+            './.tepochcalli/flow/' \
+            './.tepochcalli/mcp/'; do
+            grep -qx -- "${path}" "${listing}" \
+              || { echo "::error::payload sin ${path} (${PAYLOAD_ASSET})"; exit 1; }
+          done
+          if grep -qE '(^\./)\.tepochcalli/(venv|db|models|bin|config)/' "${listing}"; then
+            echo "::error::payload con artefactos de runtime (${PAYLOAD_ASSET})"
+            exit 1
+          fi
+          echo "payload OK: $(wc -l < "${listing}") entradas en ${PAYLOAD_ASSET}"
+
+      - name: Crea o reutiliza el release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          gh release view "${TAG}" >/dev/null 2>&1 \
+            || gh release create "${TAG}" --prerelease --title "${TAG}" \
+              --notes "Beta ${version} del wizard tepochcalli. Ver CHANGELOG.md."
+
+      - name: Sube el asset
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release upload "${TAG}" "${RUNNER_TEMP}/${PAYLOAD_ASSET}" \
+            "${RUNNER_TEMP}/${PAYLOAD_ASSET}.sha256" --clobber

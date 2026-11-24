@@ -1,0 +1,96 @@
+{
+  "$schema": "https://opencode.example.test/config.json",
+  "formatter": false,
+  "model": "acme/fake-model-9",
+  "default_agent": "alpha",
+  "permissions": [
+    {
+      "action": "bash",
+      "resource": "*",
+      "effect": "ask"
+    },
+    {
+      "action": "external_directory",
+      "resource": "/opt/fake-tools/*",
+      "effect": "allow"
+    }
+  ],
+  "agents": {
+    "alpha": {
+      "model": "acme/fake-model-9",
+      "color": "#123456",
+      "request": {
+        "body": {
+          "temperature": 0.2
+        }
+      },
+      "steps": 42,
+      "permissions": [
+        {
+          "action": "edit",
+          "resource": "fake-src/*",
+          "effect": "allow"
+        }
+      ]
+    },
+    "beta": {
+      "model": "acme/fake-model-7",
+      "color": "#abcdef",
+      "request": {
+        "body": {
+          "temperature": 0.7,
+          "top_p": 0.9
+        }
+      },
+      "steps": 12,
+      "permissions": [
+        {
+          "action": "bash",
+          "resource": "fake-git *",
+          "effect": "ask"
+        }
+      ]
+    }
+  },
+  "mcp": {
+    "servers": {
+      "markitdown": {
+        "type": "local",
+        "command": [
+          "uvx",
+          "markitdown-mcp"
+        ]
+      },
+      "excel": {
+        "type": "local",
+        "command": [
+          "uvx",
+          "fake-excel-server",
+          "stdio"
+        ],
+        "disabled": true
+      },
+      "tepochcalli-rag": {
+        "type": "local",
+        "command": [
+          "old"
+        ],
+        "environment": {
+          "INDEXER_DIR": "fake-notes",
+          "TEPOCHCALLI_TOP_K": "7"
+        }
+      },
+      "weather": {
+        "type": "remote",
+        "url": "https://weather.example.test/mcp"
+      }
+    }
+  },
+  "references": {
+    "handbook": {
+      "repository": "acme/fake-handbook",
+      "branch": "trunk",
+      "description": "Fabricated reference for the merge test"
+    }
+  }
+}

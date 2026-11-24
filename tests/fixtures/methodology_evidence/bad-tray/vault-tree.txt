@@ -1,0 +1,11 @@
+01-tasks/outline.md
+01-tasks/research/evidence.md
+02-drafts/rubric.md
+02-drafts/draft-revA.md
+02-drafts/draft-revB.md
+02-drafts/draft.md
+03-citations/bibliography.md
+04-review/validation.md
+05-outputs/comparison.csv
+05-outputs/fotosintesis.md
+05-outputs/transform-manifest.md

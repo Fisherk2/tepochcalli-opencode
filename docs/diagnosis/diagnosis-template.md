@@ -26,7 +26,7 @@ The underlying cause of the issue (not just where it manifests).
 ## Impact
 
 | Dimension | Assessment |
-|-----------|------------|
+| ----------- | ------------ |
 | Users affected | [all / subset / none] |
 | Functionality | [broken / degraded / cosmetic] |
 | Data integrity | [at risk / safe / unknown] |
@@ -56,7 +56,7 @@ If a temporary workaround exists, document it here with a ⚠️ banner:
 ## Recurrences
 
 | Date | Similar Issue | Variation |
-|------|---------------|-----------|
+| --- | --- | --- |
 | YYYY-MM-DD | Link | Description |
 
 _If this pattern occurs 3+ times, consider suggesting automation._

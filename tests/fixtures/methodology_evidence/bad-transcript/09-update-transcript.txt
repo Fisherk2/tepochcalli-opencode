@@ -1,0 +1,6 @@
+# 09 /update — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.index_refresh {}
+result: {scanned: 3, indexed: 0, skipped: 3}
+tool: tepochcalli-rag.search {"query": "clorofila a 430 662", "top_k": 8}
+tool: read 02-drafts/draft-revA.md
+tool: write 02-drafts/draft-revB.md

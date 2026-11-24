@@ -1,0 +1,4 @@
+# 06 /draft — transcript sintético (no es una corrida real)
+tool: read 00-resources/fotosintesis.md
+tool: tepochcalli-rag.search {"query": "clorofila a absorción 430 662", "top_k": 8}
+tool: write 02-drafts/draft.md

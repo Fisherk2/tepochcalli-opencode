@@ -1,0 +1,73 @@
+# Publicación de la rueda PyPI del wizard `tepochcalli` (ADR-014: `uvx tepochcalli`).
+#
+# Este workflow SOLO construye y publica la rueda en PyPI. El release de GitHub
+# del payload vive en `release.yml` (workflow aparte): aquí no se crea ni se
+# sube ningún asset de release.
+#
+# PREPARADO PERO NUNCA EJECUTADO en este beta (TD-71 / TD-72): el dueño creó
+# el secreto `PYPI_API_TOKEN` y el environment `release`, pero no se ha subido
+# nada a PyPI. El disparador es EXCLUSIVAMENTE el tag `tepochcalli-v<versión>`;
+# sin ese tag no hay publicación (no hay disparadores manuales ni de PR).
+#
+# Autenticación por token (`__token__` + `PYPI_API_TOKEN`), no Trusted
+# Publishing: sin OIDC y con las atestaciones desactivadas.
+
+name: Publish PyPI wheel
+
+on:
+  push:
+    tags:
+      - "tepochcalli-v*"
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: release
+    if: startsWith(github.ref, 'refs/tags/tepochcalli-v')
+    env:
+      TAG: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Instala uv (no viene en `ubuntu-latest`)
+        run: pipx install uv
+
+      - name: Verifica tag, versión y changelog
+        run: |
+          set -euo pipefail
+          version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          if [ "${TAG}" != "tepochcalli-v${version}" ]; then
+            echo "::error::tag '${TAG}' != 'tepochcalli-v${version}' (Cargo.toml)"
+            exit 1
+          fi
+          grep -q "^## \[${version}\]" CHANGELOG.md \
+            || { echo "::error::CHANGELOG.md sin sección '## [${version}]'"; exit 1; }
+
+      - name: Construye la rueda (maturin 1.15.0 fijado)
+        run: |
+          set -euo pipefail
+          cd crates/tepochcalli
+          uvx --from 'maturin[patchelf]==1.15.0' maturin build --release --out dist
+
+      - name: Ejecuta la rueda antes de subirla
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Versión de `Cargo.toml`, nunca un literal: one-version rule.
+          version="$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/tepochcalli/Cargo.toml | head -1)"
+          out="$(uvx --from crates/tepochcalli/dist/*.whl tepochcalli --version)"
+          test "${out}" = "tepochcalli ${version}" \
+            || { echo "FALLO: '${out}' != 'tepochcalli ${version}'" >&2; exit 1; }
+          echo "OK: ${out}"
+
+      - name: Publica la rueda en PyPI
+        uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          packages-dir: crates/tepochcalli/dist/
+          attestations: false

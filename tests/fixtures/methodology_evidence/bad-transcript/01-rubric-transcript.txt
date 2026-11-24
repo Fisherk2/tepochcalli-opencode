@@ -1,0 +1,5 @@
+# 01 /rubric — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.search {"query": "fotosintesis fase luminosa ciclo calvin", "top_k": 5}
+result: 4 chunks; 00-resources/fotosintesis.md » Fase luminosa (chars 0-420)
+tool: question {"header": "Alcance", "question": "¿Fijo tres preguntas de investigación?"}
+tool: write 01-tasks/rubric.md

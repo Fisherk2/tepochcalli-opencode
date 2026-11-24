@@ -1,0 +1,24 @@
+name: Feature request
+description: Suggest an improvement or new capability for Tepochcalli.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What pain point or gap does this address? Why does it matter?
+      placeholder: As a researcher, I want ... so that ...
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposal
+      description: What should the solution look like? Include the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other options you thought about, and why they fall short.

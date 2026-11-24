@@ -1,0 +1,6 @@
+# 02 /research — transcript sintético (no es una corrida real)
+tool: tepochcalli-rag.search {"query": "fotorrespiración C4 CAM", "top_k": 8}
+result: 2 chunks; 00-resources/fotosintesis.md » Adaptaciones (chars 1200-1580)
+tool: read 00-resources/fotosintesis.md
+tool: websearch {"query": "RuBisCO kinetic parameters"}
+tool: write 01-tasks/research/evidence.md
