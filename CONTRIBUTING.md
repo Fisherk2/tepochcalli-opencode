@@ -43,8 +43,11 @@ graph TD
 ```
 
 * **Nunca** se hace PR directo a `main`: `main` solo recibe la promoción desde `develop`.
-* `ci.yml` dispara en `pull_request` (todas las ramas) y en `push` solo a `develop`/`main`
-  (los workflows `phase1.yml`/`phase3.yml` quedaron en `workflow_dispatch` manual).
+* `ci.yml` dispara en `pull_request` (todas las ramas) y en `push` solo a `develop`/`main`.
+  Es el **único** gate del repo: los dos workflows provisionales creados durante el
+  desarrollo se eliminaron el 2026-11-24 (nunca corrieron en GitHub Actions); sus jobs
+  `network`/`smoke` siguen disponibles solo como recetas locales (`just rust-test-nonet`,
+  `just rust-smoke`).
 
 ## 3. Flujos paso a paso
 

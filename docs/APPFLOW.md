@@ -101,7 +101,7 @@ etiqueta `declarado`).** El journey anterior asume Linux o macOS. En el repo exi
 `x86_64-pc-windows-msvc` (`dist.toml` y `release.yml`), el `install.ps1`, el layout
 `venv/Scripts/python.exe` (D20) y las ramas `cfg!(windows)` del wizard, pero **nada de ese camino
 se ejecutó nunca en Windows**: ni el instalador, ni el smoke path-5, ni la matriz CI
-(`phase3.yml` es ubuntu+macos; `release.yml` no ha corrido — M6). **Consecuencia para el
+(la matriz era ubuntu+macos; `release.yml` no ha corrido — M6). **Consecuencia para el
 usuario:** puede instalarlo en Windows por ese camino, pero nadie ha verificado que funcione; si
 falla, no hay soporte comprometido.
 La coletilla «verificación pendiente» cae con un smoke path-5 (`--non-interactive --skip-model`)

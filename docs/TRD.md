@@ -26,7 +26,7 @@ con verificación pendiente** (etiqueta `declarado`). Lo que **sí** existe en e
 `x86_64-pc-windows-msvc` (`crates/tepochcalli/dist.toml` y el job de `release.yml`), el
 `install.ps1`, el layout de venv `Scripts/` con `venv/Scripts/python.exe` (D20) y las ramas
 `cfg!(windows)` del wizard. Lo que **nunca se ejecutó**: ni el instalador en Windows, ni el smoke
-path-5, ni la matriz CI (`phase3.yml` corre ubuntu+macos; `release.yml` jamás ha corrido — M6).
+path-5, ni la matriz CI (era ubuntu+macos; `release.yml` jamás ha corrido — M6).
 **Consecuencia para el usuario:** puede instalarlo en Windows por ese camino, pero nadie ha
 verificado que funcione; si falla, **no hay soporte comprometido**. **La coletilla «verificación
 pendiente» cae** con un smoke path-5 (`--non-interactive --skip-model`) ejecutado en un runner

@@ -21,9 +21,11 @@
 # aprobado — el presupuesto es duro, no maquillado).
 #
 # Triggers: `pull_request` (todas las ramas) + `push` SOLO a develop/main — así
-# un PR no dispara dos veces (el flaw de phase1/phase3: push + pull_request en
-# cada workflow = 4 corridas por PR). `phase1.yml`/`phase3.yml` pasaron a
-# `workflow_dispatch` el 2026-11-23 en favor de este fichero.
+# un PR no dispara dos veces (push + pull_request en cada workflow = 4 corridas
+# por PR). Este fichero es el ÚNICO gate del repo: los dos workflows
+# provisionales creados durante el desarrollo se eliminaron el 2026-11-24
+# (nunca corrieron en GitHub Actions); sus jobs `network`/`smoke` siguen
+# disponibles como recetas locales (`just rust-test-nonet`, `just rust-smoke`).
 #
 # `just` NO viene preinstalado en ubuntu-latest: se instala explícitamente en
 # cada job que lo usa (binario musl precompilado, ver paso `Instala just`).
@@ -37,7 +39,7 @@ on:
       - develop
       - main
 
-# Cancela corridas superseded del mismo ref (espejo de phase1.yml:44-46).
+# Cancela corridas superseded del mismo ref del workflow.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -46,7 +48,7 @@ permissions:
   contents: read
 
 env:
-  # Misma toolchain que phase3.yml:41 y el desarrollo local (verificada con `just rust-ci`).
+  # Toolchain pineada = la del desarrollo local (verificada con `just rust-ci`).
   RUST_TOOLCHAIN: 1.99.1
 
 jobs:
@@ -74,7 +76,8 @@ jobs:
     timeout-minutes: 10
     defaults:
       run:
-        # `shell: bash` = `bash --noprofile --norc -eo pipefail` (estilo phase3.yml).
+        # `shell: bash` = `bash --noprofile --norc -eo pipefail` (falla en el
+        # primer error de cualquier paso `run`).
         shell: bash
     env:
       # uv 0.12.9 ignora [tool.uv] project-environment: solo env var (Justfile:42).
@@ -82,7 +85,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      # setup-uv instala uv 0.12.9 (misma spec pineada de phase1.yml:63-69) y
+      # setup-uv instala uv 0.12.9 (misma versión pineada en el Justfile) y
       # cachea ~/.cache/uv: `enable-cache` es "auto" por defecto (action.yml de
       # esa revisión) ⇒ activo en pull_request/push sobre runners de GitHub.
       - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
@@ -94,8 +97,8 @@ jobs:
         # https://github.com/astral-sh/setup-uv#do-i-still-need-actionssetup-python-alongside-setup-uv
         run: uv python install 3.12
 
-      # Espejo exacto de phase1.yml:81-89: `~` NO se expande en `env:`, por eso
-      # se exporta vía $GITHUB_ENV con $HOME resuelto por el shell.
+      # `~` NO se expande en `env:` de GitHub Actions, por eso se exporta vía
+      # $GITHUB_ENV con $HOME resuelto por el shell.
       - name: Fija los caches de modelo FUERA del repo
         run: |
           set -euo pipefail
@@ -105,9 +108,8 @@ jobs:
             echo "DOCLING_CACHE_DIR=${HOME}/.cache/docling"
           } >> "${GITHUB_ENV}"
 
-      # Claves y restore-keys idénticos a phase1.yml:102-110 (mismo key
-      # basado en uv.lock + id del modelo; restore-keys reutiliza blobs previos
-      # ante un bump de lock — son content-addressed).
+      # Key basado en uv.lock + id del modelo; restore-keys reutiliza blobs
+      # previos ante un bump de lock (son content-addressed).
       - name: Cache de modelos (HF + Docling) por revisión pineada
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
@@ -161,8 +163,13 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      # Espejo exacto de phase3.yml:57-61 (clippy + rustfmt son los componentes
-      # que exigen `rust-ci`).
+      # Toolchain 1.99.1 pineada con los componentes que exige `just rust-ci`
+      # (clippy + rustfmt). Forma coma — `--component` es `Vec<String>` con
+      # `value_delimiter = ','`, es decir UN valor por cada aparición del flag:
+      # un `rustfmt` separado por espacio cae como argumento posicional de
+      # toolchain. Error real corregido en `63ca13a` (2026-11-23):
+      # `invalid value 'rustfmt' for '[TOOLCHAIN]...': invalid toolchain name:
+      # 'rustfmt'` ⇒ forma correcta `--component clippy,rustfmt`.
       - name: Instala la toolchain Rust pineada
         run: |
           set -euo pipefail
@@ -186,7 +193,7 @@ jobs:
           "${HOME}/.local/bin/just" --version
 
       # Mitigación crítica del presupuesto: sin esta cache `rust-ci` compilaba
-      # TODO en frío (phase3.yml nunca tuvo cache de cargo). Registry + git de
+      # TODO en frío. Registry + git de
       # cargo y CARGO_TARGET_DIR (default del Justfile:304, el mismo que usa
       # `just rust-ci` sin argumentos) rotan con Cargo.lock; restore-keys
       # reutiliza los artefactos previos ante un bump de lock.

@@ -21,7 +21,7 @@ a mano fuera de la receta es la fuente de entornos dobles. El
 gate de tipos es **real y estricto**: `just typecheck` corre `mypy` con `strict = true` fijado en
 `[tool.mypy]` de su
 `pyproject.toml` — sin `[[tool.mypy.overrides]]` para el código propio ni flags de relajación, y en
-CI entre `ruff format --check` y `pytest` (`.github/workflows/phase1.yml`). Superficie tipada:
+CI entre `ruff format --check` y `pytest` (`.github/workflows/ci.yml`). Superficie tipada:
 **`flow/` + `mcp/`** (`files = ["flow", "mcp"]` — ampliada en Phase 2 T1 con la creación del
 paquete `tepochcalli_mcp`), y los tests viven fuera de este proyecto uv (no se tipan). Los bordes de terceros sin
 anotaciones útiles se acotan con `cast` o `# type: ignore[código]` puntual y comentado — nunca con

@@ -239,7 +239,7 @@ Esta spec describe un wizard que **declara** un target de Windows (`x86_64-pc-wi
 `dist.toml` y en el job de `release.yml`, un `install.ps1`, el layout de venv
 `venv/Scripts/python.exe` (D20) y ramas `cfg!(windows)`. Eso es **código declarado**: **nada de
 ese camino se ejecutó nunca en Windows** — ni el instalador, ni el smoke path-5, ni la matriz CI
-(`phase3.yml` es ubuntu+macos y `release.yml` nunca corrió — M6 en `docs/TECH_DEBT.md`). Los
+(la matriz era ubuntu+macos y `release.yml` nunca corrió — M6 en `docs/TECH_DEBT.md`). Los
 artefactos y su estado uno a uno: `docs/TECH_DEBT.md` §D-b; la decisión propagada: `docs/TRD.md`
 §2 y `docs/APPFLOW.md` §5.
 

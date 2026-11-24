@@ -137,7 +137,7 @@ quedaron cubiertas con tests de caracterización.
 
 | ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
 | --- | --- | --- | --- | --- |
-| **Q-1** | `.github/workflows/phase1.yml` **no ejecuta el gate de cobertura** que `just ci` sí exige | Rito `/test` (2026-10-27) | Local y CI divergen: una regresión de cobertura no la vería GitHub. Se suma a M6 (Actions nunca ha corrido) | Añadir el paso `coverage` al job `mcp` cuando se toque CI; hoy invisible porque Actions nunca corrió |
+| **Q-1** | `.github/workflows/ci.yml` **no ejecuta el gate de cobertura** que `just ci` sí exige | Rito `/test` (2026-10-27) | Local y CI divergen: una regresión de cobertura no la vería GitHub. Se suma a M6 | Añadir el paso `coverage` al job `python` de `ci.yml` cuando se toque CI; hoy la cobertura es solo local |
 | **Q-2** | El 95 % global tiene **4 puntos de margen** y todo lo que queda sin cubrir es de **Phase 1**: `flow/refresh_lock.py` **83 %** (30-32, 42-45, 70), `verify.py` **94 %** (111-116, 134→exit), `source.py` **96 %** (339, 352-353, 417), `app.py:383`, y `mcp/__main__.py` **91 %** (rama `24->exit`) | Medición 2026-10-27 (414 tests) | Cualquier línea nueva sin test en `mcp/` o `flow/` tumba el gate recién atado a `just ci` | Cubrir las ramas del lock (concurrencia real) y de `verify.py` (ligado a D6-3) en Phase 6 |
 | **Q-3** | El caso «`uri` inválida **y** `provider=none` a la vez» no tiene test explícito: la precedencia `VALIDATION_ERROR > E_NO_EMBEDDER` es estructural (orden de código), no afirmada | Fase verde del rito | Un reordenamiento futuro del handler podría invertir la precedencia sin que nada falle | Test de precedencia por pares cuando se toque `add_source` de nuevo (el patrón ya existe en `test_mcp_e_dialect.py`) |
 
@@ -304,11 +304,13 @@ Ninguna asciende a blocker de Phase 6.
   (TOCTOU symlink, documentada en SECURITY); ninguna otra está abierta — la deuda nueva no
   queda registrada (offsets_ref aditivo, pins de revisión, exit codes, probe de permisos)
   porque el remediador se aplicó en el mismo pase.
-* **Nota T9 (2026-10-27):** `.github/workflows/phase1.yml` conserva el nombre
+* **Nota T9 (2026-10-27):** el workflow de CI conservaba el nombre
   histórico de Phase 1; con el job `mcp` (Phase 2 T9 — gate `mypy flow+mcp` del
-  server `tepochcalli_mcp`) el fichero cubre ya dos fases. Renombrarlo
-  (p. ej. `quality.yml`) es deuda menor sin impacto funcional — los gates
-  dentro están documentados en su propia cabecera; decisión para T10.
+  server `tepochcalli_mcp`) el fichero cubría ya dos fases. Renombrarlo
+  (p. ej. `quality.yml`) era deuda menor sin impacto funcional — los gates
+  dentro estaban documentados en su propia cabecera; decisión para T10.
+  **Sin efecto desde 2026-11-24:** el fichero se eliminó como provisional y
+  el gate vive ahora en `.github/workflows/ci.yml`.
 * **Decisión T10 (2026-10-27):** el fichero **no se renombra** — `.github/` está vedado en T10
   y el nombre histórico no rompe nada (los gates están documentados en su cabecera). Queda como
   deuda menor: renombrar en la siguiente tarea que toque CI.
@@ -344,8 +346,8 @@ verificación de T20: nada aquí es deuda inventada en T20.
 
 | ID | Deuda | Origen | Impacto si se pospone | Plan de pago |
 | --- | --- | --- | --- | --- |
-| **M6** | **CI y release nunca ejecutados**: `.github/workflows/phase3.yml` y `release.yml` existen y están revisados a mano (acciones pineadas), pero **ningún workflow ha corrido nunca** — ni `phase3.yml` (matrix ubuntu+macos, smoke path-5), ni `release.yml` (`dist` genera `install.sh`/`install.ps1` oficiales); no hay release publicada ni asset `tepochcalli-workspace-<ver>.tar.gz` real; los installers de referencia viven en `crates/tepochcalli/installers/` | T18/T19 (D-a: entrega sin publicar) | Se declara "matrix verde" o "release lista" sin evidencia; el primer `dist build` real puede fallar (divergencias deliberadas vs `dist init`, `allow-dirty = ["ci"]`) | Ejecutar `phase3.yml` + publicar una release de prueba en Phase 6 (o antes si se necesita el oneliner); reconciliar con `cargo dist generate --check` cuando `dist` esté instalado |
-| **D-b** | **Windows fuera de la matriz CI y sin probar**: el target `x86_64-pc-windows-msvc` está declarado en `dist.toml` para que exista el instalador PowerShell, pero `phase3.yml` solo corre ubuntu+macos; el comando del MCP portable por SO (`venv/Scripts/python.exe`) y `install.ps1` **nunca se ejecutaron en Windows** | T18 (D-b) | Rutas, quoting y `Scripts/python.exe` pueden fallar solo en Windows sin que CI lo vea | **CERRADA 2026-11-13 — soportado con verificación pendiente (Phase 6, T13, firmada por el dueño):** Windows se documenta como **soportado con verificación pendiente** con etiqueta `declarado` (cero ejecuciones en Windows: ver §D-b). La coletilla cae con un smoke path-5 en un runner `windows-latest` sobre una release real, el layout `Scripts/` verificado, la evidencia archivada y una fila en la matriz CI |
+| **M6** | **Release nunca ejecutada** (la parte de CI quedó **resuelta 2026-11-24**): `release.yml` existe y está revisado a mano (acciones pineadas), pero **nunca corrió** (`dist` genera `install.sh`/`install.ps1` oficiales); no hay release publicada ni asset `tepochcalli-workspace-<ver>.tar.gz` real; los installers de referencia viven en `crates/tepochcalli/installers/`. **CI:** los dos workflows provisionales se eliminaron el 2026-11-24 y el gate es `.github/workflows/ci.yml`, **verde en GitHub Actions** (run `45316624910`, 3/3 jobs, todos <10 min, 2026-11-24) | T18/T19 (D-a: entrega sin publicar) | Se declara "release lista" sin evidencia; el primer `dist build` real puede fallar (divergencias deliberadas vs `dist init`, `allow-dirty = ["ci"]`) | Publicar una release de prueba en Phase 6 (o antes si se necesita el oneliner); reconciliar con `cargo dist generate --check` cuando `dist` esté instalado |
+| **D-b** | **Windows fuera de la matriz CI y sin probar**: el target `x86_64-pc-windows-msvc` está declarado en `dist.toml` para que exista el instalador PowerShell, pero la matriz CI solo corría ubuntu+macos (workflow eliminado el 2026-11-24); el comando del MCP portable por SO (`venv/Scripts/python.exe`) y `install.ps1` **nunca se ejecutaron en Windows** | T18 (D-b) | Rutas, quoting y `Scripts/python.exe` pueden fallar solo en Windows sin que CI lo vea | **CERRADA 2026-11-13 — soportado con verificación pendiente (Phase 6, T13, firmada por el dueño):** Windows se documenta como **soportado con verificación pendiente** con etiqueta `declarado` (cero ejecuciones en Windows: ver §D-b). La coletilla cae con un smoke path-5 en un runner `windows-latest` sobre una release real, el layout `Scripts/` verificado, la evidencia archivada y una fila en la matriz CI |
 | **F-T20** | **Spec del wizard sin probar contra el gate de Phase 6**: `spec-installer-wizard.md` pasa a Approved con este FTR, pero sus afirmaciones de escala y UX (VM limpia en 3 plataformas, matriz de 5 caminos del menú, tiempos de instalación) no se han ejecutado contra el gate de aceptación (tabla §6.3 de WORKFLOW) | T20 (cierre documental) | La spec Approved se lee como "probada" cuando solo está "implementada + testeada en local" | Phase 6 ejecuta la tabla §6.3 contra el wizard real; divergencias ⇒ enmienda de spec (sin re-editar lo Accepted: ADR o nota de mapeo) |
 
 ### D-b — estado de soporte de Windows en v1 (2026-11-13)
@@ -365,8 +367,8 @@ la tabla se ejecutó nunca en Windows.
 | `install.ps1` | Script escrito a mano (71 líneas) con verificación SHA-256 antes de ejecutar | `crates/tepochcalli/installers/install.ps1` | **nunca ejecutado**: solo un pin estático del texto (`tests/e2e_installers.rs:332-357`) |
 | Layout de venv `Scripts/` (D20) | `venv_python()` y `mcp_python_command_for(windows)` | `src/application/installer.rs:317,663` · `src/application/phase8.rs:91-99` | **código + test de cadena**: `tests/int_phase_f8_mcp_merge.rs:471-482` compara literales en Linux; el layout real de Windows no se creó nunca |
 | Bootstrap `uv.exe` + `uv venv` en Windows | Ramas `cfg!(windows)` en el wizard | `src/application/installer.rs:300-306` | **nunca ejecutado** en Windows |
-| Matriz CI | `phase3.yml` corre `ubuntu-latest` y `macos-latest` | `.github/workflows/phase3.yml:50` | **fuera por diseño**; nunca se amplió a Windows |
-| Smoke path-5 (instalación real no interactiva) en Windows | No existe | `grep windows .github/workflows/phase3.yml` → 0 jobs | **no existe** |
+| Matriz CI | Workflow provisional eliminado 2026-11-24 (corría `ubuntu-latest` y `macos-latest`) | §M6 · run `45316624910` | **fuera por diseño**; nunca se amplió a Windows |
+| Smoke path-5 (instalación real no interactiva) en Windows | No existe | nunca hubo job Windows en el gate (workflow eliminado 2026-11-24) | **no existe** |
 
 **Consecuencia para el usuario:** puede instalar en Windows por ese camino, pero **nadie ha
 verificado que funcione**: ni el `install.ps1` del repo ni el target de `dist.toml` cambian eso
@@ -380,10 +382,10 @@ de **soporte**, no un gate de runtime.
 1. Un **smoke path-5** (`tepochcalli install --non-interactive --skip-model`) ejecutado en un
    runner `windows-latest` **sobre una release real**, con `install.ps1` invocado de verdad.
 2. Verificar el layout `venv/Scripts/python.exe` (D20) y el `mcp.servers` resultante en ese
-   vault instalado (el mismo criterio que el smoke de `phase3.yml`: `00-resources/` y una
+   vault instalado (el mismo criterio del smoke path-5: `00-resources/` y una
    entrada `mcp.servers` válida).
 3. Archivar la evidencia (transcript + árbol del vault) y **entonces** añadir `windows-latest`
-   como fila de la matriz de `phase3.yml`, de modo que el soporte quede gated por CI y no por prosa.
+   como fila de la matriz en `.github/workflows/ci.yml`, de modo que el soporte quede gated por CI y no por prosa.
 
 Sin esos tres pasos, Windows sigue siendo `declarado` y la coletilla se mantiene.
 

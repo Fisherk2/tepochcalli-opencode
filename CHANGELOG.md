@@ -349,7 +349,7 @@ Windows sigue sin probar. Detalle en `docs/WORKFLOW.md` §Phase 3.5.
   obligatorio, índice viejo servible, auto-GC con `--keep-previous`), `tepochcalli
   reindex --confirm` (cierra TD-3) y `tepochcalli uninstall` (solo `.tepochcalli/`).
 - Distribución: `dist.toml` (5 targets, installers shell+powershell), workflows
-  `release.yml` + `phase3.yml` (ubuntu+macos; Windows fuera de la matriz — deuda M6/D-b),
+  de release y matriz CI (ubuntu+macos; Windows fuera de la matriz — deuda M6/D-b),
   installers de referencia en `crates/tepochcalli/installers/`, regla one-version
   (el binario instala siempre el payload de su propia versión, verificado por SHA-256).
   **No verificado**: ningún workflow ha corrido, no hay release publicada, Windows
