@@ -7,8 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Sin cambios todavía
-
 ## [0.1.0-beta.1] - 2026-11-23
 
 ### Added
@@ -434,33 +432,6 @@ Windows sigue sin probar. Detalle en `docs/WORKFLOW.md` §Phase 3.5.
 - **C3 y C6:** benchmarks manuales, fuera del gate.
 
 ---
-
-## Project Information
-
-### Repository
-
-- **Name**: [Project Name]
-- **Description**: [Project Description]
-- **Repository**: <https://github.com/[username]/[repository-name]>
-- **License**: MIT License
-
-### Technology Stack
-
-...
-
-### Related Documentation
-
-...
-
-### Update Instructions
-
-#### From Previous Versions
-
-...
-
-#### For Future Versions
-
-...
 
 ### Contributing to the CHANGELOG
 
