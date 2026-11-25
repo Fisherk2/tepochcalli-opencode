@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import tomllib
 from pathlib import Path
 
 import tepochcalli_flow
+import tepochcalli_mcp
 
 PAYLOAD = Path(__file__).resolve().parents[2] / "obsidian-workspace" / ".tepochcalli"
 
@@ -17,17 +19,11 @@ def test_package_imports_and_exports_version() -> None:
 
 
 def test_payload_and_mcp_versions_match() -> None:
-    """The payload version and `tepochcalli_mcp.__version__` cannot diverge."""
-    version = next(
-        line.split('"')[1]
-        for line in (PAYLOAD / "pyproject.toml").read_text(encoding="utf-8").splitlines()
-        if line.startswith("version = ")
-    )
-    declared = next(
-        line.split('"')[1]
-        for line in (PAYLOAD / "mcp" / "tepochcalli_mcp" / "__init__.py")
-        .read_text(encoding="utf-8")
-        .splitlines()
-        if line.startswith("__version__")
-    )
-    assert declared == version
+    """Ambas versiones importadas coinciden con `[project].version` del payload."""
+    with (PAYLOAD / "pyproject.toml").open("rb") as fh:
+        version = tomllib.load(fh)["project"]["version"]
+    assert tepochcalli_flow.__version__ == version
+    assert tepochcalli_mcp.__version__ == version
+    for package in ("flow", "mcp"):
+        source = PAYLOAD / package / f"tepochcalli_{package}" / "__init__.py"
+        assert '__version__ = "' not in source.read_text(encoding="utf-8")

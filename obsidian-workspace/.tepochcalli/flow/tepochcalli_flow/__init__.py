@@ -2,6 +2,8 @@
 
 import os
 
+from tepochcalli_flow.version import payload_version
+
 # cocoindex 1.0.25 emite el `tracing` de su núcleo Rust a STDOUT, y su telemetría
 # escribe `usage tracking event ... failed` cuando el ping a
 # `cocoindex.gateway.scarf.sh` no llega (timeout 5 s, fire-and-forget). Aquí
@@ -22,4 +24,4 @@ import os
 os.environ["RUST_LOG"] = "off"
 os.environ["COCOINDEX_DISABLE_USAGE_TRACKING"] = "1"
 
-__version__ = "0.1.0"
+__version__ = payload_version()
