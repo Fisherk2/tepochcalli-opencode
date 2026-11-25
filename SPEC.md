@@ -182,6 +182,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-014](docs/adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003; ADR-004 intacto | Accepted 2026-11-19 |
 | [ADR-015](docs/adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada; refina ADR-007/008 sin reabrir el rechazo de autoselección | Accepted 2026-11-19 |
 | [ADR-017](docs/adr/adr-017-instalacion-filesystem-agnostica.md) | Instalación filesystem-agnóstica: `uv` ejecutado desde `state_dir()`, symlink en el vault y destino por cwd; refina ADR-004 §3/§4/§7 sin re-editarlo | Accepted 2026-11-24 |
+| [ADR-018](docs/adr/adr-018-refresco-pines-dependencias-payload.md) | Refresco de restricciones del payload: pillow 13 (5 CRITICAL), litellm 1.110.4, soupsieve 4 y opentelemetry-api 1.45.2; refina la política de pins de ADR-011 sin re-editarlo | Accepted 2026-11-24 |
 
 ## Referencias
 
