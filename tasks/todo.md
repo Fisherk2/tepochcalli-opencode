@@ -3,6 +3,7 @@
 > Checklist operativo del plan: [tasks/plan.md](./plan.md). Fuente de verdad del requisito:
 > [docs/BACKLOG.md](../docs/BACKLOG.md) §2 «Wizard de instalación: flujo destino (2026-11-18)».
 > Actualizado el 2026-11-19 por Moctezuma. **Sin publicar en ningún gestor de paquetes.**
+> **Índice:** Phase 6.5 (arriba) · Phase 6.6 (§ abajo) · **Phase 6.8 (sección final, 2026-11-25, sin despliegue)**.
 
 **Leyenda:** `[ ]` pendiente · `[~]` en curso · `[x]` hecho · `[!]` bloqueado (motivo en la línea) · `[!]` ⇒ exige decisión del dueño.
 
@@ -383,3 +384,84 @@ de código implementado en esta sesión.*
 ---
 
 *Fase 6.6 añadida el 2026-11-20. Plan: [tasks/plan.md](./plan.md) §11. Sin código implementado por este frente.*
+
+---
+
+## 🛡️ Fase 6.8 — Fallos visibles, desinstall acotado y progreso honesto (2026-11-25)
+
+> Checklist operativo de [tasks/plan.md](./plan.md) §12. Fuente: [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.8 + D69. Añadido el 2026-11-25. **Sin despliegue.**
+> **Leyenda:** `[ ]` pendiente · `[~]` en curso · `[x]` hecho · `[!]` bloqueado (motivo en la línea).
+
+### 🔒 Guardarraíles de las 4 decisiones del dueño
+
+- [ ] **D1 — orden y alcance:** 5 slices T18–T22 en orden **B → H8 → UX → A**; checkpoints C8–C12; **sin despliegue** (no tag, no Release, no PyPI).
+- [ ] **D2 — F6 degradado visible:** exit 0 + `none_config` + checklist + `report_failure` (panel + log + causa real) desde `install_phases.rs:299`. «exit ≠ 0 + rollback» **RECHAZADA**; sin ADR nuevo.
+- [ ] **D3 — sin T23:** bump `beta.2→beta.3` diferido al prep de release; Cargo.toml / pyproject.toml / 4 ficheros one-version intactos.
+- [ ] **D4 — H8 std-only:** sin dependencia directa a `libc`; regla R1 de cero deps nuevas.
+- [ ] **Regla de cierre:** `just ci` UNA sola vez tras C12; `just coverage` NO se corre; `just rust-ci` sí es gate por tarea; `CARGO_TARGET_DIR` siempre bajo `/tmp/opencode/`; nada en segundo plano.
+
+### T18 · Error tipado del gate y fallo F6 visible (B)
+
+*Dueño: rust-engineer · Revisión: code-reviewer · Depende de: ninguna (va primero)*
+
+- [ ] `flow_contract.rs:80-98` `parse_gate` conserva `error_code`/`detail` en tipo portador; `ok:false` ⇒ `WizardError::ModelLoadFailed`
+- [ ] `domain/error.rs:39-41,112-119`: `ModelInvalid` sigue reservado al pre-filtro HF de la ruta 3; variante nueva código 45, `e_star = None`, fila en `EXIT_CODES`, enum `Copy`
+- [ ] `cli/install.rs:437-464`: `UserAborted`/`Internal`/`OfflineNoCache` intactos; resto ⇒ `compensate_phase6` → `none_config` → `mark_phase_done(F6)` → `Ok(configure_later())`, exit 0
+- [ ] `install_phases.rs:299-302`: consumidor invoca `report_failure` con causa degradada e ignora el `u8`; la rama degradada NO llama a `report_failure` desde `cli/install.rs`
+- [ ] CERO rastro de «exit ≠ 0 + rollback» para F6
+- [ ] Ampliar `e2e_install_atomicity.rs:266-299` y `e2e_failure_panel.rs:51-73` (panel + log + causa real, checklist en stdout, `status.code() == Some(0)`)
+- [ ] Nuevo `tests/int_gate_errors.rs`: fallo de red vs carga → códigos distintos; ningún fallo de red etiquetado `ModelInvalid`
+- [ ] Corregir `application/embedder_gate.rs:261-271` y `tests/int_swap_run.rs:242-262` (mapeo viejo)
+- [ ] `docs/BACKLOG.md §8` fila sin ADR
+
+### T19 · Borrado acotado y paralelo del venv en H8 (C)
+
+*Dueño: rust-engineer · Revisión: code-reviewer · Depende de: ninguna (orden B → H8)*
+
+- [ ] `maintenance.rs:244` Unix `remove_dir_all` → helper bottom-up con `std::thread::scope` N=8; Windows conserva `std::fs::remove_dir_all`
+- [ ] Helper std-only: `symlink_metadata` + `DirEntry::file_type()` (nunca sigue symlinks) + rutas canónicas verificadas contra la raíz del vault; test de symlink interno que apunta fuera: destino externo intacto
+- [ ] `maintenance.rs:52-57` y `:331-368` byte-idénticos; backup `:220-225`, panel `:227-237`, 3 scopes (`:47`), 0700/0600 + `.gitignore "*"` (`:301-303`) intactos
+- [ ] Reutilizar `map_fs` (`:277-283`), `NotFound` tolerado (`:248`), cancelación por entrada (`:227`); contadores `entries_removed`/`workers_used`
+- [ ] `grep -n 'libc' crates/tepochcalli/Cargo.toml` vacío; sin deps nuevas
+- [ ] Nuevo `tests/e2e_desinstall_large_venv.rs`: venv sintético, 3 scopes sin restos, notas/PDFs/`.obsidian/` byte-idénticos, backup con nombre
+- [ ] `docs/BACKLOG.md §8` fila sin ADR
+
+### T20 · Progreso real en el swap (UX-1)
+
+*Dueño: rust-engineer · Revisión: software-architect · Depende de: T18 (contrato congelado)*
+
+- [ ] `ports/ui.rs`: `ProgressSpec`/`Progress`/`run_stages` aditivos con default no-op; `run_cancellable` + 7 call sites + 3 fakes byte-idénticos
+- [ ] `ui_ratatui.rs:111-255`: barra monótona 0→100 por hito (swap 6), spinner ASCII `|/-\` en fila propia del watcher existente, cronómetro `mm:ss`
+- [ ] ETA sólo con `estimate_secs` (`swap.rs:284-300`); sin declaración ⇒ `ETA —`; MB de `presets.toml` NUNCA se convierten en segundos
+- [ ] Sin widget `Spinner` de ratatui 0.30.2 (Context7 ya resuelto, no repetir búsqueda ni añadir dep)
+- [ ] Nuevo `tests/int_progress_spec.rs`: 6 hitos monótonos y ETA honesta incluido `ETA —`
+
+### T21 · Propagación del progreso a install, update y desinstall (UX-2)
+
+*Dueño: rust-engineer · Revisión: code-reviewer · Depende de: T20 y T19*
+
+- [ ] install 7 hitos (`install_phases.rs`), update 1 (`update.rs`), desinstall `present.len()+1` (`maintenance.rs`) con la `ProgressSpec` de T20
+- [ ] `run_cancellable`, 7 call sites y 3 fakes (`CancellingUi`, `TapUi`, `GateUi`) sin cambios (diff 0)
+- [ ] `HeadlessUi` y `--non-interactive` sin regresión; spinner/barra no enmascara paneles de error
+- [ ] `tests/e2e_ui.rs` ampliado con los estados de progreso de los tres flujos
+- [ ] No tocar la lógica de degradación de T18, sólo el hito visual
+
+### T22 · Causas del `embed-check` y cierre documental (A)
+
+*Dueño: python-pro + rust-engineer + test-engineer · Depende de: ninguna (se entrega al final)*
+
+- [ ] `__main__.py:111-136` distingue no-embedding / descarga-red / carga-dispositivo con `error_code`+`detail` reales en un único seam; docstring `:116-120` actualizada y `shortcut` obsoleto retirado
+- [ ] Consumer `flow_contract.rs`: `error_code` desconocido ⇒ fallback tipado, nunca `ModelInvalid` por defecto
+- [ ] `tests/unit/test_flow_cli.py`: 3 causas con códigos distintos + desconocido con fallback; sin red real (fakes)
+- [ ] Cierre: `docs/BACKLOG.md §8`, `CHANGELOG.md ## [Unreleased]`, `docs/TECH_DEBT.md` TD-65
+- [ ] `grep -n 'beta.3' crates/tepochcalli/Cargo.toml obsidian-workspace/.tepochcalli/pyproject.toml` vacío
+
+### 🛑 Checkpoints C8–C12
+
+- [ ] **C8 (tras T18):** `just rust-test-filter int_gate_errors` + `just rust-test-filter f6_failure` → `error_code`/`detail` preservados; ningún fallo de red ⇒ `ModelInvalid`; F6: exit 0 + `provider = "none"` + panel/log con causa real + checklist en stdout → si falla, revertir T18, **NO** sustituir por exit≠0/rollback
+- [ ] **C9 (tras T19):** `just rust-test-filter e2e_desinstall_large_venv` + `grep -n libc crates/tepochcalli/Cargo.toml` → 3 scopes sin restos, notas/`.obsidian/` byte-idénticos, symlink externo intacto, backup byte-idéntico, sin dep nueva → si falla, revertir T19
+- [ ] **C10 (tras T20):** `just rust-test-filter int_progress_spec` → 6 hitos monótonos 0→100, `ETA —` sin estimación, spinner ASCII en fila propia → si falla, revertir T20
+- [ ] **C11 (tras T21):** `just rust-ci /tmp/opencode/cargo-target` → `run_cancellable` + 7 call sites + 3 fakes con diff 0; fmt/clippy limpios; `--non-interactive` sin regresión → si falla, revertir T21
+- [ ] **C12 (tras T22):** `just python-test-file test_flow_cli` + `just md-lint` → 3 causas + fallback; BACKLOG §8 / CHANGELOG `[Unreleased]` / TD-65 presentes; sin `beta.3` → si falla, no cerrar la fase
+
+*Fase 6.8 añadida el 2026-11-25. Plan: [tasks/plan.md](./plan.md) §12. Sin commits ni despliegue por este frente.*
