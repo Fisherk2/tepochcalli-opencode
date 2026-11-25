@@ -415,7 +415,7 @@ rust-wheel target_dir=cargo_target:
 # Acepta las dos formas de maturin: ELF directo en `*.data/scripts/` o stub
 # Python + binario en `tepochcalli.scripts/` (lo que pasa cuando el binario
 # enlaza libs externas). La versión sale de `Cargo.toml` (one-version rule):
-# maturin la normaliza a PEP 440 en el nombre (`0.1.0-beta.1` -> `0.1.0b1`).
+# maturin la normaliza a PEP 440 en el nombre (`0.1.0-beta.2` -> `0.1.0b1`).
 rust-wheel-verify: rust-wheel
     #!/usr/bin/env bash
     set -euo pipefail

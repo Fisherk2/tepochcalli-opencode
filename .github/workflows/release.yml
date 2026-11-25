@@ -1,4 +1,4 @@
-# Release del wizard `tepochcalli` — SOLO el payload (desde `0.1.0-beta.1`).
+# Release del wizard `tepochcalli` — SOLO el payload (desde `0.1.0-beta.2`).
 #
 # Este workflow NO construye binarios ni usa cargo-dist: el backend de
 # ADR-003 está retirado (ADR-014 / TD-51). El canal de instalación es la rueda
@@ -21,7 +21,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag a publicar (p. ej. tepochcalli-v0.1.0-beta.1)"
+        description: "Tag a publicar (p. ej. tepochcalli-v0.1.0-beta.2)"
         required: true
 
 permissions:

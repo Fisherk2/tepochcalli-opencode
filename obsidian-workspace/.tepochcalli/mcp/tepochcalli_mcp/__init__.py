@@ -5,4 +5,4 @@ Proceso stdio local que expone las 4 tools con contrato congelado
 `rag_status` (ADR-005: la frontera ports/adapters entre harness y motor).
 """
 
-__version__ = "0.1.0-beta.1"
+__version__ = "0.1.0-beta.2"

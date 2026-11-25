@@ -16,7 +16,7 @@
 # downloaded `tepochcalli` binary bootstraps its own `uv` + venv (T9).
 #
 # Versioning: the installer fetches the LATEST binary by default (pass a tag
-# like `tepochcalli-v0.1.0-beta.1` as `$1` to pin one). The one-version rule lives
+# like `tepochcalli-v0.1.0-beta.2` as `$1` to pin one). The one-version rule lives
 # one layer down: the binary always downloads the payload asset matching its
 # OWN version (`tepochcalli-workspace-<ver>.tar.gz` + `.sha256`), never a
 # floating `latest` (see `adapters::payload::payload_asset_url`).
@@ -31,7 +31,7 @@ BASE_URL="${TEPOCHCALLI_RELEASE_BASE_URL:-}"
 
 usage() {
     echo "usage: install.sh [tag] [-- inspect-first: read this script before running it]" >&2
-    echo "example: sh install.sh tepochcalli-v0.1.0-beta.1" >&2
+    echo "example: sh install.sh tepochcalli-v0.1.0-beta.2" >&2
 }
 
 detect_target() {
