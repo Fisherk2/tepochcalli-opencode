@@ -10,7 +10,7 @@ use tepochcalli::domain::WizardError;
 
 #[cfg(unix)]
 #[test]
-fn partial_desinstall_names_the_backup_dir() {
+fn uninstall_partial_desinstall_names_the_backup_dir() {
     use std::os::unix::fs::PermissionsExt as _;
 
     if helpers::running_as_root() {

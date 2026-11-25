@@ -21,6 +21,8 @@ pub mod phase7;
 pub mod phase8;
 mod preflight;
 mod prereqs;
+#[cfg(unix)]
+mod removal;
 mod resume;
 mod rollback;
 pub mod swap;
