@@ -204,12 +204,23 @@ fn forced_offline_install(target: &Path, payload: &Path) -> std::process::Comman
 /// runtime, and a failed install leaves neither.
 #[test]
 fn install_offline_fails_at_f4_and_rolls_back_the_vault() {
-    let (_dir, target, payload) = install_fixture();
+    let (dir, target, payload) = install_fixture();
     // Vault que YA existía: su nota es del usuario y debe sobrevivir.
     std::fs::create_dir_all(&target).expect("vault preexistente");
     std::fs::write(target.join("nota.md"), b"# nota del usuario\n").expect("nota del usuario");
+    // The F4 state root is per user and must be private: keep the child away
+    // from the developer's real `~/.local/state` (which may predate the check).
+    let state = dir.path().join("state");
+    std::fs::create_dir_all(&state).expect("state fixture");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(&state, std::fs::Permissions::from_mode(0o700))
+            .expect("private state fixture");
+    }
 
     let out = forced_offline_install(&target, &payload)
+        .env("XDG_STATE_HOME", &state)
         .output()
         .expect("spawn install");
     let stderr = String::from_utf8_lossy(&out.stderr);

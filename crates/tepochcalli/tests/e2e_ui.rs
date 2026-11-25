@@ -97,6 +97,9 @@ fn install_non_interactive_with_closed_stdin_uses_cwd_and_terminates() {
     let cwd = tempfile::tempdir().expect("cwd fixture");
     let target = cwd.path().to_path_buf();
     let payload = tempfile::tempdir().expect("payload fixture dir");
+    // The F4 state root is per user: keep the child off the developer's real
+    // `~/.local/state` (which may predate the private-root check).
+    let state = tempfile::tempdir().expect("state fixture");
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let out = bin()
@@ -108,6 +111,7 @@ fn install_non_interactive_with_closed_stdin_uses_cwd_and_terminates() {
                 payload.path().to_str().expect("utf8 tmp"),
             ])
             .current_dir(cwd.path())
+            .env("XDG_STATE_HOME", state.path())
             .env("ALL_PROXY", "http://127.0.0.1:9")
             .env("HTTPS_PROXY", "http://127.0.0.1:9")
             .env_remove("NO_PROXY")

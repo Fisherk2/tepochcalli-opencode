@@ -23,7 +23,15 @@ use tepochcalli::ports::CommandOutput;
 use tepochcalli::{INSTALL_STATE_PATH, MANAGED_RAG};
 
 fn tmp() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir for T14 fixtures")
+    let dir = tempfile::tempdir().expect("tempdir for T14 fixtures");
+    // Keep fixtures private; the wizard also repairs a legacy 0755 root.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("private fixture");
+    }
+    dir
 }
 
 fn payload_tree(base: &Path) {

@@ -11,7 +11,8 @@
 //! install`, `uv venv`, `uv sync --frozen` and the R6 import check — all via
 //! the `CommandRunner` port with explicit argv + cwd + env (never `sh -c`,
 //! never `std::env` globals). Compensations remove only what the phase
-//! wrote (`bin/` in the vault + state for F4, `venv/` for F5); `models/`,
+//! wrote (`bin/` in the vault for F4 — the per-user state `bin/` is shared
+//! by every vault and is never removed here —, `venv/` for F5); `models/`,
 //! `db/` and `config/` are never touched (the full unwind is T14, not here).
 //!
 //! The F1/F2 prerequisites live in `prereqs.rs` and the T14 resume state
@@ -19,12 +20,13 @@
 //! paths (`application::installer::…`) stay valid.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::adapters::archive::{extract_tar_gz, extract_zip};
 use crate::adapters::fetch::{self, UvAsset};
 use crate::domain::WizardError;
 
-use super::failure::state_dir;
+use super::failure::{ensure_private_dir, state_dir};
 use crate::ports::{CommandOutput, CommandRunner, HttpClient, MergeReport, PayloadSource};
 
 pub use super::prereqs::{
@@ -168,8 +170,8 @@ pub const RUNTIME_DIR: &str = ".tepochcalli";
 pub const UV_BIN_DIR: &str = "bin";
 /// F5 writes only here; its compensation removes exactly this dir.
 pub const VENV_DIR_NAME: &str = "venv";
-/// Scratch dir under the OS state root for the verified asset; removed after
-/// a successful F4 and by the F4 compensation (hygiene, never user data).
+/// Scratch dir prefix under the OS state root; each `install_uv` invocation
+/// appends pid+seq and removes its own stage on success and failure alike.
 pub const UV_STAGE_DIR: &str = ".uv-stage";
 /// Quirk uv 0.12.9: the project venv location is ONLY honored via env var
 /// (same quirk the repo's own Justfile + `ci.yml` work around).
@@ -340,6 +342,30 @@ fn run_checked(
     }
 }
 
+/// Sequence for per-invocation scratch names: the pid alone is not unique
+/// inside one process, and two concurrent installs must never share a stage.
+static STAGE_SEQ: AtomicU64 = AtomicU64::new(0);
+
+/// The state root is per user (shared by every vault): it must be a real
+/// directory and end up private. A legacy `0755` dir from beta.1 is repaired
+/// to `0700`, not rejected; a symlink, a non-dir or a chmod the user does not
+/// own is `PermissionDenied`.
+fn ensure_state_root(state_root: &Path) -> Result<(), WizardError> {
+    ensure_private_dir(state_root).map_err(|_| WizardError::PermissionDenied)?;
+    let meta = std::fs::symlink_metadata(state_root).map_err(|_| WizardError::PermissionDenied)?;
+    if meta.file_type().is_symlink() {
+        return Err(WizardError::PermissionDenied);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        if meta.permissions().mode() & 0o077 != 0 {
+            return Err(WizardError::PermissionDenied);
+        }
+    }
+    Ok(())
+}
+
 fn install_uv(
     http: &dyn HttpClient,
     proc: &dyn CommandRunner,
@@ -347,24 +373,51 @@ fn install_uv(
     asset: &UvAsset,
     state_root: &Path,
 ) -> Result<Phase4Report, WizardError> {
+    ensure_state_root(state_root)?;
     // Codice invariant: bytes + exec bit stay outside the vault; the target
     // receives only a link (no chmod on a mode-bit-discarding filesystem).
-    let stage = state_root.join(UV_STAGE_DIR);
-    clear_dir(&stage)?;
+    let seq = STAGE_SEQ.fetch_add(1, Ordering::Relaxed);
+    let stage = state_root.join(format!("{UV_STAGE_DIR}-{}-{seq}", std::process::id()));
+    let external = state_root.join(UV_BIN_DIR).join(uv_binary_name());
+    let tmp = state_root.join(UV_BIN_DIR).join(format!(
+        "{}.tmp-{}-{seq}",
+        uv_binary_name(),
+        std::process::id()
+    ));
+    let outcome = install_uv_staged(http, proc, vault, asset, &stage, &external, &tmp);
+    // Per-invocation scratch: gone on success and failure alike.
+    let _ = std::fs::remove_dir_all(&stage);
+    // No-op after a successful rename; cleans a half copy otherwise.
+    let _ = std::fs::remove_file(&tmp);
+    outcome
+}
+
+fn install_uv_staged(
+    http: &dyn HttpClient,
+    proc: &dyn CommandRunner,
+    vault: &Path,
+    asset: &UvAsset,
+    stage: &Path,
+    external: &Path,
+    tmp: &Path,
+) -> Result<Phase4Report, WizardError> {
+    clear_dir(stage)?;
     let archive = stage.join(asset.filename);
     // SHA-256 verified BEFORE anything is trusted (the adapter enforces it).
     http.download(&fetch::uv_download_url(asset), &archive, asset.sha256_hex)?;
-    extract_uv_asset(&archive, &stage)?;
-    let staged = find_uv_binary(&stage).ok_or(WizardError::PayloadCorrupt)?;
-    let external = state_root.join(UV_BIN_DIR).join(uv_binary_name());
+    extract_uv_asset(&archive, stage)?;
+    let staged = find_uv_binary(stage).ok_or(WizardError::PayloadCorrupt)?;
     if let Some(parent) = external.parent() {
         std::fs::create_dir_all(parent).map_err(|_| WizardError::PermissionDenied)?;
     }
-    remove_file_if_present(&external)?;
-    std::fs::copy(&staged, &external).map_err(|_| WizardError::PermissionDenied)?;
-    set_executable(&external)?;
-    // Best-effort: the asset was verified, residue is harmless.
-    let _ = std::fs::remove_dir_all(&stage);
+    // Private temp + chmod, then rename onto the shared name: no reader ever
+    // sees a truncated executable. Unix rename replaces atomically; Windows
+    // refuses an existing target, so remove it first.
+    std::fs::copy(&staged, tmp).map_err(|_| WizardError::PermissionDenied)?;
+    set_executable(tmp)?;
+    #[cfg(windows)]
+    remove_file_if_present(external)?;
+    std::fs::rename(tmp, external).map_err(|_| WizardError::PermissionDenied)?;
     let program = external.to_str().ok_or(WizardError::Internal)?.to_string();
     let out = proc.run_with_timeout(
         &program,
@@ -392,9 +445,9 @@ fn install_uv(
     }
     remove_file_if_present(&target)?;
     #[cfg(unix)]
-    std::os::unix::fs::symlink(&external, &target).map_err(|_| WizardError::PermissionDenied)?;
+    std::os::unix::fs::symlink(external, &target).map_err(|_| WizardError::PermissionDenied)?;
     #[cfg(not(unix))]
-    std::fs::copy(&external, &target).map_err(|_| WizardError::PermissionDenied)?;
+    std::fs::copy(external, &target).map_err(|_| WizardError::PermissionDenied)?;
 
     Ok(Phase4Report {
         uv: target,
@@ -441,18 +494,19 @@ pub fn run_phase4_with_state(
     outcome
 }
 
-/// F4 compensation: remove the vault `bin/` plus the state `bin/` and stage.
-/// NEVER the whole state root (failure logs live there), nor `models/`,
-/// `db/` or `config/`; missing dirs are a no-op.
+/// F4 compensation: remove the vault `bin/` only. `<state>/bin` is shared by
+/// every vault of this user and each stage belongs to the running
+/// `install_uv`, so neither is removed here. NEVER the whole state root
+/// (failure logs live there), nor `models/`, `db/` or `config/`; missing
+/// dirs are a no-op.
 pub fn compensate_phase4(vault: &Path) {
     compensate_phase4_in(vault, &state_dir());
 }
 
-/// `compensate_phase4` with an injected state root (test seam).
-pub fn compensate_phase4_in(vault: &Path, state_root: &Path) {
+/// `compensate_phase4` with an injected state root (test seam). The state
+/// root is deliberately left untouched: it is per user, not per vault.
+pub fn compensate_phase4_in(vault: &Path, _state_root: &Path) {
     let _ = std::fs::remove_dir_all(runtime_dir(vault).join(UV_BIN_DIR));
-    let _ = std::fs::remove_dir_all(state_root.join(UV_BIN_DIR));
-    let _ = std::fs::remove_dir_all(state_root.join(UV_STAGE_DIR));
 }
 
 fn sync_project(

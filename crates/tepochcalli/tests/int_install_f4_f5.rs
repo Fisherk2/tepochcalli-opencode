@@ -19,12 +19,21 @@ use tepochcalli::adapters::fetch::{self, UvAsset};
 use tepochcalli::adapters::{StdCommandRunner, UreqHttpClient};
 use tepochcalli::application::installer::{
     compensate_phase4_in, compensate_phase5, run_phase4, run_phase4_with_state, run_phase5,
+    UV_STAGE_DIR,
 };
 use tepochcalli::ports::CommandOutput;
 use tepochcalli::WizardError;
 
 fn tmp() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir for T9 fixtures")
+    let dir = tempfile::tempdir().expect("tempdir for T9 fixtures");
+    // Keep fixtures private; the wizard also repairs a legacy 0755 root.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("private fixture");
+    }
+    dir
 }
 
 /// Minimal `.tar.gz` with a single `member` file (mirrors `phases_f3.rs`).
@@ -109,6 +118,18 @@ fn assert_sentinels_intact(vault: &Path) {
     }
 }
 
+/// Per-invocation stages under `dir`; `install_uv` must leave none behind.
+fn stage_residue(dir: &Path) -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    entries
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .filter(|name| name.starts_with(UV_STAGE_DIR))
+        .collect()
+}
+
 #[test]
 fn uv_asset_table_covers_all_platforms_with_real_pins() {
     assert_eq!(fetch::UV_VERSION, "0.12.9");
@@ -183,9 +204,10 @@ fn f4_ok_leaves_executable_uv_and_reports_version() {
         !vault.path().join(".tepochcalli").join(".uv-stage").exists(),
         "the download stage must not leak into the vault"
     );
-    assert!(
-        !state.path().join(".uv-stage").exists(),
-        "the download stage must not leak into the state root"
+    assert_eq!(
+        stage_residue(state.path()),
+        Vec::<String>::new(),
+        "no .uv-stage* residue after a successful install_uv"
     );
     assert_sentinels_intact(vault.path());
 }
@@ -244,8 +266,13 @@ fn f4_version_check_failure_compensates_bin() {
         "failed F4 must compensate bin/"
     );
     assert!(
-        !state.path().join("bin").exists(),
-        "failed F4 must compensate the external bin/"
+        state.path().join("bin").join(UV_BIN).is_file(),
+        "the shared state bin/ is per user and survives F4 compensation"
+    );
+    assert_eq!(
+        stage_residue(state.path()),
+        Vec::<String>::new(),
+        "no .uv-stage* residue after a failed install_uv"
     );
     assert_sentinels_intact(vault.path());
 }
@@ -269,8 +296,8 @@ fn f4_spawn_failure_propagates_typed_and_compensates() {
         "failed F4 must compensate bin/"
     );
     assert!(
-        !state.path().join("bin").exists(),
-        "failed F4 must compensate the external bin/"
+        state.path().join("bin").join(UV_BIN).is_file(),
+        "the shared state bin/ is per user and survives F4 compensation"
     );
 }
 
@@ -376,17 +403,19 @@ fn compensate_fns_are_idempotent_and_never_touch_runtime_data() {
     let bin = vault.path().join(".tepochcalli").join("bin");
     let venv = vault.path().join(".tepochcalli").join("venv");
     let state_bin = state.path().join("bin");
-    let state_stage = state.path().join(".uv-stage");
     std::fs::create_dir_all(&bin).expect("bin fixture");
     std::fs::create_dir_all(&venv).expect("venv fixture");
     std::fs::create_dir_all(&state_bin).expect("state bin fixture");
-    std::fs::create_dir_all(&state_stage).expect("state stage fixture");
+    let keep = state_bin.join("keep");
+    std::fs::write(&keep, "shared").expect("state bin sentinel");
     compensate_phase4_in(vault.path(), state.path());
     compensate_phase5(vault.path());
     assert!(!bin.exists());
     assert!(!venv.exists());
-    assert!(!state_bin.exists(), "external bin/ must be compensated");
-    assert!(!state_stage.exists(), "external stage must be compensated");
+    assert!(
+        keep.is_file(),
+        "shared state bin/ is per user: compensation must not remove it"
+    );
     assert!(state.path().is_dir(), "the state root itself must survive");
     assert_eq!(
         std::fs::read_to_string(&log).expect("state log survives"),
