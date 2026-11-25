@@ -39,6 +39,7 @@ verde y **squash merge** (historial lineal — requisito explícito del dueño; 
 graph TD
     W["rama corta (feature/, fix/, chore/, hotfix/)"] -->|"PR → develop + CI verde + squash"| D["develop"]
     D -->|"PR de promoción develop → main + CI verde + squash"| M["main"]
+    M -.->|"back-merge post-despliegue"| D
     M -->|"tag tepochcalli-vX.Y.Z"| R["release.yml → GitHub Release prerelease (payload tar + sha256)"]
 ```
 
@@ -82,6 +83,7 @@ graph TD
    CHANGELOG.md section ## [<version>]` — los tres deben coincidir, si no el job falla.
 6. `release.yml` crea el GitHub Release `--prerelease` con el tar del payload +
    sidecar sha256, en el environment `release` (self-approval permitido hoy).
+7. Sincronizar `develop` con `main` (§6 paso 6) — obligatorio tras publicar.
 
 ## 4. Convención de commits
 
@@ -122,8 +124,26 @@ publica el payload como GitHub Release.
 
 4. `release.yml` (trigger `tepochcalli-v[0-9]*`) valida guard → sube
    `tepochcalli-workspace-<version>.tar.gz` + sha256 como `--prerelease` (environment
-   `release`; al no haber revisores configurados hoy, se auto-aprueba al vuelo).
+   `release`; al no haber revisores configurados hoy, se auto-aprueba al vuelo). Las
+   notas de la Release son ahora la sección `## [<version>]` de `CHANGELOG.md`, que
+   `release.yml` extrae con `--notes-file`.
 5. Verificar la Release y el asset en GitHub.
+6. **Sincronizar `develop` con `main` — obligatorio al terminar cada despliegue**
+   (regla del dueño 2026-11-24): el squash de la promoción deja `main` con un commit
+   que `develop` no tiene — mismo árbol, historial divergente (medido tras el squash de
+   beta.1: `develop` 35 commits vs `main` 1, árboles idénticos, 2026-11-24). Sin este
+   back-merge la divergencia se acumula en cada release y los hotfix hechos en `main`
+   nunca vuelven a `develop`.
+
+   ```bash
+   git fetch origin
+   git switch develop
+   git merge origin/main   # back-merge limpio: tras el squash los árboles son idénticos
+   git push origin develop
+   ```
+
+   Resultado: `main` queda contenido en `develop`, el commit etiquetado vive en el
+   historial de `develop` y la próxima promoción `develop` → `main` sale limpia.
 
 Aclaraciones: la publicación a PyPI (`uvx tepochcalli`) forma parte del flujo desde
 `0.1.0-beta.1` (`0.1.0b1` publicado; `0.1.0-beta.2` sigue el mismo camino: tag →
