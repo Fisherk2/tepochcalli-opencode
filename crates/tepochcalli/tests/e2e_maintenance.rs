@@ -660,15 +660,24 @@ fn reindex_without_confirm_exits_2_and_mutates_nothing() {
 }
 
 #[test]
-fn reindex_confirm_without_vault_in_non_interactive_fails_typed() {
+fn reindex_confirm_without_vault_uses_cwd_and_fails_typed() {
+    let cwd = tempfile::tempdir().expect("cwd fixture");
     let out = bin()
         .args(["reindex", "--confirm", "--non-interactive"])
+        .current_dir(cwd.path())
         .stdin(Stdio::null())
         .output()
         .expect("spawn binary");
+    assert_eq!(
+        out.status.code(),
+        Some(42),
+        "el cwd es el vault, sin instalación ⇒ PhaseFailed:\n{}",
+        stderr_text(&out)
+    );
     assert!(
-        out.status.code().unwrap_or(0) != 0,
-        "sin --vault no hay respuesta que adivinar"
+        stderr_text(&out).contains("Sin instalación"),
+        "el panel debe explicar que el cwd no está instalado:\n{}",
+        stderr_text(&out)
     );
     assert!(
         !stderr_text(&out).contains("not yet implemented"),

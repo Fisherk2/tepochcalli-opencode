@@ -5,12 +5,12 @@ use std::io::IsTerminal;
 use std::path::Path;
 
 use tepochcalli::adapters::{
-    fetch_release_payload, mirror_http_non_loopback, release_base_url, LocalPayload,
-    ReleasePayload, StdCommandRunner, SysHostProbe, UreqHttpClient,
+    fetch_release_payload, mirror_http_non_loopback, payload_asset_url, release_base_url,
+    LocalPayload, ReleasePayload, StdCommandRunner, SysHostProbe, UreqHttpClient,
 };
 use tepochcalli::application::{
     compensate_phase3, compensate_phase7, is_phase_done, mark_phase_done, read_completed_report,
-    run_phase3, run_phase4, run_phase5, run_phase7, run_phase8, Phase6Deps,
+    run_phase3, run_phase4, run_phase5, run_phase7, run_phase8, Phase6Deps, Phase7Report,
 };
 use tepochcalli::domain::{CancelToken, Phase, VaultPath, WizardError};
 use tepochcalli::ports::Ui;
@@ -139,58 +139,71 @@ pub(crate) fn run_phases(
     // the versioned release asset for this binary (one-version rule).
     // L3-5: bajo `--resume` con F3 resuelta por artefacto el payload ya está
     // local — ni guard ni fetch de red; es el mismo brazo del guard offline.
-    let resume_covers_payload = flags.resume && is_phase_done(path.as_path(), Phase::F3);
-    let online: Option<ReleasePayload> = match (&payload.url, &payload.sha) {
-        (Some(url), Some(sha)) => Some(ReleasePayload::new(url, sha)),
-        (None, None) if payload.dir.is_none() => {
-            if resume_covers_payload {
-                // Payload ya local (F3 por artefacto): ninguna red en un resume.
-                None
-            } else {
-                match fetch_release_payload(&http, VERSION) {
-                    Ok(release) => {
-                        let _ = writeln!(
-                            stderr,
-                            "payload: release asset {} (one-version {})",
-                            release.url(),
-                            VERSION
-                        );
-                        Some(release)
-                    }
-                    Err(err) => {
-                        return phase_failed(ui, path, Phase::F3, offline_map(flags.offline, err));
-                    }
-                }
+    let skip_f3 = flags.resume && resume_skip(stderr, path, Phase::F3, "");
+    // Estado fuera de la pantalla alternativa: el asset que se va a intentar
+    // se nombra ANTES de F3, así el camino de fallo también lo muestra.
+    let announced_url = if skip_f3 {
+        None
+    } else {
+        match (&payload.dir, &payload.url) {
+            (None, Some(url)) => Some(url.clone()),
+            (None, None) => Some(payload_asset_url(VERSION)),
+            // `--payload` local tree: no release asset que nombrar.
+            _ => None,
+        }
+    };
+    if let Some(url) = &announced_url {
+        let _ = writeln!(
+            stderr,
+            "payload: release asset {url} (one-version {})",
+            VERSION
+        );
+    }
+    let mut f3: Result<(Option<ReleasePayload>, Vec<std::path::PathBuf>), WizardError> =
+        Err(WizardError::Internal);
+    if !skip_f3 {
+        ui.run_cancellable(
+            &format!("Instalando F3 (payload) en {}", path.as_path().display()),
+            &CancelToken::new(),
+            &mut || {
+                let online = match (&payload.url, &payload.sha) {
+                    (Some(url), Some(sha)) => Ok(Some(ReleasePayload::new(url, sha))),
+                    (None, None) if payload.dir.is_none() => fetch_release_payload(&http, VERSION)
+                        .map(Some)
+                        .map_err(|err| offline_map(flags.offline, err)),
+                    // `--payload` local tree: source lives in the F3 branch.
+                    (None, None) => Ok(None),
+                    // Unreachable: `run_install` rejects a half override.
+                    _ => Err(WizardError::Internal),
+                };
+                f3 = online.and_then(|online| {
+                    let report = match (&payload.dir, &online) {
+                        (Some(dir), None) => {
+                            run_phase3(&LocalPayload::new(Path::new(dir)), path.as_path())
+                        }
+                        (None, Some(release)) => run_phase3(release, path.as_path()),
+                        // Unreachable: `run_install` rejects `--payload` + override.
+                        _ => return Err(WizardError::Internal),
+                    }?;
+                    mark_phase_done(path.as_path(), Phase::F3);
+                    Ok((online, report.skipped))
+                });
+            },
+        );
+    }
+    let (_, skipped) = if skip_f3 {
+        (None, Vec::new())
+    } else {
+        match f3 {
+            Ok(pair) => pair,
+            Err(err) => {
+                // L3-2: wiring del compensador antes del panel — un F3 que
+                // falló a mitad deja el vault como al entrar, sin intent.
+                compensate_phase3(path.as_path());
+                return phase_failed(ui, path, Phase::F3, err);
             }
         }
-        // `--payload` local tree: source lives in the F3 branch, not online.
-        (None, None) => None,
-        // Unreachable: `run_install` rejects a half override with exit 2.
-        _ => return 2,
     };
-    let skipped: Vec<std::path::PathBuf> =
-        if flags.resume && resume_skip(stderr, path, Phase::F3, "") {
-            Vec::new()
-        } else {
-            let outcome = match (&payload.dir, &online) {
-                (Some(dir), None) => run_phase3(&LocalPayload::new(Path::new(dir)), path.as_path()),
-                (None, Some(release)) => run_phase3(release, path.as_path()),
-                // Unreachable: `run_install` rejects `--payload` + override.
-                _ => return 2,
-            };
-            match outcome {
-                Ok(report) => {
-                    mark_phase_done(path.as_path(), Phase::F3);
-                    report.skipped
-                }
-                Err(err) => {
-                    // L3-2: wiring del compensador antes del panel — un F3 que
-                    // falló a mitad deja el vault como al entrar, sin intent.
-                    compensate_phase3(path.as_path());
-                    return phase_failed(ui, path, Phase::F3, err);
-                }
-            }
-        };
     // V-5 contracción: en pipe una sola línea (count + muestra), en tty el detalle.
     if !skipped.is_empty() {
         if std::io::stderr().is_terminal() {
@@ -224,13 +237,20 @@ pub(crate) fn run_phases(
     // F4: pinned `uv` into `.tepochcalli/bin/` (+ version proof).
     // Compensates itself on failure.
     let proc = StdCommandRunner;
-    if flags.resume && resume_skip(stderr, path, Phase::F4, " (uv cached)") {
-        // uv cached — nothing to re-download.
-    } else {
-        match run_phase4(&http, &proc, path.as_path()) {
-            Ok(phase4) => {
+    let skip_f4 = flags.resume && resume_skip(stderr, path, Phase::F4, " (uv cached)");
+    if !skip_f4 {
+        let mut f4: Result<String, WizardError> = Err(WizardError::Internal);
+        ui.run_cancellable(
+            &format!("Instalando F4 (uv) en {}", path.as_path().display()),
+            &CancelToken::new(),
+            &mut || {
+                f4 = run_phase4(&http, &proc, path.as_path()).map(|phase4| phase4.version);
+            },
+        );
+        match f4 {
+            Ok(version) => {
                 mark_phase_done(path.as_path(), Phase::F4);
-                let _ = writeln!(stderr, "uv {} ready", phase4.version);
+                let _ = writeln!(stderr, "{version} ready");
             }
             Err(err) => {
                 return phase_failed(ui, path, Phase::F4, offline_map(flags.offline, err));
@@ -239,11 +259,18 @@ pub(crate) fn run_phases(
     }
     // F5: venv + frozen sync + R6 import check. `bin/` stays when F5 fails
     // (each phase compensates only what it wrote).
-    if flags.resume && resume_skip(stderr, path, Phase::F5, " (venv cached)") {
-        // venv cached — nothing to re-sync.
-    } else {
-        match run_phase5(&proc, path.as_path()) {
-            Ok(_) => mark_phase_done(path.as_path(), Phase::F5),
+    let skip_f5 = flags.resume && resume_skip(stderr, path, Phase::F5, " (venv cached)");
+    if !skip_f5 {
+        let mut f5: Result<(), WizardError> = Err(WizardError::Internal);
+        ui.run_cancellable(
+            &format!("Instalando F5 (venv) en {}", path.as_path().display()),
+            &CancelToken::new(),
+            &mut || {
+                f5 = run_phase5(&proc, path.as_path()).map(|_| ());
+            },
+        );
+        match f5 {
+            Ok(()) => mark_phase_done(path.as_path(), Phase::F5),
             Err(err) => {
                 return phase_failed(ui, path, Phase::F5, offline_map(flags.offline, err));
             }
@@ -282,10 +309,17 @@ pub(crate) fn run_phases(
     );
     // F7: initial index via the flow CLI. Path 5 short-circuits inside
     // `run_phase7` (no spawn, no index).
-    if flags.resume && resume_skip(stderr, path, Phase::F7, "") {
-        // Index already built on a previous run.
-    } else {
-        match run_phase7(&proc, path.as_path(), &picked) {
+    let skip_f7 = flags.resume && resume_skip(stderr, path, Phase::F7, "");
+    if !skip_f7 {
+        let mut f7: Result<Phase7Report, WizardError> = Err(WizardError::Internal);
+        ui.run_cancellable(
+            &format!("Instalando F7 (índice) en {}", path.as_path().display()),
+            &CancelToken::new(),
+            &mut || {
+                f7 = run_phase7(&proc, path.as_path(), &picked);
+            },
+        );
+        match f7 {
             Ok(indexed) => {
                 mark_phase_done(path.as_path(), Phase::F7);
                 let _ = writeln!(

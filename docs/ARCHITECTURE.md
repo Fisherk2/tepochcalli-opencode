@@ -4,6 +4,8 @@
 > registrada como ADR en [`docs/adr/`](adr/) siguiendo el formato MADR.
 > Requisitos: [docs/BACKLOG.md](BACKLOG.md) · Especificación: [SPEC.md](../SPEC.md)
 
+[![Architecture diagram of fisherk2/tepochcalli-opencode](https://gitdiagram.com/fisherk2/tepochcalli-opencode/diagram.png)](https://gitdiagram.com/fisherk2/tepochcalli-opencode?utm_source=readme&utm_medium=picture)
+
 ## Sistema en una frase
 
 Un vault de Obsidian distribuible donde el harness **OpenCode V2** obtiene respuestas citadas
@@ -122,6 +124,7 @@ sequenceDiagram
 | LanceDB (ANN+FTS) | Procesamiento | `.tepochcalli/db/` | ADR-002 |
 | Embeddings MiniLM multilingüe | Procesamiento | `.tepochcalli/models/` | ADR-006, spec-embeddings |
 | venv + uv bootstrap | Runtime | `.tepochcalli/venv/`, `bin/` | ADR-004 |
+| `uv` ejecutable externo (descargado, SHA-256 verificado, chmoddeado y ejecutado fuera del vault) | Runtime (sin cambio de topología) | `application::failure::state_dir()`; `.tepochcalli/bin/uv` es symlink Unix (Windows: copia `.exe`) | ADR-017 (refina ADR-004), spec-vault-structure |
 | `tepochcalli.toml` | Config | `.tepochcalli/config/` (gitignored) | spec-embeddings |
 | **Suite Phase 1 (T2–T11):** `tests/unit/` + `tests/integration/` — 137 tests en T11, **164 al cierre de Phase 1 (2026-10-23)**; `bench_delta.py` en `tests/benchmarks/` (M1, p95 sobre 20 ciclos) | Verificación | repo `tests/{unit,integration,benchmarks}/` | WORKFLOW §Phase 1, TRD §6.2 |
 | **Suite Phase 3.5 (T1–T16):** **670 passed + 3 `slow`**, cobertura **97 %** (gate 95 %); contract tests e2e de las 7 tools, negativos de B′, multi-raíz y documentos; `bench_delta.py` re-medido (Δ texto p95 **4 299 ms**, n=20 nearest-rank) | Verificación | repo `tests/` | WORKFLOW §Phase 3.5 |
@@ -293,6 +296,8 @@ graph TB
 | [ADR-013](adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003) | Accepted | 2026-11-13 |
 | [ADR-014](adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003 | Accepted | 2026-11-19 |
 | [ADR-015](adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada (`cpu`/`cuda`/`cuda:N`); refina ADR-007/008 sin reabrir el rechazo de autoselección | Accepted | 2026-11-19 |
+| [ADR-017](adr/adr-017-instalacion-filesystem-agnostica.md) | Instalación filesystem-agnóstica: `uv` ejecutado desde `state_dir()`, symlink en el vault y destino por cwd; refina ADR-004 §3/§4/§7 | Accepted | 2026-11-24 |
+| [ADR-018](adr/adr-018-refresco-pines-dependencias-payload.md) | Refresco de restricciones del payload: pillow 13 (5 CRITICAL), litellm 1.110.4, soupsieve 4 y opentelemetry-api 1.45.2; refina la política de pins de ADR-011 | Accepted | 2026-11-24 |
 
 ## Key decisions summary
 

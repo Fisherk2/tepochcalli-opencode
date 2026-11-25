@@ -50,12 +50,11 @@ const UPDATE_SPEC: FlagSpec = FlagSpec {
     boolean: &["--non-interactive"],
 };
 
-/// One vault resolver for every non-install command: `--non-interactive`
-/// without a resolved vault is a usage failure (the missing flag is the fix),
-/// Esc is a genuine cancel, anything else is a maintenance failure.
+/// One vault resolver for every non-install command: `--vault` wins, absent
+/// means the process cwd. Only a genuine abort is a usage failure; a typed
+/// filesystem failure (an unreadable cwd) is a maintenance failure.
 pub(crate) fn resolve_vault_or_report(
     ui: &dyn Ui,
-    non_interactive: bool,
     vault: Option<&str>,
     command: &str,
     usage: &str,
@@ -63,17 +62,16 @@ pub(crate) fn resolve_vault_or_report(
     let context = format!("{command}: vault selection failed");
     match resolve_vault_dir(ui, vault) {
         Ok(raw) => Ok(raw),
-        Err(err) if non_interactive => Err(report_usage_failure(
+        Err(WizardError::UserAborted) => Err(report_usage_failure(
             ui,
             command,
             None,
             "vault selection failed",
             "--vault <directorio>",
             usage,
-            err,
+            WizardError::UserAborted,
             None,
         )),
-        Err(WizardError::UserAborted) => Err(report_cancel(ui, command)),
         Err(err) => Err(report_maintenance_failure(ui, command, &context, err, None)),
     }
 }
@@ -131,7 +129,6 @@ pub(crate) fn run_config_embedder(
     }
     let raw = match resolve_vault_or_report(
         &*ui,
-        non_interactive,
         vault.as_deref(),
         "config embedder",
         "tepochcalli config embedder --vault <directorio> --non-interactive --confirm",
@@ -198,16 +195,14 @@ pub(crate) fn run_reindex_cmd(
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
-        // The flag (when given) answers the directory question in
-        // `resolve_vault_dir` without asking; an absent one surfaces as a
-        // typed `UserAborted` — never a guess, never stdin.
+        // `--vault` (when given) overrides the cwd; no answer ever comes
+        // from stdin.
         Box::new(HeadlessUi::new(Default::default(), Default::default()))
     } else {
         Box::new(TtyUi)
     };
     let raw = match resolve_vault_or_report(
         &*ui,
-        non_interactive,
         vault.as_deref(),
         "reindex",
         "tepochcalli reindex --vault <directorio> --non-interactive --confirm",
@@ -265,14 +260,13 @@ pub(crate) fn run_uninstall_cmd(
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
-        // Same contract as `reindex`: the flag answers, absence aborts typed.
+        // Same contract as `reindex`: the flag overrides, absence uses cwd.
         Box::new(HeadlessUi::new(Default::default(), Default::default()))
     } else {
         Box::new(TtyUi)
     };
     let raw = match resolve_vault_or_report(
         &*ui,
-        non_interactive,
         vault.as_deref(),
         "uninstall",
         "tepochcalli uninstall --vault <directorio> --non-interactive --confirm",
@@ -352,7 +346,6 @@ pub(crate) fn run_update_cmd(
     };
     let raw = match resolve_vault_or_report(
         &*ui,
-        non_interactive,
         vault.as_deref(),
         "update",
         "tepochcalli update --vault <directorio> --non-interactive",

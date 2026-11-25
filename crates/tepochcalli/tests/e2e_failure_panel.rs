@@ -228,21 +228,37 @@ fn render_helpers_never_touch_stdout() {
 }
 
 /// Failing `install` keeps stdout empty and puts the panel on stderr, with
-/// the log outside the vault (child-process env, never the parent's).
+/// the log outside the vault. A real F4 network failure (dead proxy) replaces
+/// the old missing-`--vault` usage case: the cwd is now a valid target.
 #[test]
 fn failing_install_panel_is_stderr_only_with_log_outside_vault() {
     let state = tempfile::tempdir().expect("state home fixture");
+    let vault = tempfile::tempdir().expect("vault fixture");
+    let payload = tempfile::tempdir().expect("payload fixture");
     let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
-        .args(["install", "--non-interactive", "--skip-model"])
+        .args([
+            "install",
+            "--non-interactive",
+            "--skip-model",
+            "--vault",
+            vault.path().to_str().expect("utf8 tmp"),
+            "--payload",
+            payload.path().to_str().expect("utf8 tmp"),
+        ])
         .env("XDG_STATE_HOME", state.path())
         .env("LOCALAPPDATA", state.path())
+        .env("ALL_PROXY", "http://127.0.0.1:9")
+        .env("HTTPS_PROXY", "http://127.0.0.1:9")
+        .env_remove("NO_PROXY")
+        .env_remove("no_proxy")
         .stdin(std::process::Stdio::null())
         .output()
         .expect("spawn binary");
     assert_eq!(
         out.status.code(),
-        Some(41),
-        "headless install without --vault must stay 41"
+        Some(20),
+        "the dead proxy must fail F4 fast:\n{}",
+        String::from_utf8_lossy(&out.stderr)
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
@@ -251,29 +267,22 @@ fn failing_install_panel_is_stderr_only_with_log_outside_vault() {
         "stdout must stay empty on failure: {stdout}"
     );
     assert!(
-        stderr.contains("F2"),
-        "panel must name the phase:\n{stderr}"
+        stderr.contains("F4") && stderr.contains("download failed"),
+        "panel must name the phase and the cause:\n{stderr}"
     );
-    // Contrato de USO (no de cancelación): nadie canceló — falta el flag.
+    // Fallo de fase genuino: nadie canceló, y el reintento con `--resume` sí
+    // es la acción correctiva (a diferencia del antiguo fallo de uso).
     assert!(
         !stderr.contains("estado: cancelado"),
-        "un fallo de uso no puede afirmar que el usuario canceló:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("falta: --vault <directorio>"),
-        "el panel debe nombrar el flag que falta:\n{stderr}"
-    );
-    assert!(
-        stderr.contains("uso: tepochcalli install --vault <directorio> --non-interactive"),
-        "el correctivo es pasar el flag, no reintentar a ciegas:\n{stderr}"
+        "a phase failure cannot claim a cancellation:\n{stderr}"
     );
     assert!(
         !stderr.contains("cancelled by user"),
-        "la causa no debe imprimir el Display de UserAborted (es mentira):\n{stderr}"
+        "the cause must not print UserAborted's Display:\n{stderr}"
     );
     assert!(
-        !stderr.contains(RETRY),
-        "a usage error offers no retry command:\n{stderr}"
+        stderr.contains(RETRY),
+        "a phase failure offers the resume retry:\n{stderr}"
     );
     assert!(
         stderr.contains("install-") && stderr.contains(".log"),
