@@ -243,8 +243,10 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
         if cancel.is_cancelled() {
             let _ = terminal.draw(|frame| {
                 frame.render_widget(
-                    Paragraph::new(Line::from("Cancelado — deshaciendo los cambios aplicados…"))
-                        .style(Style::new().add_modifier(Modifier::BOLD)),
+                    Paragraph::new(Line::from(
+                        "Cancelación no disponible en esta fase — la operación continúa",
+                    ))
+                    .style(Style::new().add_modifier(Modifier::BOLD)),
                     frame.area(),
                 );
             });

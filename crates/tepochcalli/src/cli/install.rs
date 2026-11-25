@@ -79,7 +79,7 @@ pub(crate) fn run_install(
         return code;
     }
     // F2: vault directory (`--vault` wins; otherwise the process cwd).
-    let raw = match resolve_vault_for_install(&*ui, non_interactive, vault.as_deref()) {
+    let raw = match resolve_vault_for_install(&*ui, vault.as_deref()) {
         Ok(raw) => raw,
         Err(code) => return code,
     };
@@ -182,25 +182,19 @@ fn prereqs_gate(ui: &dyn Ui, stderr: &mut dyn std::io::Write) -> Result<(), u8> 
 }
 
 /// F2: `--vault` wins; otherwise the process cwd. `Err(code)` is the panel
-/// already emitted (a cwd that cannot be read is a typed filesystem failure).
-fn resolve_vault_for_install(
-    ui: &dyn Ui,
-    non_interactive: bool,
-    vault: Option<&str>,
-) -> Result<String, u8> {
+/// already emitted. A cwd that cannot be read is a typed filesystem failure,
+/// never "falta --vault"; only a genuine abort is a usage failure.
+fn resolve_vault_for_install(ui: &dyn Ui, vault: Option<&str>) -> Result<String, u8> {
     match resolve_vault_dir(ui, vault) {
         Ok(raw) => Ok(raw),
-        // Sin `--vault` ya no hay pregunta: solo puede fallar la lectura del
-        // cwd (filesystem tipado). El brazo de abajo conserva el panel de
-        // cancelación genuina por si otro resolver emitiera `UserAborted`.
-        Err(err) if non_interactive => Err(report_usage_failure(
+        Err(WizardError::UserAborted) => Err(report_usage_failure(
             ui,
             "install",
             Some(Phase::F2),
             "vault selection failed",
             "--vault <directorio>",
             "tepochcalli install --vault <directorio> --non-interactive",
-            err,
+            WizardError::UserAborted,
             None,
         )),
         Err(err) => Err(report_failure(

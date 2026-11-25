@@ -67,7 +67,6 @@ pub(crate) fn run_home_cmd(
     };
     let raw = match resolve_vault_or_report(
         &*ui,
-        non_interactive,
         vault.as_deref(),
         "tepochcalli",
         "tepochcalli --vault <directorio> --non-interactive <subcomando>",
