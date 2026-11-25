@@ -1,6 +1,6 @@
 # Contribuir a Tepochcalli
 
-> Guía del contribuidor para el flujo de CI/CD de la versión `0.1.0-beta.2`.
+> Guía del contribuidor para el flujo de CI/CD de la versión `0.1.0-beta.3`.
 > Prosa en español; comandos, rutas y nombres técnicos en English.
 > Reglas del repo: [AGENTS.md](AGENTS.md) · estilo: [docs/CODE_STYLE.md](docs/CODE_STYLE.md) ·
 > seguridad: [docs/SECURITY.md](docs/SECURITY.md) · plan: [docs/WORKFLOW.md](docs/WORKFLOW.md).
