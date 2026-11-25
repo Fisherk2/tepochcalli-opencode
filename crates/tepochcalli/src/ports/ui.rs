@@ -2,6 +2,7 @@
 //! ratatui menu and its line-based fallback, `HeadlessUi` scripted, and the
 //! `ScriptedUi`/`TapUi` fakes in tests).
 
+use std::cell::RefCell;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
@@ -64,6 +65,33 @@ impl Progress {
     pub fn done(&self) -> usize {
         self.done.load(Ordering::SeqCst).min(self.total)
     }
+}
+
+thread_local! {
+    /// Barra activa en esta hebra: el código anidado bajo `run_stages`
+    /// (gate de descarga, scopes de desinstall) marca hitos sin cambiar
+    /// firmas; sin pantalla activa todo es no-op.
+    static ACTIVE_PROGRESS: RefCell<Option<Progress>> = const { RefCell::new(None) };
+}
+
+/// Publica el contador de la pantalla de hitos en curso.
+pub fn set_active_progress(progress: Option<&Progress>) {
+    ACTIVE_PROGRESS.with(|cell| *cell.borrow_mut() = progress.cloned());
+}
+
+/// Marca un hito en la barra activa; sin barra, no-op.
+pub fn advance_active_stage() {
+    ACTIVE_PROGRESS.with(|cell| {
+        if let Some(progress) = cell.borrow().as_ref() {
+            progress.advance();
+        }
+    });
+}
+
+/// `true` mientras haya una pantalla de hitos en esta hebra.
+#[must_use]
+pub fn has_active_progress() -> bool {
+    ACTIVE_PROGRESS.with(|cell| cell.borrow().is_some())
 }
 
 /// Installer dialogue. `panel` only renders (errors surface via `Result`

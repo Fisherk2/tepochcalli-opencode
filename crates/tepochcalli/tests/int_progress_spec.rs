@@ -14,7 +14,9 @@ use ratatui::Terminal;
 
 use tepochcalli::adapters::HeadlessUi;
 use tepochcalli::domain::CancelToken;
-use tepochcalli::ports::{Progress, ProgressSpec, Ui};
+use tepochcalli::ports::{
+    advance_active_stage, has_active_progress, set_active_progress, Progress, ProgressSpec, Ui,
+};
 
 fn stage_spec(steps: usize, eta: Option<Duration>) -> ProgressSpec {
     ProgressSpec {
@@ -153,5 +155,40 @@ fn int_progress_spec_el_default_del_puerto_ejecuta_el_trabajo_sin_pantalla() {
     assert!(
         !cancel.is_cancelled(),
         "la UI por defecto no dispara cancelación"
+    );
+}
+
+#[test]
+fn int_progress_spec_el_gate_no_toma_una_segunda_pantalla_con_la_barra_activa() {
+    // El gate llama a `run_cancellable` DENTRO de `run_stages`: con la barra
+    // exterior activa, esa pantalla debe ceder (work en línea) para no sacar
+    // el frame exterior de la alternate screen. `TestBackend` no observa
+    // `try_init`, así que se aserta el guard, no un frame.
+    let progress = Progress::new(7);
+    set_active_progress(Some(&progress));
+    assert!(has_active_progress());
+    advance_active_stage();
+    assert_eq!(
+        progress.done(),
+        1,
+        "el hito anidado cuenta en la barra activa"
+    );
+    let mut ran = false;
+    tepochcalli::adapters::ui_ratatui::run_progress(
+        "Descargando modelo de embeddings",
+        &CancelToken::new(),
+        &mut || ran = true,
+    );
+    set_active_progress(None);
+    assert!(ran, "el trabajo del gate corre aunque ceda la pantalla");
+    assert!(!has_active_progress(), "el guard se limpia al terminar");
+
+    // El hito anidado (gate del install / scope del desinstall) solo cuenta
+    // mientras hay una corrida con barra; fuera de ella es no-op.
+    advance_active_stage();
+    assert_eq!(
+        progress.done(),
+        1,
+        "sin barra activa no se inventan hitos (sigue el único aviso de arriba)"
     );
 }

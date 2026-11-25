@@ -12,6 +12,7 @@ mod embedder_options;
 pub mod failure;
 pub(crate) mod flow_cli;
 pub mod flow_contract;
+pub use embedder_gate::take_gate_stage;
 pub use flow_contract::{take_gate_cause, GateCause};
 mod home;
 mod installed;

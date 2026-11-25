@@ -18,7 +18,7 @@ use ratatui::widgets::{Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
-use crate::ports::{MenuView, Progress, ProgressSpec};
+use crate::ports::{has_active_progress, set_active_progress, MenuView, Progress, ProgressSpec};
 
 /// Contact shown at the bottom of the menu (H5).
 const REPO: &str = "https://github.com/Fisherk2/tepochcalli-opencode";
@@ -223,15 +223,18 @@ pub fn is_cancel_key(code: KeyCode, modifiers: KeyModifiers) -> bool {
         || (code == KeyCode::Char('c') && modifiers.contains(KeyModifiers::CONTROL))
 }
 
-/// R-offline-2: draws the Cancel screen, runs `work` while a watcher thread
-/// fires `cancel` on Esc/Ctrl+C and redraws the spinner every 100 ms, then
-/// leaves the final frame (cancel notice, or the unchanged bar). Any terminal
-/// failure degrades to plain `work()`: a broken screen must never break the
-/// operation.
+/// R-offline-2: pantalla de Cancelar + watcher (100 ms); cualquier fallo de
+/// terminal degrada a `work()` — una pantalla rota nunca rompe la operación.
 pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
-    // `try_init` (no `init`): el doc de esta función promete degradar ante
-    // CUALQUIER fallo de terminal, y `init` paniquea (`expect`). `try_init`
-    // instala el mismo panic hook antes de intentar (ratatui 0.30.2, init.rs).
+    // shortcut: con la barra exterior activa el watcher de `run_stages` ya
+    // posee cancelación y frame final; un segundo `try_init` sacaría la
+    // pantalla exterior de la alternate screen. TestBackend no lo observa.
+    if has_active_progress() {
+        work();
+        return;
+    }
+    // `try_init` (no `init`): degrada ante cualquier fallo; `init` paniquea
+    // (ratatui 0.30.2, init.rs).
     let mut terminal = match ratatui::try_init() {
         Ok(terminal) => terminal,
         Err(_) => {
@@ -243,8 +246,7 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
             return;
         }
     };
-    // `_restore` solo tras un init exitoso: el brazo `Err` de arriba ya
-    // restauró a mano y duplicarlo ahí sería inofensivo pero sucio.
+    // `_restore` solo tras init exitoso: el brazo `Err` ya restauró a mano.
     let _restore = RestoreOnDrop;
     if terminal
         .draw(|frame| render_progress(frame, title, 0))
@@ -276,8 +278,7 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
                     }
                     Ok(false) => {
                         tick += 1;
-                        // Lock envenenado: la pantalla es decorativa, se
-                        // ignora en vez de paniquear.
+                        // Lock envenenado: pantalla decorativa, se ignora.
                         if let Ok(mut terminal) = terminal.lock() {
                             let _ = terminal.draw(|frame| render_progress(frame, &title, tick));
                         }
@@ -305,8 +306,7 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
                 );
             });
         } else {
-            // Sin hitos declarados no hay 100 % que fingir: se redibuja la
-            // pantalla tal cual, con el spinner en su última posición.
+            // Sin hitos no hay 100 % que fingir: se redibuja la última posición.
             let _ = terminal.draw(|frame| render_progress(frame, title, 0));
         }
     };
@@ -329,11 +329,13 @@ pub fn run_stages(spec: &ProgressSpec, cancel: &CancelToken, work: &mut dyn FnMu
     let _restore = RestoreOnDrop;
     let spec = spec.clone();
     let progress = Progress::new(spec.steps);
+    set_active_progress(Some(&progress));
     let start = Instant::now();
     if terminal
         .draw(|frame| render_stages(frame, &spec, &progress, Duration::ZERO, 0))
         .is_err()
     {
+        set_active_progress(None);
         work(&progress);
         return;
     }
@@ -371,6 +373,7 @@ pub fn run_stages(spec: &ProgressSpec, cancel: &CancelToken, work: &mut dyn FnMu
         })
     };
     work(&progress);
+    set_active_progress(None);
     done.store(true, Ordering::SeqCst);
     let _ = watcher.join();
     if let Ok(mut terminal) = terminal.lock() {
@@ -409,10 +412,8 @@ impl Drop for RestoreOnDrop {
 pub fn run_menu(view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
     let spec = view.spec;
     let mut selected = first_enabled(spec);
-    // `try_init` (mismo criterio que `run_progress`): `init` paniquea con
-    // `expect` ante un terminal inservible, y el contrato de este wizard es
-    // abortar tipado, nunca reventar. `restore()` es idempotente y cubre el
-    // init a medias (raw mode aplicado, alt screen no).
+    // `try_init` (como en `run_progress`): `init` paniquea; `restore()` es
+    // idempotente y cubre el init a medias.
     let mut terminal = match ratatui::try_init() {
         Ok(terminal) => terminal,
         Err(_) => {

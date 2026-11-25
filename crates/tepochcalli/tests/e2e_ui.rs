@@ -3,15 +3,17 @@
 
 mod common;
 
+use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::IsTerminal;
 use std::process::Stdio;
 use std::time::Duration;
 
 use common::helpers::bin;
+use common::FakePayload;
 use tepochcalli::adapters::{HeadlessUi, TtyUi};
-use tepochcalli::domain::WizardError;
-use tepochcalli::ports::Ui;
+use tepochcalli::domain::{CancelToken, MenuAction, WizardError};
+use tepochcalli::ports::{set_active_progress, MenuView, Progress, ProgressSpec, Ui};
 
 #[test]
 fn headless_returns_scripted_answers_in_order() {
@@ -186,4 +188,136 @@ fn install_non_interactive_with_vault_flag_terminates() {
         "exit {code} is outside the documented wizard ranges, stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
+}
+
+// --- T21: estados de progreso de los tres flujos --------------------------
+
+/// `Ui` de captura: corre el trabajo en línea (sin TTY) y recuerda la spec y
+/// el último contador de cada `run_stages`. No dibuja nada: lo que aserta es
+/// la declaración de hitos del producto, no el render.
+#[derive(Default)]
+struct StagesUi {
+    specs: RefCell<Vec<ProgressSpec>>,
+    done: RefCell<Vec<usize>>,
+}
+
+impl Ui for StagesUi {
+    fn select(
+        &self,
+        _prompt: &str,
+        _options: &[&str],
+        _default_index: usize,
+    ) -> Result<usize, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
+    fn input(&self, _prompt: &str, _default: Option<&str>) -> Result<String, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
+    fn input_secret(&self, _prompt: &str) -> Result<String, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
+    fn panel(&self, _title: &str, _body: &str) {}
+
+    fn menu(&self, _view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        Err(WizardError::UserAborted)
+    }
+
+    fn run_stages(
+        &self,
+        spec: &ProgressSpec,
+        _cancel: &CancelToken,
+        work: &mut dyn FnMut(&Progress),
+    ) {
+        let progress = Progress::new(spec.steps);
+        set_active_progress(Some(&progress));
+        work(&progress);
+        set_active_progress(None);
+        self.specs.borrow_mut().push(spec.clone());
+        self.done.borrow_mut().push(progress.done());
+    }
+}
+
+/// Update declara UN hito y lo marca al terminar la materialización.
+#[test]
+fn update_progress_declara_un_hito_y_llena_la_barra() {
+    let vault = tempfile::tempdir().expect("vault fixture");
+    let payload = tempfile::tempdir().expect("payload fixture");
+    let ui = StagesUi::default();
+
+    let report = tepochcalli::run_update(&FakePayload::new(payload.path()), &ui, vault.path());
+
+    assert!(
+        report.is_ok(),
+        "update sin ficheros debe terminar: {report:?}"
+    );
+    assert_eq!(
+        ui.specs.borrow().len(),
+        1,
+        "update debe declarar una sola pantalla de progreso"
+    );
+    assert_eq!(ui.specs.borrow()[0].steps, 1, "un hito para H7");
+    assert_eq!(ui.done.borrow()[0], 1, "el hito se marca al terminar");
+}
+
+/// Con un solo scope presente, desinstall declara backup + ese scope (2),
+/// nunca los tres scopes del contrato (no anuncia lo que no existe).
+#[test]
+fn uninstall_progress_declara_backup_y_solo_los_scopes_presentes() {
+    let vault = tempfile::tempdir().expect("vault fixture");
+    std::fs::write(vault.path().join("opencode.json"), b"{}").expect("scope fixture");
+    let ui = StagesUi::default();
+
+    let report = tepochcalli::run_uninstall(&ui, vault.path());
+
+    assert!(report.is_ok(), "desinstall debe terminar: {report:?}");
+    assert_eq!(ui.specs.borrow().len(), 1);
+    assert_eq!(
+        ui.specs.borrow()[0].steps,
+        2,
+        "backup + 1 scope presente; los 2 scopes ausentes no se anuncian"
+    );
+    assert_eq!(ui.done.borrow()[0], 2, "backup y scope se marcan");
+}
+
+/// Sin TTY la barra es un no-op: el trabajo corre en línea y stderr sigue
+/// siendo parseable (criterio de `--non-interactive`, sin regresión T21).
+#[test]
+fn install_non_interactive_no_escribe_estados_de_progreso() {
+    let cwd = tempfile::tempdir().expect("cwd fixture");
+    let payload = tempfile::tempdir().expect("payload fixture");
+    let state = tempfile::tempdir().expect("state fixture");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let out = bin()
+            .args([
+                "install",
+                "--non-interactive",
+                "--skip-model",
+                "--payload",
+                payload.path().to_str().expect("utf8 tmp"),
+            ])
+            .current_dir(cwd.path())
+            .env("XDG_STATE_HOME", state.path())
+            .env("ALL_PROXY", "http://127.0.0.1:9")
+            .env("HTTPS_PROXY", "http://127.0.0.1:9")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
+            .stdin(Stdio::null())
+            .output()
+            .expect("spawn binary");
+        let _ = tx.send(out);
+    });
+    let out = rx
+        .recv_timeout(Duration::from_secs(60))
+        .expect("install --non-interactive debe terminar sin TTY");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    for marker in ["transcurrido", "ETA ", "█", "Cancelar — Esc"] {
+        assert!(
+            !stderr.contains(marker),
+            "sin TTY no se dibuja progreso; encontrado `{marker}`:\n{stderr}"
+        );
+    }
 }

@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::{CancelToken, WizardError};
-use crate::ports::{CommandRunner, Ui};
+use crate::ports::{advance_active_stage, CommandRunner, ProgressSpec, Ui};
 
 use super::embedder_gate::run_gate;
 use super::embedder_menu::config_path;
@@ -212,14 +212,36 @@ pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, Wizar
         ),
     );
     let cancel = CancelToken::new();
+    // Backup + solo los scopes presentes: no se anuncia lo que no existe.
+    let spec = ProgressSpec {
+        title: "Desinstalando (H8)".to_string(),
+        steps: present.len() + 1,
+        eta: None,
+    };
     let mut outcome: Option<Result<UninstallReport, WizardError>> = None;
-    ui.run_cancellable("Desinstalando (H8)", &cancel, &mut || {
-        outcome = Some(uninstall_inner(ui, vault, &present, &cancel));
+    ui.run_stages(&spec, &cancel, &mut |_| {
+        uninstall_stages(ui, vault, present.clone(), cancel.clone(), &mut outcome);
     });
     match outcome {
         Some(result) => result,
         None => Err(WizardError::Internal),
     }
+}
+
+/// Pantalla de cancelación de H8 con la barra exterior ya activa (contrato
+/// `run_cancellable` intacto): los hitos los marca `uninstall_inner`.
+fn uninstall_stages(
+    ui: &dyn Ui,
+    vault: &Path,
+    present: Vec<(&str, PathBuf)>,
+    cancel: CancelToken,
+    slot: &mut Option<Result<UninstallReport, WizardError>>,
+) {
+    let mut outcome: Option<Result<UninstallReport, WizardError>> = None;
+    ui.run_cancellable("Desinstalando (H8)", &cancel, &mut || {
+        outcome = Some(uninstall_inner(ui, vault, &present, &cancel));
+    });
+    *slot = outcome;
 }
 
 /// H8 under the cancel token: [cancelar antes del backup] no toca nada; a
@@ -241,6 +263,7 @@ fn uninstall_inner(
         let _ = std::fs::remove_dir_all(&backup_dir);
         return Err(err);
     }
+    advance_active_stage(); // hito 1: backup listo
     let mut entries_removed = 0;
     let mut workers_used = 0;
     for (scope, path) in present {
@@ -277,6 +300,7 @@ fn uninstall_inner(
             Ok(removal) => {
                 entries_removed += removal.entries_removed;
                 workers_used = workers_used.max(removal.workers_used);
+                advance_active_stage(); // un hito por scope presente
             }
             Err(err) => {
                 ui.panel(

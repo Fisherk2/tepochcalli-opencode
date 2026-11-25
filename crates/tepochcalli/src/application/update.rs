@@ -8,7 +8,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::domain::{CancelToken, WizardError};
-use crate::ports::{backup_path, OverwriteJournal, PayloadSource, Ui};
+use crate::ports::{backup_path, OverwriteJournal, PayloadSource, ProgressSpec, Ui};
 
 use super::installer::{AGENTS_MD, GITIGNORE, OPENCODE_DIR, RUNTIME_DIR};
 use super::phase8::OPENCODE_JSON;
@@ -57,9 +57,23 @@ pub fn run_update(
     let mut journal = OverwriteJournal::default();
     let cancel = CancelToken::new();
     let mut outcome: Option<Result<(), WizardError>> = None;
-    ui.run_cancellable("Actualizando (H7)", &cancel, &mut || {
-        outcome =
-            Some(payload.materialize_overwrite(vault, &UPDATE_SCOPES, &mut journal, Some(&cancel)));
+    let spec = ProgressSpec {
+        title: "Actualizando (H7)".to_string(),
+        steps: 1,
+        eta: None,
+    };
+    ui.run_stages(&spec, &cancel, &mut |progress| {
+        journal = update_stages(
+            ui,
+            payload,
+            vault,
+            cancel.clone(),
+            std::mem::take(&mut journal),
+            &mut outcome,
+        );
+        if outcome.as_ref().is_some_and(Result::is_ok) {
+            progress.advance();
+        }
     });
     match outcome {
         Some(Ok(())) => {}
@@ -83,6 +97,25 @@ pub fn run_update(
         ),
     );
     Ok(report)
+}
+
+/// Sobrescritura bajo la pantalla de cancelación (contrato H7 intacto): el
+/// único hito se marca en `run_update` solo si el trabajo terminó bien.
+fn update_stages(
+    ui: &dyn Ui,
+    payload: &dyn PayloadSource,
+    vault: &Path,
+    cancel: CancelToken,
+    mut journal: OverwriteJournal,
+    slot: &mut Option<Result<(), WizardError>>,
+) -> OverwriteJournal {
+    let mut outcome: Option<Result<(), WizardError>> = None;
+    ui.run_cancellable("Actualizando (H7)", &cancel, &mut || {
+        outcome =
+            Some(payload.materialize_overwrite(vault, &UPDATE_SCOPES, &mut journal, Some(&cancel)));
+    });
+    *slot = outcome;
+    journal
 }
 
 /// Undo an H7 overwrite from its journal: restore every `<ruta>.bak` over its
