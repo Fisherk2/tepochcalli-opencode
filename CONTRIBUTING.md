@@ -124,7 +124,12 @@ publica el payload como GitHub Release.
 
 4. `release.yml` (trigger `tepochcalli-v[0-9]*`) valida guard → sube
    `tepochcalli-workspace-<version>.tar.gz` + sha256 como `--prerelease` (environment
-   `release`; al no haber revisores configurados hoy, se auto-aprueba al vuelo). Las
+   `release`; ese environment tiene reviewer requerido —Fisherk2, con auto-revisión
+   permitida—, así que la run espera en `waiting` hasta una aprobación explícita (UI
+   «Review deployments» o API
+   `POST /repos/{owner}/{repo}/actions/runs/{run_id}/pending_deployments`, con
+   `state=approved` y `comment` obligatorio); sin aprobación la petición expira a los
+   30 días). Las
    notas de la Release son ahora la sección `## [<version>]` de `CHANGELOG.md`, que
    `release.yml` extrae con `--notes-file`.
 5. Verificar la Release y el asset en GitHub.
