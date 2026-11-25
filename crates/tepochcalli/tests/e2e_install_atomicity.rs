@@ -298,6 +298,108 @@ fn f6_failure_compensates_to_degraded_path5() {
     );
 }
 
+// shortcut: 951 líneas (tramo 701–1000); el test de F6 degradado se añadió aquí para reutilizar el harness de este fichero; refactorizar a <500 extrayendo el harness a tests/common/ antes de la próxima fase.
+/// T18 (D69/2): un gate `ok:false` en F6 NO cambia la política degradada —
+/// exit 0 + `provider = "none"` + checklist en stdout — pero ahora deja panel,
+/// log y la causa real del flow en ambos. Sin este test el fallo A era silencioso.
+#[test]
+fn f6_failure_reports_panel_and_log_with_exit_zero() {
+    use std::os::unix::fs::PermissionsExt as _;
+
+    const DETAIL: &str = "cuda error: device not ready (sm_90)";
+
+    let dir = tmp();
+    let payload = dir.path().join("payload-f6");
+    std::fs::create_dir_all(&payload).expect("payload dir");
+    write_path(&payload.join("READ.md"), "# read\n");
+    let state = dir.path().join("state-f6");
+    std::fs::create_dir_all(&state).expect("state dir");
+    let vault = dir.path().join("v-f6");
+    let rt = vault.join(".tepochcalli");
+    std::fs::create_dir_all(rt.join("bin")).expect("bin dir");
+    std::fs::create_dir_all(rt.join("venv").join("bin")).expect("venv bin dir");
+    std::fs::write(rt.join("bin").join("uv"), b"fake-uv").expect("uv artifact");
+    // F6 no está en el marker: se ejecuta y el gate devuelve la causa real.
+    std::fs::write(rt.join(".install-state"), "F1\nF2\nF3\nF4\nF5\nF8\n").expect("state marker");
+    std::fs::write(rt.join(".install-intent"), "").expect("intent artifact");
+    let python = rt.join("venv").join("bin").join("python");
+    let script = format!(
+        "#!/bin/sh\ncase \"$*\" in\n  *embed-check*) echo '{{\"ok\":false,\"error_code\":\"E_MODEL_LOAD_FAILED\",\"detail\":\"{DETAIL}\"}}' ;;\n  *) echo '{{\"embedder\":null,\"index\":null,\"config\":null,\"health\":null,\"state\":\"degraded\",\"reason\":\"E_NO_EMBEDDER\",\"fix_hint\":\"run config embedder\",\"mode\":\"none\"}}' ;;\nesac\n"
+    );
+    std::fs::write(&python, script).expect("fake python fixture");
+    std::fs::set_permissions(&python, std::fs::Permissions::from_mode(0o755))
+        .expect("chmod fake python");
+
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_tepochcalli"))
+        .args([
+            "install",
+            "--non-interactive",
+            "--resume",
+            "--vault",
+            vault.to_str().expect("utf8 tmp"),
+            "--payload",
+            payload.to_str().expect("utf8 tmp"),
+        ])
+        .env("XDG_STATE_HOME", &state)
+        .env("LOCALAPPDATA", &state)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .expect("spawn install");
+    let stdout = String::from_utf8_lossy(&out.stdout);
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert_eq!(out.status.code(), Some(0), "degradado = exit 0:\n{stderr}");
+
+    // Política intacta: none_config marcado F6 done y checklist en stdout.
+    let config = std::fs::read_to_string(rt.join("config").join("tepochcalli.toml"))
+        .expect("degraded config");
+    assert!(config.contains("provider = \"none\""), "got:\n{config}");
+    assert!(
+        std::fs::read_to_string(rt.join(".install-state"))
+            .expect("state marker")
+            .contains("F6"),
+        "F6 queda marcado done"
+    );
+    for expected in [
+        "RAG degradado",
+        "tepochcalli config embedder --confirm",
+        "tepochcalli reindex --confirm",
+    ] {
+        assert!(
+            stdout.contains(expected),
+            "checklist en stdout ({expected}):\n{stdout}"
+        );
+    }
+
+    // Novedad T18: panel(log+stderr) con la causa real, NUNCA el pre-filtro HF.
+    for expected in [
+        "install failed (F6)",
+        "E_MODEL_LOAD_FAILED",
+        DETAIL,
+        "model failed to load",
+        "log: ",
+    ] {
+        assert!(
+            stderr.contains(expected),
+            "panel sin {expected:?}:\n{stderr}"
+        );
+    }
+    assert!(
+        !stderr.contains("not an embedding model"),
+        "el gate no es el pre-filtro HF:\n{stderr}"
+    );
+    let log_path = stderr
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("log: "))
+        .expect("el panel nombra su log");
+    let log = std::fs::read_to_string(log_path).expect("log leído");
+    assert!(log.contains("E_MODEL_LOAD_FAILED"), "log sin código: {log}");
+    assert!(log.contains(DETAIL), "log sin detalle real: {log}");
+    assert!(
+        Path::new(log_path).starts_with(&state),
+        "el log vive fuera del vault: {log_path}"
+    );
+}
+
 // --- F7: failure leaves no index residue, placeholders survive ---
 
 #[test]

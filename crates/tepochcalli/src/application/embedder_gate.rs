@@ -4,6 +4,7 @@
 //! [--revision <sha>]` y verifica que `<models>/<slug>@<sha>/` quedó
 //! materializado antes de escribir la config.
 
+use std::cell::Cell;
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
@@ -16,8 +17,9 @@ use super::installer::RUNTIME_DIR;
 
 /// Runs `venv python -m tepochcalli_flow embed-check --model <id> [--revision
 /// <sha>]` (spawn trunk + parser del contrato compartido, T11/S5). `ok:false`
-/// is the portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
-/// `PhaseFailed`.
+/// ⇒ `ModelLoadFailed`, con la causa real en `flow_contract::take_gate_cause`;
+/// `ModelInvalid` queda reservado al pre-filtro HF de la ruta 3. Un gate roto o
+/// ilegible es `PhaseFailed`.
 pub(super) fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,
@@ -55,6 +57,9 @@ pub(super) fn run_gate_cancellable(
             Some(cancel),
         ));
     });
+    if outcome.is_some() {
+        mark_gate_stage();
+    }
     match outcome {
         Some(Err(WizardError::UserAborted)) => {
             purge_partials(vault, &before);
@@ -63,6 +68,23 @@ pub(super) fn run_gate_cancellable(
         Some(other) => other,
         None => Err(WizardError::Internal),
     }
+}
+
+thread_local! {
+    /// Buzón de una sola lectura para el hito de descarga: el punto de UI del
+    /// gate lo marca y `install_phases` lo consume. Swap no lo lee, así que su
+    /// barra de seis hitos no se adelanta.
+    static GATE_STAGE: Cell<bool> = const { Cell::new(false) };
+}
+
+fn mark_gate_stage() {
+    GATE_STAGE.with(|cell| cell.set(true));
+}
+
+/// Toma (y vacía) el aviso de que el gate corrió en esta hebra.
+#[must_use]
+pub fn take_gate_stage() -> bool {
+    GATE_STAGE.with(Cell::take)
 }
 
 /// Nombres de los snapshots de `models/` antes del gate (R-offline-2).
@@ -154,7 +176,18 @@ fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_materialized, model_dir, models_snapshot, parse_gate, purge_partials};
+    use super::{
+        is_materialized, mark_gate_stage, model_dir, models_snapshot, parse_gate, purge_partials,
+        take_gate_stage,
+    };
+
+    #[test]
+    fn gate_marca_un_solo_hito_de_descarga_para_el_install() {
+        assert!(!take_gate_stage(), "buzón vacío al empezar");
+        mark_gate_stage();
+        assert!(take_gate_stage(), "el punto de UI del gate lo reporta");
+        assert!(!take_gate_stage(), "una sola lectura");
+    }
 
     /// R-offline-2: la purga borra SOLO lo que nació durante la descarga
     /// cancelada; un snapshot previo del usuario sobrevive intacto.
@@ -259,10 +292,19 @@ mod tests {
     }
 
     #[test]
-    fn gate_false_is_model_invalid_and_garbage_is_phase_failed() {
-        match parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}") {
-            Err(crate::domain::WizardError::ModelInvalid) => {}
-            other => panic!("portero must reject, got: {other:?}"),
+    fn gate_false_is_a_load_failure_not_the_hf_tag_prefilter() {
+        // `ModelInvalid` está reservado al pre-filtro de tags de la ruta 3;
+        // un `ok:false` del gate nunca puede reclamar ese significado.
+        for body in [
+            "{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}",
+            "{\"ok\":false,\"error_code\":\"E_NET_LOAD\",\"detail\":\"cuda: no device\"}",
+        ] {
+            let err = parse_gate(body).expect_err("gate must reject");
+            assert_ne!(
+                err,
+                crate::domain::WizardError::ModelInvalid,
+                "gate rejection must not be labelled as the HF pre-filter: {body}"
+            );
         }
         match parse_gate("not json at all") {
             Err(crate::domain::WizardError::PhaseFailed) => {}

@@ -20,10 +20,11 @@
 //! paso 6 (GC del cache) quedó fuera, en `embedder_gc`.
 
 use std::path::Path;
+use std::time::Duration;
 
 use crate::config::{default_and_large, parse_presets, Preset};
 use crate::domain::{CancelToken, EmbedderChoice, WizardError};
-use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Ui};
+use crate::ports::{CommandRunner, HostFacts, HostProbe, HttpClient, Progress, ProgressSpec, Ui};
 
 use super::embedder_estimate::{BYTES_PER_MB, HF_API_BASE};
 use super::embedder_gate::run_gate_cancellable;
@@ -135,24 +136,50 @@ impl CurrentState {
     }
 }
 
-/// D8.4 six-step swap with zero-state rollback on any failure.
+/// D8.4 six-step swap with zero-state rollback on any failure. Six milestones
+/// feed the progress bar; the ETA is the figure already declared by `warning`.
 pub fn run_swap(
     deps: &SwapDeps<'_>,
     vault: &Path,
     opts: &SwapOptions,
 ) -> Result<SwapReport, WizardError> {
     let before = snapshot(vault);
-    // (1) Show the current state (reads only — never a mutation).
     let current = current_state(vault);
+    let spec = ProgressSpec {
+        title: "Cambiando embedder (swap D8.4)".to_string(),
+        steps: 6,
+        eta: Some(Duration::from_secs(estimate_secs(current.db_bytes))),
+    };
+    let mut result = None;
+    deps.ui.run_stages(&spec, &deps.cancel, &mut |progress| {
+        result = Some(swap_stages(deps, vault, opts, &before, &current, progress));
+    });
+    result.unwrap_or(Err(WizardError::Internal))
+}
+
+/// Los seis hitos del swap, en orden; el último `advance()` solo se alcanza
+/// tras el panel de éxito, así un rollback nunca muestra un 100 % falso.
+fn swap_stages(
+    deps: &SwapDeps<'_>,
+    vault: &Path,
+    opts: &SwapOptions,
+    before: &Snapshot,
+    current: &CurrentState,
+    progress: &Progress,
+) -> Result<SwapReport, WizardError> {
+    // (1) Show the current state (reads only — never a mutation).
     deps.ui
         .panel("Estado actual del embedder", &current.describe());
+    progress.advance();
     // (2) Pick the new embedder: the same D7.1 menu with D8 badges.
     // The optional HF token travels alongside (never in a panel or file).
     let (picked, token) = pick_embedder(deps, current.device.as_deref())?;
+    progress.advance();
     // (3) Explicit full-reindex warning + estimate; `--confirm` is mandatory.
     deps.ui
-        .panel("Advertencia de re-index", &warning(&picked, &current));
+        .panel("Advertencia de re-index", &warning(&picked, current));
     confirm_or_abort(deps.ui, opts.confirm)?;
+    progress.advance();
     // C1: sin red no se escribe ni la config elegida.
     probe_local_model(deps.http, &picked)?;
     // C1 (D7.3): la config ELEGIDA queda VIVA (tmp+rename, mismo tramo del
@@ -163,21 +190,25 @@ pub fn run_swap(
         vault,
         &picked_config_body(&picked, current.device.as_deref()),
     ) {
-        abort_swap(vault, &before);
+        abort_swap(vault, before);
         return Err(err);
     }
-    let outcome = download_gate_and_reindex(deps, vault, &picked, token.as_deref(), &current);
+    let outcome = download_gate_and_reindex(deps, vault, &picked, token.as_deref(), current);
     match outcome {
         Err(err) => {
-            abort_swap(vault, &before);
+            abort_swap(vault, before);
             Err(err)
         }
         Ok(partial) => {
+            // (4) gate + re-index terminados.
+            progress.advance();
             if commit_meta(vault, &picked).is_err() {
-                abort_swap(vault, &before);
+                abort_swap(vault, before);
                 return Err(WizardError::PermissionDenied);
             }
             cleanup_staged(vault);
+            // (5) conmutación atómica confirmada.
+            progress.advance();
             // (6) Auto-GC, only after the atomic switch — and only then.
             gc_old_model(
                 vault,
@@ -194,6 +225,7 @@ pub fn run_swap(
                 "Swap completo",
                 &success_panel(&partial, opts.keep_previous),
             );
+            progress.advance();
             Ok(SwapReport {
                 model: partial.model,
                 dims: partial.dims,
@@ -665,7 +697,8 @@ mod tests {
     fn parse_gate_refuses_aborts_and_missing_fields() {
         assert_eq!(
             parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
-            Err(WizardError::ModelInvalid)
+            Err(WizardError::ModelLoadFailed),
+            "el gate nunca es el pre-filtro HF de la ruta 3"
         );
         assert_eq!(parse_gate("garabato"), Err(WizardError::PhaseFailed));
         assert_eq!(

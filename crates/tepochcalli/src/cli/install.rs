@@ -12,7 +12,7 @@ use tepochcalli::application::{
     check_prereqs_on, compensate_phase6, embedder_presence, ensure_vault_dir,
     guard_offline_before_touch, is_phase_done, litellm_config_present, mark_phase_done,
     payload_endpoint, payload_local_ready, resolve_vault_dir, rollback_install, run_phase6,
-    EmbedderPresence, InstallSnapshot, Phase6Deps, Phase6Report,
+    take_gate_cause, EmbedderPresence, GateCause, InstallSnapshot, Phase6Deps, Phase6Report,
 };
 use tepochcalli::domain::{EmbedderChoice, Phase, VaultPath, WizardError};
 use tepochcalli::ports::{HttpClient, Ui};
@@ -428,6 +428,7 @@ pub(crate) fn run_f6_or_degraded(
     offline: bool,
     ui: &dyn Ui,
     stderr: &mut dyn std::io::Write,
+    cause: &mut Option<GateCause>,
 ) -> Result<Phase6Report, u8> {
     match run_phase6(deps, path.as_path()) {
         Ok(picked) => {
@@ -453,6 +454,9 @@ pub(crate) fn run_f6_or_degraded(
             match compensate_phase6(path.as_path()) {
                 Ok(()) => {
                     mark_phase_done(path.as_path(), Phase::F6);
+                    // La degradación sigue siendo exit 0: aquí solo se entrega
+                    // la causa; el panel/log los pinta el consumidor.
+                    *cause = Some(take_gate_cause().unwrap_or_else(|| err.into()));
                     let _ = writeln!(
                         stderr,
                         "embedder: F6 failed ({err}); continuing degraded (configure later)"

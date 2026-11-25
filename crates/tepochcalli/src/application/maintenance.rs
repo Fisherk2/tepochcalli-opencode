@@ -12,7 +12,7 @@
 use std::path::{Path, PathBuf};
 
 use crate::domain::{CancelToken, WizardError};
-use crate::ports::{CommandRunner, Ui};
+use crate::ports::{advance_active_stage, CommandRunner, ProgressSpec, Ui};
 
 use super::embedder_gate::run_gate;
 use super::embedder_menu::config_path;
@@ -20,6 +20,8 @@ use super::flow_contract::{parse_refresh, spawn_refresh, Refreshed};
 use super::installer::{venv_python, RUNTIME_DIR, VENV_DIR_NAME};
 use super::phase7::{index_meta_path, write_index_meta};
 use super::phase8::OPENCODE_JSON;
+#[cfg(unix)]
+use super::removal::remove_scope;
 use super::text::{config_value, json_string, json_u32, or_fallback, provider_is_none};
 
 /// What the confirmed rebuild established: the counts plus the embedder the
@@ -58,6 +60,16 @@ pub const UNINSTALL_BACKUP_SCOPES: [&str; 4] = [
 /// Backup folder prefix (sibling of the scopes, inside the vault).
 const BACKUP_PREFIX: &str = ".tepochcalli-backup-";
 
+/// Evidencia determinista del borrado de un scope (T19): entradas reales
+/// desvinculadas y workers simultáneos, sin aseveraciones de tiempo.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct Removal {
+    /// Entradas borradas, incluidos directorios y la raíz del scope.
+    pub entries_removed: u64,
+    /// Workers lanzados en la fase con más trabajo (`min(8, entradas)`).
+    pub workers_used: usize,
+}
+
 /// What the removal established: whether there was a runtime to remove.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct UninstallReport {
@@ -66,6 +78,10 @@ pub struct UninstallReport {
     pub removed: bool,
     /// Backup folder holding the removed scopes (`None` on a no-op).
     pub backup_dir: Option<PathBuf>,
+    /// Entradas borradas por el helper (Unix; `0` en no-op y en Windows).
+    pub entries_removed: u64,
+    /// Workers simultáneos usados por el helper (`0` cuando no hubo trabajo).
+    pub workers_used: usize,
 }
 
 /// Confirmed rebuild: mismatch check → gate (only when the dims are unknown)
@@ -180,6 +196,8 @@ pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, Wizar
         return Ok(UninstallReport {
             removed: false,
             backup_dir: None,
+            entries_removed: 0,
+            workers_used: 0,
         });
     }
     ui.panel(
@@ -194,14 +212,36 @@ pub fn run_uninstall(ui: &dyn Ui, vault: &Path) -> Result<UninstallReport, Wizar
         ),
     );
     let cancel = CancelToken::new();
+    // Backup + solo los scopes presentes: no se anuncia lo que no existe.
+    let spec = ProgressSpec {
+        title: "Desinstalando (H8)".to_string(),
+        steps: present.len() + 1,
+        eta: None,
+    };
     let mut outcome: Option<Result<UninstallReport, WizardError>> = None;
-    ui.run_cancellable("Desinstalando (H8)", &cancel, &mut || {
-        outcome = Some(uninstall_inner(ui, vault, &present, &cancel));
+    ui.run_stages(&spec, &cancel, &mut |_| {
+        uninstall_stages(ui, vault, present.clone(), cancel.clone(), &mut outcome);
     });
     match outcome {
         Some(result) => result,
         None => Err(WizardError::Internal),
     }
+}
+
+/// Pantalla de cancelación de H8 con la barra exterior ya activa (contrato
+/// `run_cancellable` intacto): los hitos los marca `uninstall_inner`.
+fn uninstall_stages(
+    ui: &dyn Ui,
+    vault: &Path,
+    present: Vec<(&str, PathBuf)>,
+    cancel: CancelToken,
+    slot: &mut Option<Result<UninstallReport, WizardError>>,
+) {
+    let mut outcome: Option<Result<UninstallReport, WizardError>> = None;
+    ui.run_cancellable("Desinstalando (H8)", &cancel, &mut || {
+        outcome = Some(uninstall_inner(ui, vault, &present, &cancel));
+    });
+    *slot = outcome;
 }
 
 /// H8 under the cancel token: [cancelar antes del backup] no toca nada; a
@@ -223,6 +263,9 @@ fn uninstall_inner(
         let _ = std::fs::remove_dir_all(&backup_dir);
         return Err(err);
     }
+    advance_active_stage(); // hito 1: backup listo
+    let mut entries_removed = 0;
+    let mut workers_used = 0;
     for (scope, path) in present {
         if cancel.is_cancelled() {
             ui.panel(
@@ -238,15 +281,28 @@ fn uninstall_inner(
         // Scope → kind is fixed: the two roots are dirs, `opencode.json` is a
         // file. A corrupted tree (a file named `.tepochcalli`) fails typed
         // instead of silently deleting the wrong thing.
-        let outcome = if *scope == OPENCODE_JSON {
-            std::fs::remove_file(path)
+        let outcome: Result<Removal, WizardError> = if *scope == OPENCODE_JSON {
+            match std::fs::remove_file(path) {
+                Ok(()) => Ok(Removal::default()),
+                Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok(Removal::default()),
+                Err(err) => Err(map_fs(err)),
+            }
         } else {
-            std::fs::remove_dir_all(path)
+            #[cfg(unix)]
+            let removal = remove_scope(vault, path, cancel);
+            #[cfg(windows)]
+            let removal = std::fs::remove_dir_all(path)
+                .map_err(map_fs)
+                .map(|()| Removal::default());
+            removal
         };
         match outcome {
-            Ok(()) => {}
-            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
-            Err(_) => {
+            Ok(removal) => {
+                entries_removed += removal.entries_removed;
+                workers_used = workers_used.max(removal.workers_used);
+                advance_active_stage(); // un hito por scope presente
+            }
+            Err(err) => {
                 ui.panel(
                     "Desinstall interrumpido",
                     &format!(
@@ -255,7 +311,10 @@ fn uninstall_inner(
                         backup_dir.display()
                     ),
                 );
-                return Err(WizardError::PermissionDenied);
+                return Err(match err {
+                    WizardError::DiskFull | WizardError::UserAborted => err,
+                    _ => WizardError::PermissionDenied,
+                });
             }
         }
     }
@@ -269,12 +328,15 @@ fn uninstall_inner(
     Ok(UninstallReport {
         removed: true,
         backup_dir: Some(backup_dir),
+        entries_removed,
+        workers_used,
     })
 }
 
 /// ENOSPC es `DiskFull` (30), no `PermissionDenied` (31): la convención T7
-/// mapeaba todo io error a permiso y mentía sobre un disco lleno.
-fn map_fs(err: std::io::Error) -> WizardError {
+/// mapeaba todo io error a permiso y mentía sobre un disco lleno. El helper de
+/// borrado de T19 reutiliza este mismo mapeo.
+pub(crate) fn map_fs(err: std::io::Error) -> WizardError {
     if err.kind() == std::io::ErrorKind::StorageFull {
         WizardError::DiskFull
     } else {

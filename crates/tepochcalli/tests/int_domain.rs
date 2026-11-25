@@ -41,6 +41,7 @@ fn exit_codes_land_in_spec_ranges() {
         (WizardError::PayloadCorrupt, 30..=39),
         (WizardError::ModelInvalid, 40..=u8::MAX),
         (WizardError::ModelMismatch, 40..=u8::MAX),
+        (WizardError::ModelLoadFailed, 40..=u8::MAX),
         (WizardError::PhaseFailed, 40..=u8::MAX),
         (WizardError::Internal, 40..=u8::MAX),
         (WizardError::UserAborted, 40..=u8::MAX),
