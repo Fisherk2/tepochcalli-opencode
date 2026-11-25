@@ -61,14 +61,14 @@ el único campo (`detail`) que podría distinguirlos.
 > `gate_verdict` mapea todo `ok:false` a `ModelInvalid`, reservado en realidad al pre-filtro de
 > tags de la ruta 3 (`specs/spec-embeddings.md:153`, ADR-008:50). El `detail` real muere en el
 > parseo.
-
+>
 > ¿Por qué aparece CUDA si el usuario eligió un preset? → `swap.rs:327-330` no aplica el
 > pre-filtro HF al preset, `choose_device` (`:343-358`) infiere `cuda` de la presencia de
 > `nvidia-smi`/`rocm-smi`, y `swap.rs:156-168` escribe `device=cuda` en la config antes del gate.
 > Como `spawn_gate` no pasa `--device` (`flow_contract.rs:55-60`) y `build_embedder_for_model`
 > lee la config viva (`__main__.py:74-85`), el gate hereda exactamente el device que lo hace
 > fallar.
-
+>
 > ¿Por qué el fallo A no deja rastro? → `run_f6_or_degraded` (`cli/install.rs:437-460`) trata
 > `ModelInvalid` como error degradable: compensa a `none_config`, marca la fase *done* y devuelve
 > `Ok(configure_later)`; el único productor de panel/log es `report_failure` (`cli/report.rs:69-81`),
@@ -148,8 +148,8 @@ en `docs/BACKLOG.md` §8.
 | 2026-11-25 | B: swap con preset y `device=cuda` | Panel «install failed / not an embedding model»; `--confirm` presente |
 | 2026-11-25 | A: F6 de instalación con el mismo gate | Sin panel ni log; degradado a `provider = "none"` y exit 0 |
 
-_Ambas variantes del mismo release beta.3; ver [fix03](fix03-desinstall-lento-por-venv.md) para el
-tercer síntoma del release (H8 lento), de raíz distinta._
+**Ambas variantes del mismo release beta.3; ver [fix03](fix03-desinstall-lento-por-venv.md) para el
+tercer síntoma del release (H8 lento), de raíz distinta.**
 
 ## References
 
@@ -165,4 +165,4 @@ tercer síntoma del release (H8 lento), de raíz distinta._
 
 ---
 
-_Diagnosis created by `/diagnosis`. Update this file if the fix reveals additional insights._
+**Diagnosis created by `/diagnosis`. Update this file if the fix reveals additional insights.**

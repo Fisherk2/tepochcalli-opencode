@@ -77,6 +77,22 @@ fn int_gate_errors_no_network_failure_is_model_invalid() {
 }
 
 #[test]
+fn int_gate_errors_unknown_or_absent_code_falls_back_to_load_failed() {
+    // Códigos nuevos (o su ausencia) no pueden caer en el pre-filtro HF: el
+    // fallback tipado es `ModelLoadFailed`, con o sin portador de causa.
+    for body in [
+        "{\"ok\":false,\"error_code\":\"E_FUTURO\",\"detail\":\"causa imprevista\"}",
+        "{\"ok\":false,\"detail\":\"sin código\"}",
+    ] {
+        let err = parse_gate(body).expect_err("gate rechazado");
+        assert_eq!(err, WizardError::ModelLoadFailed, "fallback: {body}");
+        assert_ne!(err, WizardError::ModelInvalid, "nunca el pre-filtro");
+        let cause = take_gate_cause().expect("portador del gate");
+        assert_eq!(cause.error, WizardError::ModelLoadFailed);
+    }
+}
+
+#[test]
 fn int_gate_errors_garbled_gate_is_phase_failed_without_carrier() {
     let err = parse_gate("not json at all").expect_err("gate ilegible");
     assert_eq!(err, WizardError::PhaseFailed);

@@ -42,13 +42,13 @@ en un filesystem donde cada mutación de metadatos es cara.
 > recorre y desvincula entradas una a una; con 101.413 entradas en `.tepochcalli/` (dos venvs)
 > resultan ~150–300 k mutaciones secuenciales amplificadas por fuseblk/NTFS-3G, frente a los
 > 3–5 k syscalls del backup `copy_tree` (`:331-368`, sin seguir symlinks).
-
+>
 > ¿Por qué no basta con no hacer backup del venv? → ya es así: `UNINSTALL_BACKUP_SCOPES`
 > (`maintenance.rs:52-57`) excluye `venv/`, `db/`, `models/` y `bin/` por ser regenerables y
 > porque copiarlos puede agotar el disco (comentario `:48-51`). El coste está enteramente en el
 > **borrado**, no en la copia. Reducir el backup sería además inseguro: `config/` puede contener
 > API key y su `.gitignore` `"*"` con permisos 0700/0600 (`:301-303`) es intocable.
-
+>
 > ¿Por qué parece colgado? → porque el único trabajo visible es el panel de inicio y el de
 > final (`:262-268`); entre ambos no hay progreso por entrada, y la pausa de H11
 > (`ui_ratatui.rs:349-359`) es solo interacción humana posterior, no actividad de disco.
@@ -131,8 +131,8 @@ cambio de contrato MCP ni de las decisiones D1-D8; no se re-editan ADRs Accepted
 | --- | --- | --- |
 | 2026-11-25 | H8 lento en `desinstall` | ~4 m 21 s por `remove_dir_all` sobre 101.413 entradas en fuseblk/NTFS-3G |
 
-_Tercer síntoma del mismo release beta.3; los dos fallos de error del gate y F6 tienen raíz
-distinta y están en [fix02](fix02-wizard-gate-modelinvalid-y-f6-silencioso.md)._
+**Tercer síntoma del mismo release beta.3; los dos fallos de error del gate y F6 tienen raíz
+distinta y están en [fix02](fix02-wizard-gate-modelinvalid-y-f6-silencioso.md).**
 
 ## References
 
@@ -145,4 +145,4 @@ distinta y están en [fix02](fix02-wizard-gate-modelinvalid-y-f6-silencioso.md).
 
 ---
 
-_Diagnosis created by `/diagnosis`. Update this file if the fix reveals additional insights._
+**Diagnosis created by `/diagnosis`. Update this file if the fix reveals additional insights.**
