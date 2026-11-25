@@ -644,6 +644,9 @@ fn f8_real_venv_loopback_ok_then_degraded() {
         .expect("warm-up import must complete (>300s en frío ⇒ montaje FUSE roto, no cableado)");
     assert_eq!(warm.status, 0, "warm-up import failed: {}", warm.stderr);
 
+    // El probe interno de `run_phase8` (`flow_cli::PROBE_TIMEOUT`) es 120 s,
+    // menor que este warm-up; el riesgo real de tiempo es el envelope de 10
+    // min del CI, que no se toca aquí.
     let first = run_phase8(&proc, vault.path(), None).expect("real ok loopback must succeed");
     assert_eq!(first.health, RagHealth::Ok);
     assert!(first.changed);

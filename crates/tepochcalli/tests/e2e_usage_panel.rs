@@ -13,13 +13,16 @@ fn state() -> tempfile::TempDir {
     tempfile::tempdir().expect("state home fixture")
 }
 
-/// `tepochcalli --non-interactive` sin `--vault`: el menú no puede adivinar el
-/// directorio. Uso (falta `--vault`), no cancelación.
+/// `tepochcalli --non-interactive` sin `--vault`: el cwd es el vault, así que
+/// lo único que puede faltar es la selección del menú (sin guion). Nunca se
+/// pregunta por el directorio ni se afirma una cancelación.
 #[test]
-fn home_non_interactive_without_vault_reports_usage_not_cancel() {
+fn home_non_interactive_without_vault_reports_menu_usage_not_cancel() {
     let state = state();
+    let cwd = tempfile::tempdir().expect("cwd fixture");
     let out = bin()
         .arg("--non-interactive")
+        .current_dir(cwd.path())
         .env("XDG_STATE_HOME", state.path())
         .env("LOCALAPPDATA", state.path())
         .stdin(Stdio::null())
@@ -34,27 +37,30 @@ fn home_non_interactive_without_vault_reports_usage_not_cancel() {
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("falta: --vault <directorio>"),
-        "el panel debe nombrar el flag que falta:\n{stderr}"
+        stderr.contains("menu selection failed"),
+        "the only missing answer is the menu button:\n{stderr}"
     );
     assert!(
-        stderr.contains("uso: tepochcalli --vault <directorio> --non-interactive <subcomando>"),
-        "el correctivo es pasar el flag:\n{stderr}"
+        !stderr.contains("falta: --vault <directorio>"),
+        "the vault is no longer a question:\n{stderr}"
     );
     assert!(!stderr.contains("estado: cancelado"), "{stderr}");
     assert!(!stderr.contains("cancelled by user"), "{stderr}");
     assert!(
         !stderr.contains("tepochcalli failed"),
-        "nadie falló ni canceló: falta un flag:\n{stderr}"
+        "the menu had no script, not a failure:\n{stderr}"
     );
 }
 
-/// `update --non-interactive` sin `--vault`: mismo contrato que `install`.
+/// `update --non-interactive` sin `--vault`: el cwd es el vault; sin runtime
+/// instalado el fallo es de fase (2), no un panel de flag ausente.
 #[test]
-fn update_non_interactive_without_vault_reports_usage_not_cancel() {
+fn update_non_interactive_without_vault_uses_cwd_and_fails_for_missing_install() {
     let state = state();
+    let cwd = tempfile::tempdir().expect("cwd fixture");
     let out = bin()
         .args(["update", "--non-interactive"])
+        .current_dir(cwd.path())
         .env("XDG_STATE_HOME", state.path())
         .env("LOCALAPPDATA", state.path())
         .stdin(Stdio::null())
@@ -63,31 +69,31 @@ fn update_non_interactive_without_vault_reports_usage_not_cancel() {
 
     assert_eq!(
         out.status.code(),
-        Some(41),
+        Some(2),
         "stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("falta: --vault <directorio>"),
-        "el panel debe nombrar el flag que falta:\n{stderr}"
+        stderr.contains("no hay instalación") && stderr.contains(cwd.path().to_str().unwrap()),
+        "the cwd must be named as the target:\n{stderr}"
     );
     assert!(
-        stderr.contains("uso: tepochcalli update --vault <directorio> --non-interactive"),
-        "el correctivo es pasar el flag:\n{stderr}"
+        !stderr.contains("falta: --vault <directorio>") && !stderr.contains("estado: cancelado"),
+        "no vault question was asked:\n{stderr}"
     );
-    assert!(!stderr.contains("estado: cancelado"), "{stderr}");
     assert!(!stderr.contains("cancelled by user"), "{stderr}");
 }
 
-/// `uninstall --non-interactive` sin `--vault`: uso (falta `--vault`), no
-/// cancelación. `--confirm` viaja porque su ausencia es OTRO gate de uso (2),
-/// anterior a la resolución del vault.
+/// `uninstall --non-interactive` sin `--vault`: el cwd es el vault. `--confirm`
+/// viaja porque su ausencia sigue siendo un gate de uso (2).
 #[test]
-fn uninstall_non_interactive_without_vault_reports_usage() {
+fn uninstall_non_interactive_without_vault_uses_cwd_and_is_idempotent() {
     let state = state();
+    let cwd = tempfile::tempdir().expect("cwd fixture");
     let out = bin()
         .args(["uninstall", "--non-interactive", "--confirm"])
+        .current_dir(cwd.path())
         .env("XDG_STATE_HOME", state.path())
         .env("LOCALAPPDATA", state.path())
         .stdin(Stdio::null())
@@ -96,25 +102,33 @@ fn uninstall_non_interactive_without_vault_reports_usage() {
 
     assert_eq!(
         out.status.code(),
-        Some(41),
+        Some(0),
         "stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
+    assert!(
+        String::from_utf8_lossy(&out.stdout).contains("nothing to remove"),
+        "an empty cwd has no runtime to remove:\n{}",
+        String::from_utf8_lossy(&out.stdout)
+    );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("falta: --vault <directorio>"),
-        "el panel debe nombrar el flag que falta:\n{stderr}"
+        !stderr.contains("falta: --vault <directorio>"),
+        "no vault question was asked:\n{stderr}"
     );
     assert!(!stderr.contains("cancelado"), "{stderr}");
     assert!(!stderr.contains("cancelled by user"), "{stderr}");
 }
 
-/// `reindex --non-interactive --confirm` sin `--vault`: mismo contrato.
+/// `reindex --non-interactive --confirm` sin `--vault`: el cwd es el vault y
+/// el reindex falla tipado porque allí no hay instalación.
 #[test]
-fn reindex_non_interactive_without_vault_reports_usage() {
+fn reindex_non_interactive_without_vault_uses_cwd_and_fails_typed() {
     let state = state();
+    let cwd = tempfile::tempdir().expect("cwd fixture");
     let out = bin()
         .args(["reindex", "--non-interactive", "--confirm"])
+        .current_dir(cwd.path())
         .env("XDG_STATE_HOME", state.path())
         .env("LOCALAPPDATA", state.path())
         .stdin(Stdio::null())
@@ -123,14 +137,18 @@ fn reindex_non_interactive_without_vault_reports_usage() {
 
     assert_eq!(
         out.status.code(),
-        Some(41),
+        Some(42),
         "stderr:\n{}",
         String::from_utf8_lossy(&out.stderr)
     );
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        stderr.contains("falta: --vault <directorio>"),
-        "el panel debe nombrar el flag que falta:\n{stderr}"
+        stderr.contains("Sin instalación"),
+        "the empty cwd must be reported as an uninstalled vault:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("falta: --vault <directorio>"),
+        "no vault question was asked:\n{stderr}"
     );
     assert!(!stderr.contains("cancelado"), "{stderr}");
     assert!(!stderr.contains("cancelled by user"), "{stderr}");

@@ -23,7 +23,15 @@ use tepochcalli::ports::CommandOutput;
 use tepochcalli::{INSTALL_STATE_PATH, MANAGED_RAG};
 
 fn tmp() -> tempfile::TempDir {
-    tempfile::tempdir().expect("tempdir for T14 fixtures")
+    let dir = tempfile::tempdir().expect("tempdir for T14 fixtures");
+    // Keep fixtures private; the wizard also repairs a legacy 0755 root.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt as _;
+        std::fs::set_permissions(dir.path(), std::fs::Permissions::from_mode(0o700))
+            .expect("private fixture");
+    }
+    dir
 }
 
 fn payload_tree(base: &Path) {
@@ -172,7 +180,9 @@ fn f3_compensation_removes_written_and_keeps_user_files() {
 #[test]
 fn f4_f5_failures_compensate_without_touching_user_data() {
     use tepochcalli::adapters::fetch::{self};
-    use tepochcalli::application::installer::{compensate_phase4, compensate_phase5, run_phase5};
+    use tepochcalli::application::installer::{
+        compensate_phase4_in, compensate_phase5, run_phase4_with_state, run_phase5,
+    };
 
     let vault = tmp();
     write_path(&vault.path().join("notes.md"), "# user research\n");
@@ -200,10 +210,15 @@ fn f4_f5_failures_compensate_without_touching_user_data() {
         stdout: "uv 0.12.9".to_string(),
         stderr: String::new(),
     })]);
-    let err =
-        tepochcalli::run_phase4(&http, &proc, vault.path()).expect_err("tampered F4 must fail");
+    let state = tmp();
+    let err = run_phase4_with_state(&http, &proc, vault.path(), asset, state.path())
+        .expect_err("tampered F4 must fail");
     assert_eq!(err, WizardError::PayloadCorrupt);
     assert!(!vault.path().join(".tepochcalli").join("bin").exists());
+    assert!(
+        !state.path().join("bin").exists(),
+        "failed F4 must compensate the external bin/"
+    );
     assert_eq!(
         std::fs::read(vault.path().join("notes.md")).expect("sentinel"),
         before_user
@@ -238,7 +253,7 @@ fn f4_f5_failures_compensate_without_touching_user_data() {
     );
 
     // Direct compensation fns are idempotent no-ops on missing dirs.
-    compensate_phase4(vault.path());
+    compensate_phase4_in(vault.path(), state.path());
     compensate_phase5(vault.path());
     assert_eq!(
         std::fs::read(vault.path().join("notes.md")).expect("sentinel"),

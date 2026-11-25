@@ -70,8 +70,7 @@ fn bare_invocation_opens_the_menu_and_never_dumps_usage() {
 #[test]
 fn non_interactive_menu_without_a_script_aborts_typed() {
     // Checklist T9: `--non-interactive` sin guion ⇒ `UserAborted` tipado,
-    // nunca un cuelgue. Without `--vault` the headless menu cannot even
-    // resolve the vault, so it fails fast with the documented 41.
+    // nunca un cuelgue. El cwd resuelve el vault; lo que falta es el botón.
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let out = bin()
@@ -252,15 +251,35 @@ fn config_embedder_is_implemented_not_a_stub() {
         !stderr_text(&out).contains("not yet implemented"),
         "the stub is gone; T16 owns this subcommand"
     );
-    // `--non-interactive` without `--vault` ⇒ typed failure (missing answer
-    // is never guessed), still on the failure-panel path.
-    let out = bin()
-        .args(["config", "embedder", "--non-interactive", "--confirm"])
-        .stdin(Stdio::null())
-        .output()
-        .expect("spawn binary");
+    // `--non-interactive` without `--vault` ⇒ the cwd is the target: the
+    // swap's dead-proxy preflight fails typed (never a vault prompt, never a
+    // hang).
+    let cwd = tempfile::tempdir().expect("cwd fixture");
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let out = bin()
+            .args(["config", "embedder", "--non-interactive", "--confirm"])
+            .current_dir(cwd.path())
+            .env("ALL_PROXY", "http://127.0.0.1:9")
+            .env("HTTPS_PROXY", "http://127.0.0.1:9")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
+            .stdin(Stdio::null())
+            .output()
+            .expect("spawn binary");
+        let _ = tx.send(out);
+    });
+    let out = rx
+        .recv_timeout(std::time::Duration::from_secs(15))
+        .expect("`config embedder --non-interactive` must not hang on a vault prompt");
     assert!(
         out.status.code().unwrap_or(0) != 0,
-        "`--non-interactive` without `--vault` must fail, not hang"
+        "the dead proxy must fail the preflight:\n{}",
+        stderr_text(&out)
+    );
+    assert!(
+        !stderr_text(&out).contains("vault selection failed"),
+        "the cwd must resolve the vault without asking:\n{}",
+        stderr_text(&out)
     );
 }

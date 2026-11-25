@@ -1,4 +1,4 @@
-# CI — gate único de push/PR de Tepochcalli (v0.1.0-beta.1).
+# CI — gate único de push/PR de Tepochcalli (desde v0.1.0-beta.2).
 #
 # Composición del gate (aprobada por el dueño, 2026-11-23):
 #   * job `python`   — la mitad Python de `just quality` + `test-acceptance` + `md-lint`
