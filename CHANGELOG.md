@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.2] - 2026-11-24
+
+### Fixed
+
+- **Wizard: destino por defecto sin preguntar.** `resolve_vault_dir` usa el directorio corriente
+  (`current_dir()`) cuando no hay `--vault` o llega en blanco; `--vault <dir>` sigue ganando.
+- **Wizard: instalación en NTFS-3G.** El `uv` verificado se descarga, se comprueba por SHA-256, se
+  hace ejecutable y se ejecuta desde el state dir del SO; `<vault>/.tepochcalli/bin/uv` es un
+  symlink Unix (Windows conserva la copia `.exe`). El state root se crea o verifica privado
+  (`0700`) y un directorio legacy `0755` de beta.1 se repara a `0700` —no se rechaza—; un symlink o
+  un directorio no chmodeable falla de forma tipada. Corrige el `Permission denied (os error 13)`
+  del montaje fuseblk/NTFS-3G ([ADR-017](docs/adr/adr-017-instalacion-filesystem-agnostica.md)).
+- **Wizard: cancelación honesta por fase.** Al cancelar F3/F4/F5/F7, la pantalla de progreso de esa
+  fase muestra «Cancelado — deshaciendo los cambios aplicados…» en lugar de un fallo genérico.
+- **Wizard: diagnósticos de cwd y payload.** El reporte de fallo muestra el directorio corriente y
+  el payload usado.
+
+### Changed
+
+- **Restricciones de dependencias del payload** ([ADR-018](docs/adr/adr-018-refresco-pines-dependencias-payload.md)):
+  `pillow>=13.0.0` (5 CVEs CRITICAL corregidos), `litellm>=1.110.4,<1.111` (por encima de
+  `GHSA-92x9-889m-jgmw`), `filelock>=4.2.1` (resuelve `4.3.1`; 13 advisories corregidos),
+  `soupsieve>=4.0.0` y `opentelemetry-api>=1.45.2` (un advisory cada uno). Verificado contra OSV
+  el 2026-11-24.
+
+### Docs
+
+- **README en inglés** con tarjetas de agentes y procedencia de los benchmarks.
+
 ## [0.1.0-beta.1] - 2026-11-23
 
 ### Added

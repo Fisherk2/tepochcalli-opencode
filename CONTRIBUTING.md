@@ -1,6 +1,6 @@
 # Contribuir a Tepochcalli
 
-> Guía del contribuidor para el flujo de CI/CD de la versión `0.1.0-beta.1`.
+> Guía del contribuidor para el flujo de CI/CD de la versión `0.1.0-beta.2`.
 > Prosa en español; comandos, rutas y nombres técnicos en English.
 > Reglas del repo: [AGENTS.md](AGENTS.md) · estilo: [docs/CODE_STYLE.md](docs/CODE_STYLE.md) ·
 > seguridad: [docs/SECURITY.md](docs/SECURITY.md) · plan: [docs/WORKFLOW.md](docs/WORKFLOW.md).
@@ -125,8 +125,11 @@ publica el payload como GitHub Release.
    `release`; al no haber revisores configurados hoy, se auto-aprueba al vuelo).
 5. Verificar la Release y el asset en GitHub.
 
-Aclaraciones: la publicación a PyPI (`uvx tepochcalli`) está **dormida en este beta**
-(TD-71) — `wheels.yml`/`publish.yml` existen pero no forman parte del flujo de 0.1.0-beta.1.
+Aclaraciones: la publicación a PyPI (`uvx tepochcalli`) forma parte del flujo desde
+`0.1.0-beta.1` (`0.1.0b1` publicado; `0.1.0-beta.2` sigue el mismo camino: tag →
+`release.yml` + `publish.yml`, ambos con environment `release`) — ver
+`docs/BACKLOG.md` §8 (filas 2026-11-24). Queda como deuda la migración de `publish.yml`
+del token estático a Trusted Publishing/OIDC.
 
 ## 7. Rollback
 

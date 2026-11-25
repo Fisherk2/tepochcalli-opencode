@@ -281,7 +281,7 @@ Exact snippet from the payload (`opencode.json`):
   "cwd": ".",
   "environment": {
     "TEPOCHCALLI_ROOT": ".",
-    "INDEXER_DIR": "00-resources,09-materials",
+    "INDEXER_DIR": "00-resources",
     "TEPOCHCALLI_TOP_K": "5"
   }
 }
@@ -450,7 +450,7 @@ What it costs to ingest material into the index, by size. **First ingestion** = 
 | Problem | Solution |
 | --- | --- |
 | `uvx tepochcalli` runs an old version | `uvx --refresh tepochcalli` (or `uvx tepochcalli@latest`) |
-| PyPI shows `0.1.0b1` but the CLI prints `0.1.0-beta.1` | Same release, PEP 440 normalization — not a mismatch |
+| PyPI shows `0.1.0b2` but the CLI prints `0.1.0-beta.2` | Same release, PEP 440 normalization — not a mismatch |
 | No network during install / update / embedder change | Preflight cancels before the first write with rollback; there is no degraded installation |
 | Cancellation vs phase failure | Exit **41** = user cancellation; **42** = failure with leftovers (rollback incomplete) |
 | `rag_status().config.valid == false` | Read `config.problems` / `config.unknown_env` in `opencode.json`; fix typos such as `INDEXER_DRI` and restart the MCP |
