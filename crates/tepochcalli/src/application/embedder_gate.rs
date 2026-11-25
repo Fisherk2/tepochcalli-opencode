@@ -17,8 +17,9 @@ use super::installer::RUNTIME_DIR;
 
 /// Runs `venv python -m tepochcalli_flow embed-check --model <id> [--revision
 /// <sha>]` (spawn trunk + parser del contrato compartido, T11/S5). `ok:false`
-/// is the portero verdict (`E_MODEL_INVALID`); a crashed/garbled gate is
-/// `PhaseFailed`.
+/// ⇒ `ModelLoadFailed`, con la causa real en `flow_contract::take_gate_cause`;
+/// `ModelInvalid` queda reservado al pre-filtro HF de la ruta 3. Un gate roto o
+/// ilegible es `PhaseFailed`.
 pub(super) fn run_gate(
     proc: &dyn CommandRunner,
     vault: &Path,

@@ -298,7 +298,7 @@ fn f6_failure_compensates_to_degraded_path5() {
     );
 }
 
-// shortcut: 950 líneas (tramo 701–1000); el test de F6 degradado se añadió aquí para reutilizar el harness de este fichero; refactorizar a <500 extrayendo el harness a tests/common/ antes de la próxima fase.
+// shortcut: 951 líneas (tramo 701–1000); el test de F6 degradado se añadió aquí para reutilizar el harness de este fichero; refactorizar a <500 extrayendo el harness a tests/common/ antes de la próxima fase.
 /// T18 (D69/2): un gate `ok:false` en F6 NO cambia la política degradada —
 /// exit 0 + `provider = "none"` + checklist en stdout — pero ahora deja panel,
 /// log y la causa real del flow en ambos. Sin este test el fallo A era silencioso.

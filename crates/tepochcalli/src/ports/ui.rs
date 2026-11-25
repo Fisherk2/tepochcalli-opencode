@@ -54,10 +54,14 @@ impl Progress {
         }
     }
 
-    /// Marca un hito completado; sucesivos `advance()` más allá del total se
-    /// acotan al leer con [`Progress::done`].
+    /// Marca un hito completado; el acote al total ocurre al escribir, en el
+    /// único mutador (el `min` de [`Progress::done`] sigue como defensa).
     pub fn advance(&self) {
-        self.done.fetch_add(1, Ordering::SeqCst);
+        let _ = self
+            .done
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |v| {
+                Some((v + 1).min(self.total))
+            });
     }
 
     /// Hitos completados, nunca más de los declarados.

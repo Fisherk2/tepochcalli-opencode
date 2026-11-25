@@ -7,6 +7,7 @@
 //! cwd + env). Ningún modelo se descarga: los fixtures `gate_ok`/`refresh_ok`
 //! replican los contratos T11/T12. El gate `--confirm` y los flags
 //! `--vault`/`--non-interactive` se prueban contra el binario real.
+//! Umbral: 914 líneas (tramo 701-1000); refactorizar a <500 extrayendo el harness a tests/common/.
 
 mod common;
 
