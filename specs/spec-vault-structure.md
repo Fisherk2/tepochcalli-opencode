@@ -85,12 +85,17 @@ Nota de convención: el nombre canónico de la carpeta de entrada —y raíz por
 ├── db/                        # LanceDB embebido (tepochcalli.lance, tabla chunks) — ADR-002
 ├── models/                    # cache de modelos de embeddings (SENTENCE_TRANSFORMERS_HOME/HF_HOME)
 ├── venv/                      # entorno Python aislado creado por uv — ADR-004
-├── bin/                       # binario uv bootstrappeado por el wizard — ADR-003/004
+├── bin/                       # entrada `uv`: symlink Unix al ejecutable del state dir del SO — ADR-004/017
 ├── config/                    # tepochcalli.toml (proveedor/modelo embeddings, chunk sizes,
 │                              #   claves de embedders externos) — NUNCA se commit-ear
 └── pyproject.toml             # deps pineadas: cocoindex[lancedb,sentence-transformers],
                                #   markitdown[docx,pptx,xlsx,xls,pdf] (+ uv.lock) — ADR-011
 ```
+
+Nota ADR-017 (2026-11-24): el ejecutable real `uv` se descarga, se verifica con SHA-256 y se
+ejecuta desde `state_dir()` (`$XDG_STATE_HOME/tepochcalli` / `$HOME/.local/state/tepochcalli`),
+fuera del vault; `bin/uv` es un symlink en Unix (en Windows se conserva la copia `.exe`). La ruta
+pública y el venv no cambian: ADR-004 sigue vigente, solo se refina su ubicación física.
 
 ### Estrategia gitignore
 

@@ -77,7 +77,7 @@ repo                                # este repositorio (producto + plantilla)
 | Instalador | **TUI Rust**; canal **aprobado** `uvx tepochcalli` (rueda PyPI vía maturin `bindings = "bin"`): [ADR-014](docs/adr/adr-014-distribucion-uvx-pypi.md) (Accepted 2026-11-19) sustituye el canal de [ADR-013](docs/adr/adr-013-distribucion-cargo-binstall.md) y declara el retiro del backend de [ADR-003](docs/adr/adr-003-distribucion-cargo-dist.md) (no materializado, TD-51) | ADR-014 (canal) · ADR-003 (backend, en retiro) · ADR-013 (canal heredado) |
 | Frontera agente↔motor | **MCP `tepochcalli-rag`**: `search`/`index_refresh`/`add_source`/`rag_status` + `convert_document`/`convert_base64`/`list_formats` (Phase 3.5); el conjunto de raíces del índice es solo `INDEXER_DIR` | [ADR-005](docs/adr/adr-005-mcp-ports-adapters.md), [ADR-007](docs/adr/adr-007-seleccion-embedder-instalacion.md), [ADR-009](docs/adr/adr-009-conversor-resumen-sin-cuerpo.md), [ADR-010](docs/adr/adr-010-indice-multi-raiz-cita-vault.md) |
 | Conversor soporte | **markitdown** como librería **en proceso** en el venv (el server standalone `markitdown-mcp` se retira del payload) | specs/spec-markitdown.md, [ADR-011](docs/adr/adr-011-politica-dependencias-dos-librerias.md) |
-| Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host) | [ADR-004](docs/adr/adr-004-uv-venv-aislado.md) |
+| Deps Python | **uv + venv local** (`.tepochcalli/venv`; usuario sin Python en host); `uv` se ejecuta desde `state_dir()` y el vault recibe un symlink en Unix | [ADR-004](docs/adr/adr-004-uv-venv-aislado.md) (refinado por [ADR-017](docs/adr/adr-017-instalacion-filesystem-agnostica.md), sin re-editar) |
 
 Resumen de estilo de código: [docs/CODE_STYLE.md](docs/CODE_STYLE.md) (ruff+type hints Python,
 rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
@@ -159,6 +159,8 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 > enmiendas **Accepted**, versión alineada a `0.1.0` y Phase 6.5 **desbloqueada y después
 > COMPLETADA** el mismo día (métricas y salvedades en WORKFLOW §Phase 6.5); el canal queda
 > decidido, sin publicar nada.
+>
+> **Instalación filesystem-agnóstica (2026-11-24, [ADR-017](docs/adr/adr-017-instalacion-filesystem-agnostica.md), Accepted):** el `uv` verificado se ejecuta desde `state_dir()` fuera del vault y `.tepochcalli/bin/uv` es symlink en Unix; `resolve_vault_dir` usa el cwd por omisión (`--vault` sigue ganando) y F3/F4/F5/F7 muestran progreso. ADR-003/004/014 intactos; detalle en spec-installer-wizard §Enmienda 2026-11-24.
 
 ## Log de decisiones
 
@@ -179,6 +181,7 @@ rustfmt+clippy wizard, specs kebab, ADRs `adr-NNN-kebab`, prosa en español).
 | [ADR-013](docs/adr/adr-013-distribucion-cargo-binstall.md) | Canal de instalación: `cargo binstall` recomendado, `shell`/`powershell` como fallback (reemplaza el canal de ADR-003, no su backend cargo-dist) | Accepted 2026-11-13 |
 | [ADR-014](docs/adr/adr-014-distribucion-uvx-pypi.md) | Canal de distribución uvx + PyPI (maturin bindings=bin); sustituye el canal de ADR-013 y declara el retiro del backend de ADR-003; ADR-004 intacto | Accepted 2026-11-19 |
 | [ADR-015](docs/adr/adr-015-dispositivo-inferencia-wizard.md) | Elección explícita de device en wizard y re-entrada; refina ADR-007/008 sin reabrir el rechazo de autoselección | Accepted 2026-11-19 |
+| [ADR-017](docs/adr/adr-017-instalacion-filesystem-agnostica.md) | Instalación filesystem-agnóstica: `uv` ejecutado desde `state_dir()`, symlink en el vault y destino por cwd; refina ADR-004 §3/§4/§7 sin re-editarlo | Accepted 2026-11-24 |
 
 ## Referencias
 

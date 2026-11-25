@@ -51,7 +51,7 @@ flowchart TD
     S(["tepochcalli install --vault &lt;ruta&gt;"]) --> F1["1 Detección de prerrequisitos: Obsidian, OpenCode V2, SO/arch, RAM"]
     F1 --> F2["2 Elegir/crear directorio del vault"]
     F2 --> F3["3 Extraer payload template a &lt;vault&gt; (merge sin sobreescribir)"]
-    F3 --> F4["4 Bootstrap uv en .tepochcalli/bin/ (uv instala CPython gestionado)"]
+    F3 --> F4["4 uv verificado y ejecutado en el state dir del SO; el vault recibe un symlink en .tepochcalli/bin/ (uv instala CPython gestionado)"]
     F4 --> F5["5 uv venv + uv sync en .tepochcalli/venv/ (deps pineadas)"]
     F5 --> F6["6 Paso Embedding provider — menú D7.1 (preselección, presets, test-embed, API LiteLLM, Configurar después)"]
     F6 -->|"salidas 1-4"| F7["7 Indexación inicial de 00-resources/ (muestra incluida)"]
@@ -77,7 +77,7 @@ fase 6 **no aborta la instalación**: hace fallback a la salida 5 (ver §Fases, 
 | 1 | Detectar prereqs (Obsidian en rutas estándar por SO; `opencode` en PATH; memoria/disco) | sin cambios; guía de qué instalar |
 | 2 | Seleccionar destino del vault (ruta nueva o vault existente) | sin cambios |
 | 3 | Copiar payload (carpetas numeradas, `.opencode/` con agents/commands/skills, `AGENTS.md` del vault, `opencode.json` base, `00-resources/` con muestras md+PDF) | borrar lo copiado en esta corrida (marca `.tepochcalli/.install-intent`) |
-| 4 | Descargar binario `uv` → `.tepochcalli/bin/`; uv asegura CPython gestionado (el usuario NO necesita Python) | eliminar `bin/` |
+| 4 | Descargar y verificar (SHA-256) el binario `uv`; chmod y ejecución desde `state_dir()` del SO (fuera del vault); `.tepochcalli/bin/uv` = symlink en Unix; uv asegura CPython gestionado (el usuario NO necesita Python) | eliminar `bin/` del vault y del state root y `.uv-stage` — nunca el state root (logs) |
 | 5 | `uv venv .tepochcalli/venv` + `uv sync` desde `pyproject.toml` (`cocoindex[lancedb,sentence-transformers,litellm]`, `markitdown[docx,pptx,xlsx,xls,pdf]` — ADR-011) | `rm -rf venv/` |
 | 6 | Paso **"Embedding provider"** (menú D7.1/ADR-007) con filas de transparencia de hardware (D8.1) y badges de detección del host (D8.2): salida 1 `paraphrase-multilingual-MiniLM-L12-v2` preseleccionado (~470MB a `models/`), salida 2 presets `BAAI/bge-m3` / `all-MiniLM-L6-v2` de `presets.toml` con peso estimado y detección de GPU (advertencia, no bloqueo), salida 3 ID libre de HuggingFace tras el gate **test-embed** (`HF_TOKEN` opcional para gated), salida 4 API LiteLLM con clave en `config/tepochcalli.toml` (gitignored), salida 5 "Configurar después" | un fallo de descarga/validación **no aborta**: `rm -rf models/` parcial + fallback a salida 5 (instalación completa en estado `degraded`) |
 | 7 | Correr flow: index inicial de `00-resources/` (incluye parse Docling de PDF de muestra; **omitida en salida 5**) | `rm -rf db/ flow state` |
@@ -454,6 +454,34 @@ la §UX de fallo y el backup de H7/H8. Canal `uvx`, TUI full-screen y `device` e
 * **No regresión:** la salida 5 explícita y `--skip-model` siguen instalando completo con
   `rag_status` → `degraded`; `sin dato` sigue siendo solo la estimación de requisitos.
 * Evidencia `declarado` hasta la implementación (ADR-016 §6); este lote no añade gates.
+
+## Enmienda 2026-11-24 — instalación filesystem-agnóstica y vault por cwd (ADR-017)
+
+**Status: Accepted 2026-11-24** — orden del dueño; decisión de fondo:
+[ADR-017](../docs/adr/adr-017-instalacion-filesystem-agnostica.md). **Refina**, sin re-escribir,
+la fila 4 de §Fases, el layout D2 de spec-vault-structure y la ubicación física de ADR-004
+§3/§4/§7. ADR-003/004/014, el contrato MCP, el canal `uvx`, el `device` electivo y ADR-016 intactos.
+
+* **F4 — ubicación física:** el `uv` pineado se descarga, se verifica con SHA-256, se chmoddea y
+  se ejecuta desde `application::failure::state_dir()` (`$XDG_STATE_HOME/tepochcalli` o
+  `$HOME/.local/state/tepochcalli`; en Windows `%LOCALAPPDATA%/tepochcalli`). El vault recibe solo
+  un **symlink Unix** en `.tepochcalli/bin/uv` (Windows conserva la copia `.exe`). `Phase4Report.uv`,
+  F5, `resume.rs` y la ruta runtime de `opencode.json` no cambian. `compensate_phase4` retira
+  `bin/` del vault, `bin/` del state root y `.uv-stage`, nunca el state root (logs). Limitación
+  declarada: sin `HOME`/XDG, `state_dir()` cae a `std::env::temp_dir()`, no garantizado exec-capable.
+* **F2 / flags / H5-H6:** `resolve_vault_dir` no pregunta: sin `--vault` (o en blanco) ⇒
+  `current_dir()` absoluto; `--vault <dir>` sigue ganando. Help: `vault directory (default:
+  current directory)`. H5/H6 operan sobre ese destino sin prompt de ruta; la coletilla «v2
+  sugerido» de §Flags queda superada.
+* **Progreso:** F3/F4/F5/F7 muestran la barra indeterminada existente (`Ui::run_cancellable`) con
+  el vault destino en el título; F6 y el mirror conservan sus prompts interactivos y las líneas de
+  estado quedan fuera de la pantalla alternativa. Salvedad: el token de `run_cancellable` es solo
+  visual en F3/F4/F5/F7 (sus APIs no lo aceptan): Esc/Ctrl+C cierra la pantalla pero no detiene los
+  subprocesos; la cancelación efectiva sigue en F6 y update/uninstall/reindex, y ampliarla exige
+  ensanchar esas APIs (diferido).
+* **Evidencia:** `medido` en el mount fuseblk/NTFS-3G (exit 0, F4+F5 verdes, `venv/bin/python` →
+  CPython 3.12.14). Citas: `application/prereqs.rs:97-107`,
+  `application/installer.rs:184-193,387-402,444-456`, `cli/install_phases.rs:150,244,266,316`.
 
 ## References
 

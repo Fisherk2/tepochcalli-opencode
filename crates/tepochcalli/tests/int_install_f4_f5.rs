@@ -18,7 +18,7 @@ use common::{FakeHttp, FakeProc, RecordingProc};
 use tepochcalli::adapters::fetch::{self, UvAsset};
 use tepochcalli::adapters::{StdCommandRunner, UreqHttpClient};
 use tepochcalli::application::installer::{
-    compensate_phase4, compensate_phase5, run_phase4, run_phase4_with, run_phase5,
+    compensate_phase4_in, compensate_phase5, run_phase4, run_phase4_with_state, run_phase5,
 };
 use tepochcalli::ports::CommandOutput;
 use tepochcalli::WizardError;
@@ -148,11 +148,14 @@ fn f4_ok_leaves_executable_uv_and_reports_version() {
     let proc = FakeProc::scripted([ok_version()]);
 
     let vault = tmp();
+    let state = tmp();
     runtime_sentinels(vault.path());
-    let report = run_phase4_with(&http, &proc, vault.path(), &asset).expect("F4 must succeed");
+    let report = run_phase4_with_state(&http, &proc, vault.path(), &asset, state.path())
+        .expect("F4 must succeed");
 
-    let uv = vault.path().join(".tepochcalli").join("bin").join(UV_BIN);
-    assert_eq!(report.uv, uv);
+    let link = vault.path().join(".tepochcalli").join("bin").join(UV_BIN);
+    // Public report and resume artifact stay vault-based (F5 resolves the link).
+    assert_eq!(report.uv, link);
     // The scripted `--version` output is the only source of the version, so
     // the report proves the version check ran.
     assert!(
@@ -160,19 +163,29 @@ fn f4_ok_leaves_executable_uv_and_reports_version() {
         "report must carry `uv --version`, got: {}",
         report.version
     );
-    assert_eq!(std::fs::read(&uv).expect("uv readable"), b"fake-uv-binary");
     #[cfg(unix)]
     {
+        let external = state.path().join("bin").join(UV_BIN);
+        let target = std::fs::read_link(&link).expect("vault uv must be a symlink");
+        assert_eq!(target, external, "the link must point into the state root");
         use std::os::unix::fs::PermissionsExt as _;
-        let mode = std::fs::metadata(&uv)
-            .expect("uv metadata")
+        let mode = std::fs::metadata(&external)
+            .expect("external uv metadata")
             .permissions()
             .mode();
-        assert!(mode & 0o111 != 0, "bin/uv must be executable");
+        assert!(mode & 0o111 != 0, "the external uv must be executable");
     }
+    assert_eq!(
+        std::fs::read(&link).expect("uv readable through the vault link"),
+        b"fake-uv-binary"
+    );
     assert!(
         !vault.path().join(".tepochcalli").join(".uv-stage").exists(),
-        "the download stage must not leak"
+        "the download stage must not leak into the vault"
+    );
+    assert!(
+        !state.path().join(".uv-stage").exists(),
+        "the download stage must not leak into the state root"
     );
     assert_sentinels_intact(vault.path());
 }
@@ -189,12 +202,18 @@ fn f4_corrupt_asset_fails_typed_and_leaves_no_bin() {
     let proc = FakeProc::scripted([ok_version()]);
 
     let vault = tmp();
+    let state = tmp();
     runtime_sentinels(vault.path());
-    let err = run_phase4(&http, &proc, vault.path()).expect_err("tampered asset must fail");
+    let err = run_phase4_with_state(&http, &proc, vault.path(), asset, state.path())
+        .expect_err("tampered asset must fail");
     assert_eq!(err, WizardError::PayloadCorrupt);
     assert!(
         !vault.path().join(".tepochcalli").join("bin").exists(),
         "a corrupt asset must leave no bin/"
+    );
+    assert!(
+        !state.path().join("bin").exists(),
+        "a corrupt asset must leave no external bin/"
     );
     assert_sentinels_intact(vault.path());
 }
@@ -215,13 +234,18 @@ fn f4_version_check_failure_compensates_bin() {
     })]);
 
     let vault = tmp();
+    let state = tmp();
     runtime_sentinels(vault.path());
-    let err =
-        run_phase4_with(&http, &proc, vault.path(), &asset).expect_err("dead binary must fail");
+    let err = run_phase4_with_state(&http, &proc, vault.path(), &asset, state.path())
+        .expect_err("dead binary must fail");
     assert_eq!(err, WizardError::PayloadCorrupt);
     assert!(
         !vault.path().join(".tepochcalli").join("bin").exists(),
         "failed F4 must compensate bin/"
+    );
+    assert!(
+        !state.path().join("bin").exists(),
+        "failed F4 must compensate the external bin/"
     );
     assert_sentinels_intact(vault.path());
 }
@@ -236,12 +260,17 @@ fn f4_spawn_failure_propagates_typed_and_compensates() {
     let proc = FakeProc::scripted([Err(WizardError::PhaseFailed)]);
 
     let vault = tmp();
-    let err =
-        run_phase4_with(&http, &proc, vault.path(), &asset).expect_err("spawn failure must fail");
+    let state = tmp();
+    let err = run_phase4_with_state(&http, &proc, vault.path(), &asset, state.path())
+        .expect_err("spawn failure must fail");
     assert_eq!(err, WizardError::PhaseFailed);
     assert!(
         !vault.path().join(".tepochcalli").join("bin").exists(),
         "failed F4 must compensate bin/"
+    );
+    assert!(
+        !state.path().join("bin").exists(),
+        "failed F4 must compensate the external bin/"
     );
 }
 
@@ -335,20 +364,34 @@ fn f5_sync_failure_removes_venv_but_keeps_f4_bin() {
 #[test]
 fn compensate_fns_are_idempotent_and_never_touch_runtime_data() {
     let vault = tmp();
+    let state = tmp();
     runtime_sentinels(vault.path());
+    let log = state.path().join("install-1.log");
+    std::fs::write(&log, "failure log").expect("state log fixture");
 
     // Missing dirs: compensation is a no-op, never an error.
-    compensate_phase4(vault.path());
+    compensate_phase4_in(vault.path(), state.path());
     compensate_phase5(vault.path());
 
     let bin = vault.path().join(".tepochcalli").join("bin");
     let venv = vault.path().join(".tepochcalli").join("venv");
+    let state_bin = state.path().join("bin");
+    let state_stage = state.path().join(".uv-stage");
     std::fs::create_dir_all(&bin).expect("bin fixture");
     std::fs::create_dir_all(&venv).expect("venv fixture");
-    compensate_phase4(vault.path());
+    std::fs::create_dir_all(&state_bin).expect("state bin fixture");
+    std::fs::create_dir_all(&state_stage).expect("state stage fixture");
+    compensate_phase4_in(vault.path(), state.path());
     compensate_phase5(vault.path());
     assert!(!bin.exists());
     assert!(!venv.exists());
+    assert!(!state_bin.exists(), "external bin/ must be compensated");
+    assert!(!state_stage.exists(), "external stage must be compensated");
+    assert!(state.path().is_dir(), "the state root itself must survive");
+    assert_eq!(
+        std::fs::read_to_string(&log).expect("state log survives"),
+        "failure log"
+    );
     assert_sentinels_intact(vault.path());
 }
 
