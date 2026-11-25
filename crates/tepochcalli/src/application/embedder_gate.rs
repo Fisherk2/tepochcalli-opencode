@@ -259,10 +259,19 @@ mod tests {
     }
 
     #[test]
-    fn gate_false_is_model_invalid_and_garbage_is_phase_failed() {
-        match parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}") {
-            Err(crate::domain::WizardError::ModelInvalid) => {}
-            other => panic!("portero must reject, got: {other:?}"),
+    fn gate_false_is_a_load_failure_not_the_hf_tag_prefilter() {
+        // `ModelInvalid` está reservado al pre-filtro de tags de la ruta 3;
+        // un `ok:false` del gate nunca puede reclamar ese significado.
+        for body in [
+            "{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}",
+            "{\"ok\":false,\"error_code\":\"E_NET_LOAD\",\"detail\":\"cuda: no device\"}",
+        ] {
+            let err = parse_gate(body).expect_err("gate must reject");
+            assert_ne!(
+                err,
+                crate::domain::WizardError::ModelInvalid,
+                "gate rejection must not be labelled as the HF pre-filter: {body}"
+            );
         }
         match parse_gate("not json at all") {
             Err(crate::domain::WizardError::PhaseFailed) => {}

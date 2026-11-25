@@ -665,7 +665,8 @@ mod tests {
     fn parse_gate_refuses_aborts_and_missing_fields() {
         assert_eq!(
             parse_gate("{\"ok\":false,\"code\":\"E_MODEL_INVALID\"}"),
-            Err(WizardError::ModelInvalid)
+            Err(WizardError::ModelLoadFailed),
+            "el gate nunca es el pre-filtro HF de la ruta 3"
         );
         assert_eq!(parse_gate("garabato"), Err(WizardError::PhaseFailed));
         assert_eq!(

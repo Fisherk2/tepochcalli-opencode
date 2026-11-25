@@ -72,6 +72,46 @@ fn user_aborted_panel_states_the_workspace_was_untouched_and_drops_retry() {
     );
 }
 
+/// T18: un fallo de carga del gate y uno de red tienen causas distintas en
+/// el panel —y ninguno puede reclamar el significado del pre-filtro HF (ruta 3).
+#[test]
+fn f6_degraded_panel_distinguishes_network_from_load_failure() {
+    let log = std::path::Path::new("/tmp/state/tepochcalli/install-t18.log");
+    let network = tepochcalli::domain::failure::failure_body(
+        "install: phase F6 failed (download failed)",
+        Some(Phase::F6),
+        WizardError::NetDownload,
+        log,
+        &[],
+    );
+    let load = tepochcalli::domain::failure::failure_body(
+        "install: phase F6 failed (E_MODEL_LOAD_FAILED: cuda: device not ready)",
+        Some(Phase::F6),
+        WizardError::ModelLoadFailed,
+        log,
+        &[],
+    );
+    assert_ne!(network, load, "causas distintas en panel y log");
+    assert!(network.contains("download failed"), "{network}");
+    assert!(
+        load.contains("E_MODEL_LOAD_FAILED")
+            && load.contains("cuda: device not ready")
+            && load.contains("model failed to load"),
+        "causa real del gate en el panel: {load}"
+    );
+    assert!(
+        !load.contains("not an embedding model"),
+        "el gate no es el pre-filtro HF: {load}"
+    );
+    assert!(
+        !load.contains("E_MODEL_INVALID"),
+        "sin código inventado: {load}"
+    );
+    // La degradación no cambia el contrato del panel: reintento y log siguen.
+    assert!(load.contains(RETRY), "{load}");
+    assert!(load.contains("install-t18.log"), "{load}");
+}
+
 #[test]
 fn e_star_surfaces_where_the_contract_defines_one() {
     let log = std::path::Path::new("/tmp/state/tepochcalli/install-1.log");

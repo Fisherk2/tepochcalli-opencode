@@ -9,6 +9,7 @@
 //! completa; el swap solo lee `scanned` del refresh) — el trunk y la lógica de
 //! veredicto ya no se copian.
 
+use std::cell::RefCell;
 use std::path::Path;
 
 use crate::domain::{CancelToken, WizardError};
@@ -26,10 +27,70 @@ pub(super) const REFRESH_SUBCOMMAND: &str = "refresh";
 
 /// Gate success payload (T12 programs the flow CLI against this shape).
 #[derive(Debug, PartialEq, Eq)]
-pub(super) struct GateOk {
+pub struct GateOk {
     pub(super) model: String,
     pub(super) dims: u32,
     pub(super) rss_peak_bytes: u64,
+}
+
+/// Causa real de un gate rechazado (T18). `WizardError` es `Copy` y no puede
+/// llevar `String`: el `error_code`/`detail` del JSON viajan aquí, sin truncar,
+/// hasta el panel del install degradado.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GateCause {
+    pub error: WizardError,
+    pub error_code: Option<String>,
+    pub detail: Option<String>,
+}
+
+impl From<WizardError> for GateCause {
+    /// Errores sin veredicto del gate (spawn, fs, cancelación): la causa es
+    /// el propio error tipado, sin código ni detalle inventados.
+    fn from(error: WizardError) -> Self {
+        Self {
+            error,
+            error_code: None,
+            detail: None,
+        }
+    }
+}
+
+impl GateCause {
+    /// Causa para el panel y el log: código y detalle del flow, sin recortes.
+    #[must_use]
+    pub fn context(&self) -> String {
+        let mut out = String::new();
+        if let Some(code) = &self.error_code {
+            out.push_str(code);
+            out.push_str(": ");
+        }
+        if let Some(detail) = &self.detail {
+            out.push_str(detail);
+        }
+        if out.is_empty() {
+            out.push_str(&self.error.to_string());
+        }
+        out
+    }
+}
+
+thread_local! {
+    /// Buzón de una sola lectura para el veredicto del gate: las capas
+    /// intermedias están tipadas a `WizardError` (`Copy`) y no pueden portar
+    /// el `detail`; `install_phases` lo toma justo después del F6.
+    static LAST_GATE_CAUSE: RefCell<Option<GateCause>> = const { RefCell::new(None) };
+}
+
+/// Toma y vacía la causa del último `embed-check` de esta hebra.
+#[must_use]
+pub fn take_gate_cause() -> Option<GateCause> {
+    LAST_GATE_CAUSE.with(|cell| cell.borrow_mut().take())
+}
+
+fn stash_gate_cause(cause: Option<GateCause>) {
+    LAST_GATE_CAUSE.with(|cell| {
+        *cell.borrow_mut() = cause;
+    });
 }
 
 /// Refresh success payload (T12 contract): the four counters of the pass.
@@ -76,10 +137,10 @@ pub(super) fn spawn_refresh(
     )
 }
 
-/// Gate completo (T12): `ok:false` es el veredicto del portero
-/// (`E_MODEL_INVALID`); un gate roto o ilegible es `PhaseFailed`; un campo
-/// ausente no se inventa (`Internal`).
-pub(super) fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
+/// Gate completo (T12/T18): `ok:false` es un fallo de carga del modelo
+/// (`ModelLoadFailed`, con su causa real en [`take_gate_cause`]); un gate roto
+/// o ilegible es `PhaseFailed`; un campo ausente no se inventa (`Internal`).
+pub fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
     gate_verdict(body)?;
     Ok(GateOk {
         model: json_string(body, "model").ok_or(WizardError::Internal)?,
@@ -88,13 +149,27 @@ pub(super) fn parse_gate(body: &str) -> Result<GateOk, WizardError> {
     })
 }
 
-/// `ok:true` ⇒ sigue el parser del caller; `ok:false` ⇒ portero
-/// (`ModelInvalid`); sin `ok` ⇒ fase rota (`PhaseFailed`).
+/// `ok:true` ⇒ sigue el parser del caller; `ok:false` ⇒ fallo de carga, con
+/// `error_code`/`detail` guardados en el portador; sin `ok` ⇒ fase rota.
 fn gate_verdict(body: &str) -> Result<(), WizardError> {
     match json_bool(body, "ok") {
-        Some(true) => Ok(()),
-        Some(false) => Err(WizardError::ModelInvalid),
-        None => Err(WizardError::PhaseFailed),
+        Some(true) => {
+            stash_gate_cause(None);
+            Ok(())
+        }
+        Some(false) => {
+            let error = WizardError::ModelLoadFailed;
+            stash_gate_cause(Some(GateCause {
+                error,
+                error_code: json_string(body, "error_code"),
+                detail: json_string(body, "detail"),
+            }));
+            Err(error)
+        }
+        None => {
+            stash_gate_cause(None);
+            Err(WizardError::PhaseFailed)
+        }
     }
 }
 

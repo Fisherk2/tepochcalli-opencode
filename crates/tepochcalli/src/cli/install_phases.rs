@@ -294,13 +294,27 @@ pub(crate) fn run_phases(
     if cached.is_some() {
         let _ = writeln!(stderr, "resume: F6 already done, skipping");
     }
+    let mut degraded_cause = None;
     let picked = match cached {
         Some(report) => report,
-        None => match run_f6_or_degraded(&deps, path, flags.offline, ui, stderr) {
-            Ok(picked) => picked,
-            Err(code) => return code,
-        },
+        None => {
+            match run_f6_or_degraded(&deps, path, flags.offline, ui, stderr, &mut degraded_cause) {
+                Ok(picked) => picked,
+                Err(code) => return code,
+            }
+        }
     };
+    if let Some(cause) = degraded_cause {
+        // F6 degradado: panel + log con la causa real, SIN cambiar el exit 0.
+        let context = format!("install: phase F6 failed ({})", cause.context());
+        let _ = report_failure(
+            ui,
+            Some(Phase::F6),
+            &context,
+            cause.error,
+            Some(path.as_path()),
+        );
+    }
     let _ = writeln!(
         stderr,
         "embedder: provider={} {}",

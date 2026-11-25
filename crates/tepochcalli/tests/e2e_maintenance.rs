@@ -353,7 +353,7 @@ fn reindex_failed_refresh_keeps_old_meta_byte_identical() {
 }
 
 #[test]
-fn reindex_gate_refusal_is_model_invalid_without_touching_meta() {
+fn reindex_gate_refusal_is_a_load_failure_without_touching_meta() {
     let vault = installed_vault_with(NEW_MODEL, OLD_MODEL);
     let before_meta = std::fs::read(
         vault
@@ -372,7 +372,11 @@ fn reindex_gate_refusal_is_model_invalid_without_touching_meta() {
 
     let err =
         run_reindex(&proc, &ui, vault.path()).expect_err("el portero rechazado falla el reindex");
-    assert_eq!(err, WizardError::ModelInvalid);
+    assert_eq!(
+        err,
+        WizardError::ModelLoadFailed,
+        "un `ok:false` del gate es fallo de carga, no el pre-filtro HF"
+    );
     assert_eq!(
         std::fs::read(
             vault
