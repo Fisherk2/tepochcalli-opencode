@@ -10,7 +10,8 @@
 # El release se marca `--prerelease`: `releases/latest` NO apunta a él, así que
 # toda descarga DEBE fijar el tag `tepochcalli-v<ver>` (regla one-version).
 #
-# M6 (sin cambio): este workflow NUNCA se ha ejecutado en GitHub Actions.
+# M6: este workflow SÍ se ha ejecutado en GitHub Actions — beta.1, 2026-11-24,
+# con éxito (run 45349164769).
 
 name: Release
 
@@ -127,9 +128,21 @@ jobs:
         run: |
           set -euo pipefail
           version="$(grep '^version' crates/tepochcalli/Cargo.toml | head -1 | cut -d'"' -f2)"
+          # Notas = sección '## [<version>]' del CHANGELOG (hasta el próximo
+          # encabezado `## [`), para que el release muestre el changelog real.
+          notes="${RUNNER_TEMP}/release-notes.md"
+          awk -v v="${version}" '
+            index($0, "## [" v "]") == 1 { found = 1 }
+            found && /^## \[/ && index($0, "## [" v "]") != 1 { exit }
+            found { print }
+          ' CHANGELOG.md > "${notes}"
+          if [ ! -s "${notes}" ]; then
+            echo "::error::sección '## [${version}]' vacía o ausente en CHANGELOG.md"
+            exit 1
+          fi
           gh release view "${TAG}" >/dev/null 2>&1 \
             || gh release create "${TAG}" --prerelease --title "${TAG}" \
-              --notes "Beta ${version} del wizard tepochcalli. Ver CHANGELOG.md."
+              --notes-file "${notes}"
 
       - name: Sube el asset
         env:
