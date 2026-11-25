@@ -135,13 +135,29 @@ publica el payload como GitHub Release.
    back-merge la divergencia se acumula en cada release y los hotfix hechos en `main`
    nunca vuelven a `develop`.
 
+   Restricción: el push directo a `develop` está prohibido por el ruleset
+   `protect-develop` («Changes must be made through a pull request» + required checks
+   `gitleaks`/`python`/`rust`, `bypass_actors: []` — sin bypass, ni siquiera para
+   admins; intentarlo falla con `GH013`), así que la sincronización entra por PR como
+   todo lo demás (§2).
+
    ```bash
    git fetch origin
    git switch develop
-   git merge origin/main   # back-merge limpio: tras el squash los árboles son idénticos
-   git push origin develop
+   git merge origin/main   # árboles idénticos tras el squash ⇒ merge auto-limpio
+   # si hubiera conflictos: resolver hacia el contenido de `develop` (es el
+   # superconjunto — `main` no aporta contenido nuevo) y verificar que el árbol
+   # resultante no cambia (`git diff HEAD` vacío tras `git add`) antes del commit
+   git switch -c sync/post-deploy
+   git push -u origin sync/post-deploy
+   gh pr create --base develop --head sync/post-deploy
+   gh pr checks <n> --watch --fail-fast   # gitleaks/python/rust en verde
+   gh pr merge <n> --merge                 # método merge, NUNCA squash
+   git branch -d sync/post-deploy
    ```
 
+   El merge (no squash) conserva los dos padres: con squash el commit resultante
+   aplana la historia y `main` dejaría de quedar contenido en `develop`.
    Resultado: `main` queda contenido en `develop`, el commit etiquetado vive en el
    historial de `develop` y la próxima promoción `develop` → `main` sale limpia.
 
