@@ -33,6 +33,52 @@ CONTROL_PHRASE: Final = "tepochcalli embedding check"
 ERROR_MODEL_INVALID: Final = "E_MODEL_INVALID"
 """Código del portero: el repo no es un modelo de embeddings (plan §5.4)."""
 
+ERROR_MODEL_DOWNLOAD_FAILED: Final = "E_MODEL_DOWNLOAD_FAILED"
+"""Fallo de red/descarga del snapshot; el código viaja al panel del wizard."""
+
+ERROR_MODEL_LOAD_FAILED: Final = "E_MODEL_LOAD_FAILED"
+"""Fallo de carga/dispositivo; también el fallback de causa desconocida."""
+
+# Heurística acotada, no una taxonomía de HF/transformers: basta con los nombres
+# de las excepciones de descarga (huggingface_hub 1.33.0, verificado en su doc)
+# y marcadores estables de «repo que no es de embeddings».
+_DOWNLOAD_ERROR_NAMES: Final = frozenset(
+    {
+        "HfHubHTTPError",
+        "EntryNotFoundError",
+        "LocalEntryNotFoundError",
+        "RemoteEntryNotFoundError",
+        "OfflineModeIsEnabled",
+        "HTTPError",
+        "URLError",
+        "ConnectError",
+        "ConnectTimeout",
+        "ReadTimeout",
+        "TimeoutException",
+    }
+)
+_NOT_EMBEDDING_MARKERS: Final = (
+    "not a sentence-transformers",
+    "no sentence-transformers model found",
+    "not an embedding model",
+)
+
+
+def classify_embed_error(exc: Exception) -> str:
+    """Clasifica la causa del gate en un único punto (sin importar HF).
+
+    Solo mira nombres de clase y marcadores de texto: red antes que identidad
+    (un error HTTP puede nombrar el modelo), y carga como fallback seguro para
+    que una causa desconocida nunca se disfrace de `E_MODEL_INVALID`.
+    """
+    names = {base.__name__ for base in type(exc).__mro__}
+    if _DOWNLOAD_ERROR_NAMES.intersection(names):
+        return ERROR_MODEL_DOWNLOAD_FAILED
+    detail = str(exc).lower()
+    if any(marker in detail for marker in _NOT_EMBEDDING_MARKERS):
+        return ERROR_MODEL_INVALID
+    return ERROR_MODEL_LOAD_FAILED
+
 
 class EmbedCheckError(Exception):
     """El embed-check no pudo medirse (plataforma sin `resource`, etc.)."""
@@ -112,12 +158,11 @@ def cmd_embed_check(model: str, revision: str | None = None) -> dict[str, object
     """Ejecuta `embed-check` para `model` y devuelve el veredicto JSON.
 
     Materializa `<models>/<slug>@<revision>/` (una sola función,
-    `model_store.ensure_local_model`) y valida con la frase de control. Todo
-    fallo de carga/embed —repo inexistente, no-embeddings, red caída— se
-    reporta como `E_MODEL_INVALID` con `detail`.
-    shortcut: el CLI no distingue «no-embedding» de «no-descargable» sin
-    reimplementar la taxonomía de errores de HF/transformers; el wizard
-    (T11) decide reintentos por su lado con el `detail` como pista.
+    `model_store.ensure_local_model`) y valida con la frase de control. Un
+    único seam (`classify_embed_error`) separa tres causas con heurística
+    acotada: tags no-embedding (`E_MODEL_INVALID`), red/descarga
+    (`E_MODEL_DOWNLOAD_FAILED`) y carga/dispositivo (`E_MODEL_LOAD_FAILED`,
+    código de fallback). El `detail` real se conserva (≤300 chars).
     """
     try:
         vector = build_embedder_for_model(model, revision).encode(CONTROL_PHRASE)
@@ -131,7 +176,7 @@ def cmd_embed_check(model: str, revision: str | None = None) -> dict[str, object
         return {
             "ok": False,
             "model": model,
-            "error_code": ERROR_MODEL_INVALID,
+            "error_code": classify_embed_error(exc),
             "detail": str(exc)[:300],
         }
 

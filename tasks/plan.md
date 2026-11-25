@@ -4,6 +4,7 @@
 > **Fuente de verdad:** [docs/BACKLOG.md](../docs/BACKLOG.md) §2 «Wizard de instalación: flujo destino (2026-11-18)» + §4 D-005..D-008
 > **Restricción vigente del dueño:** **no se publica en ningún gestor de paquetes.** Solo se prepara y se verifica en local.
 > **Alcance documental:** ADR-014/015, enmiendas 2026-11-18 de `spec-installer-wizard` / `spec-embeddings`, [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.5, [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) TD-45..TD-50.
+> **Índice:** §1-10 Phase 6.5 (2026-11-19) · §11 Phase 6.6 (2026-11-20) · **§12 Phase 6.8 (2026-11-25, sin despliegue)**.
 
 ---
 
@@ -717,3 +718,133 @@ graph TB
 - [specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-20 · [specs/spec-embeddings.md](../specs/spec-embeddings.md) §Enmienda 2026-11-20
 - Internos verificados: `crates/tepochcalli/Cargo.toml` (`ureq = "3"`) · `crates/tepochcalli/tests/int_fetch_verified.rs` (red falsa en loopback) · `crates/tepochcalli/tests/int_model_availability.rs` (`#[ignore]` + receta)
 - [docs/CODE_STYLE.md](../docs/CODE_STYLE.md) §Reglas específicas del payload (backup obligatorio) · §Umbral de líneas (este fichero: tramo `<1000`).
+
+---
+
+## 12. Fase 6.8 — Fallos visibles, desinstall acotado y progreso honesto (2026-11-25)
+
+> **Estado:** planificado el 2026-11-25 · orden del dueño · **sin despliegue** (no tag, no Release,
+> no PyPI). Fuente: [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.8 + D69 +
+> `docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md` y
+> `docs/diagnosis/fix03-desinstall-lento-por-venv.md`. Fase intermedia: no se renumera ninguna fase.
+
+### 12.1 Decisiones del dueño (confirmadas; no se re-abren)
+
+| # | Decisión | Efecto en el plan |
+| --- | --- | --- |
+| D1 | 5 slices T18–T22, orden **B → H8 → UX → A**, checkpoints C8–C12 | **Sin despliegue**: no tag / Release / PyPI |
+| D2 | F6 con gate fallido = **degradado visible**: exit 0 + `none_config` + checklist + `report_failure` (panel + log + causa real) | «exit ≠ 0 + rollback» **RECHAZADA**; sin ADR nuevo |
+| D3 | **Sin T23**: bump `beta.2→beta.3` diferido al prep de release | Cero cambios de versión en esta fase |
+| D4 | H8 **std-only**, sin dependencia directa a `libc` | R1: cero deps nuevas |
+
+### 12.2 Grafo de dependencias
+
+```mermaid
+graph LR
+    T18["T18 · B · error tipado y F6 visible"] --> T19["T19 · H8 · borrado acotado del venv"]
+    T19 --> T20["T20 · UX-1 · progreso real del swap"]
+    T20 --> T21["T21 · UX-2 · progreso en los 3 flujos"]
+    T21 --> T22["T22 · A · causas del embed-check y cierre"]
+    T18 -.->|"comparte flow_contract.rs"| T22
+```
+
+**Orden:** B → H8 → UX → A. T20 consume el contrato de error congelado por T18; T21 reutiliza la `ProgressSpec` de T20 y hereda la exclusividad de `maintenance.rs` de T19; T22 comparte `flow_contract.rs` con T18 (un solo dueño) y se entrega al final.
+
+### 12.3 T18 — Error tipado del gate y fallo F6 visible (B)
+
+**Capability:** conservar la causa del `embed-check` hasta el panel y hacer visible un fallo de F6 sin cambiar la degradación exit 0.
+
+**Criterios:** `application/flow_contract.rs:80-98` `parse_gate` conserva `error_code` y `detail` en un tipo portador; `ok:false` ⇒ nueva variante tipada `WizardError::ModelLoadFailed` en vez de `ModelInvalid`. `domain/error.rs:39-41,112-119`: `ModelInvalid` sigue reservado al pre-filtro HF de la ruta 3 (`spec-embeddings.md:153`, ADR-008:50); variante nueva con código propio en rango 40+ (45 propuesto), `e_star = None`, fila en `EXIT_CODES`; el enum sigue `Copy` (el `detail` viaja en el portador). `cli/install.rs:437-464`: `UserAborted`/`Internal`/`OfflineNoCache` sin cambios; cualquier otro error ⇒ `compensate_phase6` → `none_config` → `mark_phase_done(F6)` → `Ok(Phase6Report::configure_later())`, exit 0. `cli/install_phases.rs:299-302`: el consumidor invoca `report_failure` con la causa degradada e ignora el `u8` para preservar exit 0; la rama degradada NO llama a `report_failure` desde `cli/install.rs`. CERO rastro de «exit ≠ 0 + rollback» para F6. Tests: ampliar `e2e_install_atomicity.rs:266-299` y `e2e_failure_panel.rs:51-73` (panel + log + causa real, checklist en stdout, `status.code() == Some(0)`); nuevo `tests/int_gate_errors.rs` (fallo de red vs carga → códigos distintos; ningún fallo de red etiquetado `ModelInvalid`); corregir `application/embedder_gate.rs:261-271` y `tests/int_swap_run.rs:242-262` que pinean el mapeo viejo. `docs/BACKLOG.md §8` fila sin ADR.
+
+**Verificación:** `just rust-test-filter int_gate_errors`; `just rust-test-filter f6_failure`; `just rust-test-filter degraded_install_prints_the_reentry_checklist_on_stdout`; `just rust-ci /tmp/opencode/cargo-target`.
+
+**Ficheros:** `src/application/flow_contract.rs`, `src/domain/error.rs`, `src/cli/install_phases.rs`, `src/cli/install.rs` (sólo el portador de causa), `src/application/embedder_gate.rs` (tests), `tests/int_gate_errors.rs` (nuevo), `tests/e2e_install_atomicity.rs`, `tests/int_swap_run.rs`, `docs/BACKLOG.md`.
+
+**Dependencias:** ninguna; va primero (B). T20 consume el contrato congelado; T22 añade el fallback sobre el mismo `flow_contract.rs`.
+
+**Instrucciones deterministas — HACER:** separar causas en el portador; añadir variante y fila en `EXIT_CODES`; propagar causa al consumidor en `install_phases.rs:299`; invocar `report_failure` ignorando su código; actualizar tests. **NO HACER:** convertir F6 en fallo duro; añadir rollback; cambiar `Ok(configure_later())`, exit 0 ni `none_config`; reeditar ADRs; tocar H5, el puerto `Ui` ni `run_cancellable`; añadir dependencias; hacer commits.
+
+### 12.4 T19 — Borrado acotado y paralelo del venv en H8 (C)
+
+**Capability:** borrar el runtime grande sin cuelgo, con invariante de no-salir-del-vault probado, usando sólo `std`.
+
+**Criterios:** `maintenance.rs:244` en Unix `remove_dir_all` → helper bottom-up con `std::thread::scope` N=8; `#[cfg(windows)]` conserva `std::fs::remove_dir_all`. Helper std-only: `symlink_metadata` + `DirEntry::file_type()` (nunca sigue symlinks) + rutas canónicas verificadas contra la raíz del vault; test con symlink interno que apunta fuera: no se sigue y el destino externo queda intacto. `maintenance.rs:52-57` y `:331-368` byte-idénticos; backup `:220-225`, panel de interrupción `:227-237`, 3 scopes (`:47`), privacidad 0700/0600 + `.gitignore "*"` (`:301-303`) intactos. Reutilizar `map_fs` (`:277-283`) y `NotFound` tolerado (`:248`), cancelación por entrada (`:227`). Contadores `entries_removed`/`workers_used`. `grep -n 'libc' crates/tepochcalli/Cargo.toml` vacío; sin deps nuevas. Nuevo `tests/e2e_desinstall_large_venv.rs`: vault temporal con venv sintético, 3 scopes borrados sin restos, notas/PDFs/`.obsidian/` byte-idénticos, destino externo intacto, backup con nombre. `docs/BACKLOG.md §8` fila sin ADR.
+
+**Verificación:** `just rust-test-filter e2e_desinstall_large_venv`; `just rust-test-filter uninstall`; grep de `libc` vacío; diff de `maintenance.rs:52-57,331-368` = 0; `just rust-ci /tmp/opencode/cargo-target`.
+
+**Ficheros:** `src/application/maintenance.rs`, `tests/e2e_desinstall_large_venv.rs` (nuevo), `tests/int_uninstall_backup.rs` (sólo si hace falta), `docs/BACKLOG.md`.
+
+**Dependencias:** sin dependencia de código de T18; orden fijado B → H8. T21 vuelve a tocar `maintenance.rs`, por eso va después.
+
+**Instrucciones deterministas — HACER:** helper con `std::thread::scope`, 8 workers, bottom-up, `symlink_metadata` + canonicalización, `map_fs`, contadores, test de symlink saliente. **NO HACER:** añadir `libc` ni dep; tocar rangos 52-57 y 331-368; cambiar scopes, backup, paneles, rollback ni privacidad; `rm -rf`/`just clean` desde el código; `strace` ni aseveraciones de tiempo de pared; tocar la rama Windows; hacer commits.
+
+### 12.5 T20 — Progreso real en el swap (UX-1)
+
+**Capability:** barra monótona y tiempo honesto en los 6 hitos del swap, sin widgets nuevos.
+
+**Criterios:** `ports/ui.rs`: `ProgressSpec`/`Progress`/`run_stages` aditivos con default no-op; `run_cancellable` y sus 7 call sites de producto + 3 fakes byte-idénticos. `adapters/ui_ratatui.rs:111-255`: barra monótona 0→100 por hito (swap 6), spinner ASCII `|/-\` en fila propia alimentado por el watcher existente, cronómetro `mm:ss`. ratatui 0.30.2 no tiene widget `Spinner` (verificado con Context7 ID `/websites/rs_ratatui_ratatui/v0.30.2`; no repetir búsqueda ni añadir dep). ETA sólo con la estimación declarada (`swap.rs:284-300`, `estimate_secs`); sin declaración ⇒ literal `ETA —`; MB de `presets.toml` nunca se convierten en segundos. Nuevo `tests/int_progress_spec.rs`: 6 hitos monótonos y ETA honesta incluido `ETA —`.
+
+**Verificación:** `just rust-test-filter int_progress_spec`; diff de `run_cancellable` y los 3 fakes (`tests/common/mod.rs`, `tests/int_gate_cancel.rs`) = 0; `just rust-ci /tmp/opencode/cargo-target`.
+
+**Ficheros:** `src/ports/ui.rs`, `src/adapters/ui_ratatui.rs`, `src/application/swap.rs`, `tests/int_progress_spec.rs` (nuevo).
+
+**Dependencias:** T18 (contrato de error congelado); T21 reutiliza la misma `ProgressSpec`.
+
+**Instrucciones deterministas — HACER:** `ProgressSpec` como módulo profundo (interfaz pequeña, lógica de frames/ETA dentro); frames ASCII del watcher. **NO HACER:** cambiar firmas existentes de `Ui`; introducir widget/dep de spinner; inventar conversiones MB→segundos; tocar la rama degradada de F6 ni el checklist; duplicar el render por hito; hacer commits.
+
+### 12.6 T21 — Propagación del progreso a install, update y desinstall (UX-2)
+
+**Capability:** el mismo contrato de progreso en los tres flujos restantes, sin tocar la cancelación.
+
+**Criterios:** install 7 hitos (`cli/install_phases.rs`), update 1 (`application/update.rs`), desinstall `present.len()+1` (`application/maintenance.rs`), todos con la `ProgressSpec` de T20. `run_cancellable`, sus 7 call sites (`embedder_gate.rs:48`, `maintenance.rs:198`, `update.rs:60`, `install_phases.rs:165,243,265,315`) y los 3 fakes (`CancellingUi`, `TapUi`, `GateUi`) sin cambios (diff 0). `HeadlessUi` y `--non-interactive` sin regresión; el spinner/barra no enmascara paneles de error. `tests/e2e_ui.rs` ampliado con los estados de progreso de los tres flujos.
+
+**Verificación:** `just rust-test-filter progress`; `just rust-test-filter e2e_ui`; `just rust-ci /tmp/opencode/cargo-target`.
+
+**Ficheros:** `src/cli/install_phases.rs`, `src/application/update.rs`, `src/application/maintenance.rs`, `src/adapters/ui_ratatui.rs`, `tests/e2e_ui.rs`, `tests/common/mod.rs` (sólo si el default basta).
+
+**Dependencias:** T20 (interfaz) y T19 (exclusividad de `maintenance.rs`). No tocar la lógica de degradación de T18, sólo el hito visual.
+
+**Instrucciones deterministas — HACER:** envolver cada fase con `run_stages` usando la `ProgressSpec` compartida; contar los hitos exactos. **NO HACER:** reimplementar `Progress` por flujo; modificar `run_cancellable` ni sus fakes; cambiar el checklist de stdout de F6; ocultar paneles de error; hacer commits.
+
+### 12.7 T22 — Causas del `embed-check` y cierre documental (A)
+
+**Capability:** tres causas distinguibles en el flow y fallo desconocido con fallback en el consumer.
+
+**Criterios:** `__main__.py:111-136` `cmd_embed_check` distingue no-embedding / descarga-red / carga-dispositivo con `error_code` + `detail` reales en un único seam; actualizar docstring `:116-120` y retirar el `shortcut` obsoleto. Consumer `flow_contract.rs`: `error_code` desconocido ⇒ fallback tipado, nunca `ModelInvalid` por defecto. `tests/unit/test_flow_cli.py`: 3 causas con códigos distintos + caso desconocido con fallback; sin red real (fakes de la factoría del embedder). Cierre documental: `docs/BACKLOG.md §8`, `CHANGELOG.md ## [Unreleased]`, `docs/TECH_DEBT.md` TD-65. Sin bump: Cargo.toml, pyproject.toml y los 4 ficheros one-version conservan su versión; no hay T23.
+
+**Verificación:** `just python-test-file test_flow_cli`; `just python-test-unit`; `just md-lint`; `grep -n 'beta.3' crates/tepochcalli/Cargo.toml obsidian-workspace/.tepochcalli/pyproject.toml` vacío.
+
+**Ficheros:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/__main__.py`, `tests/unit/test_flow_cli.py`, `crates/tepochcalli/src/application/flow_contract.rs` (fallback), `docs/BACKLOG.md`, `CHANGELOG.md`, `docs/TECH_DEBT.md`.
+
+**Dependencias:** independiente (A), se entrega al final por el orden B→H8→UX→A; comparte `flow_contract.rs` con T18 ⇒ un solo dueño.
+
+**Instrucciones deterministas — HACER:** único punto de clasificación de excepciones; propagar `detail` sin recortarlo a texto fijo; fallback en el consumer. **NO HACER:** reimplementar taxonomía de HF/transformers; añadir deps; convertir MB en segundos; publicar/taguear/subir PyPI; cambiar versión a beta.3; reeditar ADRs; hacer commits.
+
+### 12.8 Tabla de asignación (subagentes · skills · herramientas · recursos)
+
+| Tarea | Subagentes | Skills | Tools | Recursos | Convenciones |
+| --- | --- | --- | --- | --- | --- |
+| T18 | rust-engineer (dueño), code-reviewer | rust-best-practices, error-handling-patterns, clean-ddd-hexagonal, test-driven-development | shell (`just rust-test-filter`, `just rust-ci`), codebase-memory-mcp | fix02-*.md, WORKFLOW D69, spec-embeddings.md:153, ADR-008:50 | Sin ADR; sin rollback/exit≠0; un dueño por fichero |
+| T19 | rust-engineer, code-reviewer | rust-best-practices, design-patterns, test-driven-development, doubt-driven-development | shell, codebase-memory-mcp | fix03-*.md, maintenance.rs | R1 cero deps (sin libc); 0700/0600 + .gitignore intactos |
+| T20 | rust-engineer, software-architect | codebase-design, clean-ddd-hexagonal, api-and-interface-design, rust-best-practices | shell, context7 (ya resuelto) | swap.rs:284-300, ui_ratatui.rs:111-255 | Ui aditivo; run_cancellable intacto |
+| T21 | rust-engineer, code-reviewer | rust-best-practices, test-driven-development, code-review-and-quality | shell | install_phases.rs, update.rs, maintenance.rs, e2e_ui.rs | Un dueño por fichero (tras T19); sin regresión --non-interactive |
+| T22 | python-pro, rust-engineer, test-engineer | python-testing-patterns, test-driven-development, documentation-and-adrs, changelog-generate, tech-debt | shell, codebase-memory-mcp | test_flow_cli.py, __main__.py:111-136, D69 | Sin bump; sin publicación; commits atómicos |
+
+### 12.9 Checkpoints C8–C12
+
+| # | Momento | Puerta | Si falla |
+| --- | --- | --- | --- |
+| **C8** | Tras T18 | `just rust-test-filter int_gate_errors` + `just rust-test-filter f6_failure` → `error_code`/`detail` preservados; ningún fallo de red ⇒ `ModelInvalid`; F6: exit 0 + `provider = "none"` + panel/log con causa real + checklist en stdout | revertir T18, **NO** sustituir por exit≠0/rollback |
+| **C9** | Tras T19 | `just rust-test-filter e2e_desinstall_large_venv` + `grep -n libc crates/tepochcalli/Cargo.toml` → 3 scopes borrados sin restos, notas/`.obsidian/` byte-idénticos, symlink externo intacto, backup byte-idéntico, sin dep nueva | revertir T19 |
+| **C10** | Tras T20 | `just rust-test-filter int_progress_spec` → 6 hitos monótonos 0→100, `ETA —` sin estimación, spinner ASCII en fila propia | revertir T20 |
+| **C11** | Tras T21 | `just rust-ci /tmp/opencode/cargo-target` → `run_cancellable` + 7 call sites + 3 fakes con diff 0; fmt/clippy limpios; `--non-interactive` sin regresión | revertir T21 |
+| **C12** | Tras T22 | `just python-test-file test_flow_cli` + `just md-lint` → 3 causas + fallback; BACKLOG §8 / CHANGELOG `[Unreleased]` / TD-65 presentes; sin `beta.3` en Cargo.toml ni pyproject.toml | no cerrar la fase |
+
+**Regla de cierre:** `just ci` corre **UNA sola vez** al cierre (tras C12), nunca por tarea; `just coverage` **NO** se corre en esta fase; `just rust-ci` sí es gate por tarea; `CARGO_TARGET_DIR` siempre bajo `/tmp/opencode/`; nada en segundo plano.
+
+### 12.10 Referencias de la fase
+
+- [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.8 · ola D69 (tabla §8) · [docs/BACKLOG.md](../docs/BACKLOG.md) §8
+- [docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md](../docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md) · [docs/diagnosis/fix03-desinstall-lento-por-venv.md](../docs/diagnosis/fix03-desinstall-lento-por-venv.md)
+- [specs/spec-embeddings.md](../specs/spec-embeddings.md):153 · [ADR-008](../docs/adr/adr-008-transparencia-hardware-cambio-modelo.md):50 · `crates/tepochcalli/src/application/maintenance.rs` · `swap.rs:284-300`
+- Context7 `/websites/rs_ratatui_ratatui/v0.30.2` — sin widget `Spinner` (ya resuelto; no repetir búsqueda).

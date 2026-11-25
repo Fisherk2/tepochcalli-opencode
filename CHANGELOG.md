@@ -7,8 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.3] - 2026-11-25
+
+<!-- markdownlint-disable-next-line MD024 -->
+### Fixed
+
+- **Wizard: causas del `embed-check` ya no se aplanan.** El gate distingue repo no-embedding
+  (`E_MODEL_INVALID`), fallo de red/descarga (`E_MODEL_DOWNLOAD_FAILED`) y carga/dispositivo
+  (`E_MODEL_LOAD_FAILED`, también fallback de causa desconocida), con el `detail` real (≤300 chars).
+  El consumer Rust mapea todo código desconocido o ausente a `ModelLoadFailed`, nunca a
+  `ModelInvalid` (reservado al pre-filtro de tags de HuggingFace). La respuesta de éxito no cambia.
+- **Wizard: fallo del gate en F6 visible.** El panel y el log muestran la causa real y el checklist
+  de reentrada, manteniendo la degradación exit 0 con `provider = "none"` de ADR-016.
+- **Wizard: desinstall acotado del venv.** El borrado en Unix es bottom-up y paralelo (N=8,
+  std-only): no sigue symlinks, comprueba la cancelación por entrada y deja notas, PDFs y
+  `.obsidian/` intactos; Windows conserva la primitiva estándar.
+- **UX: barra de progreso real.** Avance monótono 0→100 por hito en install (7), swap (6),
+  desinstall (`present.len()+1`) y update (1), en lugar de la barra indeterminada.
+- **UX: spinner y cronómetro honestos.** Frames ASCII `|/-\` en fila propia alimentados por el
+  watcher existente, `mm:ss` y `ETA —` cuando no hay estimación declarada (los MB de
+  `presets.toml` nunca se convierten en segundos).
+- **UX: progreso en los cuatro flujos.** `ProgressSpec`/`Progress`/`run_stages` se añaden de forma
+  aditiva al puerto `Ui`; `run_cancellable` y sus call sites y fakes no cambian.
+
 ## [0.1.0-beta.2] - 2026-11-24
 
+<!-- markdownlint-disable-next-line MD024 -->
 ### Fixed
 
 - **Wizard: destino por defecto sin preguntar.** `resolve_vault_dir` usa el directorio corriente

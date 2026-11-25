@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::io::IsTerminal;
 
 use crate::domain::{CancelToken, MenuAction, WizardError};
-use crate::ports::{MenuView, Ui};
+use crate::ports::{MenuView, Progress, ProgressSpec, Ui};
 
 /// Interactive dialogue: full-screen ratatui menu on a TTY, `dialoguer`
 /// line-based fallback when there is none.
@@ -75,6 +75,21 @@ impl Ui for TtyUi {
             super::ui_ratatui::run_progress(title, cancel, work);
         } else {
             work();
+        }
+    }
+
+    fn run_stages(
+        &self,
+        spec: &ProgressSpec,
+        cancel: &CancelToken,
+        work: &mut dyn FnMut(&Progress),
+    ) {
+        // Misma guarda que `menu`/`run_cancellable`: sin TTY la operación corre
+        // en línea y el default del puerto no escribe nada.
+        if std::io::stdout().is_terminal() && std::io::stdin().is_terminal() {
+            super::ui_ratatui::run_stages(spec, cancel, work);
+        } else {
+            work(&Progress::new(spec.steps));
         }
     }
 

@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag a publicar (p. ej. tepochcalli-v0.1.0-beta.2)"
+        description: "Tag a publicar (p. ej. tepochcalli-v0.1.0-beta.3)"
         required: true
 
 permissions:
@@ -35,8 +35,8 @@ jobs:
   payload:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Al configurar revisores en el repo, este environment convierte la
-    # publicación en un acto aprobado; hoy se crea al vuelo, sin bloquear.
+    # Este environment exige aprobación de un reviewer requerido (waiting →
+    # approved) antes de ejecutar; sin aprobación la petición expira a los 30 días.
     environment: release
     defaults:
       run:

@@ -13,7 +13,7 @@ use tepochcalli::application::{
     run_phase3, run_phase4, run_phase5, run_phase7, run_phase8, Phase6Deps, Phase7Report,
 };
 use tepochcalli::domain::{CancelToken, Phase, VaultPath, WizardError};
-use tepochcalli::ports::Ui;
+use tepochcalli::ports::{advance_active_stage, set_active_progress, ProgressSpec, Ui};
 
 use super::install::{offline_map, run_f6_or_degraded};
 use super::report::{report_failure, report_usage_failure};
@@ -67,6 +67,9 @@ fn phase_failed(ui: &dyn Ui, path: &VaultPath, phase: Phase, err: WizardError) -
 }
 
 /// F3..F8 with `--resume` skips (marker + artifacts, never a re-download).
+/// Una sola barra de siete hitos envuelve todas las fases; `run_cancellable`
+/// sigue siendo la pantalla de cada fase, pero con la barra activa cede el
+/// frame (ver `ui_ratatui::run_progress`) y el watcher exterior posee el token.
 pub(crate) fn run_phases(
     path: &VaultPath,
     payload: &PayloadArgs,
@@ -74,6 +77,37 @@ pub(crate) fn run_phases(
     ui: &dyn Ui,
     stdout: &mut dyn std::io::Write,
     stderr: &mut dyn std::io::Write,
+) -> u8 {
+    // El token es compartido por la barra y el gate de F6: cancelar desde la
+    // pantalla detiene la descarga del modelo (R-offline-2).
+    let cancel = CancelToken::new();
+    let spec = install_progress_spec(format!("Instalando en {}", path.as_path().display()));
+    let mut result = None;
+    ui.run_stages(&spec, &cancel, &mut |progress| {
+        set_active_progress(Some(progress));
+        result = Some(run_phases_stages(
+            path,
+            payload,
+            flags,
+            ui,
+            &mut *stdout,
+            &mut *stderr,
+            &cancel,
+        ));
+        set_active_progress(None);
+    });
+    result.unwrap_or(WizardError::Internal.exit_code())
+}
+
+/// Cuerpo de F3..F8 con el contador de la barra exterior.
+fn run_phases_stages(
+    path: &VaultPath,
+    payload: &PayloadArgs,
+    flags: RunFlags,
+    ui: &dyn Ui,
+    stdout: &mut dyn std::io::Write,
+    stderr: &mut dyn std::io::Write,
+    cancel: &CancelToken,
 ) -> u8 {
     // L4-2 security del mirror: la rama release (sin `--payload`/override)
     // con base http NO-loopback exige consentimiento TUI en interactivo y
@@ -204,7 +238,8 @@ pub(crate) fn run_phases(
             }
         }
     };
-    // V-5 contracción: en pipe una sola línea (count + muestra), en tty el detalle.
+    advance_active_stage(); // hito 1/7: F3 payload
+                            // V-5 contracción: en pipe una sola línea (count + muestra), en tty el detalle.
     if !skipped.is_empty() {
         if std::io::stderr().is_terminal() {
             for already in &skipped {
@@ -257,8 +292,9 @@ pub(crate) fn run_phases(
             }
         }
     }
-    // F5: venv + frozen sync + R6 import check. `bin/` stays when F5 fails
-    // (each phase compensates only what it wrote).
+    advance_active_stage(); // hito 2/7: F4 uv
+                            // F5: venv + frozen sync + R6 import check. `bin/` stays when F5 fails
+                            // (each phase compensates only what it wrote).
     let skip_f5 = flags.resume && resume_skip(stderr, path, Phase::F5, " (venv cached)");
     if !skip_f5 {
         let mut f5: Result<(), WizardError> = Err(WizardError::Internal);
@@ -276,16 +312,19 @@ pub(crate) fn run_phases(
             }
         }
     }
-    // F6: embedder menu + test-embed gate + atomic config. `--skip-model`
-    // preselects path 5 (configure later, degraded, no index).
+    advance_active_stage(); // hito 3/7: F5 venv
+                            // F6: embedder menu + test-embed gate + atomic config. `--skip-model`
+                            // preselects path 5 (configure later, degraded, no index).
     let deps = Phase6Deps {
         ui,
         host: &SysHostProbe,
         proc: &proc,
         http: &http,
-        // El watcher de `Ui::run_cancellable` dispara el token; la UI no decide el resultado.
-        cancel: CancelToken::new(),
+        // Mismo token que la barra exterior: su watcher cancela la descarga.
+        cancel: cancel.clone(),
     };
+    // Descarta un aviso de gate de una corrida anterior en esta hebra (swap).
+    let _ = tepochcalli::application::take_gate_stage();
     let cached = if flags.resume && is_phase_done(path.as_path(), Phase::F6) {
         read_completed_report(path.as_path())
     } else {
@@ -294,13 +333,33 @@ pub(crate) fn run_phases(
     if cached.is_some() {
         let _ = writeln!(stderr, "resume: F6 already done, skipping");
     }
+    let mut degraded_cause = None;
     let picked = match cached {
         Some(report) => report,
-        None => match run_f6_or_degraded(&deps, path, flags.offline, ui, stderr) {
-            Ok(picked) => picked,
-            Err(code) => return code,
-        },
+        None => {
+            match run_f6_or_degraded(&deps, path, flags.offline, ui, stderr, &mut degraded_cause) {
+                Ok(picked) => picked,
+                Err(code) => return code,
+            }
+        }
     };
+    advance_active_stage(); // hito 4/7: F6 selección + config
+                            // El punto de UI de `embedder_gate` marca el gate de descarga; aquí se
+                            // consume el aviso. Sin descarga (resume / ruta 5) el hueco se cierra
+                            // igual: 100 % significa trabajo terminado, no "gate ejecutado".
+    let _ = tepochcalli::application::take_gate_stage();
+    advance_active_stage(); // hito 5/7: gate de descarga
+    if let Some(cause) = degraded_cause {
+        // F6 degradado: panel + log con la causa real, SIN cambiar el exit 0.
+        let context = format!("install: phase F6 failed ({})", cause.context());
+        let _ = report_failure(
+            ui,
+            Some(Phase::F6),
+            &context,
+            cause.error,
+            Some(path.as_path()),
+        );
+    }
     let _ = writeln!(
         stderr,
         "embedder: provider={} {}",
@@ -336,7 +395,8 @@ pub(crate) fn run_phases(
             }
         }
     }
-    // F8: merge `mcp.servers` (+ `.bak`) and verify `rag_status` end to end.
+    advance_active_stage(); // hito 6/7: F7 índice
+                            // F8: merge `mcp.servers` (+ `.bak`) and verify `rag_status` end to end.
     if flags.resume && resume_skip(stderr, path, Phase::F8, "") {
         // MCP registration already merged on a previous run.
     } else {
@@ -359,6 +419,7 @@ pub(crate) fn run_phases(
             }
         }
     }
+    advance_active_stage(); // hito 7/7: F8 MCP
     let _ = writeln!(stdout, "{}", path.as_path().display());
     // Checklist degraded (4c-6): una salida 5 deja el RAG sin índice —
     // las órdenes exactas de re-entrada van en stdout (no se pierden entre
@@ -373,4 +434,26 @@ pub(crate) fn run_phases(
         );
     }
     0
+}
+
+/// Spec de la barra del install: los siete hitos (F3, F4, F5, F6, gate de
+/// descarga, F7, F8) sin ETA declarada — el install no conoce una estimación.
+fn install_progress_spec(title: String) -> ProgressSpec {
+    ProgressSpec {
+        title,
+        steps: 7,
+        eta: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::install_progress_spec;
+
+    #[test]
+    fn install_declara_siete_hitos_sin_eta_inventada() {
+        let spec = install_progress_spec("Instalando".to_string());
+        assert_eq!(spec.steps, 7);
+        assert!(spec.eta.is_none(), "sin estimación declarada, ETA —");
+    }
 }

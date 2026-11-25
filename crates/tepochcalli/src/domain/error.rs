@@ -42,6 +42,10 @@ pub enum WizardError {
     /// Model dims differ from the existing index (reindex/swap guard).
     #[error("model/index dimension mismatch")]
     ModelMismatch,
+    /// `embed-check` rejected the model while loading it. The real `error_code`
+    /// and `detail` travel in the gate carrier, not in this `Copy` enum.
+    #[error("model failed to load")]
+    ModelLoadFailed,
     /// A phase failed after its compensation ran (user data intact).
     #[error("install phase failed (compensated)")]
     PhaseFailed,
@@ -76,6 +80,7 @@ impl WizardError {
             Self::PhaseFailed => 42,
             Self::ModelInvalid => 43,
             Self::ModelMismatch => 44,
+            Self::ModelLoadFailed => 45,
         }
     }
 
@@ -102,7 +107,7 @@ mod tests {
 
     /// One row per variant. Not derived from the enum: the point is to pin the
     /// number a user sees, not to restate the `match`.
-    const EXIT_CODES: [(WizardError, u8); 14] = [
+    const EXIT_CODES: [(WizardError, u8); 15] = [
         (WizardError::PrereqRam, 10),
         (WizardError::PrereqDisk, 11),
         (WizardError::PrereqPlatform, 12),
@@ -117,6 +122,7 @@ mod tests {
         (WizardError::PhaseFailed, 42),
         (WizardError::ModelInvalid, 43),
         (WizardError::ModelMismatch, 44),
+        (WizardError::ModelLoadFailed, 45),
     ];
 
     /// The bands as documented on the enum itself. No wildcard arm: a new
@@ -136,13 +142,14 @@ mod tests {
             | WizardError::UserAborted
             | WizardError::PhaseFailed
             | WizardError::ModelInvalid
-            | WizardError::ModelMismatch => 40..=u8::MAX,
+            | WizardError::ModelMismatch
+            | WizardError::ModelLoadFailed => 40..=u8::MAX,
         }
     }
 
     #[test]
     fn exit_code_table_is_pinned_per_variant() {
-        assert_eq!(EXIT_CODES.len(), 14, "one row per variant");
+        assert_eq!(EXIT_CODES.len(), 15, "one row per variant");
         for (error, code) in EXIT_CODES {
             assert_eq!(error.exit_code(), code, "{error:?} exit code");
         }
@@ -178,7 +185,7 @@ mod tests {
 
     #[test]
     fn e_star_table_is_pinned_per_variant() {
-        let expected: [(WizardError, Option<&str>); 14] = [
+        let expected: [(WizardError, Option<&str>); 15] = [
             (WizardError::PrereqRam, None),
             (WizardError::PrereqDisk, None),
             (WizardError::PrereqPlatform, None),
@@ -193,6 +200,8 @@ mod tests {
             (WizardError::PhaseFailed, None),
             (WizardError::ModelInvalid, Some("E_MODEL_INVALID")),
             (WizardError::ModelMismatch, Some("E_MODEL_MISMATCH")),
+            // El gate informa su código en el portador, no en el enum `Copy`.
+            (WizardError::ModelLoadFailed, None),
         ];
         for (error, code) in expected {
             assert_eq!(error.e_star(), code, "{error:?} E_* mapping");

@@ -396,24 +396,26 @@ fn path3_non_embedding_returns_to_menu_without_config() {
 }
 
 #[test]
-fn path3_gate_invalid_returns_to_menu_without_config() {
-    // HF metadata unreachable (offline) so the gate decides: ok:false with
-    // E_MODEL_INVALID sends the user back to the menu, writing nothing until
-    // the second choice (path 5) lands.
-    let ui = TapUi::new(vec![2, 0, 4], vec!["org/mystery-model".to_string()]);
+fn path3_gate_failure_propagates_typed_without_writing_config() {
+    // HF metadata unreachable (offline) so the gate decides: `ok:false` es un
+    // fallo de CARGA, no el pre-filtro HF. Ya no re-entra al menú disfrazado de
+    // `ModelInvalid`: propaga tipado y el caller (F6) degrada con panel real.
+    let ui = TapUi::new(vec![2, 0], vec!["org/mystery-model".to_string()]);
     let host = host_16gb();
     let proc = FakeProc::scripted([gate_invalid()]);
     let http = empty_http();
     let vault = tmp();
     create_venv_python(vault.path());
-    let report = tepochcalli::application::embedder_menu::run_phase6(
+    let err = tepochcalli::application::embedder_menu::run_phase6(
         &deps(&ui, &host, &proc, &http),
         vault.path(),
     )
-    .expect("menu must recover after the gate rejects the id");
-    assert_eq!(report.provider, "none");
-    let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
-    assert!(body.contains("provider = \"none\""), "got:\n{body}");
+    .expect_err("el gate rechazado debe propagar su causa");
+    assert_eq!(err, WizardError::ModelLoadFailed);
+    assert!(
+        !config_path(vault.path()).exists(),
+        "un gate rechazado nunca escribe config"
+    );
 }
 
 #[test]

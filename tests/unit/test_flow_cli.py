@@ -5,7 +5,8 @@ Contrato JSON (lo consume el wizard vía `CommandRunner`, stdout parseable):
 * `refresh` → `{"scanned": N, "indexed": N, "skipped": N, "elapsed_ms": N}`
 * `embed-check --model <id>` → `{"ok": true, "model": id, "dims": N,
   "rss_peak_bytes": N}` o `{"ok": false, "model": id,
-  "error_code": "E_MODEL_INVALID", "detail": ...}`
+  "error_code": "E_MODEL_INVALID" | "E_MODEL_DOWNLOAD_FAILED" |
+  "E_MODEL_LOAD_FAILED", "detail": ...}`
 
 Los tests NO descargan modelos ni tocan la red: la factoria del embedder y el
 `refresh` se sustituyen por fakes. La diferencia de plataforma del RSS (OM-6:
@@ -72,6 +73,61 @@ def test_embed_check_bad_model_reports_e_model_invalid(
     assert payload["ok"] is False
     assert payload["model"] == "gpt2"
     assert payload["error_code"] == "E_MODEL_INVALID"
+
+
+def test_embed_check_download_failure_reports_download_code(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fallo de red/descarga de HuggingFace ⇒ `E_MODEL_DOWNLOAD_FAILED`."""
+
+    class HfHubHTTPError(Exception):
+        """Doble del error HTTP de `huggingface_hub` (v1.33.0, sin red)."""
+
+    def _boom(_model: str, _revision: str | None = None) -> object:
+        raise HfHubHTTPError("Connection to huggingface.co failed")
+
+    monkeypatch.setattr(cli, "build_embedder_for_model", _boom)
+    assert cli.main(["embed-check", "--model", "org/model"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error_code"] == "E_MODEL_DOWNLOAD_FAILED"
+    assert payload["detail"] == "Connection to huggingface.co failed"
+
+
+def test_embed_check_device_load_failure_reports_load_code(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Fallo de carga en el dispositivo (CUDA) ⇒ `E_MODEL_LOAD_FAILED`."""
+
+    def _boom(_model: str, _revision: str | None = None) -> object:
+        raise RuntimeError("cuda: device not ready")
+
+    monkeypatch.setattr(cli, "build_embedder_for_model", _boom)
+    assert cli.main(["embed-check", "--model", "org/model"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error_code"] == "E_MODEL_LOAD_FAILED"
+    assert payload["detail"] == "cuda: device not ready"
+
+
+def test_embed_check_unknown_error_falls_back_to_load_code(
+    capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Una excepción sin clasificar nunca se disfraza de `E_MODEL_INVALID`."""
+
+    class UnexpectedError(Exception):
+        """Causa fuera de la heurística acotada del seam."""
+
+    def _boom(_model: str, _revision: str | None = None) -> object:
+        raise UnexpectedError("x" * 400)
+
+    monkeypatch.setattr(cli, "build_embedder_for_model", _boom)
+    assert cli.main(["embed-check", "--model", "org/model"]) == 0
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["ok"] is False
+    assert payload["error_code"] == "E_MODEL_LOAD_FAILED"
+    assert payload["detail"] == "x" * 300
+    assert len(payload["detail"]) <= 300
 
 
 def test_embed_check_uses_control_phrase(monkeypatch: pytest.MonkeyPatch) -> None:

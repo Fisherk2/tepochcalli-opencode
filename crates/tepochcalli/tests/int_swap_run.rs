@@ -256,7 +256,11 @@ fn swap_rejected_gate_rolls_back_to_zero_state() {
         &confirmed(),
     );
     let err = result.expect_err("el gate rechazado debe fallar el swap");
-    assert_eq!(err, WizardError::ModelInvalid);
+    assert_eq!(
+        err,
+        WizardError::ModelLoadFailed,
+        "el swap tampoco puede culpar al pre-filtro HF de un fallo de carga"
+    );
 
     assert_zero_state(vault.path(), &before);
 }

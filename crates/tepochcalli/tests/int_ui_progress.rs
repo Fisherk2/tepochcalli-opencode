@@ -1,8 +1,8 @@
-//! R-offline-2 progress screen (T16): the pure `render_progress` drawn into a
-//! `TestBackend` (Cancelar enabled, the five menu rows blocked with a visible
-//! reason, the no-destruction notice), the key classifier, the inline default
-//! the headless UI inherits (no screen, no token fired) and the same inline
-//! fallback behind `TtyUi`'s no-TTY guard.
+//! R-offline-2 progress screen (T16, sin onda desde T20): the pure
+//! `render_progress` drawn into a `TestBackend` (Cancelar enabled, the five
+//! menu rows blocked with a visible reason, the no-destruction notice), the
+//! key classifier, the inline default the headless UI inherits (no screen, no
+//! token fired) and the same inline fallback behind `TtyUi`'s no-TTY guard.
 
 mod common;
 
@@ -48,7 +48,7 @@ fn progress_shows_the_title_and_the_enabled_cancel_row() {
 }
 
 #[test]
-fn every_menu_action_is_blocked_with_the_download_reason() {
+fn ui_progress_bloquea_las_acciones_y_no_finge_porcentaje() {
     let text = buffer_text(&draw(80, 24));
     for label in ["Install", "Update", "Change Embedder", "Desinstall", "Exit"] {
         assert!(text.contains(label), "missing blocked row {label}:\n{text}");
@@ -63,23 +63,26 @@ fn every_menu_action_is_blocked_with_the_download_reason() {
         "the no-destruction notice must be visible:\n{text}"
     );
     assert!(
-        text.contains("Progreso indeterminado: la operación no reporta bytes."),
-        "the bar must say it is indeterminate, never fake a percentage:\n{text}"
+        text.contains("Sin etapas declaradas: la barra no simula avance."),
+        "sin hitos declarados no se finge un porcentaje:\n{text}"
     );
     assert!(
-        !text.contains('%'),
-        "no percentage is claimed when the download reports no bytes:\n{text}"
+        text.contains("trabajando…"),
+        "la barra queda fija hasta que el llamador declara etapas:\n{text}"
     );
 }
 
 #[test]
-fn la_barra_anima_entre_ticks() {
+fn ui_progress_el_spinner_se_mueve_entre_ticks_sin_mover_la_barra() {
     let start = buffer_text(&draw_at(80, 24, 0));
-    let mid = buffer_text(&draw_at(80, 24, 10));
-    assert_ne!(
-        start, mid,
-        "the gauge must move between ticks (indeterminate animation)"
-    );
+    let next = buffer_text(&draw_at(80, 24, 1));
+    assert_ne!(start, next, "el spinner ASCII debe moverse con el tick");
+    for text in [&start, &next] {
+        assert!(
+            text.contains("trabajando…"),
+            "la barra no debe fingir avance:\n{text}"
+        );
+    }
 }
 
 #[test]
