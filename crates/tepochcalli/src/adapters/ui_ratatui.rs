@@ -8,7 +8,7 @@
 use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
 use ratatui::layout::{Constraint, Layout};
@@ -18,11 +18,15 @@ use ratatui::widgets::{Gauge, List, ListItem, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
-use crate::ports::MenuView;
+use crate::ports::{MenuView, Progress, ProgressSpec};
 
 /// Contact shown at the bottom of the menu (H5).
 const REPO: &str = "https://github.com/Fisherk2/tepochcalli-opencode";
 const CONTACT: &str = "dev@fisherk2.com";
+
+/// ratatui 0.30.2 no trae widget `Spinner`: cuatro frames ASCII movidos por el
+/// watcher de eventos existente, sin dependencias nuevas.
+const SPINNER_FRAMES: [char; 4] = ['|', '/', '-', '\\'];
 
 /// Maps a chosen button index to its action. A disabled or out-of-range
 /// index is a typed abort: the wizard never invents a selection.
@@ -102,29 +106,77 @@ fn notice_text(notice: &str) -> Text<'_> {
     }
 }
 
-/// R-offline-2: the download screen. Pure (no I/O) like `render_menu`: only
-/// the Cancel row is enabled; the five menu actions stay visible, dimmed and
-/// with the reason, so a blocked action is never hidden (H5 rule).
-///
-/// The operation reports no bytes, so the bar is INDETERMINATE: `tick` only
-/// moves a triangle and the screen says so. Never a fake percentage.
-pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
-    let [header_area, gauge_area, detail_area] = Layout::vertical([
+/// Frames del spinner ASCII: el tick del watcher decide el frame, nunca la
+/// barra (que solo refleja hitos completados).
+fn spinner_frame(tick: u64) -> char {
+    SPINNER_FRAMES[(tick % SPINNER_FRAMES.len() as u64) as usize]
+}
+
+/// Porcentaje de hitos completados, acotado a 100. Sin etapas declaradas no
+/// se inventa avance.
+fn stages_percent(done: usize, total: usize) -> u16 {
+    if total == 0 {
+        0
+    } else {
+        done.saturating_mul(100).div_euclid(total).min(100) as u16
+    }
+}
+
+/// Cronómetro `mm:ss` a partir de una `Duration` inyectada (testeable sin
+/// reloj de pared).
+fn clock(elapsed: Duration) -> String {
+    let secs = elapsed.as_secs();
+    format!("{:02}:{:02}", secs / 60, secs % 60)
+}
+
+/// Pantalla de progreso por hitos. Pura (no I/O), como `render_menu`: la barra
+/// avanza solo con `Progress::advance()`, el spinner va en su propia fila y el
+/// cronómetro/ETA se reciben ya calculados. 100 % = trabajo terminado.
+pub fn render_stages(
+    frame: &mut Frame,
+    spec: &ProgressSpec,
+    progress: &Progress,
+    elapsed: Duration,
+    tick: u64,
+) {
+    let [header_area, gauge_area, spinner_area, detail_area] = Layout::vertical([
         Constraint::Length(1),
         Constraint::Length(3),
+        Constraint::Length(1),
         Constraint::Min(3),
     ])
     .areas(frame.area());
 
-    let header = Paragraph::new(Line::from(format!("Tepochcalli · {title}")))
+    let header = Paragraph::new(Line::from(format!("Tepochcalli · {}", spec.title)))
         .style(Style::new().add_modifier(Modifier::BOLD));
     frame.render_widget(header, header_area);
 
-    let gauge = Gauge::default()
-        .ratio(indeterminate_ratio(tick))
-        .label("trabajando…")
-        .style(Style::new().add_modifier(Modifier::BOLD));
-    frame.render_widget(gauge, gauge_area);
+    let (ratio, label) = if spec.steps == 0 {
+        (0.0, "trabajando…".to_string())
+    } else {
+        let done = progress.done();
+        let percent = stages_percent(done, spec.steps);
+        (
+            f64::from(percent) / 100.0,
+            format!("{done}/{} · {percent}%", spec.steps),
+        )
+    };
+    frame.render_widget(
+        Gauge::default()
+            .ratio(ratio)
+            .label(label)
+            .style(Style::new().add_modifier(Modifier::BOLD)),
+        gauge_area,
+    );
+
+    let eta = spec.eta.map_or_else(|| "—".to_string(), clock);
+    let spinner = Paragraph::new(Line::from(format!(
+        "{}  transcurrido {} · ETA {}",
+        spinner_frame(tick),
+        clock(elapsed),
+        eta
+    )));
+    frame.render_widget(spinner, spinner_area);
 
     let mut lines = vec![Line::from("⏹ Cancelar — Esc / Ctrl+C")
         .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED))];
@@ -138,10 +190,12 @@ pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
             .style(Style::new().add_modifier(Modifier::DIM)),
         );
     }
-    lines.push(
-        Line::from("Progreso indeterminado: la operación no reporta bytes.")
-            .style(Style::new().add_modifier(Modifier::DIM)),
-    );
+    let stage_notice = if spec.steps == 0 {
+        "Sin etapas declaradas: la barra no simula avance."
+    } else {
+        "Progreso por etapas: el 100 % significa trabajo terminado."
+    };
+    lines.push(Line::from(stage_notice).style(Style::new().add_modifier(Modifier::DIM)));
     lines.push(
         Line::from("Cancelar revierte lo aplicado; si no es reversible, deja el backup nombrado.")
             .style(Style::new().add_modifier(Modifier::DIM)),
@@ -152,15 +206,15 @@ pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
     );
 }
 
-/// 0 → 1 → 0 over 40 ticks: the bar pulses without claiming progress it has
-/// no way to know. Tick 20 is the full-bar phase.
-fn indeterminate_ratio(tick: u64) -> f64 {
-    let phase = (tick % 40) as f64;
-    if phase < 20.0 {
-        phase / 20.0
-    } else {
-        (40.0 - phase) / 20.0
-    }
+/// Pantalla de `run_cancellable` (sin hitos declarados): barra fija, spinner
+/// vivo y cronómetro; nunca una onda ni un porcentaje fingido.
+pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
+    let spec = ProgressSpec {
+        title: title.to_string(),
+        steps: 0,
+        eta: None,
+    };
+    render_stages(frame, &spec, &Progress::new(0), Duration::ZERO, tick);
 }
 
 /// Esc or Ctrl+C cancel the download; any other key keeps waiting.
@@ -170,10 +224,10 @@ pub fn is_cancel_key(code: KeyCode, modifiers: KeyModifiers) -> bool {
 }
 
 /// R-offline-2: draws the Cancel screen, runs `work` while a watcher thread
-/// fires `cancel` on Esc/Ctrl+C and redraws the indeterminate bar every
-/// 100 ms, then leaves the final frame (cancel notice, or the full bar). Any
-/// terminal failure degrades to plain `work()`: a broken screen must never
-/// break the operation.
+/// fires `cancel` on Esc/Ctrl+C and redraws the spinner every 100 ms, then
+/// leaves the final frame (cancel notice, or the unchanged bar). Any terminal
+/// failure degrades to plain `work()`: a broken screen must never break the
+/// operation.
 pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
     // `try_init` (no `init`): el doc de esta función promete degradar ante
     // CUALQUIER fallo de terminal, y `init` paniquea (`expect`). `try_init`
@@ -199,8 +253,8 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
         work();
         return;
     }
-    // El receptor se comparte: el watcher anima y el hilo principal deja el
-    // frame final después del join (nunca dos dibujos a la vez).
+    // El receptor se comparte: el watcher mueve el spinner y el hilo principal
+    // deja el frame final después del join (nunca dos dibujos a la vez).
     let terminal = Arc::new(Mutex::new(terminal));
     let done = Arc::new(AtomicBool::new(false));
     let watcher = {
@@ -251,8 +305,88 @@ pub fn run_progress(title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
                 );
             });
         } else {
-            // tick 20 es la fase de ratio 1.0 del triángulo: barra llena.
-            let _ = terminal.draw(|frame| render_progress(frame, title, 20));
+            // Sin hitos declarados no hay 100 % que fingir: se redibuja la
+            // pantalla tal cual, con el spinner en su última posición.
+            let _ = terminal.draw(|frame| render_progress(frame, title, 0));
+        }
+    };
+}
+
+/// Progreso por hitos: misma pantalla y mismo watcher que `run_progress`, con
+/// la barra alimentada por los `advance()` que `work` haga sobre [`Progress`].
+/// El cronómetro nace aquí (`Instant::now()`); la ETA es solo la declarada en
+/// `spec`. Ante cancelación el frame final es el panel de rollback, nunca un
+/// 100 % falso. Cualquier fallo de terminal degrada a `work` en línea.
+pub fn run_stages(spec: &ProgressSpec, cancel: &CancelToken, work: &mut dyn FnMut(&Progress)) {
+    let mut terminal = match ratatui::try_init() {
+        Ok(terminal) => terminal,
+        Err(_) => {
+            ratatui::restore();
+            work(&Progress::new(spec.steps));
+            return;
+        }
+    };
+    let _restore = RestoreOnDrop;
+    let spec = spec.clone();
+    let progress = Progress::new(spec.steps);
+    let start = Instant::now();
+    if terminal
+        .draw(|frame| render_stages(frame, &spec, &progress, Duration::ZERO, 0))
+        .is_err()
+    {
+        work(&progress);
+        return;
+    }
+    let terminal = Arc::new(Mutex::new(terminal));
+    let done = Arc::new(AtomicBool::new(false));
+    let watcher = {
+        let done = Arc::clone(&done);
+        let cancel = cancel.clone();
+        let terminal = Arc::clone(&terminal);
+        let spec = spec.clone();
+        let progress = progress.clone();
+        std::thread::spawn(move || {
+            let mut tick = 0u64;
+            while !done.load(Ordering::SeqCst) {
+                match event::poll(Duration::from_millis(100)) {
+                    Ok(true) => {
+                        if let Ok(Event::Key(key)) = event::read() {
+                            if is_cancel_key(key.code, key.modifiers) {
+                                cancel.cancel();
+                                return;
+                            }
+                        }
+                    }
+                    Ok(false) => {
+                        tick += 1;
+                        if let Ok(mut terminal) = terminal.lock() {
+                            let _ = terminal.draw(|frame| {
+                                render_stages(frame, &spec, &progress, start.elapsed(), tick);
+                            });
+                        }
+                    }
+                    Err(_) => return,
+                }
+            }
+        })
+    };
+    work(&progress);
+    done.store(true, Ordering::SeqCst);
+    let _ = watcher.join();
+    if let Ok(mut terminal) = terminal.lock() {
+        if cancel.is_cancelled() {
+            let _ = terminal.draw(|frame| {
+                frame.render_widget(
+                    Paragraph::new(Line::from(
+                        "Cancelación registrada — se aplica el rollback (backup nombrado)",
+                    ))
+                    .style(Style::new().add_modifier(Modifier::BOLD)),
+                    frame.area(),
+                );
+            });
+        } else {
+            let elapsed = start.elapsed();
+            let _ = terminal.draw(|frame| render_stages(frame, &spec, &progress, elapsed, 0));
         }
     };
 }

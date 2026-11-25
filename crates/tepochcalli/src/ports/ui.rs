@@ -2,6 +2,10 @@
 //! ratatui menu and its line-based fallback, `HeadlessUi` scripted, and the
 //! `ScriptedUi`/`TapUi` fakes in tests).
 
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
+
 use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
 
 /// Everything the H5 menu renders, resolved by the caller: the pure spec plus
@@ -17,6 +21,49 @@ pub struct MenuView<'a> {
     pub installed: Option<&'a str>,
     /// Embedder state, already worded (`externo (API key)`/…).
     pub embedder: &'a str,
+}
+
+/// Etapas declaradas por el llamador para una operación con progreso real.
+/// `eta` solo se rellena con una estimación declarada: `None` ⇒ `ETA —`.
+#[derive(Debug, Clone)]
+pub struct ProgressSpec {
+    /// Título de la pantalla.
+    pub title: String,
+    /// Número de hitos; la barra avanza de 0 a `steps`.
+    pub steps: usize,
+    /// Estimación declarada por el llamador (nunca calculada por la UI).
+    pub eta: Option<Duration>,
+}
+
+/// Contador de hitos compartido con el watcher de la UI. `advance()` es el
+/// único mutador; la UI solo lee (`SeqCst`) y acota el valor al total.
+#[derive(Debug, Clone)]
+pub struct Progress {
+    done: Arc<AtomicUsize>,
+    total: usize,
+}
+
+impl Progress {
+    /// Contador en cero para `total` hitos.
+    #[must_use]
+    pub fn new(total: usize) -> Self {
+        Self {
+            done: Arc::new(AtomicUsize::new(0)),
+            total,
+        }
+    }
+
+    /// Marca un hito completado; sucesivos `advance()` más allá del total se
+    /// acotan al leer con [`Progress::done`].
+    pub fn advance(&self) {
+        self.done.fetch_add(1, Ordering::SeqCst);
+    }
+
+    /// Hitos completados, nunca más de los declarados.
+    #[must_use]
+    pub fn done(&self) -> usize {
+        self.done.load(Ordering::SeqCst).min(self.total)
+    }
 }
 
 /// Installer dialogue. `panel` only renders (errors surface via `Result`
@@ -49,6 +96,19 @@ pub trait Ui {
     fn run_cancellable(&self, title: &str, cancel: &CancelToken, work: &mut dyn FnMut()) {
         let _ = (title, cancel);
         work();
+    }
+    /// Progreso por hitos: la UI dibuja la barra y el spinner mientras `work`
+    /// avanza [`Progress`]. Default (sin TTY): `work` en línea,
+    /// sin pantalla ni escritura — igual que `run_cancellable`.
+    fn run_stages(
+        &self,
+        spec: &ProgressSpec,
+        cancel: &CancelToken,
+        work: &mut dyn FnMut(&Progress),
+    ) {
+        let _ = (spec, cancel);
+        let progress = Progress::new(spec.steps);
+        work(&progress);
     }
     /// H11: bloquea hasta una tecla; por defecto no-op (headless).
     fn wait_key(&self) {}

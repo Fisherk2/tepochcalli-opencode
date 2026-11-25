@@ -15,4 +15,4 @@ pub use host::{GpuInfo, HostFacts, HostProbe};
 pub use net::HttpClient;
 pub use payload::{backup_path, MergeReport, OverwriteJournal, PayloadSource};
 pub use proc::{CommandOutput, CommandRunner};
-pub use ui::{MenuView, Ui};
+pub use ui::{MenuView, Progress, ProgressSpec, Ui};
