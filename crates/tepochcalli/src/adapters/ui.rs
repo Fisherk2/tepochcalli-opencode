@@ -194,8 +194,8 @@ impl HeadlessUi {
     /// the D7.1 numbering. `skip_row` answers the single F6 menu row under
     /// `--skip-model`; `default_row` (MiniLM) otherwise, followed by the
     /// device row (`0` = `cpu`, H9/ADR-015). The former vault
-    /// param was dead: `--vault` resolves by flag and an absent flag must
-    /// abort typed (never guess), so no queue entry ever helped.
+    /// param was dead: the vault comes from `--vault` or the process cwd,
+    /// so no queue entry ever helped.
     #[must_use]
     pub fn for_install(skip_row: usize, default_row: usize, skip_model: bool) -> Self {
         // El menú de dispositivo solo se pregunta en los paths locales: `cpu`

@@ -12,6 +12,7 @@ use common::{FakeHost, FakeUiScript, ScriptedUi};
 use tepochcalli::application::installer::{
     check_prereqs_on, ensure_vault_dir, is_supported_os, resolve_vault_dir, tool_present_in,
 };
+use tepochcalli::ports::Ui;
 use tepochcalli::WizardError;
 
 fn host(ram_gb: f64, disk_gb: f64) -> FakeHost {
@@ -122,21 +123,29 @@ fn existing_vault_dir_is_reused_without_deleting() {
 }
 
 #[test]
-fn vault_without_flag_asks_ui_with_sensible_default() {
+fn vault_without_or_blank_flag_is_the_cwd_and_never_prompts() {
+    let expected = std::env::current_dir()
+        .expect("test cwd")
+        .to_string_lossy()
+        .into_owned();
+    // A queued answer proves no prompt was consumed: it is still there after.
     let ui = ScriptedUi::new(FakeUiScript {
         inputs: ["my-vault".to_string()].into(),
         ..FakeUiScript::default()
     });
-    let raw = resolve_vault_dir(&ui, None).expect("Ui answer must be honored");
-    assert_eq!(raw, "my-vault");
-
-    // Blank flag behaves like no flag: ask the Ui instead of guessing.
-    let ui = ScriptedUi::new(FakeUiScript {
-        inputs: ["fallback".to_string()].into(),
-        ..FakeUiScript::default()
-    });
-    let raw = resolve_vault_dir(&ui, Some("   ")).expect("blank flag must prompt");
-    assert_eq!(raw, "fallback");
+    assert_eq!(
+        resolve_vault_dir(&ui, None).expect("cwd is the default"),
+        expected
+    );
+    // Blank flag behaves like no flag: cwd, no prompt.
+    assert_eq!(
+        resolve_vault_dir(&ui, Some("   ")).expect("blank flag must fall back to cwd"),
+        expected
+    );
+    assert_eq!(
+        ui.input("vault?", None).expect("scripted answer untouched"),
+        "my-vault"
+    );
 }
 
 #[test]

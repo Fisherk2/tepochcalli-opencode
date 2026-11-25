@@ -47,9 +47,9 @@ fn run_embedder_cli(state: &Path, args: &[String]) -> std::process::Output {
 /// saldría con 42 en vez de 20 (fallaría en `rust-ci`, pasaría en `nonet`).
 ///
 /// Discriminador de GAP 12: 41-vs-no-41, no 42-vs-41. Si el flag `--vault` no
-/// resolviera el directorio, `resolve_vault_dir` fallaría con `UserAborted`
-/// (41) y el panel «vault selection failed»; el exit 20 con «config embedder
-/// failed» prueba que el directorio llegó desde el flag y el swap corrió.
+/// resolviera el directorio, aparecería el panel «vault selection failed» (41);
+/// el exit 20 con «config embedder failed» prueba que el directorio llegó desde
+/// el flag y el swap corrió (sin flag, el cwd tampoco pregunta nada).
 #[test]
 fn config_embedder_accepts_both_vault_forms_and_rejects_valueless_flag() {
     let state = tempfile::tempdir().expect("state home fixture");

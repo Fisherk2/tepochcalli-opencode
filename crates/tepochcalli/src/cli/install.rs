@@ -70,8 +70,7 @@ pub(crate) fn run_install(
     ) {
         return code;
     }
-    // T6 rule: no TTY means no prompts — fail fast instead of hanging or
-    // resolving the default dir under an unintended cwd.
+    // T6 rule: no TTY means no prompts — fail fast instead of hanging.
     if !tty_ok(stderr, non_interactive, "install") {
         return WizardError::UserAborted.exit_code();
     }
@@ -79,11 +78,15 @@ pub(crate) fn run_install(
     if let Err(code) = prereqs_gate(&*ui, stderr) {
         return code;
     }
-    // F2: vault directory (`--vault` wins; otherwise the Ui asks).
+    // F2: vault directory (`--vault` wins; otherwise the process cwd).
     let raw = match resolve_vault_for_install(&*ui, non_interactive, vault.as_deref()) {
         Ok(raw) => raw,
         Err(code) => return code,
     };
+    // One line naming the absolute target before the first write (F2 probe).
+    let target =
+        std::path::absolute(Path::new(&raw)).unwrap_or_else(|_| Path::new(&raw).to_path_buf());
+    let _ = writeln!(stderr, "install: destino: {}", target.display());
     let payload_dir = payload.dir.as_deref();
     let url_override = payload.url.as_deref();
     if let Err(code) = offline_guard(&*ui, &raw, offline, resume, skip_model, payload_dir) {
@@ -178,8 +181,8 @@ fn prereqs_gate(ui: &dyn Ui, stderr: &mut dyn std::io::Write) -> Result<(), u8> 
     Ok(())
 }
 
-/// F2: `--vault` wins; otherwise the `Ui` asks. `Err(code)` is the panel
-/// already emitted, on both failures.
+/// F2: `--vault` wins; otherwise the process cwd. `Err(code)` is the panel
+/// already emitted (a cwd that cannot be read is a typed filesystem failure).
 fn resolve_vault_for_install(
     ui: &dyn Ui,
     non_interactive: bool,
@@ -187,9 +190,9 @@ fn resolve_vault_for_install(
 ) -> Result<String, u8> {
     match resolve_vault_dir(ui, vault) {
         Ok(raw) => Ok(raw),
-        // #10b: headless sin `--vault` nadie canceló — es un fallo de uso
-        // (el correctivo es el flag). El brazo de abajo (Esc interactivo) sí
-        // es una cancelación genuina y conserva su `estado:` / `failure_body`.
+        // Sin `--vault` ya no hay pregunta: solo puede fallar la lectura del
+        // cwd (filesystem tipado). El brazo de abajo conserva el panel de
+        // cancelación genuina por si otro resolver emitiera `UserAborted`.
         Err(err) if non_interactive => Err(report_usage_failure(
             ui,
             "install",

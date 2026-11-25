@@ -15,7 +15,7 @@ pub const MIN_RAM_GB: f64 = 8.0;
 pub const MIN_DISK_FREE_GB: f64 = 4.0;
 /// OS values (`std::env::consts::OS`) the wizard supports (else exit 12).
 pub const SUPPORTED_OS: &[&str] = &["linux", "macos", "windows"];
-/// F2 default when `--vault` is absent, resolved under the caller cwd.
+/// Legacy default, kept for API compatibility; F2 now uses the process cwd.
 pub const DEFAULT_VAULT_DIR: &str = "./tepochcalli-vault";
 /// Desktop tools the wizard warns about but never installs (Non-Goals).
 const OBSIDIAN_TOOL: &str = "obsidian";
@@ -94,12 +94,15 @@ pub fn check_prereqs_on(
     })
 }
 
-/// F2 choice: `--vault` wins; otherwise the Ui asks (default preselected).
-/// A blank flag counts as absent — the Ui is asked instead of guessing.
-pub fn resolve_vault_dir(ui: &dyn Ui, flag: Option<&str>) -> Result<String, WizardError> {
+/// F2 choice: `--vault` wins verbatim; absent or blank means the process cwd.
+/// `_ui` stays in the public signature but never prompts — a wizard launched
+/// in `Downloads/test` installs there without asking anything.
+pub fn resolve_vault_dir(_ui: &dyn Ui, flag: Option<&str>) -> Result<String, WizardError> {
     match flag {
         Some(raw) if !raw.trim().is_empty() => Ok(raw.to_string()),
-        _ => ui.input("Vault directory", Some(DEFAULT_VAULT_DIR)),
+        _ => std::env::current_dir()
+            .map(|cwd| cwd.to_string_lossy().into_owned())
+            .map_err(|_| WizardError::PermissionDenied),
     }
 }
 

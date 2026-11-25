@@ -31,7 +31,7 @@ pub(crate) fn usage_for(command: &str) -> String {
          \nOptions:\n  \
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --skip-model       preselect \"configure later\" (degraded, no index)\n  \
-         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --vault <ruta>     vault directory (default: current directory)\n  \
          --payload <ruta>   local payload tree (dev/tests; default: the\n  \
          versioned release asset for this binary (one-version rule))\n  \
          --payload-url <url>   override the release asset URL (dev/tests;\n  \
@@ -46,7 +46,7 @@ pub(crate) fn usage_for(command: &str) -> String {
     if command == "config embedder" {
         return "Usage: tepochcalli config embedder [options]\n\
          \nOptions:\n  \
-         --vault <ruta>      vault directory (asked interactively if omitted)\n  \
+         --vault <ruta>      vault directory (default: current directory)\n  \
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --confirm          mandatory: the swap rebuilds the whole index\n  \
          --keep-previous    retain the previous model cache (no auto-GC)\n  \
@@ -58,7 +58,7 @@ pub(crate) fn usage_for(command: &str) -> String {
         return "Usage: tepochcalli reindex [options]\n\
          \nOptions:\n  \
          --confirm          mandatory: the rebuild is destructive (full re-index)\n  \
-         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --vault <ruta>     vault directory (default: current directory)\n  \
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --help     print this help\n  \
          --version  print the version\n"
@@ -69,7 +69,7 @@ pub(crate) fn usage_for(command: &str) -> String {
          \nOverwrites .opencode/, .tepochcalli/, .gitignore, opencode.json and AGENTS.md\n\
          in the target vault, saving every replaced file as `<ruta>.bak` first.\n\
          \nOptions:\n  \
-         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --vault <ruta>     vault directory (default: current directory)\n  \
          --payload <ruta>   local payload tree (dev/tests; default: the\n  \
          versioned release asset for this binary (one-version rule))\n  \
          --payload-url <url>   override the release asset URL (dev/tests;\n  \
@@ -83,7 +83,7 @@ pub(crate) fn usage_for(command: &str) -> String {
     if command == "uninstall" {
         return "Usage: tepochcalli uninstall [options]\n\
          \nOptions:\n  \
-         --vault <ruta>     vault directory (asked interactively if omitted)\n  \
+         --vault <ruta>     vault directory (default: current directory)\n  \
          --confirm          mandatory: the uninstall removes the whole runtime\n  \
          --non-interactive  never prompt; a missing answer is a typed error\n  \
          --help     print this help\n  \

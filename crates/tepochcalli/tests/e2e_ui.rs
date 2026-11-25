@@ -65,8 +65,8 @@ fn for_install_answers_the_d7_1_row_indices_from_main() {
             .unwrap(),
         4
     );
-    // El param vault era muerto: sin `--vault` la pregunta aborta tipada —
-    // jamais survive un guess.
+    // El param vault era muerto: `--vault`/cwd resuelven el directorio,
+    // así que la cola de `input` no se gasta en preguntarlo.
     assert_eq!(
         ui.input("vault?", None).unwrap_err(),
         WizardError::UserAborted
@@ -90,14 +90,28 @@ fn tty_ui_panel_renders_without_panicking_off_terminal() {
 }
 
 /// `install --non-interactive --skip-model` with stdin closed and no `--vault`
-/// must terminate fast (exit 41: the headless UI cannot guess the vault dir)
-/// instead of blocking on a prompt.
+/// must target the process cwd (never prompt) and terminate fast. The dead
+/// proxy makes F4 fail deterministically before any real download.
 #[test]
-fn install_non_interactive_with_closed_stdin_terminates() {
+fn install_non_interactive_with_closed_stdin_uses_cwd_and_terminates() {
+    let cwd = tempfile::tempdir().expect("cwd fixture");
+    let target = cwd.path().to_path_buf();
+    let payload = tempfile::tempdir().expect("payload fixture dir");
     let (tx, rx) = std::sync::mpsc::channel();
     std::thread::spawn(move || {
         let out = bin()
-            .args(["install", "--non-interactive", "--skip-model"])
+            .args([
+                "install",
+                "--non-interactive",
+                "--skip-model",
+                "--payload",
+                payload.path().to_str().expect("utf8 tmp"),
+            ])
+            .current_dir(cwd.path())
+            .env("ALL_PROXY", "http://127.0.0.1:9")
+            .env("HTTPS_PROXY", "http://127.0.0.1:9")
+            .env_remove("NO_PROXY")
+            .env_remove("no_proxy")
             .stdin(Stdio::null())
             .output()
             .expect("spawn binary");
@@ -106,11 +120,22 @@ fn install_non_interactive_with_closed_stdin_terminates() {
     let out = rx
         .recv_timeout(Duration::from_secs(15))
         .expect("install --non-interactive --skip-model must not block on closed stdin");
-    assert_eq!(out.status.code(), Some(41));
+    let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("vault selection failed"),
-        "headless install without --vault must fail fast naming the vault, got:\n{}",
-        String::from_utf8_lossy(&out.stderr)
+        stderr.contains(&format!(
+            "install: destino: {}",
+            target.to_str().expect("utf8 tmp")
+        )),
+        "the absolute cwd must be announced before any write, got:\n{stderr}"
+    );
+    assert!(
+        !stderr.contains("vault selection failed"),
+        "no vault question may be asked, got:\n{stderr}"
+    );
+    assert_eq!(
+        out.status.code(),
+        Some(20),
+        "the dead proxy must fail F4 fast, got:\n{stderr}"
     );
 }
 

@@ -50,9 +50,9 @@ const UPDATE_SPEC: FlagSpec = FlagSpec {
     boolean: &["--non-interactive"],
 };
 
-/// One vault resolver for every non-install command: `--non-interactive`
-/// without a resolved vault is a usage failure (the missing flag is the fix),
-/// Esc is a genuine cancel, anything else is a maintenance failure.
+/// One vault resolver for every non-install command: `--vault` wins, absent
+/// means the process cwd. Only a typed filesystem failure, a genuine Esc or
+/// another maintenance error reaches a panel.
 pub(crate) fn resolve_vault_or_report(
     ui: &dyn Ui,
     non_interactive: bool,
@@ -198,9 +198,8 @@ pub(crate) fn run_reindex_cmd(
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
-        // The flag (when given) answers the directory question in
-        // `resolve_vault_dir` without asking; an absent one surfaces as a
-        // typed `UserAborted` — never a guess, never stdin.
+        // `--vault` (when given) overrides the cwd; no answer ever comes
+        // from stdin.
         Box::new(HeadlessUi::new(Default::default(), Default::default()))
     } else {
         Box::new(TtyUi)
@@ -265,7 +264,7 @@ pub(crate) fn run_uninstall_cmd(
         return WizardError::UserAborted.exit_code();
     }
     let ui: Box<dyn Ui> = if non_interactive {
-        // Same contract as `reindex`: the flag answers, absence aborts typed.
+        // Same contract as `reindex`: the flag overrides, absence uses cwd.
         Box::new(HeadlessUi::new(Default::default(), Default::default()))
     } else {
         Box::new(TtyUi)
