@@ -88,7 +88,7 @@ Reestructurar `render_menu` (`ui_ratatui.rs:45-51`) y `render_stages` (`:142-148
 
 Con `--non-interactive`, `HeadlessUi` responde en el mismo orden y no emite marcadores de progreso por stderr (`e2e_ui.rs:288-323`). Añadir `e2e_install_tty.rs` con helper PTY para entrar en `try_init` (los e2e actuales usan pipes: `e2e_ui.rs:121,170,308`) y un test de que `models/` aparece en pantalla. Si el PTY es flaky en fuseblk: degradar a `int_ui_screen_ownership` + demo manual y **declarar la salvedad**, sin maquillar el gate.
 
-**Aceptación:** `e2e_ui.rs:288-323` sigue verde sin `transcurrido`/`ETA`/`█`/`Cancelar — Esc` en stderr; evidencia de ruta TTY o salvedad documentada; cola de `for_install` intacta; 4 tests viejos reescritos.
+**Aceptación:** `e2e_ui.rs:288-323` sigue verde sin `transcurrido`/`ETA`/`█`/`Cancelar — Esc` en stderr; evidencia de ruta TTY o salvedad documentada; cola de `for_install` intacta; 2 tests reescritos en `int_progress_spec.rs` + literales del banner en `int_ui_menu.rs`.
 
 **Verificación:** `just rust-test-filter tty_menu_renders_full_screen_under_a_real_pty` · `just rust-test-filter tty_menu_muestra_la_ruta_models_del_embedder_local` · `just rust-test-filter install_non_interactive_no_escribe_estados_de_progreso` · `just rust-test-filter for_install_answers_the_d7_1_row_indices_from_main` · `just rust-ci`.
 

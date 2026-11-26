@@ -231,6 +231,19 @@ congelado `.opencode/skills/**`. Limitaciones declaradas: no cuenta docstrings P
 `/* */`, y el recuento exacto de comentarios varía ligeramente según se traten los doc comments
 `///`/`//!` y los atributos `#[…]`; las cifras de la tabla son las de las sesiones de análisis.
 
+## Verificación final del hotfix
+
+Cierre 2026-11-25 sobre `fix/tui-issues`: los 7 tasks de `tasks/todo.md` están implementados y
+verificados. `just ci` completo, 9 segmentos, `EXIT=0`: 710 unit / 82 mcp-tools / 28 mcp-wire /
+80 engine / 12 converter / 10 acceptance tests Python, `bench-smoke` PASS y `rust-ci` EXIT=0.
+`just md-lint` 0 issues / 65 ficheros. `just comment-density`: 7,60 % global ⇒ sin compactar;
+Rust `src` 16,40 % queda como _watch_ (sobre el aviso del 15 %). Demo en PTY real vía `script(1)`
+y binario `0.1.0-beta.4` verificado en local, sin tag, Release ni PyPI.
+
+**Límite de accesibilidad:** la TUI usa _alternate screen_ y no expone rol/estado a lectores de
+pantalla; no se declara conformidad WCAG 2.1 AA/AAA. La ruta accesible es `--non-interactive` /
+modo línea. Los límites restantes están declarados en `docs/WORKFLOW.md` §9.
+
 ## References
 
 - [Plantilla de diagnóstico](diagnosis-template.md) · [Guía de estilo](../../docs/CODE_STYLE.md) · [Arquitectura](../../docs/ARCHITECTURE.md)

@@ -8,63 +8,65 @@
 - [x] Decisión del dueño: todo C1–C6 en una fase, dentro de `0.1.0-beta.4`, sin deploy
 - [x] Fase registrada en `docs/WORKFLOW.md` §Phase 6.9
 - [x] Plan y TODO escritos-from-scratch en estos dos ficheros
-- [ ] Implementación en curso
+- [x] Implementación en curso
 
 ## Tareas
 
 ### T1 — Dueño único de pantalla (BLOQUEANTE)
 
-- [ ] RED: `tests/int_ui_screen_ownership.rs` con guard de `select`/`input`/`panel`
-- [ ] GREEN: estado de selección en `ports/ui.rs`; `TtyUi::select` en frame; sin segundo `try_init()`
-- [ ] Limpieza de estado en todo exit + abort tipado
-- [ ] Fakes y `HeadlessUi` compilan; orden de colas intacto
-- [ ] `wc -l ui_ratatui.rs ≤ 500` (o `ui_selection.rs` extraído)
-- [ ] CHECKPOINT A: `just rust-test-filter int_ui_screen_ownership` + `just rust-ci` + revisión
+- [x] RED: `tests/int_ui_screen_ownership.rs` con guard de `select`/`input`/`panel`
+- [x] GREEN: estado de selección en `ports/ui.rs`; `TtyUi::select` en frame; sin segundo `try_init()`
+- [x] Limpieza de estado en todo exit + abort tipado
+- [x] Fakes y `HeadlessUi` compilan; orden de colas intacto
+- [x] `wc -l ui_ratatui.rs ≤ 500` (o `ui_selection.rs` extraído)
+- [x] CHECKPOINT A: `just rust-test-filter int_ui_screen_ownership` + `just rust-ci` + revisión
 
 ### T6 — Receta de densidad de comentarios (PARALELO)
 
-- [ ] Receta nueva en `Justfile` (nombre verificado con `just --list`)
-- [ ] Reproduce 7,55 % global / 16,49 % Rust `src`, con excluidores y limitaciones
-- [ ] Fila en `docs/BACKLOG.md` §8; **sin compactar comentarios**
-- [ ] CHECKPOINT C: receta ejecutada + `just md-lint` si aplica
+- [x] Receta nueva en `Justfile` (nombre verificado con `just --list`)
+- [x] Reproduce 7,55 % global / 16,49 % Rust `src`, con excluidores y limitaciones
+- [x] Fila en `docs/BACKLOG.md` §8; **sin compactar comentarios**
+- [x] CHECKPOINT C: receta ejecutada + `just md-lint` si aplica
 
 ### T2 — Orden del install (TRAS A, PARALELO)
 
-- [ ] RED: aserciones de orden en `int_embedder_menu.rs` e `int_install_f4_f5.rs`
-- [ ] Selección antes de F3; gate test-embed tras F5; `models/` en el título
-- [ ] `--resume` y cola `for_install` sin robo de índice
-- [ ] `run_f6_or_degraded` conserva degradación y exit 0
+- [x] RED: aserciones de orden en `int_embedder_menu.rs` e `int_install_f4_f5.rs`
+- [x] Selección antes de F3; gate test-embed tras F5; `models/` en el título
+- [x] `--resume` y cola `for_install` sin robo de índice
+- [x] `run_f6_or_degraded` conserva degradación y exit 0
 
 ### T3 — Layout y ETA (TRAS A, PARALELO)
 
-- [ ] RED: `tests/int_ui_layout.rs` a 80x24/40x12/30x8/20x6 con aserciones posicionales
-- [ ] ETA en columna derecha; tres zonas; Cancelar siempre visible; headers con wrap
-- [ ] Reescritos `int_progress_spec.rs:73-94` y `:97-128`
-- [ ] CHECKPOINT B: `just rust-test-filter int_ui_layout` + `just rust-ci`
+- [x] RED: `tests/int_ui_layout.rs` a 80x24/40x12/30x8/20x6 con aserciones posicionales
+- [x] ETA en columna derecha; tres zonas; Cancelar siempre visible; headers con wrap
+- [x] Reescritos `int_progress_spec.rs:73-94` y `:97-128`
+- [x] CHECKPOINT B: `just rust-test-filter int_ui_layout` + `just rust-ci`
 
 ### T4 — Banner semántico (TRAS A, PARALELO)
 
-- [ ] RED: literales en `adapters/ui.rs:363` e `int_ui_menu.rs:66,80`
-- [ ] «listo para instalar» sin pyproject; versión instalada cuando exista
-- [ ] `domain/menu.rs` sin cambios (`git diff` vacío)
+- [x] RED: literales en `adapters/ui.rs:363` e `int_ui_menu.rs:66,80`
+- [x] «listo para instalar» sin pyproject; versión instalada cuando exista
+- [x] `domain/menu.rs` sin cambios (`git diff` vacío)
 
 ### T5 — No-TTY + e2e TTY (SECUENCIAL)
 
-- [ ] `e2e_ui.rs:288-323` sin regresión
-- [ ] `e2e_install_tty.rs` con PTY **o** salvedad documentada + demo manual
-- [ ] `models/` asertado en el título del gate y en el header PTY; tests viejos reescritos: 2 en `int_progress_spec.rs` + literales en `int_ui_menu.rs`
+- [x] `e2e_ui.rs:288-323` sin regresión
+- [x] `e2e_install_tty.rs` con PTY **o** salvedad documentada + demo manual
+- [x] `models/` asertado en el título del gate y en el header PTY; tests viejos reescritos: 2 en `int_progress_spec.rs` + literales en `int_ui_menu.rs`
 
 ### T7 — Bump beta.4 y docs (ÚLTIMO)
 
-- [ ] 11 ficheros alineados a `0.1.0-beta.4` (`git show --stat 9b29a4c`)
-- [ ] `just rust-lock-refresh` → `just payload-lock` → `just payload-lock-check` → `just third-party`
-- [ ] Spec enmendada (§§279/316-357/361-367) + fila en BACKLOG §8; sin ADR
-- [ ] `git tag --list` sin tag nuevo; sin Release ni PyPI
-- [ ] CHECKPOINT D: `just rust-ci` + `just quality` + `just md-lint` + `just ci` completo; demo manual documentada
+- [x] 11 ficheros alineados a `0.1.0-beta.4` (`git show --stat 9b29a4c`)
+- [x] `just rust-lock-refresh` → `just payload-lock` → `just payload-lock-check` → `just third-party`
+- [x] Spec enmendada (§§279/316-357/361-367) + fila en BACKLOG §8; sin ADR
+- [x] `git tag --list` sin tag nuevo; sin Release ni PyPI
+- [x] CHECKPOINT D: `just rust-ci` + `just quality` + `just md-lint` + `just ci` completo; demo manual documentada
 
 ## Cierre (sin deploy)
 
-- [ ] Referencias entrantes a estos dos ficheros verificadas tras el borrado
-- [ ] `just md-lint` 0 issues
-- [ ] `git status --short` solo con los ficheros intencionados
-- [ ] Fase terminada «lista para desplegar» — **sin tag, Release ni PyPI**
+- [x] Referencias entrantes a estos dos ficheros verificadas tras el borrado
+- [x] `just md-lint` 0 issues
+- [x] `git status --short` solo con los ficheros intencionados
+- [x] Fase terminada «lista para desplegar» — **sin tag, Release ni PyPI**
+
+**Cierre 2026-11-25:** los 7 tasks están implementados y verificados; commits relevantes `03525ac`, `eb6d6fc`, `04a0382`, `6a109a4`, `519c6b8`, `253da2a`, `987aec0`, `5295910`, `6c6e42c`, `9a58b52`, `9b5c47b`. Fase COMPLETADA, lista para desplegar y sin deploy.

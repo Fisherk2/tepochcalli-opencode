@@ -6,7 +6,7 @@
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
 > un contrato en vuelo requiere ADR, no solo código.
 
-**Estado:** el cierre de cada fase está en la tabla de completadas y terminadas de §2; la tabla de pendientes registra la fase 6.9 autorizada el 2026-11-25. GitHub Actions corre desde
+**Estado:** el cierre de cada fase está en la tabla de completadas y terminadas de §2; la fase 6.9 quedó completada el 2026-11-25, lista para desplegar y sin deploy. GitHub Actions corre desde
 2026-11-24 (run `45316624910`, gates `gitleaks`/`python`/`rust` verdes). Phase 6.8 quedó
 **CERRADA EN LOCAL el 2026-11-25 con veredicto GO, sin desplegar**: sin tag, Release ni PyPI;
 el bump `beta.2→beta.3` está diferido al prep de release.
@@ -58,13 +58,13 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 | 6.8 | Terminada | F6 degradaba sin panel; `E_MODEL_INVALID` aplanaba tres causas | Panel + log + causa real, con exit 0 y `none_config`, política intacta; seam con 3 códigos + fallback `ModelLoadFailed` (`docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md`; ADR-016) |
 | 6.8 | Terminada | `remove_dir_all` secuencial sobre ~51 k entradas; barra ondulada | Helper bottom-up con 8 workers, std-only sin `libc`; progreso monótono por hitos + spinner ASCII + cronómetro + ETA declarada (`docs/diagnosis/fix03-desinstall-lento-por-venv.md`; C8–C12) |
 
-### Fases pendientes
+### Cierre de la fase 6.9
 
-> A 2026-11-25 queda UNA fase pendiente autorizada por el dueño: 6.9 (C1–C6 en una sola fase, todo dentro de `0.1.0-beta.4`). El resto está completado.
+> A 2026-11-25 NO queda ninguna fase por ejecutar: 6.9 (C1–C6 en una sola fase, todo dentro de `0.1.0-beta.4`) quedó **COMPLETADA — lista para desplegar, SIN deploy**. El resto está completado.
 
 | Fase | Objetivo | Dependencias | Gate de salida |
 | --- | --- | --- | --- |
-| 6.9 | Rediseño del TUI (un dueño de pantalla, tres zonas, banner, ETA, densidad de comentarios) + bump one-version | Decisión del dueño 2026-11-25; insunto `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`; sin ADR nuevo (D1-D8 intactas) | 7 criterios + demo TTY sin red; `just rust-ci`, `just quality`, `just md-lint`, `just ci`; sin deploy (§9) |
+| 6.9 | Rediseño del TUI (un dueño de pantalla, tres zonas, banner, ETA, densidad de comentarios) + bump one-version | Decisión del dueño 2026-11-25; insunto `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`; sin ADR nuevo (D1-D8 intactas) | 7 criterios + demo TTY sin red; `just rust-ci`, `just quality`, `just md-lint`, `just ci`; verificado, sin deploy (§9) |
 
 ## 3. Testing Strategy per Phase
 
@@ -163,7 +163,7 @@ Las suites de módulo solo informan su tiempo (sin gate que falle); `mcp-tools` 
 
 ## 9. Phase 6.9 — Rediseño del TUI del wizard y preparación de 0.1.0-beta.4
 
-**Estado:** pendiente, autorizada por el dueño el 2026-11-25 («Todo C1–C6 en una fase», «Todo dentro de `0.1.0-beta.4`»), sin deploy. Insunto: `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`. Sin ADR nuevo: D1-D8 intactas, el rediseño es UX reversible.
+**Estado:** **COMPLETADA 2026-11-25 — lista para desplegar, SIN deploy** (autorizada por el dueño el 2026-11-25: «Todo C1–C6 en una fase», «Todo dentro de `0.1.0-beta.4`»); sin tag, Release ni PyPI. Insunto: `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`. Sin ADR nuevo: D1-D8 intactas, el rediseño es UX reversible.
 
 **Objetivo.** Que `uvx tepochcalli` muestre un TUI responsive de tres zonas desde el que se elige el embedder dentro del frame al iniciar Install, con el ETA en columna derecha y el banner con semántica correcta, con el código y la versión alineados a `0.1.0-beta.4`.
 
@@ -185,6 +185,14 @@ uvx tepochcalli --payload <fixture local> --skip-model  # sin red
 ```
 
 En el TTY: Install → lista de embedder en pantalla → ↑/↓ y Enter → destino `models/` → barra de 7 hitos sin parpadeos → banner «listo para instalar»/versión → CLI `0.1.0-beta.4`. Esc/Ctrl+C cancela y compensa. Nota: `uvx` desde PyPI no se publica en esta fase (se valida el binario local).
+
+### Accesibilidad y límites declarados
+
+**Accesibilidad honesta.** La TUI de `uvx tepochcalli` usa la *alternate screen* de ratatui y no expone rol/estado a lectores de pantalla: **no se declara conformidad WCAG 2.1 AA ni AAA**. La ruta accesible es `--non-interactive` / modo línea (`HeadlessUi`), que responde en el mismo orden sin emitir marcadores de progreso por stderr.
+
+**Hallazgos corregidos en el ship review.** Foco y navegación verificados a 20x6, con la fila Cancelar siempre visible; avisos con `ack` explícito; leyenda de teclado en pantalla.
+
+**Límites declarados (sin maquillar).** Sin PTY dentro de F6 (la selección se ejecuta dentro del closure de `ui.run_stages`, antes de F3 — `install_phases.rs:88-96`); guard `--resume` textual para no repetir F6 ni consumir fila de la cola; el bump one-version cubre 2 de 11 ficheros, el resto con guard automático; sin escáner CVE de Rust en el host. Gates y evidencia en `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md` §Verificación final del hotfix.
 
 ### Ficheros tocados (por capa)
 

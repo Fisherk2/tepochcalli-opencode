@@ -20,8 +20,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   y contacto; wrap/elipsis y cota mínima para Cancelar a 80×24, 40×12, 30×8 y 20×6.
 - **Wizard: banner con semántica.** «listo para instalar» sin instalación previa y versión instalada
   cuando existe `.tepochcalli/pyproject.toml`, reutilizando `READY_NOTICE`.
-- **Wizard: Install elige embedder antes de F3.** La selección ocurre dentro del frame, antes de
-  `run_stages`; el gate test-embed sigue detrás del venv (F5) y el título muestra el destino
+- **Wizard: Install elige embedder antes de F3.** La selección ocurre dentro de `run_stages`,
+  antes de F3; el gate test-embed sigue detrás del venv (F5) y el título muestra el destino
   `<vault>/.tepochcalli/models/`.
 - **Tests: ruta TTY cubierta.** PTY vía `script(1)` sin dependencias nuevas (5/5), con la ruta
   no-TTY blindada y aserciones posicionales del layout.
