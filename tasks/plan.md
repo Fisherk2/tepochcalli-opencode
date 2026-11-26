@@ -26,7 +26,7 @@ El puerto `Ui` gana estado de selección central junto a `ACTIVE_PROGRESS` (`por
 
 **Aceptación:** sin segundo `try_init()` en la selección; token de cancelación compartido con un solo lector; `int_ui_screen_ownership.rs` extiende el guard de `int_progress_spec.rs:161-184` a `select`/`input`/`panel`; fakes compilan sin cambiar el orden de colas; `dialoguer` permanece en `Cargo.toml:22` para `input`/`input_secret`/`line_menu` (R1).
 
-**Verificación:** `just rust-test-filter int_ui_screen_ownership` · `just rust-test-filter int_progress_spec` · `just rust-ci`.
+**Verificación:** `just rust-test-filter int_ui_screen_ownership` · `just rust-test-filter int_ui_screen_ownership_input_secret_no_hace_eco_del_valor_bajo_el_watcher` · `just rust-test-filter int_ui_screen_ownership_las_teclas_del_puerto_mueven_el_cursor_y_borran_texto` · `just rust-test-filter int_ui_screen_ownership_clear_del_watcher_despierta_al_esperador_y_no_cancela` · `just rust-test-filter int_ui_screen_ownership_las_letras_k_y_j_son_texto_en_dialogos_de_entrada` · `just rust-test-filter int_progress_spec` · `just rust-ci`.
 
 **Instrucciones:** (1) RED: crear `tests/int_ui_screen_ownership.rs` espejo de `int_progress_spec.rs:161-184` y confirmar que falla. (2) GREEN: estado central en `ports/ui.rs`; `TtyUi::select` renderiza en frame; reutilizar `is_cancel_key`/`RestoreOnDrop`; limpiar estado en **todo** exit y abort tipado. (3) Propagar solo lo necesario a `HeadlessUi` y fakes; no cambiar `for_install` (`adapters/ui.rs:215-227`). (4) Verificar `wc -l ui_ratatui.rs ≤ 500` o extracción hecha.
 
@@ -42,7 +42,7 @@ Separar en `application/embedder_menu.rs` la selección del gate/config; mover s
 
 **Aceptación:** al elegir Install aparece primero la selección y luego la barra de 7 hitos; gate después de F5; `--resume` con F6 hecha y la cola `HeadlessUi::for_install` no roban el índice; título del gate contiene `.tepochcalli/models/`; `run_f6_or_degraded` conserva degradación y exit 0.
 
-**Verificación:** `just rust-test-filter int_embedder_menu` · `just rust-test-filter int_install_f4_f5` · `just rust-ci`.
+**Verificación:** `just rust-test-filter gate_title_names_the_model_download_directory` · `just rust-test-filter preselected_choice_is_reused_by_f6_without_a_second_menu` · `just rust-test-filter preselected_mailbox_is_single_read` · `just rust-test-filter install_pregunta_el_embedder_antes_de_f3_y_deja_el_gate_tras_f5` · `just rust-test-filter resume_con_f6_hecha_la_guarda_envuelve_la_preseleccion_y_el_take` · `just rust-ci`.
 
 **Instrucciones:** (1) RED: aserciones de orden en `int_embedder_menu.rs` y `int_install_f4_f5.rs`. (2) GREEN: extraer la selección de `run_phase6`; invocarla antes de `run_stages` y el gate tras el hito F5 (`advance_active_stage()`, `:315`); no tocar `install_progress_spec`. (3) Comprobar `take_gate_stage()` (`:327`,`:350`). (4) No cambiar `EMBEDDER_PATHS` ni `menu_order_is_the_adr_numbering` (`embedder_menu.rs:324-336`).
 
@@ -74,7 +74,7 @@ Reestructurar `render_menu` (`ui_ratatui.rs:45-51`) y `render_stages` (`:142-148
 
 **Aceptación:** sin pyproject el banner contiene `directorio listo para instalar`; con versión muestra esa versión (no `—`); `domain/menu.rs` byte-a-byte intacto; máquina H5 sin cambios.
 
-**Verificación:** `just rust-test-filter int_ui_menu` · `just rust-test-filter header` · `just rust-ci`.
+**Verificación:** `just rust-test-filter header_shows_the_resolved_versions` · `just rust-test-filter header` · `just rust-ci`.
 
 **Instrucciones:** (1) RED: ajustar los literales y confirmar fallo. (2) GREEN: `header_line` consulta `view.installed` y usa `READY_NOTICE` si es `None`. (3) `git diff domain/menu.rs` vacío.
 
@@ -90,9 +90,9 @@ Con `--non-interactive`, `HeadlessUi` responde en el mismo orden y no emite marc
 
 **Aceptación:** `e2e_ui.rs:288-323` sigue verde sin `transcurrido`/`ETA`/`█`/`Cancelar — Esc` en stderr; evidencia de ruta TTY o salvedad documentada; cola de `for_install` intacta; 4 tests viejos reescritos.
 
-**Verificación:** `just rust-test-filter e2e_install_tty` · `just rust-test-filter e2e_ui` · `just rust-ci`.
+**Verificación:** `just rust-test-filter tty_menu_renders_full_screen_under_a_real_pty` · `just rust-test-filter tty_menu_muestra_la_ruta_models_del_embedder_local` · `just rust-test-filter install_non_interactive_no_escribe_estados_de_progreso` · `just rust-test-filter for_install_answers_the_d7_1_row_indices_from_main` · `just rust-ci`.
 
-**Instrucciones:** (1) RED: crear `e2e_install_tty.rs` con helper PTY y aserción de `models/`; decidir **antes** de escribir código si se añade dependencia — `Cargo.toml` no tiene `portable-pty`/`nix`, y añadirla exige visto bueno del dueño (R1); vía preferida: degradar a `int` + demo manual. (2) `just rust-test-filter e2e_ui`. (3) GREEN: integrar T1–T4 y demo manual con `uvx tepochcalli --payload <fixture local> --skip-model` sin red. (4) Documentar salvedad si el PTY no es estable.
+**Instrucciones:** (1) RED: crear `e2e_install_tty.rs` con helper PTY y aserción de `models/`; decidir **antes** de escribir código si se añade dependencia — `Cargo.toml` no tiene `portable-pty`/`nix`, y añadirla exige visto bueno del dueño (R1); vía preferida: degradar a `int` + demo manual. (2) `just rust-test-filter install_non_interactive_no_escribe_estados_de_progreso` y `just rust-test-filter for_install_answers_the_d7_1_row_indices_from_main`. (3) GREEN: integrar T1–T4 y demo manual con `uvx tepochcalli --payload <fixture local> --skip-model` sin red. (4) Documentar salvedad si el PTY no es estable.
 
 **Archivos:** `tests/e2e_install_tty.rs` (nuevo), `tests/e2e_ui.rs`, `tests/common/mod.rs` (solo si cambia el contrato), `tests/int_ui_screen_ownership.rs`.
 
@@ -142,6 +142,8 @@ Bump en los **11 ficheros** del precedente `9b29a4c`: `.github/ISSUE_TEMPLATE/bu
 | **D** | T7 | `just rust-lock-refresh` · `just payload-lock` · `just payload-lock-check` · `just third-party` · `just rust-ci` · `just quality` · `just md-lint` · `just ci` completo | 11 ficheros en `0.1.0-beta.4`; demo documentada; sin tag nuevo; **sin deploy** |
 
 Verificación de nombres: `rust-test-filter` (Justfile:374) es la receta Rust; **`test-file` (Justfile:507) es Python, no usarla aquí**. Confirmados: `rust-ci` (386), `quality` (575), `md-lint` (531), `ci` (592), `rust-lock-refresh` (329), `payload-lock` (332), `payload-lock-check` (336), `third-party` (536). La receta de densidad no existe hoy: su nombre se fija en T6 y se verifica con `just --list` antes de citarlo.
+
+Nota: `rust-test-filter` filtra por nombre de función; verificar siempre que ejecuta ≥1 test (`running N tests`); `just rust-ci` es el gate de suite completa.
 
 ## 6. Riesgos
 

@@ -193,12 +193,14 @@ En el TTY: Install → lista de embedder en pantalla → ↑/↓ y Enter → des
 | Puertos | `ports/ui.rs`: seam de estado junto a `ACTIVE_PROGRESS` (:74-99); conservar firma de `Ui::select` si es posible para no propagar a 6 fakes |
 | Adaptadores | `adapters/ui.rs`: quitar `Select` del path TTY, banner en `header_line` (:137-144), guards no-TTY (:65/74/89) intactos · `adapters/ui_ratatui.rs`: watcher render/keys en zona central (:181-206), ETA en columna derecha, layout de tres zonas, wrap/elipsis y cotas mínimas (494 líneas → extraer `ui_selection.rs` si pasa de 500) |
 | Aplicación y CLI | `application/embedder_menu.rs` (separar selección de gate/config) · `cli/install_phases.rs` + `cli/install.rs` (selección antes de F3, gate tras F5, `install_progress_spec` :441-447 intacto) · `application/embedder_gate.rs:50` |
-| Tests | Nuevos `int_ui_screen_ownership.rs`, `e2e_install_tty.rs` (PTY), `int_ui_layout.rs` (posiciones); ajustes en `int_install_f4_f5.rs`, `int_embedder_menu.rs`, `int_progress_spec.rs`, `int_ui_menu.rs`, `e2e_ui.rs`; `common/mod.rs` solo si cambia el contrato |
+| Tests | Nuevos `int_ui_screen_ownership.rs`, `e2e_install_tty.rs` (PTY), `int_ui_layout.rs` (posiciones); ajustes en `int_install_f4_f5.rs`, `int_embedder_menu.rs`, `int_progress_spec.rs`, `int_ui_menu.rs`; `e2e_ui.rs` solo verificado (sin cambios); `common/mod.rs` solo si cambia el contrato |
 | Build y docs | `Justfile` (receta de densidad y wrappers nuevos) · `specs/spec-installer-wizard.md` · `docs/BACKLOG.md` §8 · 11 ficheros del bump · este `docs/WORKFLOW.md` |
 
 ### Verificación (gates)
 
 `just rust-test-filter <nombre>` por test nuevo → `just rust-ci` → `just quality` → `just md-lint` → `just ci` completo antes de integrar (requisito del dueño). Demo manual con TTY real y payload local; sin deploy.
+
+Nota: `rust-test-filter` filtra por nombre de función; verificar siempre que ejecuta ≥1 test (`running N tests`); `just rust-ci` es el gate de suite completa. Los nombres verificados por task están en `tasks/plan.md` §§4-5.
 
 ### Riesgos y mitigación
 

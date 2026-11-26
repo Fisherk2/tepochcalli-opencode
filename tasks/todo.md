@@ -52,7 +52,7 @@
 
 - [ ] `e2e_ui.rs:288-323` sin regresión
 - [ ] `e2e_install_tty.rs` con PTY **o** salvedad documentada + demo manual
-- [ ] `models/` visible en pantalla; 4 tests viejos reescritos
+- [ ] `models/` asertado en el título del gate y en el header PTY; tests viejos reescritos: 2 en `int_progress_spec.rs` + literales en `int_ui_menu.rs`
 
 ### T7 — Bump beta.4 y docs (ÚLTIMO)
 
