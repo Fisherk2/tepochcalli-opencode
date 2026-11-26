@@ -242,7 +242,7 @@ y binario `0.1.0-beta.4` verificado en local, sin tag, Release ni PyPI.
 
 **Límite de accesibilidad:** la TUI usa _alternate screen_ y no expone rol/estado a lectores de
 pantalla; no se declara conformidad WCAG 2.1 AA/AAA. La ruta accesible es `--non-interactive` /
-modo línea. Los límites restantes están declarados en `docs/WORKFLOW.md` §9.
+modo línea. El registro de cierre de la fase 6.9 (con sus límites declarados) está en la fila `6.9 | Terminada` de la tabla de `docs/WORKFLOW.md` §2, según el protocolo de la sección «Fases pendientes».
 
 ## References
 
