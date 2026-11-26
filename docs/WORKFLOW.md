@@ -6,7 +6,7 @@
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
 > un contrato en vuelo requiere ADR, no solo código.
 
-**Estado:** el cierre de cada fase está en la tabla de completadas y terminadas de §2; la tabla de pendientes está vacía y lista para futuras fases. GitHub Actions corre desde
+**Estado:** el cierre de cada fase está en la tabla de completadas y terminadas de §2; la tabla de pendientes registra la fase 6.9 autorizada el 2026-11-25. GitHub Actions corre desde
 2026-11-24 (run `45316624910`, gates `gitleaks`/`python`/`rust` verdes). Phase 6.8 quedó
 **CERRADA EN LOCAL el 2026-11-25 con veredicto GO, sin desplegar**: sin tag, Release ni PyPI;
 el bump `beta.2→beta.3` está diferido al prep de release.
@@ -24,6 +24,7 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 | 6 | E2E Acceptance | Validar los 7 criterios de BACKLOG.md sobre sistema completo | Aceptación: evidencia de los 7 criterios en docs/acceptance/ (criterio 6 con salvedad TD-36) en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 | 6.5 | Wizard flujo destino (H5-H11) | Materializar el estado objetivo del instalador: canal uvx, TUI full-screen con botones por estado, versión desde pyproject, Update/Desinstall ampliados, selección de device/embedder | **COMPLETADA 2026-11-19** — 4 precondiciones del gate de entrada resueltas (ADR-014/015 Accepted; deps `maturin`/PyPI + `ratatui`/`crossterm` aprobadas; one-version alineada en `0.1.0`; enmiendas 2026-11-18 Accepted). Verificado: rueda local por `uvx --from`, H5 en TTY real, install/update/desinstall e2e con backup, `just ci` exit 0 (45m49s), `just md-lint` 0. **Salvedades declaradas:** VM limpia/`uvx` desde PyPI (no se publica), TTY en Windows (TD-52), Change Embedder e2e, payload del checkout (TD-53) |
 | 6.8 | Fallos visibles, desinstall acotado y progreso honesto | Corregir 3 bugs y añadir 3 mejoras UX de cara a `beta.3`, sin desplegar | **CERRADA EN LOCAL 2026-11-25 — GO, sin desplegar** — gate: C8–C12 verdes + `just rust-ci` y `just quality`; bump y tag diferidos al prep de release |
+| 6.9 | Rediseño del TUI del wizard y preparación de `0.1.0-beta.4` | Un único dueño de pantalla, layout de tres zonas, banner con semántica, ETA a la derecha y bump one-version; C1–C6 en una sola fase | 7 criterios verificables + demo en TTY real con payload local; gates locales verdes y `just ci` antes de integrar; sin tag/Release/PyPI (detalle en §9) |
 
 ## 2. Phase Breakdown
 
@@ -59,10 +60,11 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 
 ### Fases pendientes
 
-> Sin fases pendientes a 2026-11-25. Esta tabla queda preparada para las fases que el dueño autorice.
+> A 2026-11-25 queda UNA fase pendiente autorizada por el dueño: 6.9 (C1–C6 en una sola fase, todo dentro de `0.1.0-beta.4`). El resto está completado.
 
 | Fase | Objetivo | Dependencias | Gate de salida |
 | --- | --- | --- | --- |
+| 6.9 | Rediseño del TUI (un dueño de pantalla, tres zonas, banner, ETA, densidad de comentarios) + bump one-version | Decisión del dueño 2026-11-25; insunto `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`; sin ADR nuevo (D1-D8 intactas) | 7 criterios + demo TTY sin red; `just rust-ci`, `just quality`, `just md-lint`, `just ci`; sin deploy (§9) |
 
 ## 3. Testing Strategy per Phase
 
@@ -74,6 +76,7 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 | 4 | ls + grep + revisión humana | tabla 9×4 + matriz de conflictos; permisos V2 | BLUEPRINT APPROVED |
 | 5 | smoke e2e + fixtures D9 | payload del blueprint | golden vault citado; bandejas/frontmatters |
 | 6 | suite TRD §6 + manual | criterios 1-7 | tabla de evidencia en `docs/acceptance/` |
+| 6.9 | PTY + aserciones posicionales + gates Rust | selección en el frame, tres zonas a 80x24/40x12/30x8/20x6, no-TTY sin regresión, bump one-version | propiedad del tty y orden de tools; `just rust-ci` + `just ci` |
 
 `just typecheck` (mypy `--strict`) corre en CI entre `ruff format --check` y `pytest`; superficie: `flow/` en Phase 1 y `flow/` + `mcp/` desde Phase 2 ([CODE_STYLE.md](CODE_STYLE.md)).
 
@@ -157,3 +160,58 @@ Las suites de módulo solo informan su tiempo (sin gate que falle); `mcp-tools` 
 | Phase 3.5 / 2026-11-03 | Cierre con FTR aprobado | ADR-009/010/011 *Accepted*; 4 specs enmendadas definitivas |
 | D10 / 2026-10-21 | Pre-D10, «Phase 5» significaba hoy Phase 6 en ADR-002/006/007/008 | ADRs *Accepted* no se reeditan; benchmarks 10k/1k → Phase 6 |
 | D11 / 2026-10-21 | `cocoindex setup` no existe en v1 (`cocoindex==1.0.25`): leerlo como `cocoindex update` | ADR-002 §4.1; estado en `COCOINDEX_DB` |
+
+## 9. Phase 6.9 — Rediseño del TUI del wizard y preparación de 0.1.0-beta.4
+
+**Estado:** pendiente, autorizada por el dueño el 2026-11-25 («Todo C1–C6 en una fase», «Todo dentro de `0.1.0-beta.4`»), sin deploy. Insunto: `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`. Sin ADR nuevo: D1-D8 intactas, el rediseño es UX reversible.
+
+**Objetivo.** Que `uvx tepochcalli` muestre un TUI responsive de tres zonas desde el que se elige el embedder dentro del frame al iniciar Install, con el ETA en columna derecha y el banner con semántica correcta, con el código y la versión alineados a `0.1.0-beta.4`.
+
+### Criterios de aceptación (verificables)
+
+1. **Un dueño de pantalla (C1).** En TTY real, al elegir 🔵 Install aparece PRIMERO el panel de selección de embedder dentro del frame; ↑/↓ y Enter cambian/confirman, Esc/Ctrl+C cancela con rollback; sin `dialoguer::Select` en ese camino ni segundo `try_init()`; tras confirmar arranca la barra de 7 hitos y el gate test-embed sigue detrás del venv (F5).
+2. **Layout de tres zonas (C2).** `render_menu` y `render_stages`: arriba banner + progreso + spinner + ETA (ETA en columna derecha vía `Layout::horizontal`, fuera del `format!` en `ui_ratatui.rs:173-178`); centro mensajes/opciones/confirmaciones/selección; abajo menú H5 + contacto. Aserciones posicionales a 80x24, 40x12, 30x8 y 20x6: sin pérdida de la fila Cancelar y headers con wrap o elipsis.
+3. **Banner con semántica (C3).** «listo para instalar» cuando `installed_version()` (`application/installed.rs:17-20`) no halla `.tepochcalli/pyproject.toml`, y versión instalada cuando sí; reutilizar `READY_NOTICE` (`domain/menu.rs:84`) sin tocar `installed_version`, `home_view`, `MenuView` ni `installed_state`.
+4. **Destino visible (C4).** `<vault>/.tepochcalli/models/` aparece como destino de descarga en el título del gate (`application/embedder_gate.rs:50`).
+5. **Sin TTY sin regresión (C5).** Con `--non-interactive`, `HeadlessUi` responde en el mismo orden y no emite marcadores de progreso por stderr (`e2e_ui.rs:288-323`). Se reescriben los tests que hoy consagran el bug: `int_progress_spec.rs:73-94/97-128`, `adapters/ui.rs:363`, `int_ui_menu.rs:66,80`.
+6. **Densidad de comentarios (C6).** Receta `just` que mida la banda 10–15 %; global medido 7,55 % ⇒ NO compactar; declarar exclusión de docstrings y `.opencode/skills/**`.
+7. **Versión (C7).** Bump one-version a `0.1.0-beta.4` en los 11 ficheros del precedente `9b29a4c` (`Cargo.toml`/`Cargo.lock` vía `just rust-lock`; `pyproject.toml`/`uv.lock` vía `just payload-lock`; `CHANGELOG.md`, ejemplos), sin tag/Release/PyPI; enmienda de `specs/spec-installer-wizard.md` §§279/316-357/361-367 y fila nueva en `docs/BACKLOG.md` §8.
+
+### Resultado observable (demo)
+
+```bash
+uvx tepochcalli                                        # TTY real
+uvx tepochcalli --payload <fixture local> --skip-model  # sin red
+```
+
+En el TTY: Install → lista de embedder en pantalla → ↑/↓ y Enter → destino `models/` → barra de 7 hitos sin parpadeos → banner «listo para instalar»/versión → CLI `0.1.0-beta.4`. Esc/Ctrl+C cancela y compensa. Nota: `uvx` desde PyPI no se publica en esta fase (se valida el binario local).
+
+### Ficheros tocados (por capa)
+
+| Capa | Ficheros |
+| --- | --- |
+| Puertos | `ports/ui.rs`: seam de estado junto a `ACTIVE_PROGRESS` (:74-99); conservar firma de `Ui::select` si es posible para no propagar a 6 fakes |
+| Adaptadores | `adapters/ui.rs`: quitar `Select` del path TTY, banner en `header_line` (:137-144), guards no-TTY (:65/74/89) intactos · `adapters/ui_ratatui.rs`: watcher render/keys en zona central (:181-206), ETA en columna derecha, layout de tres zonas, wrap/elipsis y cotas mínimas (494 líneas → extraer `ui_selection.rs` si pasa de 500) |
+| Aplicación y CLI | `application/embedder_menu.rs` (separar selección de gate/config) · `cli/install_phases.rs` + `cli/install.rs` (selección antes de F3, gate tras F5, `install_progress_spec` :441-447 intacto) · `application/embedder_gate.rs:50` |
+| Tests | Nuevos `int_ui_screen_ownership.rs`, `e2e_install_tty.rs` (PTY), `int_ui_layout.rs` (posiciones); ajustes en `int_install_f4_f5.rs`, `int_embedder_menu.rs`, `int_progress_spec.rs`, `int_ui_menu.rs`, `e2e_ui.rs`; `common/mod.rs` solo si cambia el contrato |
+| Build y docs | `Justfile` (receta de densidad y wrappers nuevos) · `specs/spec-installer-wizard.md` · `docs/BACKLOG.md` §8 · 11 ficheros del bump · este `docs/WORKFLOW.md` |
+
+### Verificación (gates)
+
+`just rust-test-filter <nombre>` por test nuevo → `just rust-ci` → `just quality` → `just md-lint` → `just ci` completo antes de integrar (requisito del dueño). Demo manual con TTY real y payload local; sin deploy.
+
+### Riesgos y mitigación
+
+| Riesgo | Mitigación |
+| --- | --- |
+| Handshake watcher↔selección deadlock-prone | Limpiar estado en todo exit y abort tipado |
+| 6 fakes y 3 tests consagran contrato/orden actuales | Preferir seam que conserva `Ui::select` |
+| `--resume` con F6 ya hecha y cola `HeadlessUi::for_install` roban el índice | Aserciones de orden |
+| `ui_ratatui.rs` a 494 líneas | Extraer `ui_selection.rs` al pasar de 500 |
+| PTY flaky en fuseblk | Degradar a `int_ui_screen_ownership` + demo manual y declarar salvedad, sin maquillar gate |
+| `dialoguer` permanece en `Cargo.toml:22` | Solo para `input`/`input_secret`/`line_menu` (R1: no reinventar) |
+| H9 swap/device prompt con el mismo patrón | Queda como deuda |
+
+### Checkpoint
+
+Antes de pasar a testing: gates locales en verde y demo manual documentada. Sin deploy: la fase termina «lista para desplegar», sin tag, Release ni PyPI.
