@@ -11,10 +11,9 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
-use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
-use ratatui::widgets::{List, ListItem, ListState, Paragraph, Wrap};
+use ratatui::widgets::{Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::domain::{CancelToken, MenuAction, MenuSpec, WizardError};
@@ -23,14 +22,10 @@ use crate::ports::{
     ProgressSpec,
 };
 
-use super::ui_selection::dialog_key;
+use super::ui_selection::{bottom_areas, dialog_key, fit_header, render_contact, render_h5, zones};
 // Reexporta los nombres que ya ofrecía este módulo: el render del frame vive
 // en `ui_selection`, pero callers y tests siguen cruzando el mismo seam.
 pub use super::ui_selection::{render_progress, render_stages, render_stages_with_dialog};
-
-/// Contact shown at the bottom of the menu (H5).
-const REPO: &str = "https://github.com/Fisherk2/tepochcalli-opencode";
-const CONTACT: &str = "dev@fisherk2.com";
 
 /// Maps a chosen button index to its action. A disabled or out-of-range
 /// index is a typed abort: the wizard never invents a selection.
@@ -41,44 +36,42 @@ pub fn choose(spec: &MenuSpec, index: usize) -> Result<MenuAction, WizardError> 
     }
 }
 
-/// Draws the whole menu into `frame`. Every fact comes resolved in `view`
-/// (this function never touches the disk).
+/// Draws the whole menu into `frame` with the shared three-zone layout:
+/// banner arriba, avisos en el centro y H5 + contacto abajo. Every fact comes
+/// resolved in `view` (this function never touches the disk).
 pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
     let spec = view.spec;
-    let notice_rows = if spec.notice.is_some() { 3 } else { 0 };
-    let [header_area, list_area, notice_area, contact_area] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Min(1),
-        Constraint::Length(notice_rows),
-        Constraint::Length(3),
-    ])
-    .areas(frame.area());
+    let [top, center, bottom] = zones(frame.area(), 1, 7);
 
-    let header = Paragraph::new(Line::from(super::ui::header_line(view)))
-        .style(Style::new().add_modifier(Modifier::BOLD));
-    frame.render_widget(header, header_area);
-
-    let list = List::new(menu_items(spec))
-        .highlight_symbol("› ")
-        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
-    let mut state = ListState::default().with_selected(Some(selected));
-    frame.render_stateful_widget(list, list_area, &mut state);
+    let header = Paragraph::new(Line::from(fit_header(
+        &super::ui::header_line(view),
+        top.width,
+    )))
+    .style(Style::new().add_modifier(Modifier::BOLD))
+    .wrap(Wrap { trim: true });
+    frame.render_widget(header, top);
 
     if let Some(notice) = spec.notice {
         let paragraph = Paragraph::new(notice_text(notice))
             .style(Style::new().add_modifier(Modifier::BOLD))
             .wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, notice_area);
+        frame.render_widget(paragraph, center);
     }
 
-    let contact = Paragraph::new(Text::from(vec![Line::from(REPO), Line::from(CONTACT)]))
-        .style(Style::new().add_modifier(Modifier::DIM))
-        .wrap(Wrap { trim: true });
-    frame.render_widget(contact, contact_area);
+    let (rows_area, contact_area) = bottom_areas(bottom);
+    let labels: Vec<&str> = spec
+        .buttons
+        .iter()
+        .map(|button| button.action.label())
+        .collect();
+    render_h5(frame, rows_area, menu_items(spec), &labels, Some(selected));
+    if let Some(contact_area) = contact_area {
+        render_contact(frame, contact_area);
+    }
 }
 
 /// One row per button: icon, label, and the visible reason when disabled.
-fn menu_items(spec: &MenuSpec) -> Vec<ListItem<'_>> {
+fn menu_items(spec: &MenuSpec) -> Vec<Line<'_>> {
     spec.buttons
         .iter()
         .map(|button| {
@@ -94,7 +87,7 @@ fn menu_items(spec: &MenuSpec) -> Vec<ListItem<'_>> {
             } else {
                 Style::new().add_modifier(Modifier::DIM)
             };
-            ListItem::new(line).style(style)
+            line.style(style)
         })
         .collect()
 }

@@ -1,15 +1,15 @@
 //! Costura del diálogo bajo el watcher: traduce teclas de crossterm al
-//! puerto y pinta la zona central del frame. Módulo privado de `adapters`:
-//! no añade interfaz pública ni dependencias; `ui_ratatui` reexporta los
-//! renderizados que ya tenía y el test de propiedad usa esa misma costura.
+//! puerto y pinta el frame en tres zonas (ARRIBA/CENTRO/ABAJO). Módulo privado
+//! de `adapters`: `ui_ratatui` reexporta los renderizados y comparte estas
+//! costuras de layout, sin añadir interfaz pública ni dependencias.
 
 use std::time::Duration;
 
 use crossterm::event::{KeyCode, KeyModifiers};
-use ratatui::layout::{Constraint, Layout};
+use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Text};
-use ratatui::widgets::{Gauge, Paragraph, Wrap};
+use ratatui::widgets::{Gauge, List, ListState, Paragraph, Wrap};
 use ratatui::Frame;
 
 use crate::domain::MenuAction;
@@ -20,6 +20,10 @@ use super::ui_ratatui::is_cancel_key;
 /// ratatui 0.30.2 no trae widget `Spinner`: cuatro frames ASCII movidos por el
 /// watcher de eventos existente, sin dependencias nuevas.
 const SPINNER_FRAMES: [char; 4] = ['|', '/', '-', '\\'];
+
+/// Contacto compartido por el menú y la pantalla de hitos (zona ABAJO).
+pub(crate) const REPO: &str = "https://github.com/Fisherk2/tepochcalli-opencode";
+pub(crate) const CONTACT: &str = "dev@fisherk2.com";
 
 /// crossterm → tecla del puerto. Esc/Ctrl+C pasan por `is_cancel_key`, así
 /// que la cancelación sigue siendo la misma que la de la barra exterior.
@@ -39,11 +43,10 @@ pub(crate) fn dialog_key(code: KeyCode, modifiers: KeyModifiers) -> Option<Dialo
 }
 
 /// Líneas de la zona central mientras hay un diálogo pendiente: la fila
-/// Cancelar sigue visible y resaltada, como en la pantalla de hitos.
+/// Cancelar sigue visible y resaltada, también en los avisos.
 #[must_use]
 pub(crate) fn dialog_lines(dialog: &Dialog) -> Vec<Line<'_>> {
-    let cancel = Line::from("⏹ Cancelar — Esc / Ctrl+C")
-        .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED));
+    let cancel = cancel_line();
     let bold = Style::new().add_modifier(Modifier::BOLD);
     match dialog {
         Dialog::Select {
@@ -81,11 +84,122 @@ pub(crate) fn dialog_lines(dialog: &Dialog) -> Vec<Line<'_>> {
         }
         Dialog::Notice { title, body } => {
             vec![
+                cancel,
                 Line::from(title.clone()).style(bold),
                 Line::from(body.clone()),
             ]
         }
     }
+}
+
+fn cancel_line() -> Line<'static> {
+    Line::from("⏹ Cancelar — Esc / Ctrl+C")
+        .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED))
+}
+
+/// Tres bandas compartidas: ARRIBA (`top_rows` fijas), CENTRO (`Min(1)`) y
+/// ABAJO (`bottom` fijas). Las cotas se recortan antes de repartir para que el
+/// centro nunca desaparezca en terminales de 6 u 8 filas.
+#[must_use]
+pub(crate) fn zones(area: Rect, top_rows: u16, bottom_wanted: u16) -> [Rect; 3] {
+    let top = top_rows.min(area.height.saturating_sub(2));
+    let bottom = bottom_wanted.min(area.height.saturating_sub(top + 1));
+    Layout::vertical([
+        Constraint::Length(top),
+        Constraint::Min(1),
+        Constraint::Length(bottom),
+    ])
+    .areas(area)
+}
+
+/// Separa las filas del H5 del contacto solo cuando caben las siete filas.
+#[must_use]
+pub(crate) fn bottom_areas(area: Rect) -> (Rect, Option<Rect>) {
+    if area.height >= 7 {
+        let [rows, contact] =
+            Layout::vertical([Constraint::Length(area.height - 2), Constraint::Length(2)])
+                .areas(area);
+        (rows, Some(contact))
+    } else {
+        (area, None)
+    }
+}
+
+/// H5 compacto para terminales donde no caben cinco filas: las etiquetas se
+/// reparten entre las filas disponibles con `Wrap`, sin perder ninguna.
+#[must_use]
+pub(crate) fn compact_labels(labels: &[&str]) -> String {
+    labels.join(" · ")
+}
+
+/// Header de una sola fila con elipsis cuando no cabe entero.
+#[must_use]
+pub(crate) fn fit_header(text: &str, width: u16) -> String {
+    let limit = usize::from(width);
+    if text.chars().count() <= limit {
+        return text.to_string();
+    }
+    if limit == 0 {
+        return String::new();
+    }
+    format!("{}…", text.chars().take(limit - 1).collect::<String>())
+}
+
+/// Contacto de la franja inferior, con el mismo estilo en ambas pantallas.
+pub(crate) fn render_contact(frame: &mut Frame, area: Rect) {
+    // En 40 columnas la URL completa ocuparía dos filas y empujaría el email
+    // fuera de la franja: se acorta el esquema, no el dominio ni el contacto.
+    let repo = if area.width < 48 {
+        "github.com/Fisherk2/tepochcalli-opencode"
+    } else {
+        REPO
+    };
+    frame.render_widget(
+        Paragraph::new(Text::from(vec![Line::from(repo), Line::from(CONTACT)]))
+            .style(Style::new().add_modifier(Modifier::DIM))
+            .wrap(Wrap { trim: true }),
+        area,
+    );
+}
+
+/// Filas del H5 en la franja inferior: lista completa si hay sitio, texto
+/// envuelto si la terminal es demasiado baja.
+pub(crate) fn render_h5<'a>(
+    frame: &mut Frame,
+    area: Rect,
+    rows: Vec<Line<'a>>,
+    labels: &[&str],
+    selected: Option<usize>,
+) {
+    if area.height < 5 {
+        frame.render_widget(
+            Paragraph::new(compact_labels(labels)).wrap(Wrap { trim: true }),
+            area,
+        );
+        return;
+    }
+    let list = List::new(rows)
+        .highlight_symbol("› ")
+        .highlight_style(Style::new().add_modifier(Modifier::REVERSED));
+    let mut state = ListState::default().with_selected(selected);
+    frame.render_stateful_widget(list, area, &mut state);
+}
+
+/// Cronómetro a la izquierda y ETA en la columna derecha: dos widgets en un
+/// `Layout::horizontal`, nunca interpolados en el mismo `format!`.
+pub(crate) fn render_status(frame: &mut Frame, area: Rect, left: String, eta: String) {
+    let eta_width =
+        u16::try_from(eta.chars().count().min(usize::from(area.width))).unwrap_or(area.width);
+    let [left_area, right_area] =
+        Layout::horizontal([Constraint::Min(1), Constraint::Length(eta_width)]).areas(area);
+    frame.render_widget(
+        Paragraph::new(Line::from(left)).wrap(Wrap { trim: true }),
+        left_area,
+    );
+    frame.render_widget(
+        Paragraph::new(Line::from(eta)).wrap(Wrap { trim: true }),
+        right_area,
+    );
 }
 
 /// Frames del spinner ASCII: el tick del watcher decide el frame, nunca la
@@ -112,8 +226,8 @@ fn clock(elapsed: Duration) -> String {
 }
 
 /// Pantalla de progreso por hitos. Pura (no I/O), como `render_menu`: la barra
-/// avanza solo con `Progress::advance()`, el spinner va en su propia fila y el
-/// cronómetro/ETA se reciben ya calculados. 100 % = trabajo terminado.
+/// avanza solo con `Progress::advance()`, el spinner y la ETA se reparten la
+/// fila de estado en columnas y el cronómetro se recibe ya calculado.
 pub fn render_stages(
     frame: &mut Frame,
     spec: &ProgressSpec,
@@ -134,17 +248,10 @@ pub fn render_stages_with_dialog(
     tick: u64,
     dialog: Option<&Dialog>,
 ) {
-    let [header_area, gauge_area, spinner_area, detail_area] = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Length(3),
-        Constraint::Length(1),
-        Constraint::Min(3),
-    ])
-    .areas(frame.area());
-
-    let header = Paragraph::new(Line::from(format!("Tepochcalli · {}", spec.title)))
-        .style(Style::new().add_modifier(Modifier::BOLD));
-    frame.render_widget(header, header_area);
+    let area = frame.area();
+    let tiny = area.height < 8;
+    let gauge_height = if area.height >= 14 { 3 } else { 1 };
+    let [top, center, bottom] = zones(area, if tiny { 2 } else { gauge_height + 2 }, 7);
 
     let (ratio, label) = if spec.steps == 0 {
         (0.0, "trabajando…".to_string())
@@ -156,38 +263,56 @@ pub fn render_stages_with_dialog(
             format!("{done}/{} · {percent}%", spec.steps),
         )
     };
-    frame.render_widget(
-        Gauge::default()
-            .ratio(ratio)
-            .label(label)
-            .style(Style::new().add_modifier(Modifier::BOLD)),
-        gauge_area,
-    );
+    let header = Paragraph::new(Line::from(fit_header(
+        &format!("Tepochcalli · {}", spec.title),
+        top.width,
+    )))
+    .style(Style::new().add_modifier(Modifier::BOLD))
+    .wrap(Wrap { trim: true });
+    let gauge = Gauge::default()
+        .ratio(ratio)
+        .label(label)
+        .style(Style::new().add_modifier(Modifier::BOLD));
 
-    let eta = spec.eta.map_or_else(|| "—".to_string(), clock);
-    let spinner = Paragraph::new(Line::from(format!(
-        "{}  transcurrido {} · ETA {}",
-        spinner_frame(tick),
-        clock(elapsed),
-        eta
-    )));
-    frame.render_widget(spinner, spinner_area);
+    let eta = spec
+        .eta
+        .map_or_else(|| "ETA —".to_string(), |d| format!("ETA {}", clock(d)));
+    let short_status = top.width < 24;
+    let left = if short_status {
+        format!(
+            "{} {} {}",
+            spinner_frame(tick),
+            if spec.steps == 0 {
+                "…".to_string()
+            } else {
+                format!("{}/{}", progress.done(), spec.steps)
+            },
+            clock(elapsed)
+        )
+    } else {
+        format!("{}  transcurrido {}", spinner_frame(tick), clock(elapsed))
+    };
+    if tiny {
+        let [header_area, status_area] =
+            Layout::vertical([Constraint::Length(1), Constraint::Length(1)]).areas(top);
+        frame.render_widget(header, header_area);
+        render_status(frame, status_area, left, eta);
+    } else {
+        let [header_area, gauge_area, status_area] = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Length(gauge_height),
+            Constraint::Length(1),
+        ])
+        .areas(top);
+        frame.render_widget(header, header_area);
+        frame.render_widget(gauge, gauge_area);
+        render_status(frame, status_area, left, eta);
+    }
 
     let lines = if let Some(dialog) = dialog {
         dialog_lines(dialog)
     } else {
-        let mut lines = vec![Line::from("⏹ Cancelar — Esc / Ctrl+C")
-            .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED))];
-        for action in MenuAction::ALL {
-            lines.push(
-                Line::from(format!(
-                    "{} {}  — operación en curso",
-                    action.icon(),
-                    action.label()
-                ))
-                .style(Style::new().add_modifier(Modifier::DIM)),
-            );
-        }
+        let mut lines = vec![cancel_line()];
         let stage_notice = if spec.steps == 0 {
             "Sin etapas declaradas: la barra no simula avance."
         } else {
@@ -204,12 +329,34 @@ pub fn render_stages_with_dialog(
     };
     frame.render_widget(
         Paragraph::new(Text::from(lines)).wrap(Wrap { trim: true }),
-        detail_area,
+        center,
     );
+
+    let (rows_area, contact_area) = bottom_areas(bottom);
+    let labels: Vec<&str> = MenuAction::ALL
+        .iter()
+        .map(|action| action.label())
+        .collect();
+    let blocked: Vec<Line<'_>> = MenuAction::ALL
+        .iter()
+        .map(|action| {
+            Line::from(format!(
+                "{} {}  — operación en curso",
+                action.icon(),
+                action.label()
+            ))
+            .style(Style::new().add_modifier(Modifier::DIM))
+        })
+        .collect();
+    render_h5(frame, rows_area, blocked, &labels, None);
+    if let Some(contact_area) = contact_area {
+        render_contact(frame, contact_area);
+    }
 }
 
 /// Pantalla de `run_cancellable` (sin hitos declarados): barra fija, spinner
-/// vivo y cronómetro; nunca una onda ni un porcentaje fingido.
+/// vivo y cronómetro; nunca una onda ni un porcentaje fingido. Sin ETA
+/// declarada no se inventa un tiempo.
 pub fn render_progress(frame: &mut Frame, title: &str, tick: u64) {
     let spec = ProgressSpec {
         title: title.to_string(),
