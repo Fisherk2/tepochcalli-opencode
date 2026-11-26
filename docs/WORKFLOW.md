@@ -67,6 +67,12 @@ Protocolo de edición del summary de fases:
 2. Al terminar o completar una fase, se añade una fila a la tabla de fases terminadas (§2) y después se elimina su entrada y su summary de esta sección, dejando el hueco correspondiente.
 3. No se crean secciones «Cierre de la fase X» ni summaries de fase al final del documento: la fila en la tabla de terminadas es el único registro de cierre.
 
+Plantilla para el summary de una fase pendiente (copiar la fila; no es una fase real):
+
+| Fase | Nombre | Objetivo | Entregables | Dependencias | Gate (criterio de salida, medible) |
+| --- | --- | --- | --- | --- | --- |
+| `<N>` | `<nombre>` | `<objetivo>` | `<entregables>` | `<dependencias>` | `<gate medible>` |
+
 A 2026-11-26 no hay fases pendientes: la última (6.9) pasó a terminadas y su summary se eliminó; la sección queda reseteada.
 
 ## 3. Testing Strategy per Phase
