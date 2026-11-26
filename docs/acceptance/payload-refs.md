@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-11-12 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T12
 > **Estado:** entregado; **sin commit** (lo integra el orquestador). El payload no se tocó (D-P6-1).
-> **Fuente de verdad de la deuda:** `docs/TECH_DEBT.md:45` (TD-34) · alcance en `tasks/plan.md:448` y `tasks/plan.md:43` (D-P6-1) y `tasks/todo.md:220`.
+> **Fuente de verdad de la deuda:** `docs/TECH_DEBT.md:45` (TD-34) · alcance en `specs/spec-payload-skills.md:193` y `specs/spec-payload-permissions.md:454` (D-P6-1; antes `tasks/plan.md:448`, `tasks/plan.md:43` y `tasks/todo.md:220`).
 > **Jerarquía de evidencia:** toda cifra de este documento es **`medido`** en el repo con el comando que se cita.
 
 ## Veredicto

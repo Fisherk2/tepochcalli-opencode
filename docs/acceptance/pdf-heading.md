@@ -4,7 +4,7 @@
 > **Estado:** **medido** y **firmado por el dueño (2026-11-13): se reafirma D54**.
 > **Fuente de verdad:** [ADR-011](../adr/adr-011-politica-dependencias-dos-librerias.md) §4.3
 > (D54) · [spec-rag-engine](../../specs/spec-rag-engine.md) §Ruta de documentos ·
-> [TECH_DEBT](../TECH_DEBT.md) TD-27 · [plan](../../tasks/plan.md) §Task T10 (D-P6-5).
+> [TECH_DEBT](../TECH_DEBT.md) TD-27 · [protocol](protocol.md) §5 (D-P6-5; antes [plan](../../tasks/plan.md) §Task T10).
 > **Jerarquía de evidencia (D8):** `medido > estimado > declarado`. Lo medido lleva su comando;
 > lo que no se pudo medir se escribe como no medido.
 > **Evidencia archivada:** [pdf-heading.json](pdf-heading.json) (11 registros: 9 documentos,
