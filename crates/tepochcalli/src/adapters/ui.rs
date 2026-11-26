@@ -7,9 +7,23 @@
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::IsTerminal;
+use std::sync::Arc;
 
-use crate::domain::{CancelToken, MenuAction, WizardError};
-use crate::ports::{MenuView, Progress, ProgressSpec, Ui};
+use crate::domain::{menu_spec, CancelToken, InstalledState, MenuAction, WizardError};
+use crate::ports::{
+    active_dialog, has_active_progress, Dialog, DialogHandle, DialogOutcome, MenuView, Progress,
+    ProgressSpec, Ui,
+};
+
+/// Diálogo bajo el watcher: solo con barra activa y pantalla propia. Sin él se
+/// conserva el prompt en línea (rama no-TTY / headless, sin cambios).
+fn owned_dialog() -> Option<Arc<DialogHandle>> {
+    if has_active_progress() {
+        active_dialog()
+    } else {
+        None
+    }
+}
 
 /// Interactive dialogue: full-screen ratatui menu on a TTY, `dialoguer`
 /// line-based fallback when there is none.
@@ -30,6 +44,17 @@ impl Ui for TtyUi {
         if options.is_empty() || default_index >= options.len() {
             return Err(WizardError::UserAborted);
         }
+        if let Some(dialog) = owned_dialog() {
+            dialog.request(Dialog::Select {
+                prompt: prompt.to_string(),
+                options: options.iter().map(|option| (*option).to_string()).collect(),
+                cursor: default_index,
+            });
+            return match dialog.wait() {
+                DialogOutcome::Index(index) if index < options.len() => Ok(index),
+                _ => Err(WizardError::UserAborted),
+            };
+        }
         dialoguer::Select::new()
             .with_prompt(prompt)
             .items(options)
@@ -39,6 +64,18 @@ impl Ui for TtyUi {
     }
 
     fn input(&self, prompt: &str, default: Option<&str>) -> Result<String, WizardError> {
+        if let Some(dialog) = owned_dialog() {
+            dialog.request(Dialog::Input {
+                prompt: prompt.to_string(),
+                value: String::new(),
+                secret: false,
+            });
+            return match dialog.wait() {
+                DialogOutcome::Text(text) if !text.is_empty() => Ok(text),
+                DialogOutcome::Text(_) => Ok(default.unwrap_or_default().to_string()),
+                _ => Err(WizardError::UserAborted),
+            };
+        }
         let mut asked = dialoguer::Input::<String>::new().with_prompt(prompt);
         if let Some(fallback) = default {
             asked = asked.default(fallback.to_string());
@@ -47,6 +84,17 @@ impl Ui for TtyUi {
     }
 
     fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        if let Some(dialog) = owned_dialog() {
+            dialog.request(Dialog::Input {
+                prompt: prompt.to_string(),
+                value: String::new(),
+                secret: true,
+            });
+            return match dialog.wait() {
+                DialogOutcome::Text(text) => Ok(text),
+                _ => Err(WizardError::UserAborted),
+            };
+        }
         // Password::interact no repite el secreto en el terminal (L2-7).
         dialoguer::Password::new()
             .with_prompt(prompt)
@@ -55,6 +103,18 @@ impl Ui for TtyUi {
     }
 
     fn panel(&self, title: &str, body: &str) {
+        if let Some(dialog) = owned_dialog() {
+            // El watcher lo pinta en el frame: escribir en stderr rompería la
+            // alternate screen de la barra exterior.
+            dialog.request(Dialog::Notice {
+                title: title.to_string(),
+                body: body.to_string(),
+            });
+            // Sin este wait el siguiente `select`/`input` sobrescribe `active`
+            // antes de que el watcher pinte el aviso (100 ms de poll).
+            let _ = dialog.wait();
+            return;
+        }
         render_panel(title, body);
     }
 
@@ -135,11 +195,18 @@ struct LineMenuPlan {
 /// Header line shared by the full-screen menu and the line fallback.
 #[must_use]
 pub fn header_line(view: &MenuView<'_>) -> String {
+    // `READY_NOTICE` es privado en `domain`: se reutiliza vía `menu_spec`, sin
+    // duplicar el literal ni tocar la máquina de estados.
+    let installed = match view.installed {
+        Some(version) => format!("instalada: {version}"),
+        None => menu_spec(InstalledState::NotInstalled)
+            .notice
+            .unwrap_or_default()
+            .to_string(),
+    };
     format!(
-        "Tepochcalli {} · instalada: {} · embedder: {}",
-        view.wizard,
-        view.installed.unwrap_or("—"),
-        view.embedder
+        "Tepochcalli {} · {installed} · embedder: {}",
+        view.wizard, view.embedder
     )
 }
 
@@ -367,6 +434,21 @@ mod tests {
         assert!(
             plan.body.contains("directorio listo para instalar"),
             "the notice reaches the panel:\n{}",
+            plan.body
+        );
+
+        let absent = MenuView {
+            spec: &spec,
+            wizard: "0.1.0",
+            installed: None,
+            embedder: "sin configurar",
+        };
+        let plan = line_menu_plan(&absent).expect("Install keeps the menu alive");
+        assert!(
+            plan.body.starts_with(
+                "Tepochcalli 0.1.0 · directorio listo para instalar · embedder: sin configurar"
+            ),
+            "no installed version means ready, never a dash:\n{}",
             plan.body
         );
     }

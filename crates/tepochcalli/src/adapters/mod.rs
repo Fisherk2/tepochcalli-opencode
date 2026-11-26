@@ -11,6 +11,7 @@ pub mod payload;
 pub mod std_proc;
 pub mod ui;
 pub mod ui_ratatui;
+mod ui_selection;
 
 pub use host::{find_tool_in, path_dirs, SysHostProbe};
 pub use http::UreqHttpClient;

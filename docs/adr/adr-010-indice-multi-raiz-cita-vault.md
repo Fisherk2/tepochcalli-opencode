@@ -5,7 +5,7 @@
 * **Decision Makers:** Dueño del repo (Product Owner), Arquitecto
 * **Consulted:** Fuente instalada de `cocoindex==1.0.25` (conector `localfs`), `docs/TRD.md` §presupuestos
 * **Informed:** Autor de T2/T3/T8, autores de agentes/comandos del vault
-* **Traceability:** docs/BACKLOG.md (criterios 2, 5, 6, 7), specs/spec-rag-engine.md, specs/spec-mcp-server.md, tasks/plan.md D32-D67
+* **Traceability:** docs/BACKLOG.md (criterios 2, 5, 6, 7), specs/spec-rag-engine.md (D32/D41), specs/spec-mcp-server.md (D42/D64/D67; antes tasks/plan.md D32-D67)
 
 ## 1. Context and Problem Statement
 

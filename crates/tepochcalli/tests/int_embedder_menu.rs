@@ -9,13 +9,68 @@
 // Shared fakes: this target reuses three of them.
 mod common;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use common::{gate_ok, host_16gb, FakeHost, FakeHttp, FakeProc, RecordingProc, TapUi, UiEvent};
-use tepochcalli::application::embedder_menu::{Phase6Deps, EMBEDDER_PATHS};
-use tepochcalli::domain::{CancelToken, EmbedderChoice, WizardError};
-use tepochcalli::ports::{CommandOutput, CommandRunner, GpuInfo, Ui};
+use tepochcalli::application::embedder_menu::{
+    preselect_embedder, take_preselected, Phase6Deps, EMBEDDER_PATHS,
+};
+use tepochcalli::domain::{CancelToken, EmbedderChoice, MenuAction, WizardError};
+use tepochcalli::ports::{CommandOutput, CommandRunner, GpuInfo, MenuView, Ui};
+
+/// `TapUi` plus captura de los títulos de `run_cancellable`: el gate debe nombrar
+/// el directorio donde descarga el modelo (T2), no solo decir «descargando».
+struct TitleUi {
+    inner: TapUi,
+    titles: RefCell<Vec<String>>,
+}
+
+impl TitleUi {
+    fn new(selects: Vec<usize>, inputs: Vec<String>) -> Self {
+        Self {
+            inner: TapUi::new(selects, inputs),
+            titles: RefCell::new(Vec::new()),
+        }
+    }
+
+    fn titles(&self) -> Vec<String> {
+        self.titles.borrow().clone()
+    }
+}
+
+impl Ui for TitleUi {
+    fn select(
+        &self,
+        prompt: &str,
+        options: &[&str],
+        default_index: usize,
+    ) -> Result<usize, WizardError> {
+        self.inner.select(prompt, options, default_index)
+    }
+
+    fn input(&self, prompt: &str, default: Option<&str>) -> Result<String, WizardError> {
+        self.inner.input(prompt, default)
+    }
+
+    fn input_secret(&self, prompt: &str) -> Result<String, WizardError> {
+        self.inner.input_secret(prompt)
+    }
+
+    fn panel(&self, title: &str, body: &str) {
+        self.inner.panel(title, body);
+    }
+
+    fn menu(&self, view: &MenuView<'_>) -> Result<MenuAction, WizardError> {
+        self.inner.menu(view)
+    }
+
+    fn run_cancellable(&self, title: &str, _cancel: &CancelToken, work: &mut dyn FnMut()) {
+        self.titles.borrow_mut().push(title.to_string());
+        work();
+    }
+}
 
 /// Los dos presets embebidos y su SHA pineada (espejo de `presets.toml`).
 const MINILM: &str = "paraphrase-multilingual-MiniLM-L12-v2";
@@ -626,4 +681,80 @@ fn device_with_gpu_offers_cuda_and_writes_the_choice() {
     );
     let body = std::fs::read_to_string(config_path(vault.path())).expect("config written");
     assert!(body.contains("device = \"cuda\""), "got:\n{body}");
+}
+
+/// Solution 4: el gate nombra el directorio de descarga del modelo, calculado
+/// en `flow_cli.rs` como `HF_HOME`/`SENTENCE_TRANSFORMERS_HOME`. Sin esa ruta el
+/// usuario no sabe dónde va a parar ~470 MB.
+#[test]
+fn gate_title_names_the_model_download_directory() {
+    let ui = TitleUi::new(vec![0, 0], vec![]);
+    let host = host_16gb();
+    let proc = FakeProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
+    let http = empty_http();
+    let vault = tmp();
+    create_venv_python(vault.path());
+    materialize(vault.path(), MINILM, MINILM_SHA);
+    tepochcalli::application::embedder_menu::run_phase6(
+        &deps(&ui, &host, &proc, &http),
+        vault.path(),
+    )
+    .expect("path 1 con gate válido debe cerrar F6");
+
+    let titles = ui.titles();
+    assert_eq!(titles.len(), 1, "un solo gate de descarga: {titles:?}");
+    assert!(
+        titles[0].contains(".tepochcalli/models/"),
+        "el título del gate debe mostrar el directorio de descarga, got: {}",
+        titles[0]
+    );
+}
+
+/// La selección ocurre al arrancar el install (antes de F3); F6 solo ejecuta
+/// el gate con la elección ya hecha, sin volver a preguntar ni a sondear host.
+#[test]
+fn preselected_choice_is_reused_by_f6_without_a_second_menu() {
+    let ui = TapUi::new(vec![0, 0], vec![]);
+    let host = host_16gb();
+    let proc = RecordingProc::scripted([gate_ok(MINILM, 384, 650_000_000)]);
+    let http = empty_http();
+    let vault = tmp();
+    create_venv_python(vault.path());
+    materialize(vault.path(), MINILM, MINILM_SHA);
+
+    preselect_embedder(&ui, &host).expect("la primera interacción es elegir embedder");
+    let report = tepochcalli::application::embedder_menu::run_phase6(
+        &deps(&ui, &host, &proc, &http),
+        vault.path(),
+    )
+    .expect("F6 reutiliza la elección");
+    assert_eq!(report.provider, "local", "el gate corre tras el venv");
+    let menus = ui
+        .captured()
+        .iter()
+        .filter(|line| line.contains("Embedding provider"))
+        .count();
+    assert_eq!(
+        menus,
+        1,
+        "el menú se pregunta una sola vez: {:?}",
+        ui.captured()
+    );
+    assert_eq!(
+        host.snapshot_count(),
+        1,
+        "un solo probe de host por corrida"
+    );
+}
+
+/// `--resume` con F6 hecha no llama a `preselect_embedder`: el buzón queda
+/// vacío y ninguna fila de la cola headless se consume en nombre del embedder.
+#[test]
+fn preselected_mailbox_is_single_read() {
+    let ui = TapUi::new(vec![4], vec![]);
+    let host = host_16gb();
+    assert!(take_preselected().is_none(), "buzón vacío al empezar");
+    preselect_embedder(&ui, &host).expect("path 5 preseleccionado");
+    assert!(take_preselected().is_some(), "F6 toma la elección");
+    assert!(take_preselected().is_none(), "una sola lectura");
 }

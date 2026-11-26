@@ -3,9 +3,9 @@
 * **Status:** Accepted (2026-11-03)
 * **Date:** 2026-11-02
 * **Decision Makers:** Product Owner (dueño del repo), Arquitecto
-* **Consulted:** Backend instalado (`cocoindex==1.0.25`, `markitdown==0.1.9`), tasks/plan.md §2.1-§2.2 y §5.6
+* **Consulted:** Backend instalado (`cocoindex==1.0.25`, `markitdown==0.1.9`), `specs/spec-rag-engine.md` §Fuentes y `specs/spec-markitdown.md` §Catálogo de formatos (antes tasks/plan.md §2.1-§2.2 y §5.6)
 * **Informed:** Mantenedores del flow y del MCP `tepochcalli-rag`, autor del wizard (ADR-003/004)
-* **Traceability:** docs/BACKLOG.md (criterios 1-7), tasks/plan.md D52-D56/D58-D63, specs/spec-rag-engine.md, specs/spec-mcp-server.md, specs/spec-embeddings.md, docs/TECH_DEBT.md TD-16
+* **Traceability:** docs/BACKLOG.md (criterios 1-7), specs/spec-rag-engine.md (D53/D58-D62), specs/spec-mcp-server.md, specs/spec-embeddings.md (D59), specs/spec-markitdown.md (D55), este ADR §§4.2-4.7 (D52-D63; antes tasks/plan.md D52-D56/D58-D63), docs/TECH_DEBT.md TD-16 (D56)
 
 ## 1. Context and Problem Statement
 

@@ -3,7 +3,7 @@
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T7
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
 > **Fuente de verdad:** `docs/BACKLOG.md §1 / C5` — «las respuestas del agente incluyen
-> citas precisas a las fuentes originales» · `tasks/plan.md` §Task T7 · `docs/TECH_DEBT.md` TD-13.
+> citas precisas a las fuentes originales» (antes `tasks/plan.md` §Task T7) · `docs/TECH_DEBT.md` TD-13.
 > **Jerarquía de evidencia (D8):** todo lo de aquí es **`medido`** sobre el golden vault grabado;
 > cada cifra lleva su comando.
 > **Evidencia archivada:** [citations.json](citations.json) (cifras por corrida).

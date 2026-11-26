@@ -151,7 +151,7 @@ syn v3.0.9|MIT OR Apache-2.0 (*)
 sysinfo v0.36.1|MIT
 tar v0.4.46|MIT OR Apache-2.0
 tempfile v3.27.0|MIT OR Apache-2.0
-tepochcalli v0.1.0-beta.3 (/mnt/HDDFish/Documents/Programacion/PROYECTOS/14-tepochcalli-opencode/crates/tepochcalli)|MIT
+tepochcalli v0.1.0-beta.4 (/mnt/HDDFish/Documents/Programacion/PROYECTOS/14-tepochcalli-opencode/crates/tepochcalli)|MIT
 thiserror v2.0.21|MIT OR Apache-2.0
 thiserror v2.0.21|MIT OR Apache-2.0 (*)
 thiserror-impl v2.0.21 (proc-macro)|MIT OR Apache-2.0

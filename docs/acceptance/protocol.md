@@ -24,7 +24,7 @@
 | FS de referencia | **btrfs / NVMe** | `df -T /tmp/opencode` → `/dev/nvme0n1p3 btrfs` |
 | FS de contraste | **fuseblk (NTFS-3G)** | `df -T /mnt/HDDFish` → `/dev/sda1 fuseblk` |
 
-**Decisión de medición (D-P6-3, `tasks/plan.md:45`):**
+**Decisión de medición (D-P6-3, `docs/TRD.md:163`; antes `tasks/plan.md:45`):**
 
 * La cifra que **decide** el PASS/FAIL de los criterios 2, 3 y 6 es la medida en
   **btrfs/NVMe** (`/tmp/opencode`). Todo bench que escriba corpus pasa `--dir` apuntando ahí.
@@ -70,8 +70,8 @@ de la tabla de 7 criterios de BACKLOG.md (no se renumeran ni se añade un "crite
   con bandejas D9.2, permission fixtures D9.3 y frontmatters assertados (`docs/WORKFLOW.md:266`).
 * **Estado de partida:** **no ejecutado**. La corrida se difirió en Phase 5 (D-P5-10, TD-31) y
   el runbook `tests/phase5-methodology-runbook.md` está escrito contra el formato **anterior** a
-  la ola canónica del 2026-11-12 (`tasks/plan.md:76`).
-* **Quién lo ejecuta:** el QA humano (D-P6-2, `tasks/plan.md:44`); no es automatizable. Phase 6
+  la ola canónica del 2026-11-12 (`tests/phase6-methodology-runbook.md:3`; antes `tasks/plan.md:76`).
+* **Quién lo ejecuta:** el QA humano (D-P6-2, `tests/phase6-methodology-runbook.md:3`; antes `tasks/plan.md:44`); no es automatizable. Phase 6
   entrega scaffolding y verificación mecánica (T14) y la corrida es de T15. Sin corrida se
   declara **NO EJECUTADO**, nunca verde.
 
@@ -102,7 +102,7 @@ Rutas verificadas con `ls`/`grep` el 2026-11-12. `n` y método: nearest-rank sob
 * **Punto de medición:** TRD fija «tool-call recibido → respuesta serializada»; `bench_search.py`
   publica **dos** cifras (cliente stdio y `took_ms`). La que **decide el criterio** es
   `p95_client_ms` —incluye IPC y es lo que vive el usuario—; `p95_server_took_ms` se publica
-  como el punto de medición de la spec (`tasks/plan.md` §5 T4).
+  como el punto de medición de la spec (`specs/spec-mcp-server.md` §Presupuesto de latencia; antes `tasks/plan.md` §5 T4).
 
 ## 4. Tabla §6.3 con `Result` vacía y `origen de la cifra`
 
@@ -127,7 +127,7 @@ Gate adicional (`docs/WORKFLOW.md:289-291`):
 
 ## 5. Deuda re-declarada (D-P6-4)
 
-Fuente: `tasks/plan.md:46` y `docs/TECH_DEBT.md`. La deuda **en alcance** se paga en Phase 6;
+Fuente: `docs/TECH_DEBT.md` (deuda vigente; antes `tasks/plan.md:46`). La deuda **en alcance** se paga en Phase 6;
 la **fuera de alcance** se re-declara abierta, no se cierra por omisión.
 
 | Deuda | Estado | Calpulli | Motivo / nota |

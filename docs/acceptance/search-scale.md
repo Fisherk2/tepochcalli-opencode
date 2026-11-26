@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-11-12 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T4
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
-> **Fuente de verdad:** `tasks/plan.md` §Task T4 · `docs/TRD.md` §6.1 (método) y §6.2 (umbrales,
+> **Fuente de verdad:** `docs/BACKLOG.md §1 / C3` (criterio vigente; antes `tasks/plan.md` §Task T4) · `docs/TRD.md` §6.1 (método) y §6.2 (umbrales,
 > fijados en T0/CP-0) · `specs/spec-mcp-server.md` §Presupuesto de latencia.
 > **Jerarquía de evidencia (D8):** todas las cifras de este documento son **`medido`** en el host
 > de referencia (`/tmp/opencode`, btrfs/NVMe, CPython 3.12.14 del venv del payload) con el

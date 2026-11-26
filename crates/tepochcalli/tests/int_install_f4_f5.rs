@@ -443,3 +443,83 @@ fn real_uv_asset_downloads_and_reports_version() {
     assert!(report.uv.is_file());
     let _ = asset;
 }
+
+/// Guard de orden del install (Solution 4). El `cli` es privado al binario: la
+/// secuencia se fija aquí como guard textual, igual que `int_architecture.rs`
+/// fija las fronteras de capas. La selección va dentro de `run_stages`, antes
+/// de F3; el gate sigue dentro de F6, después de F5.
+fn install_phases_source() -> String {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/cli/install_phases.rs");
+    std::fs::read_to_string(path).expect("install_phases.rs legible")
+}
+
+#[test]
+fn install_pregunta_el_embedder_antes_de_f3_y_deja_el_gate_tras_f5() {
+    let src = install_phases_source();
+    let select_at = src
+        .find("preselect_embedder(ui")
+        .expect("la selección debe ser la primera interacción del install");
+    let f3_at = src
+        .find("let skip_f3 =")
+        .expect("F3 sigue en install_phases");
+    assert!(
+        select_at < f3_at,
+        "el embedder se elige antes de F3, no durante F6: {select_at} vs {f3_at}"
+    );
+    let f5_at = src
+        .find("hito 3/7: F5 venv")
+        .expect("el hito 3/7 marca F5 terminado");
+    let gate_at = src
+        .find("match run_f6_or_degraded(")
+        .expect("el gate se invoca desde F6");
+    assert!(
+        f5_at < gate_at,
+        "el gate test-embed va tras el venv (ADR-015): {f5_at} vs {gate_at}"
+    );
+}
+
+#[test]
+fn resume_con_f6_hecha_no_roba_la_respuesta_del_embedder() {
+    let src = install_phases_source();
+    let guard_at = src
+        .find("f6_cached")
+        .expect("debe haber una guarda de resume antes de preguntar");
+    let select_at = src
+        .find("preselect_embedder(ui")
+        .expect("la selección debe estar en install_phases");
+    assert!(
+        guard_at < select_at,
+        "con F6 ya hecha no se consume la cola de respuestas: {guard_at} vs {select_at}"
+    );
+}
+
+#[test]
+fn resume_con_f6_hecha_la_guarda_envuelve_la_preseleccion_y_el_take() {
+    let src = install_phases_source();
+    let f6_at = src
+        .find("let f6_cached = flags.resume && is_phase_done(path.as_path(), Phase::F6);")
+        .expect("f6_cached se calcula con resume y F6");
+    let select_at = src
+        .find("preselect_embedder(ui")
+        .expect("la selección sigue en install_phases");
+    let guarded = &src[f6_at..select_at];
+    let condition = guarded.lines().next().expect("línea de la guarda");
+    assert!(
+        condition.contains("flags.resume") && condition.contains("Phase::F6"),
+        "la condición debe ser resume && F6: {condition}"
+    );
+    let guard_at = guarded
+        .find("if !f6_cached {")
+        .expect("la guarda niega f6_cached");
+    let take_at = guarded
+        .find("let _ = take_preselected();")
+        .expect("el buzón se vacía antes de preguntar");
+    assert!(
+        take_at < guard_at,
+        "el buzón se vacía antes de decidir si se pregunta: {take_at} vs {guard_at}"
+    );
+    assert!(
+        guarded.contains("if !f6_cached {") && guarded.contains("take_preselected();"),
+        "guarda y vaciado del buzón deben envolver la preselección"
+    );
+}

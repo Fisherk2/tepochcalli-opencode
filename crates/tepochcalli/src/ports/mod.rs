@@ -16,6 +16,7 @@ pub use net::HttpClient;
 pub use payload::{backup_path, MergeReport, OverwriteJournal, PayloadSource};
 pub use proc::{CommandOutput, CommandRunner};
 pub use ui::{
-    advance_active_stage, has_active_progress, set_active_progress, MenuView, Progress,
+    active_dialog, advance_active_stage, has_active_dialog, has_active_progress, set_active_dialog,
+    set_active_progress, Dialog, DialogHandle, DialogKey, DialogOutcome, MenuView, Progress,
     ProgressSpec, Ui,
 };

@@ -3,9 +3,9 @@
 * **Status:** Accepted (2026-11-03) — enmendada en sitio la nota de §D38 (rev. 2026-11-03, orden explícita del dueño; precedente ADR-010 rev. 2)
 * **Date:** 2026-11-02
 * **Decision Makers:** Dueño del repo, Arquitecto
-* **Consulted:** `docs/diagnosis/fix01-conversor-satura-contexto-llm.md` (defecto reproducido), `markitdown==0.1.9` instalado y `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/convert.py` (API real: `MarkItDown().convert(source).markdown`), `tasks/plan.md` §2.1/§2.2 (D28-D67) y §5.5-§5.9
+* **Consulted:** `docs/diagnosis/fix01-conversor-satura-contexto-llm.md` (defecto reproducido), `markitdown==0.1.9` instalado y `obsidian-workspace/.tepochcalli/mcp/tepochcalli_mcp/convert.py` (API real: `MarkItDown().convert(source).markdown`), `specs/spec-markitdown.md` y `specs/spec-mcp-server.md` (D28/D31/D36/D37/D39/D64/D66/D67; antes `tasks/plan.md` §2.1/§2.2 y §5.5-§5.9)
 * **Informed:** Autor de la skill `tepochcalli-mcp` (H4), mantenedores de `spec-markitdown.md` y `spec-mcp-server.md`, usuarios del vault
-* **Traceability:** `tasks/plan.md` D28 · D31 · D36 · D37 · D38 · D39 · D49 · D64 · D66 · D35; `docs/BACKLOG.md` H1-H2 (anexo 2026-10-30); diagnosis `fix01`; `specs/spec-markitdown.md` (contrato que este ADR amplía); `docs/SECURITY.md`
+* **Traceability:** `specs/spec-markitdown.md` (D28/D31/D36/D37/D39/D66), `specs/spec-mcp-server.md` (D35/D49/D64) y este ADR §D37/D38 (antes `tasks/plan.md` D28 · D31 · D36 · D37 · D38 · D39 · D49 · D64 · D66 · D35); `docs/BACKLOG.md` H1-H2 (anexo 2026-10-30); diagnosis `fix01`; `specs/spec-markitdown.md` (contrato que este ADR amplía); `docs/SECURITY.md`
 
 ## 1. Context and Problem Statement
 

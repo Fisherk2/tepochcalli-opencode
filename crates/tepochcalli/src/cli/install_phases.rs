@@ -9,8 +9,10 @@ use tepochcalli::adapters::{
     LocalPayload, ReleasePayload, StdCommandRunner, SysHostProbe, UreqHttpClient,
 };
 use tepochcalli::application::{
-    compensate_phase3, compensate_phase7, is_phase_done, mark_phase_done, read_completed_report,
-    run_phase3, run_phase4, run_phase5, run_phase7, run_phase8, Phase6Deps, Phase7Report,
+    compensate_phase3, compensate_phase7,
+    embedder_menu::{preselect_embedder, take_preselected},
+    is_phase_done, mark_phase_done, read_completed_report, run_phase3, run_phase4, run_phase5,
+    run_phase7, run_phase8, Phase6Deps, Phase7Report,
 };
 use tepochcalli::domain::{CancelToken, Phase, VaultPath, WizardError};
 use tepochcalli::ports::{advance_active_stage, set_active_progress, ProgressSpec, Ui};
@@ -85,6 +87,18 @@ pub(crate) fn run_phases(
     let mut result = None;
     ui.run_stages(&spec, &cancel, &mut |progress| {
         set_active_progress(Some(progress));
+        // T2: la elección de embedder es la PRIMERA interacción, todavía bajo
+        // la barra única (T1). Con F6 ya resuelta por `--resume` no se pregunta
+        // ni se consume una fila de la cola de `HeadlessUi::for_install`.
+        let f6_cached = flags.resume && is_phase_done(path.as_path(), Phase::F6);
+        let _ = take_preselected();
+        if !f6_cached {
+            if let Err(err) = preselect_embedder(ui, &SysHostProbe) {
+                result = Some(phase_failed(ui, path, Phase::F6, err));
+                set_active_progress(None);
+                return;
+            }
+        }
         result = Some(run_phases_stages(
             path,
             payload,
