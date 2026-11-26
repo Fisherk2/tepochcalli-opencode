@@ -22,10 +22,12 @@ use crate::ports::{
     ProgressSpec,
 };
 
-use super::ui_selection::{bottom_areas, dialog_key, fit_header, render_contact, render_h5, zones};
+use super::ui_selection::{bottom_areas, fit_header, render_contact, render_h5, zones};
 // Reexporta los nombres que ya ofrecía este módulo: el render del frame vive
 // en `ui_selection`, pero callers y tests siguen cruzando el mismo seam.
-pub use super::ui_selection::{render_progress, render_stages, render_stages_with_dialog};
+pub use super::ui_selection::{
+    dialog_key, render_progress, render_stages, render_stages_with_dialog,
+};
 
 /// Maps a chosen button index to its action. A disabled or out-of-range
 /// index is a typed abort: the wizard never invents a selection.
@@ -249,7 +251,8 @@ pub fn run_stages(spec: &ProgressSpec, cancel: &CancelToken, work: &mut dyn FnMu
                         if let Ok(Event::Key(key)) = event::read() {
                             // El watcher es el único lector: traduce la tecla
                             // al diálogo en curso antes de mirar cancelación.
-                            if dialog_key(key.code, key.modifiers)
+                            let view = dialog.snapshot();
+                            if dialog_key(key.code, key.modifiers, view.as_ref())
                                 .is_some_and(|key| dialog.handle(key, &cancel))
                             {
                                 tick += 1;

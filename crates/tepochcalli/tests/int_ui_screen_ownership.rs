@@ -365,3 +365,106 @@ fn int_ui_screen_ownership_clear_del_watcher_despierta_al_esperador_y_no_cancela
     assert!(handle.handle(DialogKey::Confirm, &cancel));
     assert_eq!(handle.wait(), DialogOutcome::Index(0));
 }
+
+#[test]
+fn int_ui_screen_ownership_las_letras_k_y_j_son_texto_en_dialogos_de_entrada() {
+    let input = Dialog::Input {
+        prompt: "HF id".to_string(),
+        value: String::new(),
+        secret: false,
+    };
+    let select = Dialog::Select {
+        prompt: "Embedding provider".to_string(),
+        options: vec!["MiniLM".to_string(), "bge-m3".to_string()],
+        cursor: 0,
+    };
+
+    assert_eq!(
+        ui_ratatui::dialog_key(KeyCode::Char('k'), KeyModifiers::NONE, Some(&input)),
+        Some(DialogKey::Char('k')),
+        "k debe ser texto en un input"
+    );
+    assert_eq!(
+        ui_ratatui::dialog_key(KeyCode::Char('j'), KeyModifiers::NONE, Some(&input)),
+        Some(DialogKey::Char('j')),
+        "j debe ser texto en un input"
+    );
+    assert_eq!(
+        ui_ratatui::dialog_key(KeyCode::Char('k'), KeyModifiers::NONE, Some(&select)),
+        Some(DialogKey::Previous),
+        "k navega en una selección"
+    );
+    assert_eq!(
+        ui_ratatui::dialog_key(KeyCode::Char('j'), KeyModifiers::NONE, Some(&select)),
+        Some(DialogKey::Next),
+        "j navega en una selección"
+    );
+
+    // La navegación con flechas y Tab sigue disponible también en texto.
+    for (code, expected) in [
+        (KeyCode::Up, DialogKey::Previous),
+        (KeyCode::BackTab, DialogKey::Previous),
+        (KeyCode::Down, DialogKey::Next),
+        (KeyCode::Tab, DialogKey::Next),
+    ] {
+        assert_eq!(
+            ui_ratatui::dialog_key(code, KeyModifiers::NONE, Some(&input)),
+            Some(expected),
+            "las flechas y Tab siguen navegando: {code:?}"
+        );
+    }
+    assert_eq!(
+        ui_ratatui::dialog_key(KeyCode::Char('j'), KeyModifiers::NONE, None),
+        Some(DialogKey::Char('j')),
+        "sin diálogo la tecla no se pierde"
+    );
+
+    // Camino completo: el watcher traduce, `handle` escribe y el frame pinta.
+    let handle = Arc::new(DialogHandle::default());
+    let cancel = CancelToken::new();
+    handle.request(Dialog::Input {
+        prompt: "HF id".to_string(),
+        value: String::new(),
+        secret: false,
+    });
+    for ch in ['k', 'j'] {
+        let mapped = ui_ratatui::dialog_key(
+            KeyCode::Char(ch),
+            KeyModifiers::NONE,
+            handle.snapshot().as_ref(),
+        );
+        assert_eq!(mapped, Some(DialogKey::Char(ch)));
+        assert!(handle.handle(mapped.expect("tecla del watcher"), &cancel));
+    }
+    let text = buffer_text(&dialog_frame(&handle, 0));
+    assert!(text.contains("> kj"), "las letras llegan al valor:\n{text}");
+    assert!(handle.handle(DialogKey::Confirm, &cancel));
+    assert_eq!(handle.wait(), DialogOutcome::Text("kj".to_string()));
+
+    // Un secreto con k/j se escribe y tampoco hace eco en el frame.
+    handle.request(Dialog::Input {
+        prompt: "HF_TOKEN".to_string(),
+        value: String::new(),
+        secret: true,
+    });
+    for ch in ['k', 'j'] {
+        let mapped = ui_ratatui::dialog_key(
+            KeyCode::Char(ch),
+            KeyModifiers::NONE,
+            handle.snapshot().as_ref(),
+        );
+        assert!(handle.handle(mapped.expect("tecla del watcher"), &cancel));
+    }
+    let text = buffer_text(&dialog_frame(&handle, 0));
+    assert!(
+        text.contains("<oculto>"),
+        "el secreto avisa de contenido:\n{text}"
+    );
+    assert!(
+        !text.contains("kj"),
+        "el secreto con k/j no hace eco:\n{text}"
+    );
+    assert!(handle.handle(DialogKey::Confirm, &cancel));
+    assert_eq!(handle.wait(), DialogOutcome::Text("kj".to_string()));
+    assert!(!cancel.is_cancelled(), "confirmar no cancela");
+}

@@ -27,14 +27,23 @@ pub(crate) const CONTACT: &str = "dev@fisherk2.com";
 
 /// crossterm → tecla del puerto. Esc/Ctrl+C pasan por `is_cancel_key`, así
 /// que la cancelación sigue siendo la misma que la de la barra exterior.
+/// `dialog` es el diálogo en curso: solo una selección interpreta k/j como
+/// navegación; en texto son caracteres.
 #[must_use]
-pub(crate) fn dialog_key(code: KeyCode, modifiers: KeyModifiers) -> Option<DialogKey> {
+pub fn dialog_key(
+    code: KeyCode,
+    modifiers: KeyModifiers,
+    dialog: Option<&Dialog>,
+) -> Option<DialogKey> {
     if is_cancel_key(code, modifiers) {
         return Some(DialogKey::Cancel);
     }
+    let navigation = matches!(dialog, Some(Dialog::Select { .. }));
     match code {
-        KeyCode::Up | KeyCode::BackTab | KeyCode::Char('k') => Some(DialogKey::Previous),
-        KeyCode::Down | KeyCode::Tab | KeyCode::Char('j') => Some(DialogKey::Next),
+        KeyCode::Up | KeyCode::BackTab => Some(DialogKey::Previous),
+        KeyCode::Down | KeyCode::Tab => Some(DialogKey::Next),
+        KeyCode::Char('k') if navigation => Some(DialogKey::Previous),
+        KeyCode::Char('j') if navigation => Some(DialogKey::Next),
         KeyCode::Enter => Some(DialogKey::Confirm),
         KeyCode::Backspace => Some(DialogKey::Backspace),
         KeyCode::Char(ch) => Some(DialogKey::Char(ch)),
