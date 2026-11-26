@@ -47,16 +47,27 @@ pub(super) fn run_gate_cancellable(
 ) -> Result<GateOk, WizardError> {
     let before = models_snapshot(vault);
     let mut outcome: Option<Result<GateOk, WizardError>> = None;
-    ui.run_cancellable("Descargando modelo de embeddings", cancel, &mut || {
-        outcome = Some(run_gate(
-            proc,
-            vault,
-            model_id,
-            revision,
-            token,
-            Some(cancel),
-        ));
-    });
+    // La ruta es la misma que `flow_cli` pasa como `HF_HOME`: así el usuario
+    // ve dónde caen los ~470 MB antes de que empiece la descarga.
+    let models = vault
+        .join(RUNTIME_DIR)
+        .join(MODELS_DIR)
+        .to_string_lossy()
+        .replace('\\', "/");
+    ui.run_cancellable(
+        &format!("Descargando modelo en {models}/"),
+        cancel,
+        &mut || {
+            outcome = Some(run_gate(
+                proc,
+                vault,
+                model_id,
+                revision,
+                token,
+                Some(cancel),
+            ));
+        },
+    );
     if outcome.is_some() {
         mark_gate_stage();
     }

@@ -3,7 +3,7 @@
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T6
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
 > **Fuente de verdad:** `docs/BACKLOG.md §1 / C4` — «el consumo de tokens por consulta es
-> inferior a 2000 tokens (incluyendo contexto)» · `tasks/plan.md` §Task T6 · `docs/TRD.md` §6.1
+> inferior a 2000 tokens (incluyendo contexto)» (antes `tasks/plan.md` §Task T6) · `docs/TRD.md` §6.1
 > (fila 4) y §6.2.
 > **Jerarquía de evidencia (D8):** todo lo de aquí es **`medido`** con `tiktoken` en el host de
 > referencia; cada tabla lleva su comando.
@@ -191,4 +191,4 @@ de esa oscilación, y así se publica.
 * Host: el de [protocol.md](protocol.md) §1 (fusión btrfs/NVMe, CPython 3.12.14 del venv del
   payload); el conteo de tokens no depende del filesystem.
 * **No** se recorta el corpus ni el `top_k` para que la cifra pase: si el total superara 2 000, se
-  publicaría el FAIL y se pararía a pedir decisión del dueño (`tasks/plan.md` §Task T6).
+  publicaría el FAIL y se pararía a pedir decisión del dueño (`docs/BACKLOG.md §1 / C4`; antes `tasks/plan.md` §Task T6).

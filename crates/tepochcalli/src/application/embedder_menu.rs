@@ -17,6 +17,7 @@
 //! (artefactos `[embedding]` y escritura atómica). Los `pub use` de abajo
 //! conservan los caminos que ya consumían `swap`, `installer` y `main`.
 
+use std::cell::RefCell;
 use std::path::Path;
 
 use crate::config::{default_and_large, parse_presets, Preset};
@@ -114,6 +115,51 @@ pub struct Phase6Report {
     pub rss_peak_bytes: Option<u64>,
 }
 
+/// La elección del embedder, separada del gate: se pregunta al arrancar el
+/// install (antes de F3) bajo la barra única de `run_stages`, y F6 la reutiliza
+/// cuando el venv ya existe. Un probe de host por corrida (L5-1).
+fn select_embedder(
+    ui: &dyn Ui,
+    host: &dyn HostProbe,
+) -> Result<(EmbedderChoice, HostFacts), WizardError> {
+    let presets = parse_presets().map_err(|_| WizardError::Internal)?;
+    let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
+    let facts = host.snapshot();
+    let options = build_options(default, large, &facts);
+    let shown: Vec<&str> = options.iter().map(String::as_str).collect();
+    let index = ui.select("Embedding provider", &shown, 0)?;
+    let choice = EMBEDDER_PATHS
+        .get(index)
+        .copied()
+        .ok_or(WizardError::UserAborted)?;
+    Ok((choice, facts))
+}
+
+thread_local! {
+    /// Buzón de una sola lectura para la elección temprana: el mismo patrón
+    /// que `take_gate_stage`, para no cambiar la firma pública de `run_phase6`
+    /// ni la de `run_f6_or_degraded`. Swap nunca lo llena.
+    static PRESELECTED: RefCell<Option<(EmbedderChoice, HostFacts)>> = const {
+        RefCell::new(None)
+    };
+}
+
+/// Primera interacción del install: elige embedder y guarda la elección para
+/// F6. Debe correrse DENTRO de `run_stages` para que el watcher sea el dueño
+/// de la pantalla (T1).
+pub fn preselect_embedder(ui: &dyn Ui, host: &dyn HostProbe) -> Result<(), WizardError> {
+    let (choice, facts) = select_embedder(ui, host)?;
+    PRESELECTED.with(|cell| *cell.borrow_mut() = Some((choice, facts)));
+    Ok(())
+}
+
+/// Toma (y vacía) la elección hecha antes de F3; `None` si no hubo preselección
+/// (resume con F6 hecha, o llamada directa a `run_phase6`).
+#[must_use]
+pub fn take_preselected() -> Option<(EmbedderChoice, HostFacts)> {
+    PRESELECTED.with(RefCell::take)
+}
+
 /// F6b: menu → gate → atomic config. Path 3 rejections (`E_MODEL_INVALID`
 /// from the tag pre-filter or the gate) return to the menu without writing
 /// anything; every other failure propagates typed (§5.4).
@@ -121,16 +167,12 @@ pub fn run_phase6(deps: &Phase6Deps<'_>, vault: &Path) -> Result<Phase6Report, W
     let presets = parse_presets().map_err(|_| WizardError::Internal)?;
     let (default, large) = default_and_large(&presets).ok_or(WizardError::Internal)?;
     loop {
-        // El snapshot va fuera del loop (L5-1): un re-enter del menú por id
-        // inválido NO re-prueba RAM/GPU por fila — un probe real por corrida.
-        let facts = deps.host.snapshot();
-        let options = build_options(default, large, &facts);
-        let shown: Vec<&str> = options.iter().map(String::as_str).collect();
-        let index = deps.ui.select("Embedding provider", &shown, 0)?;
-        let choice = EMBEDDER_PATHS
-            .get(index)
-            .copied()
-            .ok_or(WizardError::UserAborted)?;
+        // El re-enter por id inválido vuelve a preguntar: el buzón solo se
+        // consume una vez (L5-1: un probe real por corrida).
+        let (choice, facts) = match take_preselected() {
+            Some(pair) => pair,
+            None => select_embedder(deps.ui, deps.host)?,
+        };
         match choice {
             EmbedderChoice::PresetDefault => return finish_local(deps, vault, default, &facts),
             EmbedderChoice::PresetLarge => return finish_local(deps, vault, large, &facts),

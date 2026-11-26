@@ -3,7 +3,7 @@
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T9
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
 > **Fuente de verdad:** `docs/BACKLOG.md §1 / C1` — «El vault de Obsidian funciona
-> normalmente sin interferencias» · `tasks/plan.md` §Task T9 · `specs/spec-vault-structure.md`
+> normalmente sin interferencias» (antes `tasks/plan.md` §Task T9) · `specs/spec-vault-structure.md`
 > §Reglas de no-interferencia (reglas 1-6) y §Testing (checklist **ejecutado**, no reescrito) ·
 > ADR-002/ADR-005 (sin daemon, sin puerto).
 > **Jerarquía de evidencia (D8):** todo lo de §3-§6 es **`medido`** (vault instalado por el

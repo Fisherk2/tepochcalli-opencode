@@ -1,850 +1,160 @@
-# Plan de implementación — Phase 6.5 (wizard, flujo destino H5-H11)
-
-> **Estado:** planificado el 2026-11-19 · tlatoani: Moctezuma · FTR firmado por Fisherk2 (2026-11-19)
-> **Fuente de verdad:** [docs/BACKLOG.md](../docs/BACKLOG.md) §2 «Wizard de instalación: flujo destino (2026-11-18)» + §4 D-005..D-008
-> **Restricción vigente del dueño:** **no se publica en ningún gestor de paquetes.** Solo se prepara y se verifica en local.
-> **Alcance documental:** ADR-014/015, enmiendas 2026-11-18 de `spec-installer-wizard` / `spec-embeddings`, [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.5, [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) TD-45..TD-50.
-> **Índice:** §1-10 Phase 6.5 (2026-11-19) · §11 Phase 6.6 (2026-11-20) · **§12 Phase 6.8 (2026-11-25, sin despliegue)**.
-
----
-
-## 1. Objetivo
-
-Materializar el flujo destino del wizard ordenado por el dueño el 2026-11-18 (H5-H11 + anexo
-Codice), cerrando los tres use-cases que hoy **no existen** (`update` de H7, `desinstall`
-ampliado de H8, `device` electivo de H9), sustituyendo el `dialoguer` line-based por una TUI
-full-screen con botones deshabilitados y razón visible, y dejando el canal `uvx` **preparado y
-verificable en local** — sin que ninguna rueda llegue a PyPI.
-
-Lo que **no** cambia: el motor RAG (`cocoindex` + `markitdown`), el contrato MCP de 7 tools, el
-payload `obsidian-workspace/` (congelado salvo orden explícita), la regla one-version de ADR-004
-(uv + venv del vault) y ADR-011 (ledger de dos librerías Python).
-
-## 2. Decisiones del dueño (FTR del 2026-11-19)
-
-| # | Decisión | Alcance | Efecto en el plan |
-| --- | --- | --- | --- |
-| D-6.5-a | **Firmar el FTR**: ADR-014 y ADR-015 pasan de *Proposed* a *Accepted*; las enmiendas 2026-11-18 de las dos specs pasan a *Accepted*; se alinean las versiones a `0.1.0` | Desbloquea la Phase 6.5 (las 4 precondiciones de WORKFLOW.md:299 quedan resueltas) | T0 y T1 |
-| D-6.5-b | **Librería TUI: `ratatui` + `crossterm`** (lo que ADR-015 nombraba como ejemplo) | Única dep nueva del binario | T8 |
-| D-6.5-c | **Empaquetado verificable en local**: `maturin build` + verificación de la rueda + `uvx --from <rueda local>` + CI que **construye** ruedas sin publicar | Ningún publish | T2 y T3 |
-| D-6.5-d | **Núcleo primero, TUI al final**: 3 cortes commiteables (núcleo → TUI → verificación) | Reduce el radio de impacto por commit | §6 |
-| D-6.5-e | **Anexo Codice→Rust fuera de alcance**: lo nuevo se aloja en las carpetas existentes (`cli/`, `application/`, `adapters/`, `domain/`) sin renombrar módulos | Evita un diff estructural sobre 18.499 líneas de Rust | Todo el plan |
-
-**Aceptar ADR-014 no es publicar.** El ADR decide el canal; la publicación a PyPI sigue siendo
-un acto futuro que este plan **no ejecuta** (ADR-014 §4.3 deja la toolchain de release propuesta,
-y el dueño no ha pedido publicar).
-
-## 3. Estado verificado del repositorio (censo del 2026-11-19)
-
-Cifras medidas, no estimadas:
-
-| Elemento | Estado verificado | Tarea que lo toca |
-| --- | --- | --- |
-| Crate Rust | `crates/tepochcalli/`, **18.499 líneas** en 66 `.rs`; capas `domain/` `ports/` `adapters/` `application/` `cli/` `config/` | T4, T5, T7, T8, T9 |
-| Puerto `Ui` | `ports/ui.rs`: 4 métodos (`select`, `input`, `input_secret`, `panel`); **33 call sites**; 4 de ellos son `select` | T8 |
-| Adapters de UI | `TtyUi` (dialoguer) + `HeadlessUi` (scripted) + fakes en tests | T8 |
-| `Preset` | `config/presets.rs`: 10 campos, **sin `device`**; `presets.toml` con 2 entradas (MiniLM, BGE-M3) | T4 |
-| Drift `device` | `application/embedder_config.rs:42` → `device = "cpu"` hardcodeado; `application/swap.rs:422` (`picked_config_body`) reconstruye el cuerpo y **pisa** el valor | T4 |
-| `update` | **No existe** ningún use-case ni subcomando | T5 |
-| `uninstall` | `application/maintenance.rs:148` — borra **solo** `.tepochcalli/`; `AGENTS.md` nunca se toca | T5 |
-| Versiones | `Cargo.toml` = `0.1.0-beta.1` vs `obsidian-workspace/.tepochcalli/pyproject.toml` = `0.1.0` → **TD-45** | T1, T3 |
-| Empaquetado | **No existe** `crates/tepochcalli/pyproject.toml` → maturin no tiene qué empaquetar | T3 |
-| Toolchain del host | `maturin 1.15.0` ✅ · `uv`/`uvx` 0.12.9 ✅ · `cargo` 1.100.0 ✅ · **`cargo-dist`/`dist` AUSENTES** ⚠️ | T3 |
-| Deps nuevas | `ratatui` 0.30.2 (crates.io, 2026-06-19) y `crossterm` 0.29.0 disponibles; **no cacheadas** → el primer build necesita red | T8 |
-| Gates | `just quality` (702 tests, verde) · `just ci` (suite completa + 4 módulos + rust-ci 323 tests) · `just md-lint` (0 issues) | Todos |
-
-### 3.1 Dos sondas que NO pude cerrar en la fase de planificación
-
-El sandbox de esta sesión bloquea la escritura fuera del workspace, así que no pude ejecutar en
-este entorno las dos comprobaciones de las que depende la forma del empaquetado. **No las doy por
-buenas: son el primer trabajo de T2, con puerta de parada.**
-
-| Sonda | Por qué importa | Fuente consultada |
-| --- | --- | --- |
-| ¿`maturin` empaqueta un crate con `lib.rs` (rlib) **y** `main.rs` con `bindings = "bin"`? | La doc dice que la detección automática de `bin` solo ocurre «si hay un único target binario y sin dependencia pyo3 ni target cdylib». El crate tiene **ambos** targets. Con `bindings = "bin"` explícito debería funcionar, pero la rueda podría arrastrar el rlib. | [maturin §bindings](https://www.maturin.rs/bindings.html) ✔ leída |
-| ¿`uvx` puede ejecutar una tool desde una **rueda local** (`uvx --from ./tepochcalli-0.1.0-*.whl tepochcalli`)? | Es la única forma de **verificar el canal sin publicar**. Si `--from` no acepta rutas locales, el plan cambia a `uv tool install ./rueda` + `uv tool run --from`, o el canal queda sin verificación local. | [uv §Using tools](https://docs.astral.sh/uv/guides/tools/) ✔ leída (`--from` acepta «sources»; el caso local no está documentado explícitamente) |
-
-## 4. Grafo de dependencias
-
-```mermaid
-graph TB
-    subgraph R0["Ronda 0 — formalización (documental)"]
-        T0["T0 · ADR-014/015 a Accepted"]
-        T1["T1 · Enmiendas a Accepted + versión 0.1.0 + des-GATE"]
-    end
-
-    subgraph R1["Ronda 1 — paralela"]
-        T2["T2 · Sondas de viabilidad (fail-fast)"]
-        T4["T4 · H9 device electivo"]
-        T6["T6 · TD-50 test de la guarda"]
-    end
-
-    subgraph R2["Ronda 2 — paralela"]
-        T3["T3 · Canal uvx empaquetado y verificado"]
-        T5["T5 · H7 update + H8 desinstall"]
-    end
-
-    subgraph R3["Ronda 3 — secuencial"]
-        T7["T7 · Dominio H5 + semver"]
-        T8["T8 · Puerto Ui + adapter ratatui"]
-        T9["T9 · Cableado CLI H5-H11"]
-    end
-
-    subgraph R4["Ronda 4 — secuencial"]
-        T10["T10 · Verificación e2e del canal"]
-        T11["T11 · Cierre documental"]
-    end
-
-    T0 --> T1
-    T1 --> T2
-    T1 --> T4
-    T1 --> T6
-    T2 --> T3
-    T4 --> T5
-    T3 --> T8
-    T5 --> T7
-    T7 --> T8
-    T8 --> T9
-    T9 --> T10
-    T6 --> T10
-    T3 --> T10
-    T10 --> T11
-```
+# Plan de tareas — Phase 6.9: rediseño del TUI del wizard y preparación de 0.1.0-beta.4
 
-**Por qué esas flechas y no otras:**
+> Fuente: `docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md` y `docs/WORKFLOW.md` §Phase 6.9 (autorización del dueño 2026-11-25). Una sola fase, todo C1–C6 dentro de `0.1.0-beta.4`, **sin deploy** (sin tag, Release ni PyPI).
 
-- `T0 → T1`: T1 cita la aceptación de T0 en el encabezado de las specs. No hay independencia real.
-- `T1 → {T2, T4, T6}`: toda la ronda 1 exige el FTR (ADR-015Accepted es lo que habilita T4; la
-  lectura de `device` en el flow ya está, el hueco está solo del lado del wizard).
-- `T2 → T3`: **T3 no se escribe hasta que T2 demuestra que el canal es viable.** Es la puerta de
-  parada: si la sonda falla, T3 cambia de forma (o el dueño decide) en vez de construir sobre arena.
-- `T4 → T5`: T5 (update) y T4 (device) tocan ambos `lib.rs` y `application/`; se serializan para
-  que un solo frente sea dueño de los exports públicos en cada momento.
-- `T3 → T8`: T8 cambia el canal de invocación (el binario pasa a servirse como script de rueda);
-  la TUI debe arrancar igual desde `uvx` que desde `./target/release/tepochcalli`.
-- `T5 → T7`: el menú H5 enruta a los use-cases de T5 (update/desinstall); la máquina de estados
-  no se diseña antes que sus destinos.
-- `T7 → T8`: T7 define el **contrato** (`MenuSpec`, botones, razones) como tipo puro del dominio;
-  T8 lo implementa en el puerto y en el adapter. Primero el contrato, luego el render — el ADR-005
-  exige que el contrato se congele antes de las adaptaciones.
-- `T9 → T10`: el smoke e2e necesita el menú cableado.
+## 1. Decisiones congeladas
 
-**Paralelismo real:** R1 (3 frentes: T2 · T4 · T6) y R2 (2 frentes: T3 · T5). Todo lo demás es
-secuencial por dependencia de contrato, no por prudencia.
+No re-litigar: dueño único de pantalla con selección renderizada en el frame ratatui (dialoguer fuera de F6); mover **solo** la selección al inicio y el gate tras F5; layout 3 zonas + ETA en columna derecha + responsive; banner «listo para instalar»/versión; receta de densidad (banda 10–15 %, global medido 7,55 % ⇒ **no compactar**); bump one-version beta.4 en 11 ficheros; enmienda de spec + §8 del BACKLOG, **sin ADR** (UX reversible, D1-D8 intactas). Skills usadas en la planificación: `planning-and-task-breakdown`, `codebase-design`, `clean-ddd-hexagonal`.
 
-## 5. Tareas por corte
+## 2. Mapa de dependencias
 
-### CORTE 0 — Formalización (sin código)
+Flecha `X → Y` = «X depende de Y». Arquitectura (dependencia hacia dentro): `cli/install_phases.rs` + `cli/install.rs` → `application/{embedder_menu,embedder_gate,installed,home}.rs` → `ports/ui.rs` (trait `Ui`, `MenuView`, `ProgressSpec{eta}`, `ACTIVE_PROGRESS`) ← implementado por `adapters/ui.rs` (`TtyUi`/`HeadlessUi`) → `adapters/ui_ratatui.rs` (watcher/render) ← fakes de `tests/common/mod.rs` ← `tests/int_*` y `tests/e2e_*`. `domain/menu.rs` (`READY_NOTICE`, `installed_state`) es hoja: **no tocar**. Justfile, spec, BACKLOG §8 y los 11 ficheros de versión son salida final; ningún módulo de código depende de ellos. Regla ADR-005: `adapters` no puede ser importado por `application`; `domain` no importa I/O. El cambio de propiedad se hace en el seam `Ui`, nunca con un segundo `try_init()`.
 
-#### T0 · Aceptar ADR-014 y ADR-015
+Paralelismo: **T1** es el único bloqueante inicial (toca `ports/ui.rs`, `adapters/ui.rs` y `ui_ratatui.rs`). Tras el checkpoint A: **T2, T3, T4 y T6** pueden correr en paralelo entre sí — salvo T3 (mismo `ui_ratatui.rs` que T1) y T4 (mismo `adapters/ui.rs` que T1), que esperan a A. **T5** y **T7** son secuenciales al final. **T6** es independiente desde el inicio.
 
-**Descripción.** Cambiar el `Status` de ambos ADR de *Proposed* a *Accepted*, añadir la nota de
-aprobación (FTR del dueño, 2026-11-19) y ajustar sus secciones §8 «Compliance and Review» para
-que la evidencia pase de `declarado` a lo que realmente habrá tras T3. **No se reescribe ninguna
-decisión ya Accepted** (ADR-003, ADR-004, ADR-007, ADR-008, ADR-011, ADR-013): los ADR-014/015
-sustituyen/invierten lo que corresponde y lo declaran explícitamente.
+## 3. Orden por riesgo
 
-**Criterios de aceptación.**
+1. **T1** (ALTO, fail fast): dos dueños del TTY en F6. 2. **T6** (BAJO, paralelo): receta nueva. 3. **T2** (MEDIO-ALTO): orden del install, `--resume` y ADR-015. 4. **T3** (MEDIO): aserciones posicionales; `ui_ratatui.rs` a 494 líneas. 5. **T4** (BAJO-MEDIO): banner. 6. **T5** (MEDIO-ALTO): PTY flaky. 7. **T7** (MEDIO): 11 ficheros + locks.
 
-- [ ] `docs/adr/adr-014-distribucion-uvx-pypi.md` y `docs/adr/adr-015-dispositivo-inferencia-wizard.md` con `Status: Accepted` y fecha de aprobación 2026-11-19.
-- [ ] La nota de «no entra en vigor hasta la aprobación explícita del usuario» se sustituye por la constancia de aprobación, sin borrar el historial de que nacieron *Proposed*.
-- [ ] ADR-013, ADR-003, ADR-007 y ADR-008: **byte-idénticos** (verificado con `git diff --exit-code`).
-- [ ] ADR-014 §4.3 registra que `maturin` + PyPI + `ratatui`/`crossterm` quedan **aprobados como deps** por el dueño (2026-11-19) y que la publicación sigue **no ejecutada**.
-- [ ] `Decision Makers` pasa de «Dueño del repo» a «Fisherk2» en ambos ADR (alineación con el BACKLOG).
+## 4. Tareas verticales
 
-**Verificación.**
+Cada task es un camino completo (puerto → adaptador → aplicación → CLI → tests → doc cuando aplica), demostrable por sí mismo, con criterios, verificación e instrucciones deterministas.
 
-- [ ] `grep -rn 'Status: Proposed' docs/adr/` → vacío.
-- [ ] `git diff --stat -- docs/adr/adr-003* docs/adr/adr-004* docs/adr/adr-007* docs/adr/adr-008* docs/adr/adr-011* docs/adr/adr-013*` → 0 líneas.
-- [ ] `just md-lint` → 0 issues.
+### T1 — Un dueño de pantalla: la selección de embedder vive en el frame
 
-**Dependencias:** ninguna. **Ficheros:** 2 ADR. **Alcance:** S.
+El puerto `Ui` gana estado de selección central junto a `ACTIVE_PROGRESS` (`ports/ui.rs:74-99`); `TtyUi::select` deja de usar `dialoguer::Select` (`adapters/ui.rs:24-39`) y delega en el watcher de `ui_ratatui.rs:320-395`, único pintor y lector (↑/↓/Enter/Esc/Ctrl+C). Conservar la firma de `Ui::select` si es posible para no tocar los 6 fakes. El gate sigue cediendo el frame con `has_active_progress()` (`ui_ratatui.rs:232`). Si `ui_ratatui.rs` pasa de 500 líneas, extraer `adapters/ui_selection.rs`.
 
----
+**Aceptación:** sin segundo `try_init()` en la selección; token de cancelación compartido con un solo lector; `int_ui_screen_ownership.rs` extiende el guard de `int_progress_spec.rs:161-184` a `select`/`input`/`panel`; fakes compilan sin cambiar el orden de colas; `dialoguer` permanece en `Cargo.toml:22` para `input`/`input_secret`/`line_menu` (R1).
 
-#### T1 · Enmiendas Accepted, versión alineada y des-GATE de la Phase 6.5
+**Verificación:** `just rust-test-filter int_ui_screen_ownership` · `just rust-test-filter int_ui_screen_ownership_input_secret_no_hace_eco_del_valor_bajo_el_watcher` · `just rust-test-filter int_ui_screen_ownership_las_teclas_del_puerto_mueven_el_cursor_y_borran_texto` · `just rust-test-filter int_ui_screen_ownership_clear_del_watcher_despierta_al_esperador_y_no_cancela` · `just rust-test-filter int_ui_screen_ownership_las_letras_k_y_j_son_texto_en_dialogos_de_entrada` · `just rust-test-filter int_progress_spec` · `just rust-ci`.
 
-**Descripción.** Cerrar la precondición (c) y (d) del gate, y abrir la fase en el registro de fase.
-Sin esto, T2-T11 trabajan contra un contrato `Proposed`.
+**Instrucciones:** (1) RED: crear `tests/int_ui_screen_ownership.rs` espejo de `int_progress_spec.rs:161-184` y confirmar que falla. (2) GREEN: estado central en `ports/ui.rs`; `TtyUi::select` renderiza en frame; reutilizar `is_cancel_key`/`RestoreOnDrop`; limpiar estado en **todo** exit y abort tipado. (3) Propagar solo lo necesario a `HeadlessUi` y fakes; no cambiar `for_install` (`adapters/ui.rs:215-227`). (4) Verificar `wc -l ui_ratatui.rs ≤ 500` o extracción hecha.
 
-**Criterios de aceptación.**
+**Archivos:** `ports/ui.rs`, `adapters/ui.rs`, `adapters/ui_ratatui.rs` (+ `ui_selection.rs` si aplica), `tests/common/mod.rs`, `tests/int_ui_screen_ownership.rs` (nuevo).
 
-- [ ] `specs/spec-installer-wizard.md`: el encabezado pasa a «Enmienda 2026-11-18 — flujo destino (**Accepted**)» y §Enmienda 2026-11-18 deja de decir «no se aprueba ni se implementa aquí».
-- [ ] `specs/spec-embeddings.md`: su enmienda 2026-11-18 pasa a **Accepted** y formaliza `[embedding].device` electivo (autoselección en runtime sigue **rechazada**).
-- [ ] `crates/tepochcalli/Cargo.toml` `version` = `0.1.0` (alineado detrás de la canónica `obsidian-workspace/.tepochcalli/pyproject.toml` = `0.1.0`). → **cierra TD-45**.
-- [ ] `docs/WORKFLOW.md` §Phase 6.5: el estado pasa de «GATED, no ejecutable» a «desbloqueada», con las 4 precondiciones marcadas como resueltas y fecha del FTR.
-- [ ] `docs/TECH_DEBT.md`: TD-46 → cerrada; TD-45 → cerrada; **TD-51 nueva** (retiro materializado de `dist.toml` + `release.yml`, diferido por decisión del dueño).
-- [ ] `docs/BACKLOG.md` §8: una fila por cada cambio estructural de esta fase.
-- [ ] `SPEC.md` §Boundaries: la lista «preguntar antes» registra `maturin`/PyPI y `ratatui`/`crossterm` como **aprobadas** (con fecha), no como pendientes.
-
-**Verificación.**
-
-- [ ] `grep -n 'version' crates/tepochcalli/Cargo.toml` → `0.1.0`; `grep -n '^version' obsidian-workspace/.tepochcalli/pyproject.toml` → `0.1.0`.
-- [ ] `grep -rn 'Proposed' specs/spec-installer-wizard.md specs/spec-embeddings.md` → vacío.
-- [ ] `just md-lint` → 0 issues.
-
-**Dependencias:** T0. **Ficheros:** 2 specs + `Cargo.toml` + `WORKFLOW.md` + `TECH_DEBT.md` + `BACKLOG.md` + `SPEC.md`. **Alcance:** M.
-
-> **Checkpoint 0** — el FTR está registrado y el gate abierto. Sin este checkpoint, T2-T11 no arrancan.
-
----
-
-### CORTE 1 — Núcleo verificable
-
-#### T2 · Sondas de viabilidad del empaquetado (puerta de parada)
-
-**Descripción.** Resolver empíricamente las dos sondas de §3.1 **antes** de escribir una línea de
-empaquetado. El resultado es un veredicto por sonda: viable / inviable / workaround. Si alguna es
-inviable sin workaround, **T3 se detiene y el dueño decide**.
-
-**Criterios de aceptación.**
-
-- [ ] Sonda A: un crate de prueba con `lib.rs` + `main.rs` y `bindings = "bin"` se empaqueta con `maturin build` sin error, y el contenido de la rueda se lista (`unzip -l`) para confirmar que **no** arrastra el rlib.
-- [ ] Sonda B: `uvx --from <rueda local> <comando>` ejecuta el binario desde la rueda local sin instalar nada en el host. Si `--from` no acepta la ruta, se prueba `uv tool install <rueda>` + `uv tool run --from <rueda>` y se documenta el camino válido.
-- [ ] Sonda C (extra): `maturin build` con el **crate real** produce una rueda cuyo nombre sigue la convención esperada (`tepochcalli-0.1.0-<tag>-<platform>.whl`).
-- [ ] Informe de 15 líneas en el cuerpo del commit: veredicto por sonda, comando exacto que funcionó y el fallo exacto del camino que no.
-
-**Verificación.**
-
-- [ ] Cada sonda queda registrada con su comando y su salida cruda (no descrita).
-- [ ] `git status` limpio tras la sonda (no se commitean binarios ni ruedas).
-
-**Dependencias:** T1. **Ficheros:** ninguno del repo (trabajo en scratch). **Alcance:** S.
-
-> **Checkpoint 1** — veredicto de viabilidad. Si falla, se para aquí y se consulta al dueño.
-
----
-
-#### T3 · Canal `uvx`: rueda preparada y verificada en local (sin publicar)
-
-**Descripción.** Crear la maquinaria de empaquetado del crate Rust como paquete Python, y
-demostrar en local que `uvx tepochcalli` funciona — sin que nada llegue a PyPI.
-
-**Criterios de aceptación.**
-
-- [ ] `crates/tepochcalli/pyproject.toml` nuevo, con `[build-system] requires = ["maturin>=1,<2"]`, `[project]` (name `tepochcalli`, version `0.1.0`), `[project.scripts] tepochcalli = "tepochcalli:main"` y `[tool.maturin] bindings = "bin"`.
-- [ ] `just rust-wheel` (receta nueva) construye la rueda con `maturin build` y la lista. `just rust-wheel-verify` la verifica: contenido, versión, script y **ejecución real**.
-- [ ] `uvx --from <rueda local> tepochcalli --help` imprime la ayuda del wizard (evidencia de que el canal sirve el binario).
-- [ ] `.github/workflows/release.yml`: el paso de publicación a PyPI **no existe**; el workflow solo **construye** ruedas para la matriz de targets y las sube como artefactos de CI. Un comentario declara explícitamente que la publicación es un acto manual futuro.
-- [ ] **El retiro materializado de cargo-dist (`dist.toml` + `release.yml` heredado) NO se ejecuta en esta fase** (decisión D-6.5-c): `dist.toml` se conserva y se anota como pendiente en TD-51. Si T3 reescribe `release.yml`, se distingue el workflow de **ruedas** del de **cargo-dist**, y ambos conviven con nombres no colisionantes.
-- [ ] `crates/tepochcalli/Cargo.lock` actualizado con `--locked` y `ratatui`/`crossterm` si T8 ya los引入 (si no, se deja para T8).
-
-**Verificación.**
-
-- [ ] `just rust-wheel` verde; `ls target/wheels/*.whl` lista la rueda.
-- [ ] `python3 -m zipfile -l <rueda>` muestra el script `tepochcalli` en `*.data/scripts/`.
-- [ ] `uvx --from <rueda> tepochcalli --version` responde.
-- [ ] `grep -rn 'pypi\|twine\|publish' .github/workflows/` → solo menciones en comentarios que declaran que **no** se publica.
-- [ ] `git status --short` no muestra ninguna `.whl`.
-
-**Dependencias:** T2 (y T1 para la versión). **Ficheros:** `crates/tepochcalli/pyproject.toml` (nuevo), `Cargo.toml`, `Cargo.lock`, `Justfile`, `.github/workflows/`. **Alcance:** M.
-
----
-
-#### T4 · H9 — dispositivo de inferencia electivo (`device`)
-
-**Descripción.** Cerrar **TD-47**: el catálogo gana `device`, el wizard pregunta, el TOML registra y
-la re-entrada **preserva** la elección.
-
-**Criterios de aceptación.**
-
-- [ ] `config/presets.rs`: `Preset` gana el campo `device` (String) y `presets.toml` lo declara en las 2 entradas (`cpu` para MiniLM, `cuda` para BGE-M3, como dato de catálogo — **D7.2: el catálogo es dato, no UI**).
-- [ ] `application/embedder_menu.rs`: tras la elección del modelo, el wizard **pregunta explícitamente** el dispositivo (`cpu` preseleccionado; `cuda`/`cuda:N` solo si la sonda detectó GPU). Sin GPU ⇒ la opción aparece **deshabilitada con la razón visible** «GPU no detectada» — nunca se oculta (H9 + ADR-015 §4.1).
-- [ ] `application/embedder_config.rs`: `local_config()` deja de hardcodear `device = "cpu"` y escribe **el dispositivo elegido**.
-- [ ] `application/swap.rs`: `picked_config_body()` **preserva** el `device` existente como preselección en `tepochcalli config embedder` (corrige el drift de `swap.rs:422`).
-- [ ] La **autoselección en runtime sigue rechazada**: sin `device` explícito en el TOML, el flow usa su default (`cpu`) sin tocar la GPU.
-- [ ] Un modelo forzado a GPU no disponible ⇒ **advertencia** con procedencia `medido`, nunca bloqueo (D8.3).
-
-**Verificación.**
-
-- [ ] `cargo test --locked` verde con tests nuevos: `int_embedder_menu.rs` (pregunta de device, GPU ausente → deshabilitada con razón) y `int_presets.rs` (parseo del campo `device`).
-- [ ] Test de no-destructividad: `config embedder` sobre un TOML con `device = "cuda:0"` deja `cuda:0` como valor final.
-- [ ] `cargo clippy --locked --all-targets -- -D warnings` sin warnings.
-
-**Dependencias:** T1. **Ficheros:** `config/presets.rs`, `config/presets.toml`, `application/embedder_config.rs`, `application/embedder_menu.rs`, `application/swap.rs`, `tests/int_embedder_menu.rs`, `tests/int_presets.rs`. **Alcance:** M.
-
----
-
-#### T5 · H7 Update + H8 Desinstall (backup, advertencia, compensación)
-
-**Descripción.** Cerrar **TD-48**: dos use-cases que hoy no existen, con la semántica de backup
-obligatorio fijada por la excepción del dueño en `docs/CODE_STYLE.md` §Reglas específicas del payload.
-
-**Criterios de aceptación.**
-
-- [ ] Use-case `update` nuevo (`application/update.rs`): sobrescribe `.opencode/`, `.tepochcalli/`, `.gitignore`, `opencode.json` y `AGENTS.md`, y **solo eso**. Antes de pisar, **backup obligatorio** (`.bak`) de cada fichero existente + **advertencia visible** con el directorio objetivo.
-- [ ] Rollback por compensación: si una fase falla, el estado previo queda restaurado desde los `.bak` (mismo patrón que las 8 fases de instalación).
-- [ ] `application/maintenance.rs`: `run_uninstall()` amplía su alcance a `.opencode/`, `.tepochcalli/` y `opencode.json` — **y nada más** (`AGENTS.md` **no** se borra: lo fija US-H8). Backup + advertencia antes de remover.
-- [ ] `cli/commands.rs`: subcomando `update` nuevo, con su entrada en `print_help()` y su código de salida.
-- [ ] Idempotencia: `update` sobre un vault ya actualizado y `uninstall` sobre un vault ya desinstalado ⇒ no-op sin error (T14).
-- [ ] **La primera Install y la re-entrada `config` siguen con merge conservador byte-a-byte** salvo `mcp.servers.*` gestionados (no se extienden a la ruta de `update`).
-
-**Verificación.**
-
-- [ ] `cargo test --locked` verde con tests nuevos `e2e_update.rs` y ampliación de `e2e_maintenance.rs`: backup creado, contenido restaurado tras un fallo inducido, `AGENTS.md` intacto tras `uninstall`, `00-resources/` intacto.
-- [ ] Test de idempotencia: dos `update` seguidos ⇒ segundo es no-op.
-- [ ] `cargo clippy --locked --all-targets -- -D warnings` sin warnings.
-
-**Dependencias:** T4 (los exports de `lib.rs` los fija un solo frente). **Ficheros:** `application/update.rs` (nuevo), `application/maintenance.rs`, `cli/commands.rs`, `cli/usage.rs`, `lib.rs`, `tests/e2e_update.rs` (nuevo), `tests/e2e_maintenance.rs`. **Alcance:** L.
-
----
-
-#### T6 · TD-50 — test de la guarda anti-exfiltración del loader
-
-**Descripción.** Cerrar **TD-50**: la guarda que rechaza URLs dentro de `model` (protección contra
-exfiltración por configuración) existe pero no tiene test que la ejercite.
-
-**Criterios de aceptación.**
-
-- [ ] Test unitario en `tests/unit/` que ejercita `flow/tepochcalli_flow/config.py:357-369` con `provider = "litellm"` y `model` que contiene `://`, `http` y `@`.
-- [ ] El test afirma el comportamiento exacto: **fallback al modelo default con warning**, nunca el uso del `model` malicioso.
-- [ ] El test está en el módulo de tests que le corresponde (`test-unit`, ≤10 min) y no en la suite pesada.
-
-**Verificación.**
-
-- [ ] `just python-test-unit` verde y el test nuevo **falla** si se desactiva la guarda (mutación manual verificada y revertida).
-- [ ] `just typecheck` verde (mypy strict, superficie `flow` + `mcp`).
-
-**Dependencias:** T1. **Ficheros:** `tests/unit/test_config_loader_guard.py` (nuevo). **Alcance:** XS.
-
-> **Checkpoint 2** — corte 1 cerrado: `just quality` + `just rust-ci` verdes, la rueda se construye y `uvx` la ejecuta, y TD-47/48/50 cerrados.
-
----
-
-### CORTE 2 — TUI full-screen (ratatui)
-
-#### T7 · Dominio H5 puro: estado del menú, botones y comparador semver
-
-**Descripción.** El menú H5 es una **máquina de estados** (la spec ya la dibuja en mermaid) y su
-decisión —qué botón está habilitado y por qué— es **lógica de dominio**, no render. Este tarea la
-extrae como módulo puro, sin I/O, testeable sin terminal.
-
-**Criterios de aceptación.**
-
-- [ ] `domain/menu.rs` (nuevo): un tipo `MenuSpec` con la lista de botones (etiqueta, habilitada, razón) y un tipo de **escenario** con los 4 estados de H5: `NoInstalado`, `Igual`, `Atrasada`, `Adelantada`.
-- [ ] La matriz de habilitación es **exactamente** la de `spec-installer-wizard.md` §TUI full-screen: NoInstalado → solo Install; Igual → Change Embedder + Desinstall + Exit (Install y Update deshabilitados, razón «versión al día»); Atrasada → Update + Change Embedder + Desinstall + Exit (Install deshabilitado, razón «ya existe instalación»); Adelantada → **solo Exit**, con el mensaje de refresco y el comando exacto `uvx --refresh tepochcalli`.
-- [ ] `domain/version.rs` (nuevo): comparador semver **propio** (sin dependencia nueva) que ordena `0.1.0` / `0.1.0-beta.1` / `0.2.0` correctamente, y lector de la versión canónica desde `.tepochcalli/pyproject.toml`.
-- [ ] La **presencia** del embedder (API key externa o modelo local en `.tepochcalli/models/`) se calcula como dato de dominio y se muestra en el menú (H5).
-- [ ] `domain/` no importa nada de `adapters/`, `ports/` ni crates externos (test de arquitectura).
-
-**Verificación.**
-
-- [ ] `cargo test --locked` verde con `tests/int_domain.rs` ampliado: matriz de los 4 escenarios × botones habilitados/deshabilitados con su razón; casos semver (incluido `0.1.0-beta.1 < 0.1.0`).
-- [ ] Test de arquitectura: `domain/` sin dependencias de infraestructura.
-
-**Dependencias:** T5. **Ficheros:** `domain/menu.rs` (nuevo), `domain/version.rs` (nuevo), `domain/mod.rs`, `lib.rs`, `tests/int_domain.rs`. **Alcance:** M.
-
----
-
-#### T8 · Puerto `Ui` ampliado + adapter ratatui (con fallback dialoguer)
-
-**Descripción.** Sustituir el `dialoguer` line-based por la TUI full-screen **sin romper** el
-headless ni los fakes de test. El puerto es el contrato; el adapter es una implementación
-intercambiable.
-
-**Criterios de aceptación.**
-
-- [ ] `ports/ui.rs`: **un** método nuevo (`menu`), que recibe la `MenuSpec` del dominio y devuelve el botón elegido. Los 4 métodos actuales **no cambian** de firma (el resto del wizard sigue igual).
-- [ ] `adapters/ui_ratatui.rs` (nuevo): render full-screen con botones reales, **estado deshabilitado visible** (atenuado) y **razón visible** al lado; navegación por teclado; contacto (repo + `dev@fisherk2.com`) y link del repo siempre visibles (H5).
-- [ ] `adapters/ui.rs`: `TtyUi` pasa a ser el **fallback** line-based (misma información, sin full-screen) cuando ratatui no puede tomar el TTY; `HeadlessUi` responde al `menu` por índice.
-- [ ] `Cargo.toml`: `ratatui` 0.30 + `crossterm` 0.29 (únicas deps nuevas, aprobadas por el dueño); `Cargo.lock` actualizado.
-- [ ] Los fakes de test del puerto `Ui` siguen compilando con la interfaz nueva (o se actualizan en el mismo commit).
-- [ ] Con `--non-interactive`, el comportamiento es idéntico al actual (cero regresión en CI).
-
-**Verificación.**
-
-- [ ] `cargo test --locked` verde; los 33 call sites del puerto siguen funcionando.
-- [ ] `cargo clippy --locked --all-targets -- -D warnings` sin warnings.
-- [ ] Captura del menu renderizado en un TTY real (el anexo de T9) o, si no hay TTY, evidencia del buffer renderizado por el fake de test.
-
-**Dependencias:** T7 (el tipo `MenuSpec` es el contrato), T3 (el binario debe servirse igual desde la rueda). **Ficheros:** `ports/ui.rs`, `adapters/ui_ratatui.rs` (nuevo), `adapters/ui.rs`, `Cargo.toml`, `Cargo.lock`, `tests/int_ports.rs`, `tests/e2e_ui.rs`. **Alcance:** L.
-
----
-
-#### T9 · Cableado CLI: `tepochcalli` → H5 → H6..H11
-
-**Descripción.** Sin subcomando, el binario abre el menú H5; cada botón enruta a su use-case; H10
-sale sin tocar nada; H11 cierra con confirmación y agradecimiento.
-
-**Criterios de aceptación.**
-
-- [ ] `tepochcalli` (sin subcomando) ⇒ menú H5. Los subcomandos existentes (`install`, `config embedder`, `reindex`, `uninstall`) **siguen funcionando** (compatibilidad).
-- [ ] 🟢 Update ⇒ T5 · 🔴 Desinstall ⇒ T5 · 🟣 Change Embedder ⇒ el flujo de swap existente · 🔵 Install ⇒ las 8 fases actuales · 🟠 Exit ⇒ **cero cambios** en disco.
-- [ ] H11: tras cualquier opción salvo Exit, cierre **pulsando cualquier tecla** + mensaje de agradecimiento a Tepochcalli.
-- [ ] H5 muestra: versión que gestiona el wizard, versión instalada, estado del embedder, link del repo y `dev@fisherk2.com`.
-- [ ] En el escenario «instalada > wizard», el TUI muestra el comando copiable `uvx --refresh tepochcalli`.
-
-**Verificación.**
-
-- [ ] `cargo test --locked` verde; `tests/e2e_cli_help.rs` ampliado con el menú y sus 4 escenarios.
-- [ ] `e2e_` manual: ejecutar el binario en un vault temporal y recorrer los 4 escenarios del menú.
-- [ ] `just rust-ci` verde.
-
-**Dependencias:** T8. **Ficheros:** `cli/mod.rs`, `cli/commands.rs`, `cli/usage.rs`, `main.rs`, `tests/e2e_cli_help.rs`. **Alcance:** M.
-
-> **Checkpoint 3** — corte 2 cerrado: menú H5 con los 4 escenarios, botones con razón visible, y `just rust-ci` verde.
-
----
-
-### CORTE 3 — Verificación y cierre
-
-#### T10 · Verificación e2e del canal `uvx` (sin publicar)
-
-**Descripción.** La evidencia que la fase promete: el canal funciona de punta a punta **sin que
-nada llegue al registro de paquetes**.
-
-**Criterios de aceptación.**
-
-- [ ] Build limpio de la rueda desde un árbol de trabajo limpio.
-- [ ] `uvx --from <rueda local> tepochcalli` abre el wizard y el menú H5 (captura o transcript).
-- [ ] Recorrido completo sobre un vault temporal: Install → Update → Change Embedder → Desinstall, con backup verificado en cada fase.
-- [ ] `just ci` verde (suite completa: quality + 4 suites de módulo + bench-smoke + rust-ci).
-- [ ] `just md-lint` → 0 issues.
-- [ ] **Prueba negativa**: no existe ninguna ruta de publicación activa (ni `twine upload`, ni `pypi` auth, ni `publish` de cargo a un registry nuevo).
-
-**Verificación.**
-
-- [ ] Transcript del recorrido pegado en el cuerpo del commit.
-- [ ] `git status --short` limpio; ninguna rueda ni binario versionado.
-
-**Dependencias:** T3, T6, T9. **Ficheros:** ninguno de producto (evidencia en el commit). **Alcance:** S.
-
----
-
-#### T11 · Cierre documental
-
-**Descripción.** Dejar el repositorio describiendo lo que la fase hizo, sin contradicciones.
-
-**Criterios de aceptación.**
-
-- [ ] `docs/WORKFLOW.md` §Phase 6.5: estado «completada», con las métricas **medidas** (no estimadas) y la salvedad honesta de lo no verificado (TTY en Windows, `uvx` en VM limpia real, publicación).
-- [ ] `docs/TECH_DEBT.md`: TD-45/46/47/48/50 cerradas; **TD-51** (retiro materializado de cargo-dist) abierta y con plan de pago; **TD-52** nueva si el smoke de TTY en Windows sigue sin ejercitarse.
-- [ ] `docs/ARCHITECTURE.md` §Key decisions: el canal vigente es `uvx`; ADR-003 queda como backend retirado.
-- [ ] `SPEC.md` §Índice de specs: las dos specs con la enmienda Accepted.
-- [ ] `CHANGELOG.md`: entrada de la fase.
-- [ ] `docs/BACKLOG.md` §8: filas de todos los cambios estructurales.
-- [ ] `docs/APPFLOW.md`: journeys d/e/f actualizados al flujo destino (menú H5).
-- [ ] `AGENTS.md`: sin cambios (el payload y los contratos no se tocan) — se verifica y se declara.
-
-**Verificación.**
-
-- [ ] `just md-lint` → 0 issues.
-- [ ] `grep -rn 'cargo binstall' docs/ SPEC.md README.md` → solo donde se explains como canal **heredado**.
-- [ ] Coherencia: ninguna spec afirma que `UH.md` o una fuente obsoleta manda.
-
-**Dependencias:** T10. **Ficheros:** 7 documentos. **Alcance:** M.
-
----
-
-## 6. Tabla de asignación (subagentes · skills · herramientas · recursos)
-
-Nombres **verificados** contra `agents/*.md` (subagents reales) y el catálogo de skills/tools de esta
-sesión. Ninguno inventado.
-
-| Tarea | Subagente principal | Subagente de apoyo | Skills | Herramientas (MCP/plugin) | Recursos externos |
+| subagents | criteria | skills | tools | resources | conventions |
 | --- | --- | --- | --- | --- | --- |
-| **T0** | `docs-writer` | `code-reviewer` | `documentation-and-adrs`, `git-workflow-and-versioning` | shell, `git-workflow-manager` para el commit | — (todo interno: ADR-003/004/007/008/011/013) |
-| **T1** | `docs-writer` | `code-reviewer` | `documentation-and-adrs`, `spec-driven-development`, `git-workflow-and-versioning` | shell | — (interno: WORKFLOW, TECH_DEBT, BACKLOG) |
-| **T2** | `build-engineer` | `debugger` (si una sonda falla) | `ci-cd-and-automation`, `source-driven-development`, `doubt-driven-development` | shell (`maturin`, `cargo`, `uv`), `context7`, `gitmcp` | ✔ [maturin bindings](https://www.maturin.rs/bindings.html) · ✔ [maturin layout](https://www.maturin.rs/project_layout.html) · ✔ [uv tools](https://docs.astral.sh/uv/guides/tools/) |
-| **T3** | `build-engineer` | `deployment-engineer` (revisión del workflow) | `ci-cd-and-automation`, `dependency-audit`, `source-driven-development`, `incremental-implementation` | shell (`maturin build`, `uvx`), `context7`, `gitmcp`, `vercel-grep` | ✔ [maturin layout](https://www.maturin.rs/project_layout.html) · ✔ [uv tools](https://docs.astral.sh/uv/guides/tools/) · [maturin-action](https://github.com/PyO3/maturin-action) · [PyPA packaging](https://packaging.python.org/en/latest/tutorials/packaging-projects/) |
-| **T4** | `rust-engineer` | `code-reviewer` | `rust-best-practices`, `test-driven-development`, `clean-ddd-hexagonal`, `domain-cli` | shell (`cargo`), `context7` | [HuggingFace model API](https://huggingface.co/api/models) (estimación de RAM) · [spec-embeddings](../specs/spec-embeddings.md) (interno) |
-| **T5** | `rust-engineer` | `code-reviewer` | `rust-best-practices`, `test-driven-development`, `clean-ddd-hexagonal`, `design-patterns` (Command + compensación) | shell (`cargo`) | [spec-installer-wizard §Enmienda](../specs/spec-installer-wizard.md) (interno) · [CODE_STYLE §Reglas del payload](../docs/CODE_STYLE.md) (interno) |
-| **T6** | `python-pro` | `test-engineer` | `python-testing-patterns`, `test-driven-development`, `security-and-hardening` | shell (`just python-test-unit`), `context7` | [spec-embeddings §endpoint](../specs/spec-embeddings.md) (interno) · `flow/tepochcalli_flow/config.py:357-369` (interno) |
-| **T7** | `rust-engineer` | `software-architect` (revisión del contrato) | `clean-ddd-hexagonal`, `design-patterns` (State), `rust-best-practices`, `api-and-interface-design` | shell (`cargo`), `context7` | [semver](https://semver.org/) · [crates.io semver](https://crates.io/crates/semver) (referencia; la impl será propia) |
-| **T8** | `rust-engineer` | `code-reviewer` | `ratatui`, `domain-cli`, `rust-best-practices`, `api-and-interface-design`, `test-driven-development` | shell (`cargo`), `context7`, `gitmcp`, `vercel-grep` | [ratatui.rs](https://ratatui.rs/) · [docs.rs/ratatui 0.30.2](https://docs.rs/ratatui/0.30.2/) · [docs.rs/crossterm 0.29.0](https://docs.rs/crossterm/0.29.0/) · [crates.io API ratatui](https://crates.io/api/v1/crates/ratatui) |
-| **T9** | `cli-developer` | `code-reviewer` | `domain-cli`, `test-driven-development`, `error-handling-patterns` | shell (`cargo`), `context7` | [spec-installer-wizard §TUI full-screen](../specs/spec-installer-wizard.md) (interno) |
-| **T10** | `test-automation-engineer` | `testing-reality-checker` | `test-driven-development`, `ci-cd-and-automation`, `doubt-driven-development` | shell (`just ci`, `maturin`, `uvx`) | ✔ [uv tools](https://docs.astral.sh/uv/guides/tools/) · [uv publishing (NO ejecutado)](https://docs.astral.sh/uv/publishing/) |
-| **T11** | `docs-writer` | `technical-writer` (revisión) | `documentation-and-adrs`, `changelog-generate`, `tech-debt`, `git-workflow-and-versioning` | shell, `git-workflow-manager` | — (interno) |
+| `rust-engineer` (1º, secuencial), `rust-refactoring-specialist` (revisión del seam), `code-reviewer` (cierre) | Dueño único; firma conservada; guard cubre `select`/`input`/`panel`; sin segundo `try_init` | `rust-best-practices`, `codebase-design`, `clean-ddd-hexagonal`, `test-driven-development`, `incremental-implementation` | `read`, `grep`, `execute`, `shell`, `write`/`edit`, `question` | diagnosis §Root Cause 1; WORKFLOW C1; spec §§316-357; `int_progress_spec.rs:161-184` | `AGENTS.md`, `CODE_STYLE.md`, Justfile-first, `/tmp/opencode`, sin background, commit ≤72 + trailer |
 
-### 6.1 Reglas de asignación
+### T2 — Install elige embedder primero; gate tras F5 y `models/` en el título
 
-- **Un dueño por fichero.** `lib.rs` y `cli/commands.rs` los escribe **un solo frente** en cada
-  momento: T4 → T5 → T7 → T8 → T9. Ninguna ronda corre dos frentes que los toquen.
-- **Ningún subagente hace commits.** Los commits los hace `git-workflow-manager` al final de
-  cada corte, con staging explícito (nunca `git add -A`).
-- **Revisión por corte.** `code-reviewer` con contexto limpio antes de cada commit de corte.
-- **Herramientas no asignables:** `codebase-memory-mcp` está **desactivado** en `opencode.json`
-  (`"codebase-memory-mcp": {"disabled": true}`) — no se asigna a ninguna tarea. `chrome-devtools`,
-  `excel` y `jupyter` también están desactivados. Plugins con uso real: `opencode-search-plugin`
-  (web), `opencode-navigator` (navegación del workspace), `ponytail` (control de alcance).
+Separar en `application/embedder_menu.rs` la selección del gate/config; mover solo la selección al inicio del install (antes de F3, en la zona central de T1); dejar el test-embed detrás del venv (F5) para no romper ADR-015; mostrar `<vault>/.tepochcalli/models/` en el título del gate (`embedder_gate.rs:50`; ruta en `flow_cli.rs:49-59`). `install_progress_spec` (`:441-447`) intacto; cancel compartido compensa vía `purge_partials` (`embedder_gate.rs:64-66`).
 
-## 7. Checkpoints (puertas de calidad entre cortes)
+**Aceptación:** al elegir Install aparece primero la selección y luego la barra de 7 hitos; gate después de F5; `--resume` con F6 hecha y la cola `HeadlessUi::for_install` no roban el índice; título del gate contiene `.tepochcalli/models/`; `run_f6_or_degraded` conserva degradación y exit 0.
 
-| # | Momento | Puerta | Si falla |
-| --- | --- | --- | --- |
-| **C0** | Tras T0-T1 | `grep -rn 'Status: Proposed' docs/adr/` vacío · `grep -rn 'Proposed' specs/` vacío · versiones alineadas en `0.1.0` · `just md-lint` 0 | se para: la fase no arranca sin contrato |
-| **C1** | Tras T2 | Veredicto por sonda con comando y salida cruda | **se para y se pregunta al dueño**: la forma de T3 depende del veredicto |
-| **C2** | Tras T3-T6 | `just quality` verde · `just rust-ci` verde · rueda construida · `uvx --from` ejecuta el binario · `git status` sin `.whl` | se revierte el corte; no se commitea a medias |
-| **C3** | Tras T7-T9 | `just rust-ci` verde · matriz de los 4 escenarios de H5 verificada · fallback line-based y `--non-interactive` sin regresión | se revierte el corte 2 |
-| **C4** | Tras T10-T11 | `just ci` verde · `just md-lint` 0 · recorrido e2e con transcript · **cero rutas de publicación activas** | no se cierra la fase |
+**Verificación:** `just rust-test-filter gate_title_names_the_model_download_directory` · `just rust-test-filter preselected_choice_is_reused_by_f6_without_a_second_menu` · `just rust-test-filter preselected_mailbox_is_single_read` · `just rust-test-filter install_pregunta_el_embedder_antes_de_f3_y_deja_el_gate_tras_f5` · `just rust-test-filter resume_con_f6_hecha_la_guarda_envuelve_la_preseleccion_y_el_take` · `just rust-ci`.
 
-## 8. Riesgos (omens) y mitigación
+**Instrucciones:** (1) RED: aserciones de orden en `int_embedder_menu.rs` y `int_install_f4_f5.rs`. (2) GREEN: extraer la selección de `run_phase6`; invocarla antes de `run_stages` y el gate tras el hito F5 (`advance_active_stage()`, `:315`); no tocar `install_progress_spec`. (3) Comprobar `take_gate_stage()` (`:327`,`:350`). (4) No cambiar `EMBEDDER_PATHS` ni `menu_order_is_the_adr_numbering` (`embedder_menu.rs:324-336`).
 
-| # | Omen | Impacto | Mitigación |
-| --- | --- | --- | --- |
-| R1 | `maturin` **no** empaqueta bien un crate con `lib.rs` + `main.rs` | El canal `uvx` no es viable tal como está | T2 lo descubre **antes** de escribir T3; el fallback es `bindings = "bin"` explícito + `[lib] crate-type = ["rlib"]`, o un `[[bin]]` con `crate-type = ["bin"]` aislado |
-| R2 | `uvx --from` **no** acepta una ruta local | El canal no es verificable sin publicar | T2 lo descubre antes; fallback `uv tool install ./rueda` + `uv tool run --from` |
-| R3 | `cargo` muere con `Permission denied` en este montaje (fuseblk/NTFS-3G) | Todos los gates Rust | Regla de AGENTS.md: `CARGO_TARGET_DIR` **siempre** bajo `/tmp/opencode/` → `just rust-ci /tmp/opencode/cargo-target` |
-| R4 | `ratatui`/`crossterm` no están cacheadas → el primer build necesita red | T8 se bloquea sin red | Se verifica el acceso a crates.io antes de T8; si no hay red, T8 se difiere y el corte 2 se ejecuta con el fallback `dialoguer` (el dominio H5 de T7 sigue siendo válido) |
-| R5 | `cargo-dist` **no** está instalado | No se puede pasar `cargo dist generate --check` sobre `dist.toml` ni regenerar el release viejo | No se toca `dist.toml` en esta fase (TD-51); la CI de ruedas se escribe a mano, como ya se hizo con `release.yml` |
-| R6 | El smoke de TTY bajo `uvx` **en Windows** nunca se ha ejercitado | El requisito de H5 en Windows queda `declarado`, no `medido` | Se declara como salvedad honesta en WORKFLOW y se abre **TD-52**; no se afirma cobertura |
-| R7 | `AGENTS.md` del vault **no** se borra en `desinstall` (lo fija US-H8) pero la excepción del dueño en CODE_STYLE tampoco lo lista entre los borrados | Confusión de alcance | T5 lo fija con un test explícito: `AGENTS.md` intacto tras `uninstall` |
-| R8 | La rueda PyPI es **inmutable** y no se puede borrar | — | Inmaterial: **no se publica**. Queda anotado en ADR-014 §5 como riesgo del canal futuro |
-| R9 | Aceptar ADR-014 declara el retiro de cargo-dist, pero `dist.toml` sigue en el repo | Contradicción aparente entre ADR y árbol | ADR-014 §4.1 ya lo prevé («materialización = tarea futura»); **TD-51** lo registra explícitamente |
-| R10 | Cambiar `Cargo.toml` a `0.1.0` es un cambio de semver público | Quien use `cargo install tepochcalli` pierde el rótulo `-beta.1` | Es la one-version rule de ADR-014 y ya está ordenada por el dueño (D-6.5-a). Se registra en `CHANGELOG.md` |
+**Archivos:** `application/embedder_menu.rs`, `application/embedder_gate.rs`, `cli/install.rs`, `cli/install_phases.rs`, `tests/int_embedder_menu.rs`, `tests/int_install_f4_f5.rs`.
 
-## 9. Fuera de alcance (explícitamente)
-
-- **Publicación** en PyPI, crates.io o cualquier registro. Ni un `publish`, ni una credencial, ni un
-  job de upload. La preparación sí entra.
-- **Retiro materializado** de cargo-dist (`dist.toml`, `release.yml` heredado) → **TD-51**.
-- **Anexo Codice→Rust** (reorganización de módulos) → decisión D-6.5-e.
-- **Cambios en el payload** `obsidian-workspace/` (agentes, comandos, skills, `opencode.json`): congelado.
-- **Cambios en el motor RAG**, el contrato MCP de 7 tools, `cocoindex`/`markitdown` o el venv del vault.
-- **Autoselección de dispositivo en runtime**: sigue rechazada (ADR-015 §4.1, spec-embeddings:231).
-- **El motor de la fase 6 (aceptación E2E del producto v1)**: Phase 6.5 es intermedia y no la renumera.
-
-## 10. Referencias
-
-- [docs/BACKLOG.md](../docs/BACKLOG.md) §2 «Wizard de instalación: flujo destino (2026-11-18)» · §4 D-005..D-008 · §8 change log
-- [docs/adr/adr-014-distribucion-uvx-pypi.md](../docs/adr/adr-014-distribucion-uvx-pypi.md) · [docs/adr/adr-015-dispositivo-inferencia-wizard.md](../docs/adr/adr-015-dispositivo-inferencia-wizard.md)
-- [specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-18 · [specs/spec-embeddings.md](../specs/spec-embeddings.md) §Enmienda 2026-11-18
-- [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.5 · [docs/TECH_DEBT.md](../docs/TECH_DEBT.md) TD-45..TD-50
-- [docs/CODE_STYLE.md](../docs/CODE_STYLE.md) §Reglas específicas del payload (excepción del dueño 2026-11-18) · §Umbral de líneas
-- Externas consultadas en la fase de planificación: [maturin §bindings](https://www.maturin.rs/bindings.html) ✔ · [maturin §project layout](https://www.maturin.rs/project_layout.html) ✔ · [uv §Using tools](https://docs.astral.sh/uv/guides/tools/) ✔ · [crates.io API ratatui](https://crates.io/api/v1/crates/ratatui) ✔ · [crates.io API crossterm](https://crates.io/api/v1/crates/crossterm) ✔
-
----
-
-*Plan redactado por Moctezuma (tlatoani) el 2026-11-19. Sin código implementado: este documento y `tasks/todo.md` son la única entrega de esta sesión.*
-
----
-
-## 11. Fase 6.6 — resiliencia offline y rollback cancelable (H6/H7/H9)
-
-> **Estado:** planificado el 2026-11-20 · tlatoani: Moctezuma · orden del dueño 2026-11-20
-> **Fuente de verdad:** [docs/BACKLOG.md](../docs/BACKLOG.md) §2 US-H6/H7/H9 (edge case 2026-11-20) + §4 D-009 + [ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md)
-> **Restricción vigente del dueño:** **no se publica en ningún gestor de paquetes.** Solo se prepara y se verifica en local.
-> **Alcance documental de este cambio:** ADR-016 (único fichero nuevo del cambio global; lo crea otro frente) + enmiendas de `spec-installer-wizard` / `spec-embeddings` + BACKLOG §4 D-009 / §8 + estos dos ficheros `tasks/`.
-
-### 11.1 Enunciado canónico del requisito (usar tal cual, no re-inventar)
-
-- **R-offline-1 (preflight):** Antes de escribir cualquier fichero, el wizard comprueba la conectividad mínima que la operación necesita. Si no hay red, cancela la operación con rollback y deja el workspace del usuario exactamente como estaba; muestra error tipado con razón y acción correctiva. No hay modo degradado ni instalación parcial en tiempo de instalación.
-- **R-offline-2 (cancelación en progreso):** Durante la descarga del modelo, el usuario puede cancelar en cualquier momento desde el TUI y con Ctrl+C. La cancelación detiene la descarga, elimina los artefactos parciales y compensa todo cambio ya aplicado (rollback), cancelando la instalación completa. No queda modelo a medias en `.tepochcalli/models/`.
-- **R-offline-3 (integridad):** El rollback restaura el estado previo de los ficheros gestionados usando el backup + journal ya existentes de H7/H8. Notas, PDFs, `.obsidian/` y configuración propia del usuario nunca se tocan. Tras el rollback se verifica que no quedan restos.
-- **R-offline-4 (distinción crítica):** El modo degradado de **runtime** (ADR-007 / `rag_status`) NO cambia: en instalación/cambio de embedder, **sin red = cancelación, no degradación**. «Si la API no responde, se muestra `sin dato` sin fallar la instalación» aplica **solo a la estimación previa de requisitos**, no a la descarga real.
-
-### 11.2 Objetivo
-
-Hacer que H6 (Install), H7 (Update) y H9 (Change Embedder) **fallen limpio**: sin red antes de empezar se cancela sin tocar nada (R-offline-1); con red caída o cancelación del usuario a mitad de descarga se compensa el trabajo ya hecho y no queda modelo parcial (R-offline-2); y el estado previo se restaura y se verifica con el backup + journal que H7/H8 ya usan (R-offline-3). Todo sin una dependencia nueva: se reutiliza `ureq` (ya en `Cargo.toml`, v3) y el patrón de red falsa de `tests/int_fetch_verified.rs`.
-
-### 11.3 Fuera de alcance
-
-- **H8 (Desinstall)**: no se toca; su alcance y su `AGENTS.md` intacto quedan como los fijó T5.
-- **El modo degradado de runtime** de ADR-007 / `rag_status`: no cambia (R-offline-4).
-- **«Sin dato»**: sigue siendo solo la estimación previa de requisitos; no se extiende a la descarga real (R-offline-4).
-- **Publicación** en cualquier registro, cambios en el payload, en el contrato MCP de 7 tools o en el motor RAG: reglas intactas de §9.
-
-### 11.4 Decisiones del dueño (2026-11-20)
-
-| # | Decisión | Alcance | Efecto en el plan |
-| --- | --- | --- | --- |
-| D-6.6-a | **Formalizar con ADR-016 + enmiendas** de `spec-installer-wizard` / `spec-embeddings` | Documental | T12 (en ejecución en este cambio) |
-| D-6.6-b | **Alcance H6 + H7 + H9**; H8 queda fuera | Install, Update, Change Embedder | T13-T16 |
-| D-6.6-c | **Cancelación con rollback, no degradación** en instalación/cambio de embedder | R-offline-1/2/4 | T13, T14, T15 |
-| D-6.6-d | **Cero dependencias nuevas** (R1): reutilizar `ureq` y lo ya en `Cargo.lock` | Sin alta de deps | T13, T14, T17 |
-| D-6.6-e | **La suite por defecto nunca depende de red real**: red falsa en loopback, patrón `int_fetch_verified` | e2e sin red | T17 |
-
-### 11.5 Grafo y tareas por corte
-
-```mermaid
-graph TB
-    T12["T12 · Formalización documental"]
-    T13["T13 · Preflight de red y error tipado"]
-    T14["T14 · Cancelación en progreso + limpieza"]
-    T15["T15 · Journal/backup + compensación"]
-    T16["T16 · TUI estados y mensajes"]
-    T17["T17 · Verificación y cierre"]
-    T12 --> T13
-    T13 --> T14
-    T14 --> T15
-    T15 --> T16
-    T16 --> T17
-```
-
-**Orden:** T12 (contrato) → T13/T14/T15 (núcleo, secuencial por compartir las fases de instalación) → T16 (TUI sobre el contrato ya cerrado) → T17 (gate). Igual regla que §4: el contrato se congela antes que las adaptaciones (ADR-005).
-
-#### T12 · Formalización documental (ADR-016, enmiendas, BACKLOG D-009/§8)
-
-**Descripción.** Dejar el contrato written-down antes del código: ADR-016 *Accepted*, enmiendas de las dos specs y registro de la decisión D-009. **Es el trabajo que se está ejecutando ahora — en ejecución en este cambio documental** (OTRO frente crea el ADR; este frente solo escribe `tasks/plan.md` y `tasks/todo.md`).
-
-**Criterios de aceptación.**
-
-- [ ] `docs/adr/adr-016-resiliencia-offline-y-rollback.md` existe con `Status: Accepted` y fecha 2026-11-20; decide **cancelación con rollback**, no degradación; registra al menos dos alternativas (degradar / instalación parcial) y por qué se rechazan.
-- [ ] `specs/spec-installer-wizard.md`: enmienda 2026-11-20 con R-offline-1/2/3/4 y los estados de botón/mensajes de cancelación para H6/H7/H9.
-- [ ] `specs/spec-embeddings.md`: enmienda 2026-11-20 que deja explícito que `sin dato` es solo estimación previa (R-offline-4) y que el modo degradado de runtime no cambia.
-- [ ] `docs/BACKLOG.md`: §4 D-009 + filas en §8 + edge case en US-H6/H7/H9.
-
-**Verificación.**
-
-- [ ] `just md-lint` → 0 issues.
-- [ ] `git diff --exit-code` sobre ADR-007/008/014/015 → 0 líneas (no se reescriben decisiones Accepted).
-
-**Dependencias:** ninguna. **Ficheros:** ADR-016 (nuevo), 2 specs, BACKLOG. **Alcance:** M. **Gate:** contrato congelado; sin él T13 no arranca.
-
-#### T13 · Preflight de red y error tipado antes de escribir (R-offline-1)
-
-**Descripción.** Comprobar la conectividad mínima que la operación necesita **antes del primer write** de H6/H7/H9; si falla, cancelar con rollback y error tipado con razón + acción correctiva. Sin modo degradado.
-
-**Criterios de aceptación.**
-
-- [ ] Un preflight con `ureq` (ya en `Cargo.toml`, sin dep nueva) valida el endpoint que la operación necesita con timeout corto y fallo rápido.
-- [ ] Sin red ⇒ **ningún fichero escrito**; error tipado del wizard con razón y acción correctiva (no texto libre, no PANIC).
-- [ ] El preflight corre **antes** de cualquier fase de escritura de `application/update.rs` y del swap de H9.
-- [ ] `sin dato` de la estimación previa **no** cuenta como preflight (R-offline-4).
-
-**Verificación.**
-
-- [ ] Test sin red (red falsa que devuelve fallo): falla con error tipado y `git status` del vault temporal queda limpio — **cero ficheros**.
-- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes.
-
-**Dependencias:** T12. **Ficheros:** `src/application/` (preflight + taxonomía de error), `tests/int_offline_preflight.rs` (nuevo). **Alcance:** M. **Gate:** checkpoint 1.
-
-#### T14 · Cancelación de descarga en progreso + limpieza de parciales (R-offline-2)
-
-**Descripción.** Durante la descarga del modelo, cancelar desde el TUI y con Ctrl+C: detener la descarga, borrar parciales y compensar lo ya aplicado, cancelando la instalación completa.
-
-**Criterios de aceptación.**
-
-- [ ] La descarga escucha una señal de cancelación compartida por el botón del TUI y Ctrl+C; al dispararse, la petición `ureq` se aborta y el stream se cierra.
-- [ ] Los bytes parciales se escriben a un fichero temporal y se eliminan en **todas** las salidas (éxito, error, cancelación).
-- [ ] Tras cancelar a mitad, `.tepochcalli/models/` queda **sin modelo a medias** (ni el temporal ni un directorio de versión incompleto).
-- [ ] La cancelación propaga rollback (T15) y la instalación se aborta completa, no solo la descarga.
-
-**Verificación.**
-
-- [ ] Test `int_` con servidor loopback que entrega el cuerpo a trozos y se cancela a mitad: no queda ningún fichero bajo `.tepochcalli/models/`.
-- [ ] Test de Ctrl+C simulado (señal inyectada al canal de cancelación, sin matar el proceso de test).
-- [ ] `just rust-test /tmp/opencode/cargo-target` verde.
-
-**Dependencias:** T13. **Ficheros:** `src/application/` (descarga + cancelación), `src/adapters/` (señal), `tests/int_download_cancel.rs` (nuevo). **Alcance:** M. **Gate:** checkpoint 1.
-
-#### T15 · Journal/backup + compensación y verificación post-rollback (R-offline-3)
-
-**Descripción.** Reutilizar el backup + journal de H7/H8 para compensar cambios ya aplicados en H6/H7/H9, y verificar que no quedan restos. Notas, PDFs, `.obsidian/` y config propia del usuario: nunca se tocan.
-
-**Criterios de aceptación.**
-
-- [ ] El journal registra cada fichero gestionado tocado (mismo mecanismo que el rollback de `application/update.rs` de T5), antes de tocarlo.
-- [ ] Preflight fallido (T13) y cancelación a mitad (T14) invocan la **misma** compensación; no hay dos caminos de rollback divergentes.
-- [ ] Tras el rollback, los ficheros gestionados quedan **byte-idénticos** al estado previo (comparación de bytes, no solo existencia).
-- [ ] Test de no-interferencia: `00-resources/`, `.obsidian/` y un fichero de config propio del usuario siguen byte-idénticos tras forzar rollback en H6, H7 y H9.
-
-**Verificación.**
-
-- [ ] Tests `int_` que inducen fallo en cada fase y comparan el árbol completo del vault temporal antes/después.
-- [ ] `just rust-test /tmp/opencode/cargo-target` y `just rust-ci /tmp/opencode/cargo-target` verdes.
-
-**Dependencias:** T14. **Ficheros:** `src/application/` (journal/compensación), `tests/int_rollback_integrity.rs` (nuevo). **Alcance:** M. **Gate:** checkpoint 1.
-
-#### T16 · TUI: estados de botón, razón visible y mensajes de cancelación/rollback (H6/H7/H9)
-
-**Descripción.** Exponer en la TUI lo que el núcleo ya hace: progreso con botón de cancelación, razón visible cuando la red no está disponible, y confirmación de cancelación/rollback. Misma regla de H5: botón deshabilitado con razón, nunca oculto.
-
-**Criterios de aceptación.**
-
-- [ ] Durante la descarga, el botón de cancelar está habilitado y conectado a la señal de T14; el resto de botones deshabilitados con razón visible «descarga en curso».
-- [ ] Sin red en preflight: el error tipado de T13 se muestra con razón y acción correctiva; no se ofrece «modo degradado» como salida.
-- [ ] Tras cancelar/rollback, mensaje visible que confirma que el workspace quedó como estaba (R-offline-3).
-- [ ] `HeadlessUi` y `--non-interactive` siguen sin regresión: la cancelación se puede inyectar por índice/señal en tests.
-
-**Verificación.**
-
-- [ ] `tests/e2e_ui.rs` ampliado con los 3 estados nuevos (descarga, sin red, post-rollback).
-- [ ] `just rust-ci /tmp/opencode/cargo-target` verde; 33 call sites del puerto `Ui` intactos.
-
-**Dependencias:** T15. **Ficheros:** `src/ports/ui.rs` (sin cambiar firmas existentes si basta), `src/adapters/ui_ratatui.rs`, `src/adapters/ui.rs`, `tests/e2e_ui.rs`. **Alcance:** M. **Gate:** checkpoint 2.
-
-#### T17 · Verificación y cierre: gates + e2e con red falsa
-
-**Descripción.** Evidencia final: la suite por defecto **nunca** usa red real; los escenarios offline se ejercitan contra un servidor loopback, con el patrón de `int_fetch_verified.rs`.
-
-**Criterios de aceptación.**
-
-- [ ] Todo test de red de la fase usa loopback o es `#[ignore]` con receta explícita, igual que `int_model_availability.rs`; `just rust-test` / `just ci` pasan sin red.
-- [ ] Recorrido e2e sobre vault temporal: H6/H7/H9 × {sin red, cancelación a mitad}, con comparación byte-a-byte del árbol antes/después.
-- [ ] `just quality` · `just ci` · `just rust-ci /tmp/opencode/cargo-target` · `just md-lint` → 0 issues.
-- [ ] Cierre documental: WORKFLOW §Phase 6.6 con métricas medidas, TECH_DEBT con la deuda esperada de §11.8, BACKLOG §8.
-
-**Verificación.**
-
-- [ ] Transcript del recorrido en el cuerpo del commit; `git status --short` sin artefactos ni modelos parciales.
-- [ ] `grep -rn 'https://huggingface' crates/tepochcalli/tests/` → solo en tests `#[ignore]`.
-
-**Dependencias:** T16. **Ficheros:** `tests/`, `Justfile` (receta de e2e con red falsa), docs de cierre. **Alcance:** M. **Gate:** checkpoint 3.
-
-### 11.6 Tabla de asignación (subagentes · skills · herramientas · recursos)
-
-| Tarea | Subagente principal | Subagente de apoyo | Skills | Herramientas | Recursos |
+| subagents | criteria | skills | tools | resources | conventions |
 | --- | --- | --- | --- | --- | --- |
-| **T12** | `docs-writer` | `code-reviewer` | `documentation-and-adrs`, `spec-driven-development` | shell | ADR-016 + BACKLOG §4/§8 (interno) |
-| **T13** | `rust-engineer` | `code-reviewer` | `rust-best-practices`, `test-driven-development`, `error-handling-patterns` | shell (`just`) | `ureq` 3 (ya en lock) · `int_fetch_verified.rs` (interno) |
-| **T14** | `rust-engineer` | `code-reviewer` | `rust-best-practices`, `test-driven-development` | shell (`just`) | servidor loopback · `crossterm` (ya en lock) |
-| **T15** | `rust-engineer` | `software-architect` | `clean-ddd-hexagonal`, `design-patterns` (Command/compensación) | shell (`just`) | rollback de `application/update.rs` (interno) |
-| **T16** | `rust-engineer` | `code-reviewer` | `ratatui`, `domain-cli`, `test-driven-development` | shell (`just`) | `src/adapters/ui_ratatui.rs` (interno) |
-| **T17** | `test-automation-engineer` | `testing-reality-checker` | `test-driven-development`, `ci-cd-and-automation` | shell (`just`) | `int_fetch_verified.rs` · `int_model_availability.rs` (internos) |
+| `rust-engineer` (tras A, paralelo), `test-engineer` (RED), `minimal-change-engineer` (solo mover selección) | Orden demostrable; gate tras F5; ADR-015 intacto; `models/` visible | `test-driven-development`, `incremental-implementation`, `rust-best-practices`, `doubt-driven-development` | `read`, `grep`, `execute`, `shell`, `write`/`edit`, `question` | WORKFLOW C1/C4; diagnosis §Solution 4; spec §§361-367; `flow_cli.rs:49-59`; ADR-015 | `AGENTS.md`, `CODE_STYLE.md`, `rust-test-filter`, `/tmp/opencode`, sin background, trailer |
 
-### 11.7 Checkpoints
+### T3 — Layout de tres zonas, ETA a la derecha y responsive
 
-| # | Momento | Puerta | Si falla |
+Reestructurar `render_menu` (`ui_ratatui.rs:45-51`) y `render_stages` (`:142-148`) en ARRIBA (banner+progreso+spinner+ETA), CENTRO (mensajes/opciones/confirmaciones/selección) y ABAJO (menú H5+contacto). El ETA sale del `format!` de `:173-178` y va a columna derecha con `Layout::horizontal` (el campo `ProgressSpec.eta` ya existe en `ports/ui.rs:36`). Headers con `.wrap()`/elipsis (`:53-55`,`:150-152`); cota mínima para la fila Cancelar; sin pérdida a 80x24/40x12/30x8/20x6. Reescribir los tests que consagran el bug: `int_progress_spec.rs:73-94` y `:97-128`; crear `int_ui_layout.rs` con aserciones posicionales.
+
+**Aceptación:** `int_ui_layout.rs` verifica ETA a la derecha y tres zonas en los 4 tamaños; Cancelar nunca desaparece; headers refluyen o se elipsan; sin dependencias nuevas; `render_progress` (`:211-218`) sigue con `eta: None`.
+
+**Verificación:** `just rust-test-filter int_ui_layout` · `just rust-test-filter int_progress_spec` · `just rust-ci`.
+
+**Instrucciones:** (1) RED: `int_ui_layout.rs` con `TestBackend` a los 4 tamaños y aserciones de posición. (2) Reescribir `int_progress_spec.rs:73-94`/`:97-128`. (3) GREEN: `Layout::horizontal` para cronómetro/ETA en zona superior; `Constraint::{Min,Flex}` en centro; `.wrap(Wrap { trim: true })` en headers. (4) Extraer `ui_selection.rs` si se supera 500 líneas.
+
+**Archivos:** `adapters/ui_ratatui.rs` (+ `ui_selection.rs` si aplica), `tests/int_ui_layout.rs` (nuevo), `tests/int_progress_spec.rs`.
+
+| subagents | criteria | skills | tools | resources | conventions |
+| --- | --- | --- | --- | --- | --- |
+| `rust-engineer` (tras A, paralelo), `test-engineer` (posicionales RED), `rust-refactoring-specialist` (si >500 líneas) | 3 zonas + ETA derecha en 4 tamaños; Cancelar presente; umbral respetado | `rust-best-practices`, `test-driven-development`, `incremental-implementation`, `codebase-design` | `read`, `grep`, `execute` (Context7 ratatui 0.30.2), `shell`, `write`/`edit`, `question` | diagnosis §Symptoms 2-4 y §Solution 2; WORKFLOW C2; `ports/ui.rs:27-37`; `CODE_STYLE.md` §Umbral | `AGENTS.md`, `CODE_STYLE.md`, Justfile-first, `/tmp/opencode`, sin background, trailer |
+
+### T4 — Banner con semántica
+
+`header_line` (`adapters/ui.rs:137-144`) dice «listo para instalar» cuando `installed_version()` (`application/installed.rs:17-20`) devuelve `None`, y muestra la versión instalada cuando exista; reutilizar `READY_NOTICE` (`domain/menu.rs:84`). **No tocar** `installed_version`, `home_view`, `MenuView` ni `installed_state` (`domain/menu.rs:100-112`). Actualizar literales `adapters/ui.rs:363` y `int_ui_menu.rs:66,80`.
+
+**Aceptación:** sin pyproject el banner contiene `directorio listo para instalar`; con versión muestra esa versión (no `—`); `domain/menu.rs` byte-a-byte intacto; máquina H5 sin cambios.
+
+**Verificación:** `just rust-test-filter header_shows_the_resolved_versions` · `just rust-test-filter header` · `just rust-ci`.
+
+**Instrucciones:** (1) RED: ajustar los literales y confirmar fallo. (2) GREEN: `header_line` consulta `view.installed` y usa `READY_NOTICE` si es `None`. (3) `git diff domain/menu.rs` vacío.
+
+**Archivos:** `adapters/ui.rs`, `tests/int_ui_menu.rs`.
+
+| subagents | criteria | skills | tools | resources | conventions |
+| --- | --- | --- | --- | --- | --- |
+| `rust-engineer` (tras A, paralelo), `test-engineer` (literales RED), `minimal-change-engineer` (dominio intacto) | Semántica en dos estados; `READY_NOTICE` reutilizado; dominio sin cambios | `test-driven-development`, `rust-best-practices`, `codebase-design` | `read`, `grep`, `execute`, `shell`, `write`/`edit`, `question` | diagnosis §Solution 3; WORKFLOW C3; `int_ui_menu.rs:50-99`; `menu.rs:84` | `AGENTS.md`, `CODE_STYLE.md`, Justfile-first, `/tmp/opencode`, sin background, trailer |
+
+### T5 — Sin TTY sin regresión + e2e con PTY
+
+Con `--non-interactive`, `HeadlessUi` responde en el mismo orden y no emite marcadores de progreso por stderr (`e2e_ui.rs:288-323`). Añadir `e2e_install_tty.rs` con helper PTY para entrar en `try_init` (los e2e actuales usan pipes: `e2e_ui.rs:121,170,308`) y un test de que `models/` aparece en pantalla. Si el PTY es flaky en fuseblk: degradar a `int_ui_screen_ownership` + demo manual y **declarar la salvedad**, sin maquillar el gate.
+
+**Aceptación:** `e2e_ui.rs:288-323` sigue verde sin `transcurrido`/`ETA`/`█`/`Cancelar — Esc` en stderr; evidencia de ruta TTY o salvedad documentada; cola de `for_install` intacta; 2 tests reescritos en `int_progress_spec.rs` + literales del banner en `int_ui_menu.rs`.
+
+**Verificación:** `just rust-test-filter tty_menu_renders_full_screen_under_a_real_pty` · `just rust-test-filter tty_menu_muestra_la_ruta_models_del_embedder_local` · `just rust-test-filter install_non_interactive_no_escribe_estados_de_progreso` · `just rust-test-filter for_install_answers_the_d7_1_row_indices_from_main` · `just rust-ci`.
+
+**Instrucciones:** (1) RED: crear `e2e_install_tty.rs` con helper PTY y aserción de `models/`; decidir **antes** de escribir código si se añade dependencia — `Cargo.toml` no tiene `portable-pty`/`nix`, y añadirla exige visto bueno del dueño (R1); vía preferida: degradar a `int` + demo manual. (2) `just rust-test-filter install_non_interactive_no_escribe_estados_de_progreso` y `just rust-test-filter for_install_answers_the_d7_1_row_indices_from_main`. (3) GREEN: integrar T1–T4 y demo manual con `uvx tepochcalli --payload <fixture local> --skip-model` sin red. (4) Documentar salvedad si el PTY no es estable.
+
+**Archivos:** `tests/e2e_install_tty.rs` (nuevo), `tests/e2e_ui.rs`, `tests/common/mod.rs` (solo si cambia el contrato), `tests/int_ui_screen_ownership.rs`.
+
+| subagents | criteria | skills | tools | resources | conventions |
+| --- | --- | --- | --- | --- | --- |
+| `test-engineer` (tras T1–T4), `test-results-analyzer` (flakiness), `code-reviewer` (salvedad honesta) | No-TTY sin regresión; PTY o salvedad; 4 tests reescritos | `test-driven-development`, `rust-best-practices`, `doubt-driven-development`, `incremental-implementation` | `read`, `grep`, `execute`, `shell`, `write`/`edit`, `question` | diagnosis §Solution 7; WORKFLOW C5; `e2e_ui.rs:121,170,288-323`; `Cargo.toml:21-23` | `AGENTS.md` (R1), `CODE_STYLE.md` (`int_*`/`e2e_*`), `/tmp/opencode`, sin background, trailer |
+
+### T6 — Receta de densidad de comentarios (banda 10–15 %, sin compactar)
+
+Añadir al `Justfile` una receta que mida densidad de comentarios sobre `.rs`/`.py` versionados de producto, excluyendo gitignored (`venv/`, `db/`, `models/`, `target/`) y el payload congelado `.opencode/skills/**`. Declarar limitaciones: no cuenta docstrings Python ni bloques `/* */`; el recuento varía con `///`/`//!`. Global medido = **7,55 %** ⇒ **no procede limpieza**; Rust `src` = 16,49 % queda como *watch*. Documentar en `docs/BACKLOG.md` §8 (y `docs/CODE_STYLE.md` si aplica), sin tocar código.
+
+**Aceptación:** `just --list` muestra la receta con su nombre real verificado; reproduce 247 ficheros / 61.900 líneas / 4.676 comentarios / 7,55 % global; excluidores y limitaciones declarados; cero cambios de densidad en código.
+
+**Verificación:** `just --list` · ejecutar la receta y comparar con el comando `find`/`awk` de `fix04` · `just md-lint` si se tocó documentación.
+
+**Instrucciones:** (1) Partir del comando validado en el diagnóstico (`git ls-files '*.rs' '*.py' | grep -v '/\.opencode/'` + `awk`). (2) Añadir la receta al Justfile y **verificar su nombre con `just --list` antes de citarlo**. (3) Fila de §8 con el resultado y la salvedad de Rust `src` como watch. (4) No ejecutar limpieza.
+
+**Archivos:** `Justfile`, `docs/BACKLOG.md` §8, `docs/CODE_STYLE.md` (solo si se documenta allí).
+
+| subagents | criteria | skills | tools | resources | conventions |
+| --- | --- | --- | --- | --- | --- |
+| `minimal-change-engineer` (paralelo, sin solapamiento), `docs-writer` (fila §8), `code-reviewer` (excluidores) | 7,55 % reproducido; excluidores declarados; sin compactar | `bash-defensive-patterns`, `documentation-and-adrs`, `incremental-implementation` | `read`, `grep`, `shell`, `write`/`edit`, `execute`, `question` | diagnosis §Política de comentarios; `docs/BACKLOG.md` §8; `Justfile` (sin receta hoy) | `AGENTS.md`, `CODE_STYLE.md`, sin background, commit ≤72 + trailer |
+
+### T7 — Bump one-version a `0.1.0-beta.4` + enmienda de spec y BACKLOG
+
+Bump en los **11 ficheros** del precedente `9b29a4c`: `.github/ISSUE_TEMPLATE/bug_report.yml`, `.github/workflows/release.yml`, `CHANGELOG.md`, `CONTRIBUTING.md`, `THIRD-PARTY.md`, `crates/tepochcalli/Cargo.lock`, `crates/tepochcalli/Cargo.toml`, `crates/tepochcalli/installers/install.ps1`, `crates/tepochcalli/installers/install.sh`, `obsidian-workspace/.tepochcalli/pyproject.toml`, `obsidian-workspace/.tepochcalli/uv.lock`. `Cargo.toml`/`lock` vía `just rust-lock-refresh`; `pyproject.toml`/`uv.lock` vía `just payload-lock` + `just payload-lock-check`; `THIRD-PARTY.md` vía `just third-party`. Enmendar `specs/spec-installer-wizard.md` §§279/316-357/361-367 y añadir fila a `docs/BACKLOG.md` §8. **Sin tag, Release, PyPI ni ADR.**
+
+**Aceptación:** 11 ficheros en `0.1.0-beta.4`; locks regenerados y `payload-lock-check` verde; spec enmendada; sin ADR; `git tag --list 'tepochcalli-v*'` sin tag nuevo.
+
+**Verificación:** `just rust-lock-refresh` → `just payload-lock` → `just payload-lock-check` → `just third-party` → `just rust-ci` → `just quality` → `just md-lint` → `just ci` completo (requisito del dueño; **nunca en GitHub Actions**). Demo manual con CLI reportando `0.1.0-beta.4`.
+
+**Instrucciones:** (1) Confirmar los 11 con `git show --stat 9b29a4c`. (2) Cambiar versión en `Cargo.toml` y `pyproject.toml`; ejecutar `rust-lock-refresh` y `payload-lock`. (3) Regenerar `THIRD-PARTY.md`. (4) Enmendar spec y §8; sin ADR. (5) Verificar tags y gates.
+
+**Archivos:** los 11 + spec + BACKLOG §8 + WORKFLOW §Phase 6.9 (checkpoint final).
+
+| subagents | criteria | skills | tools | resources | conventions |
+| --- | --- | --- | --- | --- | --- |
+| `git-workflow-master` (último), `docs-writer` (spec/BACKLOG), `minimal-change-engineer` (auditar 11), `code-reviewer` (gate final) | 11 alineados; locks listos; sin tag/Release/ADR | `git-workflow-and-versioning`, `documentation-and-adrs`, `incremental-implementation`, `code-review-and-quality` | `read`, `grep`, `shell` (git/just, sin push/tag), `write`/`edit`, `execute`, `question` | `git show --stat 9b29a4c`; WORKFLOW C7; spec §§279/316-357/361-367; BACKLOG §8; ADR-014 | `AGENTS.md`, `CODE_STYLE.md`, `/tmp/opencode`, sin background, commit ≤72 + trailer, sin deploy |
+
+## 5. Checkpoints
+
+| Checkpoint | Tras | Gates (nombres reales del Justfile) | Criterio de paso |
 | --- | --- | --- | --- |
-| **C5** | Tras T12 | ADR-016 Accepted · enmiendas y D-009 presentes · `just md-lint` 0 | se para: sin contrato no arranca el núcleo |
-| **C6** | Tras T13-T15 | `just rust-test` / `just rust-ci` verdes · cero ficheros sin red · cero modelos parciales al cancelar · byte-idéntico tras rollback | se revierte el corte |
-| **C7** | Tras T16-T17 | `just quality` · `just ci` · `just md-lint` 0 · e2e con red falsa y transcript | no se cierra la fase |
+| **A** | T1 | `just rust-test-filter int_ui_screen_ownership` · `just rust-test-filter int_progress_spec` · `just rust-ci` | Dueño único probado; `wc -l ui_ratatui.rs ≤ 500` o extracción; revisión de `code-reviewer` |
+| **B** | T3 | `just rust-test-filter int_ui_layout` · `just rust-test-filter int_progress_spec` · `just rust-ci` | Posiciones ETA/zonas correctas a los 4 tamaños; Cancelar presente; umbral de líneas |
+| **C** | T6 | `just --list` · ejecutar la receta nueva · `just md-lint` si aplica | 7,55 % global reproducido; excluidores declarados; sin compactar. Independiente de A/B |
+| **D** | T7 | `just rust-lock-refresh` · `just payload-lock` · `just payload-lock-check` · `just third-party` · `just rust-ci` · `just quality` · `just md-lint` · `just ci` completo | 11 ficheros en `0.1.0-beta.4`; demo documentada; sin tag nuevo; **sin deploy** |
 
-### 11.8 Riesgos (omens) y mitigación
+Verificación de nombres: `rust-test-filter` (Justfile:374) es la receta Rust; **`test-file` (Justfile:507) es Python, no usarla aquí**. Confirmados: `rust-ci` (386), `quality` (575), `md-lint` (531), `ci` (592), `rust-lock-refresh` (329), `payload-lock` (332), `payload-lock-check` (336), `third-party` (536). La receta de densidad no existe hoy: su nombre se fija en T6 y se verifica con `just --list` antes de citarlo.
 
-| # | Omen | Impacto | Mitigación |
-| --- | --- | --- | --- |
-| R11 | La cancelación por Ctrl+C no se propaga al stream de `ureq` | Queda descarga zombi / modelo a medias | T14 aborta petición y cierra stream; test de señal inyectada; el temporal se borra en todas las salidas |
-| R12 | Dos caminos de rollback divergen (preflight vs cancelación) | Estado inconsistente del vault | T15 los unifica en una sola compensación con journal |
-| R13 | Test de red real se cuela en la suite por defecto | `just ci` depende de red; fallos flaky | T17: loopback o `#[ignore]` con receta, patrón `int_fetch_verified` |
-| R14 | Se confunde `sin dato` (estimación) con degradación de runtime | Se instala sin red contra R-offline-4 | T12 lo fija en spec; T13 excluye la estimación del preflight |
-| R15 | Cancelación/rollback en Windows no medido (Ctrl+C distinto) | Salvedad de cobertura | Deuda esperada (sin ID nuevo): queda `declarado`, no `medido`; no se afirma cobertura |
+Nota: `rust-test-filter` filtra por nombre de función; verificar siempre que ejecuta ≥1 test (`running N tests`); `just rust-ci` es el gate de suite completa.
 
-### 11.9 Referencias
+## 6. Riesgos
 
-- [docs/BACKLOG.md](../docs/BACKLOG.md) §2 US-H6/H7/H9 (edge case 2026-11-20) · §4 D-009 · §8 change log
-- [ADR-016](../docs/adr/adr-016-resiliencia-offline-y-rollback.md) · [ADR-007](../docs/adr/adr-007-seleccion-embedder-instalacion.md) (degradado de runtime, intacto) · [ADR-015](../docs/adr/adr-015-dispositivo-inferencia-wizard.md)
-- [specs/spec-installer-wizard.md](../specs/spec-installer-wizard.md) §Enmienda 2026-11-20 · [specs/spec-embeddings.md](../specs/spec-embeddings.md) §Enmienda 2026-11-20
-- Internos verificados: `crates/tepochcalli/Cargo.toml` (`ureq = "3"`) · `crates/tepochcalli/tests/int_fetch_verified.rs` (red falsa en loopback) · `crates/tepochcalli/tests/int_model_availability.rs` (`#[ignore]` + receta)
-- [docs/CODE_STYLE.md](../docs/CODE_STYLE.md) §Reglas específicas del payload (backup obligatorio) · §Umbral de líneas (este fichero: tramo `<1000`).
-
----
-
-## 12. Fase 6.8 — Fallos visibles, desinstall acotado y progreso honesto (2026-11-25)
-
-> **Estado:** planificado el 2026-11-25 · orden del dueño · **sin despliegue** (no tag, no Release,
-> no PyPI). Fuente: [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.8 + D69 +
-> `docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md` y
-> `docs/diagnosis/fix03-desinstall-lento-por-venv.md`. Fase intermedia: no se renumera ninguna fase.
-
-### 12.1 Decisiones del dueño (confirmadas; no se re-abren)
-
-| # | Decisión | Efecto en el plan |
+| Riesgo | Impacto | Mitigación |
 | --- | --- | --- |
-| D1 | 5 slices T18–T22, orden **B → H8 → UX → A**, checkpoints C8–C12 | **Sin despliegue**: no tag / Release / PyPI |
-| D2 | F6 con gate fallido = **degradado visible**: exit 0 + `none_config` + checklist + `report_failure` (panel + log + causa real) | «exit ≠ 0 + rollback» **RECHAZADA**; sin ADR nuevo |
-| D3 | **Sin T23**: bump `beta.2→beta.3` diferido al prep de release | Cero cambios de versión en esta fase |
-| D4 | H8 **std-only**, sin dependencia directa a `libc` | R1: cero deps nuevas |
-
-### 12.2 Grafo de dependencias
-
-```mermaid
-graph LR
-    T18["T18 · B · error tipado y F6 visible"] --> T19["T19 · H8 · borrado acotado del venv"]
-    T19 --> T20["T20 · UX-1 · progreso real del swap"]
-    T20 --> T21["T21 · UX-2 · progreso en los 3 flujos"]
-    T21 --> T22["T22 · A · causas del embed-check y cierre"]
-    T18 -.->|"comparte flow_contract.rs"| T22
-```
-
-**Orden:** B → H8 → UX → A. T20 consume el contrato de error congelado por T18; T21 reutiliza la `ProgressSpec` de T20 y hereda la exclusividad de `maintenance.rs` de T19; T22 comparte `flow_contract.rs` con T18 (un solo dueño) y se entrega al final.
-
-### 12.3 T18 — Error tipado del gate y fallo F6 visible (B)
-
-**Capability:** conservar la causa del `embed-check` hasta el panel y hacer visible un fallo de F6 sin cambiar la degradación exit 0.
-
-**Criterios:** `application/flow_contract.rs:80-98` `parse_gate` conserva `error_code` y `detail` en un tipo portador; `ok:false` ⇒ nueva variante tipada `WizardError::ModelLoadFailed` en vez de `ModelInvalid`. `domain/error.rs:39-41,112-119`: `ModelInvalid` sigue reservado al pre-filtro HF de la ruta 3 (`spec-embeddings.md:153`, ADR-008:50); variante nueva con código propio en rango 40+ (45 propuesto), `e_star = None`, fila en `EXIT_CODES`; el enum sigue `Copy` (el `detail` viaja en el portador). `cli/install.rs:437-464`: `UserAborted`/`Internal`/`OfflineNoCache` sin cambios; cualquier otro error ⇒ `compensate_phase6` → `none_config` → `mark_phase_done(F6)` → `Ok(Phase6Report::configure_later())`, exit 0. `cli/install_phases.rs:299-302`: el consumidor invoca `report_failure` con la causa degradada e ignora el `u8` para preservar exit 0; la rama degradada NO llama a `report_failure` desde `cli/install.rs`. CERO rastro de «exit ≠ 0 + rollback» para F6. Tests: ampliar `e2e_install_atomicity.rs:266-299` y `e2e_failure_panel.rs:51-73` (panel + log + causa real, checklist en stdout, `status.code() == Some(0)`); nuevo `tests/int_gate_errors.rs` (fallo de red vs carga → códigos distintos; ningún fallo de red etiquetado `ModelInvalid`); corregir `application/embedder_gate.rs:261-271` y `tests/int_swap_run.rs:242-262` que pinean el mapeo viejo. `docs/BACKLOG.md §8` fila sin ADR.
-
-**Verificación:** `just rust-test-filter int_gate_errors`; `just rust-test-filter f6_failure`; `just rust-test-filter degraded_install_prints_the_reentry_checklist_on_stdout`; `just rust-ci /tmp/opencode/cargo-target`.
-
-**Ficheros:** `src/application/flow_contract.rs`, `src/domain/error.rs`, `src/cli/install_phases.rs`, `src/cli/install.rs` (sólo el portador de causa), `src/application/embedder_gate.rs` (tests), `tests/int_gate_errors.rs` (nuevo), `tests/e2e_install_atomicity.rs`, `tests/int_swap_run.rs`, `docs/BACKLOG.md`.
-
-**Dependencias:** ninguna; va primero (B). T20 consume el contrato congelado; T22 añade el fallback sobre el mismo `flow_contract.rs`.
-
-**Instrucciones deterministas — HACER:** separar causas en el portador; añadir variante y fila en `EXIT_CODES`; propagar causa al consumidor en `install_phases.rs:299`; invocar `report_failure` ignorando su código; actualizar tests. **NO HACER:** convertir F6 en fallo duro; añadir rollback; cambiar `Ok(configure_later())`, exit 0 ni `none_config`; reeditar ADRs; tocar H5, el puerto `Ui` ni `run_cancellable`; añadir dependencias; hacer commits.
-
-### 12.4 T19 — Borrado acotado y paralelo del venv en H8 (C)
-
-**Capability:** borrar el runtime grande sin cuelgo, con invariante de no-salir-del-vault probado, usando sólo `std`.
-
-**Criterios:** `maintenance.rs:244` en Unix `remove_dir_all` → helper bottom-up con `std::thread::scope` N=8; `#[cfg(windows)]` conserva `std::fs::remove_dir_all`. Helper std-only: `symlink_metadata` + `DirEntry::file_type()` (nunca sigue symlinks) + rutas canónicas verificadas contra la raíz del vault; test con symlink interno que apunta fuera: no se sigue y el destino externo queda intacto. `maintenance.rs:52-57` y `:331-368` byte-idénticos; backup `:220-225`, panel de interrupción `:227-237`, 3 scopes (`:47`), privacidad 0700/0600 + `.gitignore "*"` (`:301-303`) intactos. Reutilizar `map_fs` (`:277-283`) y `NotFound` tolerado (`:248`), cancelación por entrada (`:227`). Contadores `entries_removed`/`workers_used`. `grep -n 'libc' crates/tepochcalli/Cargo.toml` vacío; sin deps nuevas. Nuevo `tests/e2e_desinstall_large_venv.rs`: vault temporal con venv sintético, 3 scopes borrados sin restos, notas/PDFs/`.obsidian/` byte-idénticos, destino externo intacto, backup con nombre. `docs/BACKLOG.md §8` fila sin ADR.
-
-**Verificación:** `just rust-test-filter e2e_desinstall_large_venv`; `just rust-test-filter uninstall`; grep de `libc` vacío; diff de `maintenance.rs:52-57,331-368` = 0; `just rust-ci /tmp/opencode/cargo-target`.
-
-**Ficheros:** `src/application/maintenance.rs`, `tests/e2e_desinstall_large_venv.rs` (nuevo), `tests/int_uninstall_backup.rs` (sólo si hace falta), `docs/BACKLOG.md`.
-
-**Dependencias:** sin dependencia de código de T18; orden fijado B → H8. T21 vuelve a tocar `maintenance.rs`, por eso va después.
-
-**Instrucciones deterministas — HACER:** helper con `std::thread::scope`, 8 workers, bottom-up, `symlink_metadata` + canonicalización, `map_fs`, contadores, test de symlink saliente. **NO HACER:** añadir `libc` ni dep; tocar rangos 52-57 y 331-368; cambiar scopes, backup, paneles, rollback ni privacidad; `rm -rf`/`just clean` desde el código; `strace` ni aseveraciones de tiempo de pared; tocar la rama Windows; hacer commits.
-
-### 12.5 T20 — Progreso real en el swap (UX-1)
-
-**Capability:** barra monótona y tiempo honesto en los 6 hitos del swap, sin widgets nuevos.
-
-**Criterios:** `ports/ui.rs`: `ProgressSpec`/`Progress`/`run_stages` aditivos con default no-op; `run_cancellable` y sus 7 call sites de producto + 3 fakes byte-idénticos. `adapters/ui_ratatui.rs:111-255`: barra monótona 0→100 por hito (swap 6), spinner ASCII `|/-\` en fila propia alimentado por el watcher existente, cronómetro `mm:ss`. ratatui 0.30.2 no tiene widget `Spinner` (verificado con Context7 ID `/websites/rs_ratatui_ratatui/v0.30.2`; no repetir búsqueda ni añadir dep). ETA sólo con la estimación declarada (`swap.rs:284-300`, `estimate_secs`); sin declaración ⇒ literal `ETA —`; MB de `presets.toml` nunca se convierten en segundos. Nuevo `tests/int_progress_spec.rs`: 6 hitos monótonos y ETA honesta incluido `ETA —`.
-
-**Verificación:** `just rust-test-filter int_progress_spec`; diff de `run_cancellable` y los 3 fakes (`tests/common/mod.rs`, `tests/int_gate_cancel.rs`) = 0; `just rust-ci /tmp/opencode/cargo-target`.
-
-**Ficheros:** `src/ports/ui.rs`, `src/adapters/ui_ratatui.rs`, `src/application/swap.rs`, `tests/int_progress_spec.rs` (nuevo).
-
-**Dependencias:** T18 (contrato de error congelado); T21 reutiliza la misma `ProgressSpec`.
-
-**Instrucciones deterministas — HACER:** `ProgressSpec` como módulo profundo (interfaz pequeña, lógica de frames/ETA dentro); frames ASCII del watcher. **NO HACER:** cambiar firmas existentes de `Ui`; introducir widget/dep de spinner; inventar conversiones MB→segundos; tocar la rama degradada de F6 ni el checklist; duplicar el render por hito; hacer commits.
-
-### 12.6 T21 — Propagación del progreso a install, update y desinstall (UX-2)
-
-**Capability:** el mismo contrato de progreso en los tres flujos restantes, sin tocar la cancelación.
-
-**Criterios:** install 7 hitos (`cli/install_phases.rs`), update 1 (`application/update.rs`), desinstall `present.len()+1` (`application/maintenance.rs`), todos con la `ProgressSpec` de T20. `run_cancellable`, sus 7 call sites (`embedder_gate.rs:48`, `maintenance.rs:198`, `update.rs:60`, `install_phases.rs:165,243,265,315`) y los 3 fakes (`CancellingUi`, `TapUi`, `GateUi`) sin cambios (diff 0). `HeadlessUi` y `--non-interactive` sin regresión; el spinner/barra no enmascara paneles de error. `tests/e2e_ui.rs` ampliado con los estados de progreso de los tres flujos.
-
-**Verificación:** `just rust-test-filter progress`; `just rust-test-filter e2e_ui`; `just rust-ci /tmp/opencode/cargo-target`.
-
-**Ficheros:** `src/cli/install_phases.rs`, `src/application/update.rs`, `src/application/maintenance.rs`, `src/adapters/ui_ratatui.rs`, `tests/e2e_ui.rs`, `tests/common/mod.rs` (sólo si el default basta).
-
-**Dependencias:** T20 (interfaz) y T19 (exclusividad de `maintenance.rs`). No tocar la lógica de degradación de T18, sólo el hito visual.
-
-**Instrucciones deterministas — HACER:** envolver cada fase con `run_stages` usando la `ProgressSpec` compartida; contar los hitos exactos. **NO HACER:** reimplementar `Progress` por flujo; modificar `run_cancellable` ni sus fakes; cambiar el checklist de stdout de F6; ocultar paneles de error; hacer commits.
-
-### 12.7 T22 — Causas del `embed-check` y cierre documental (A)
-
-**Capability:** tres causas distinguibles en el flow y fallo desconocido con fallback en el consumer.
-
-**Criterios:** `__main__.py:111-136` `cmd_embed_check` distingue no-embedding / descarga-red / carga-dispositivo con `error_code` + `detail` reales en un único seam; actualizar docstring `:116-120` y retirar el `shortcut` obsoleto. Consumer `flow_contract.rs`: `error_code` desconocido ⇒ fallback tipado, nunca `ModelInvalid` por defecto. `tests/unit/test_flow_cli.py`: 3 causas con códigos distintos + caso desconocido con fallback; sin red real (fakes de la factoría del embedder). Cierre documental: `docs/BACKLOG.md §8`, `CHANGELOG.md ## [Unreleased]`, `docs/TECH_DEBT.md` TD-65. Sin bump: Cargo.toml, pyproject.toml y los 4 ficheros one-version conservan su versión; no hay T23.
-
-**Verificación:** `just python-test-file test_flow_cli`; `just python-test-unit`; `just md-lint`; `grep -n 'beta.3' crates/tepochcalli/Cargo.toml obsidian-workspace/.tepochcalli/pyproject.toml` vacío.
-
-**Ficheros:** `obsidian-workspace/.tepochcalli/flow/tepochcalli_flow/__main__.py`, `tests/unit/test_flow_cli.py`, `crates/tepochcalli/src/application/flow_contract.rs` (fallback), `docs/BACKLOG.md`, `CHANGELOG.md`, `docs/TECH_DEBT.md`.
-
-**Dependencias:** independiente (A), se entrega al final por el orden B→H8→UX→A; comparte `flow_contract.rs` con T18 ⇒ un solo dueño.
-
-**Instrucciones deterministas — HACER:** único punto de clasificación de excepciones; propagar `detail` sin recortarlo a texto fijo; fallback en el consumer. **NO HACER:** reimplementar taxonomía de HF/transformers; añadir deps; convertir MB en segundos; publicar/taguear/subir PyPI; cambiar versión a beta.3; reeditar ADRs; hacer commits.
-
-### 12.8 Tabla de asignación (subagentes · skills · herramientas · recursos)
-
-| Tarea | Subagentes | Skills | Tools | Recursos | Convenciones |
-| --- | --- | --- | --- | --- | --- |
-| T18 | rust-engineer (dueño), code-reviewer | rust-best-practices, error-handling-patterns, clean-ddd-hexagonal, test-driven-development | shell (`just rust-test-filter`, `just rust-ci`), codebase-memory-mcp | fix02-*.md, WORKFLOW D69, spec-embeddings.md:153, ADR-008:50 | Sin ADR; sin rollback/exit≠0; un dueño por fichero |
-| T19 | rust-engineer, code-reviewer | rust-best-practices, design-patterns, test-driven-development, doubt-driven-development | shell, codebase-memory-mcp | fix03-*.md, maintenance.rs | R1 cero deps (sin libc); 0700/0600 + .gitignore intactos |
-| T20 | rust-engineer, software-architect | codebase-design, clean-ddd-hexagonal, api-and-interface-design, rust-best-practices | shell, context7 (ya resuelto) | swap.rs:284-300, ui_ratatui.rs:111-255 | Ui aditivo; run_cancellable intacto |
-| T21 | rust-engineer, code-reviewer | rust-best-practices, test-driven-development, code-review-and-quality | shell | install_phases.rs, update.rs, maintenance.rs, e2e_ui.rs | Un dueño por fichero (tras T19); sin regresión --non-interactive |
-| T22 | python-pro, rust-engineer, test-engineer | python-testing-patterns, test-driven-development, documentation-and-adrs, changelog-generate, tech-debt | shell, codebase-memory-mcp | test_flow_cli.py, __main__.py:111-136, D69 | Sin bump; sin publicación; commits atómicos |
-
-### 12.9 Checkpoints C8–C12
-
-| # | Momento | Puerta | Si falla |
-| --- | --- | --- | --- |
-| **C8** | Tras T18 | `just rust-test-filter int_gate_errors` + `just rust-test-filter f6_failure` → `error_code`/`detail` preservados; ningún fallo de red ⇒ `ModelInvalid`; F6: exit 0 + `provider = "none"` + panel/log con causa real + checklist en stdout | revertir T18, **NO** sustituir por exit≠0/rollback |
-| **C9** | Tras T19 | `just rust-test-filter e2e_desinstall_large_venv` + `grep -n libc crates/tepochcalli/Cargo.toml` → 3 scopes borrados sin restos, notas/`.obsidian/` byte-idénticos, symlink externo intacto, backup byte-idéntico, sin dep nueva | revertir T19 |
-| **C10** | Tras T20 | `just rust-test-filter int_progress_spec` → 6 hitos monótonos 0→100, `ETA —` sin estimación, spinner ASCII en fila propia | revertir T20 |
-| **C11** | Tras T21 | `just rust-ci /tmp/opencode/cargo-target` → `run_cancellable` + 7 call sites + 3 fakes con diff 0; fmt/clippy limpios; `--non-interactive` sin regresión | revertir T21 |
-| **C12** | Tras T22 | `just python-test-file test_flow_cli` + `just md-lint` → 3 causas + fallback; BACKLOG §8 / CHANGELOG `[Unreleased]` / TD-65 presentes; sin `beta.3` en Cargo.toml ni pyproject.toml | no cerrar la fase |
-
-**Regla de cierre:** `just ci` corre **UNA sola vez** al cierre (tras C12), nunca por tarea; `just coverage` **NO** se corre en esta fase; `just rust-ci` sí es gate por tarea; `CARGO_TARGET_DIR` siempre bajo `/tmp/opencode/`; nada en segundo plano.
-
-### 12.10 Referencias de la fase
-
-- [docs/WORKFLOW.md](../docs/WORKFLOW.md) §Phase 6.8 · ola D69 (tabla §8) · [docs/BACKLOG.md](../docs/BACKLOG.md) §8
-- [docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md](../docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md) · [docs/diagnosis/fix03-desinstall-lento-por-venv.md](../docs/diagnosis/fix03-desinstall-lento-por-venv.md)
-- [specs/spec-embeddings.md](../specs/spec-embeddings.md):153 · [ADR-008](../docs/adr/adr-008-transparencia-hardware-cambio-modelo.md):50 · `crates/tepochcalli/src/application/maintenance.rs` · `swap.rs:284-300`
-- Context7 `/websites/rs_ratatui_ratatui/v0.30.2` — sin widget `Spinner` (ya resuelto; no repetir búsqueda).
+| Handshake watcher↔selección deadlock-prone | Alto — F6 vuelve a bloquearse | Limpiar estado en todo exit y abort tipado; checkpoint A |
+| 6 fakes y 4 tests consagran contrato/orden actuales | Alto — regresión silenciosa | Seam que conserva `Ui::select`; RED primero en T1/T2 |
+| `--resume` y cola `HeadlessUi::for_install` roban el índice | Medio — embedder distinto | Aserciones de orden en `int_install_f4_f5.rs` / `int_embedder_menu.rs` |
+| `ui_ratatui.rs` a 494 líneas | Medio — gate de estilo | Extraer `ui_selection.rs` al pasar de 500; checkpoints A/B |
+| PTY flaky en fuseblk | Medio — gate rojo no reproducible | Degradar a `int_ui_screen_ownership` + demo manual y declarar salvedad; **no maquillar** |
+| `dialoguer` sigue en `Cargo.toml:22` | Bajo — dependencia aparentemente muerta | Queda para `input`/`input_secret`/`line_menu` (R1) |
+| H9 swap/device prompt con el mismo patrón | Medio — deuda futura | Declarar como deuda, fuera de esta fase |
+| **Borrado de los dos ficheros de tareas** | Medio — referencias rotas | Sobrescritura completa + `grep` de referencias entrantes; reportar sin modificar otros docs |
+| Locks desincronizados en el bump | Medio — CI rojo | `rust-lock-refresh` + `payload-lock` + `payload-lock-check` en checkpoint D |

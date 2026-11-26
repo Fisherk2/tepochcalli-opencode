@@ -6,7 +6,7 @@
 > siguiente NO arranca sin gate verde. Los contratos (specs) se congelan en Phase 0; cambiar
 > un contrato en vuelo requiere ADR, no solo código.
 
-**Estado:** el cierre de cada fase está en la tabla de completadas y terminadas de §2; la tabla de pendientes está vacía y lista para futuras fases. GitHub Actions corre desde
+**Estado:** el cierre de cada fase está en la tabla de completadas y terminadas de §2; la fase 6.9 quedó completada el 2026-11-25, lista para desplegar y sin deploy. GitHub Actions corre desde
 2026-11-24 (run `45316624910`, gates `gitleaks`/`python`/`rust` verdes). Phase 6.8 quedó
 **CERRADA EN LOCAL el 2026-11-25 con veredicto GO, sin desplegar**: sin tag, Release ni PyPI;
 el bump `beta.2→beta.3` está diferido al prep de release.
@@ -24,6 +24,7 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 | 6 | E2E Acceptance | Validar los 7 criterios de BACKLOG.md sobre sistema completo | Aceptación: evidencia de los 7 criterios en docs/acceptance/ (criterio 6 con salvedad TD-36) en HW mínimo (8GB CPU-only) y corpus 10k/1k; docs de producto alineados |
 | 6.5 | Wizard flujo destino (H5-H11) | Materializar el estado objetivo del instalador: canal uvx, TUI full-screen con botones por estado, versión desde pyproject, Update/Desinstall ampliados, selección de device/embedder | **COMPLETADA 2026-11-19** — 4 precondiciones del gate de entrada resueltas (ADR-014/015 Accepted; deps `maturin`/PyPI + `ratatui`/`crossterm` aprobadas; one-version alineada en `0.1.0`; enmiendas 2026-11-18 Accepted). Verificado: rueda local por `uvx --from`, H5 en TTY real, install/update/desinstall e2e con backup, `just ci` exit 0 (45m49s), `just md-lint` 0. **Salvedades declaradas:** VM limpia/`uvx` desde PyPI (no se publica), TTY en Windows (TD-52), Change Embedder e2e, payload del checkout (TD-53) |
 | 6.8 | Fallos visibles, desinstall acotado y progreso honesto | Corregir 3 bugs y añadir 3 mejoras UX de cara a `beta.3`, sin desplegar | **CERRADA EN LOCAL 2026-11-25 — GO, sin desplegar** — gate: C8–C12 verdes + `just rust-ci` y `just quality`; bump y tag diferidos al prep de release |
+| 6.9 | — | *(hueco — fase terminada el 2026-11-25; ver §2)* | — |
 
 ## 2. Phase Breakdown
 
@@ -56,13 +57,23 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 | 6.7 | Terminada | Sin rueda ni binarios (TD-71), workflow nuevo sin ejecutar (TD-72) | Salvedades declaradas (TD-71; TD-72) |
 | 6.8 | Terminada | F6 degradaba sin panel; `E_MODEL_INVALID` aplanaba tres causas | Panel + log + causa real, con exit 0 y `none_config`, política intacta; seam con 3 códigos + fallback `ModelLoadFailed` (`docs/diagnosis/fix02-wizard-gate-modelinvalid-y-f6-silencioso.md`; ADR-016) |
 | 6.8 | Terminada | `remove_dir_all` secuencial sobre ~51 k entradas; barra ondulada | Helper bottom-up con 8 workers, std-only sin `libc`; progreso monótono por hitos + spinner ASCII + cronómetro + ETA declarada (`docs/diagnosis/fix03-desinstall-lento-por-venv.md`; C8–C12) |
+| 6.9 | Terminada | Doble dueño del TTY en F6; ETA dentro del spinner; banner con guion; k/j no escribibles en diálogos; foco invisible a 20x6 | Watcher único dueño del frame, tres zonas responsive, banner semántico, selección antes de F3 con gate tras F5, secretos sin eco, avisos con ack; bump `0.1.0-beta.4` en 11 ficheros; `just ci` 9/9 verde + PTY real; GO sin deploy (`docs/diagnosis/fix04-tui-f6-solapamiento-y-eta.md`; `specs/spec-installer-wizard.md` enmienda 2026-11-25; `docs/BACKLOG.md` §8; commits `03525ac`..`61c5a70`) |
 
 ### Fases pendientes
 
-> Sin fases pendientes a 2026-11-25. Esta tabla queda preparada para las fases que el dueño autorice.
+Protocolo de edición del summary de fases:
 
-| Fase | Objetivo | Dependencias | Gate de salida |
-| --- | --- | --- | --- |
+1. Cuando se establecen una o más fases nuevas, se escriben aquí con su summary: objetivo, entregables, dependencias y gate.
+2. Al terminar o completar una fase, se añade una fila a la tabla de fases terminadas (§2) y después se elimina su entrada y su summary de esta sección, dejando el hueco correspondiente.
+3. No se crean secciones «Cierre de la fase X» ni summaries de fase al final del documento: la fila en la tabla de terminadas es el único registro de cierre.
+
+Plantilla para el summary de una fase pendiente (copiar la fila; no es una fase real):
+
+| Fase | Nombre | Objetivo | Entregables | Dependencias | Gate (criterio de salida, medible) |
+| --- | --- | --- | --- | --- | --- |
+| `<N>` | `<nombre>` | `<objetivo>` | `<entregables>` | `<dependencias>` | `<gate medible>` |
+
+A 2026-11-26 no hay fases pendientes: la última (6.9) pasó a terminadas y su summary se eliminó; la sección queda reseteada.
 
 ## 3. Testing Strategy per Phase
 
@@ -74,6 +85,7 @@ el bump `beta.2→beta.3` está diferido al prep de release.
 | 4 | ls + grep + revisión humana | tabla 9×4 + matriz de conflictos; permisos V2 | BLUEPRINT APPROVED |
 | 5 | smoke e2e + fixtures D9 | payload del blueprint | golden vault citado; bandejas/frontmatters |
 | 6 | suite TRD §6 + manual | criterios 1-7 | tabla de evidencia en `docs/acceptance/` |
+| 6.9 | PTY + aserciones posicionales + gates Rust | selección en el frame, tres zonas a 80x24/40x12/30x8/20x6, no-TTY sin regresión, bump one-version | propiedad del tty y orden de tools; `just rust-ci` + `just ci` |
 
 `just typecheck` (mypy `--strict`) corre en CI entre `ruff format --check` y `pytest`; superficie: `flow/` en Phase 1 y `flow/` + `mcp/` desde Phase 2 ([CODE_STYLE.md](CODE_STYLE.md)).
 

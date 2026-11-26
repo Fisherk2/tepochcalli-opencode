@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-11-12 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T1
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
-> **Fuente de verdad:** `tasks/plan.md` §5 T1 · `tasks/todo.md` T1 · `docs/acceptance/protocol.md` §1 (host).
+> **Fuente de verdad:** `docs/BACKLOG.md §1 / C6` (criterio vigente; antes `tasks/plan.md` §5 T1 y `tasks/todo.md` T1) · `docs/acceptance/protocol.md` §1 (host).
 > **Jerarquía de evidencia (D8):** todas las cifras de este documento son **`medido`** en el host de
 > referencia (btrfs/NVMe, `/tmp/opencode`) con el intérprete pineado del venv; cada una lleva su comando.
 

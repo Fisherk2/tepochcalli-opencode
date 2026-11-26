@@ -36,6 +36,14 @@ fn draw_stages(spec: &ProgressSpec, progress: &Progress, elapsed: Duration, tick
     terminal.backend().buffer().clone()
 }
 
+/// Fila y columna de la primera aparición de `needle` en el buffer.
+fn position(buffer: &Buffer, needle: &str) -> Option<(usize, usize)> {
+    buffer_text(buffer)
+        .lines()
+        .enumerate()
+        .find_map(|(y, row)| row.find(needle).map(|x| (y, x)))
+}
+
 #[test]
 fn int_progress_spec_seis_hitos_monotonos_llenan_la_barra_en_el_ultimo() {
     let spec = stage_spec(6, Some(Duration::from_secs(12)));
@@ -71,7 +79,7 @@ fn int_progress_spec_seis_hitos_monotonos_llenan_la_barra_en_el_ultimo() {
 }
 
 #[test]
-fn int_progress_spec_sin_estimacion_declarada_la_eta_es_literal() {
+fn int_progress_spec_sin_estimacion_declarada_la_eta_es_literal_y_derecha() {
     let spec = stage_spec(6, None);
     let progress = Progress::new(spec.steps);
     let text = buffer_text(&draw_stages(&spec, &progress, Duration::ZERO, 0));
@@ -86,42 +94,51 @@ fn int_progress_spec_sin_estimacion_declarada_la_eta_es_literal() {
     );
 
     let with_eta = stage_spec(6, Some(Duration::from_secs(12)));
-    let text = buffer_text(&draw_stages(&with_eta, &progress, Duration::ZERO, 0));
+    let buffer = draw_stages(&with_eta, &progress, Duration::ZERO, 0);
+    let eta = position(&buffer, "ETA 00:12")
+        .unwrap_or_else(|| panic!("falta la ETA declarada:\n{}", buffer_text(&buffer)));
+    let clock = position(&buffer, "transcurrido")
+        .unwrap_or_else(|| panic!("falta el cronómetro:\n{}", buffer_text(&buffer)));
+    assert_eq!(eta.0, clock.0, "ETA y cronómetro van en la misma fila");
     assert!(
-        text.contains("ETA 00:12"),
-        "la ETA declarada se muestra:\n{text}"
+        eta.1 > clock.1 + 16,
+        "la ETA va en la columna derecha, no pegada al cronómetro: clock={}, eta={}:\n{}",
+        clock.1,
+        eta.1,
+        buffer_text(&buffer)
     );
 }
 
 #[test]
-fn int_progress_spec_el_spinner_ascii_esta_en_su_propia_fila_y_cambia_con_el_tick() {
+fn int_progress_spec_el_spinner_ascii_va_en_la_fila_de_estado_y_cambia_con_el_tick() {
     let spec = stage_spec(6, Some(Duration::from_secs(12)));
     let progress = Progress::new(spec.steps);
     let mut frames = Vec::new();
 
     for tick in 0..4 {
-        let text = buffer_text(&draw_stages(&spec, &progress, Duration::ZERO, tick));
-        let spinner_rows: Vec<&str> = text
+        let buffer = draw_stages(&spec, &progress, Duration::ZERO, tick);
+        let text = buffer_text(&buffer);
+        let status = text
             .lines()
-            .filter(|line| {
-                line.trim_start()
-                    .chars()
-                    .next()
-                    .is_some_and(|first| matches!(first, '|' | '/' | '-' | '\\'))
-            })
-            .collect();
-        assert_eq!(
-            spinner_rows.len(),
-            1,
-            "un único spinner, en su propia fila (tick {tick}):\n{text}"
+            .find(|line| line.contains("transcurrido"))
+            .unwrap_or_else(|| panic!("sin fila de estado (tick {tick}):\n{text}"));
+        let first = status
+            .trim_start()
+            .chars()
+            .next()
+            .expect("fila de estado no vacía");
+        assert!(
+            matches!(first, '|' | '/' | '-' | '\\'),
+            "el spinner abre la fila de estado (tick {tick}):\n{text}"
         );
-        frames.push(
-            spinner_rows[0]
-                .trim_start()
-                .chars()
-                .next()
-                .expect("spinner row is not empty"),
+        let eta_col = status
+            .find("ETA 00:12")
+            .unwrap_or_else(|| panic!("la ETA debe ir en la fila de estado:\n{text}"));
+        assert!(
+            eta_col > status.find("transcurrido").unwrap_or_default(),
+            "ETA a la derecha del cronómetro, fuera del format! del spinner:\n{text}"
         );
+        frames.push(first);
     }
 
     assert_eq!(frames, vec!['|', '/', '-', '\\'], "frames ASCII |/-\\");

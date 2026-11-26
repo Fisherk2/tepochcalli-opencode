@@ -2,7 +2,7 @@
 
 > **Fecha:** 2026-11-13 · **Fase:** Phase 6 — E2E Acceptance · **Calpulli:** T5
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
-> **Fuente de verdad:** `tasks/plan.md` §Task T5 · `docs/TRD.md` §6 (criterio 6: «sin regresión
+> **Fuente de verdad:** `docs/BACKLOG.md §1 / C6` (criterio vigente; antes `tasks/plan.md` §Task T5) · `docs/TRD.md` §6 (criterio 6: «sin regresión
 > >2× entre tamaños») y §6.2 (umbral fijado en T0/CP-0, **no se toca**) · protocolo de host y FS
 > en [protocol.md](protocol.md) §1 y §6.
 > **Jerarquía de evidencia (D8):** todo lo de aquí es **`medido`** en el host de referencia con el

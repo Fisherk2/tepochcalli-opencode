@@ -67,6 +67,10 @@ fn header_shows_the_resolved_versions_and_embedder_never_a_placeholder() {
         ),
         "header must carry all three facts:\n{up_to_date}"
     );
+    assert!(
+        !up_to_date.contains("directorio listo para instalar"),
+        "an installed version must not show the ready notice:\n{up_to_date}"
+    );
 
     let absent = buffer_text(&draw_view(
         InstalledState::NotInstalled,
@@ -77,8 +81,14 @@ fn header_shows_the_resolved_versions_and_embedder_never_a_placeholder() {
         "sin configurar",
     ));
     assert!(
-        absent.contains("instalada: — · embedder: sin configurar"),
-        "absent runtime renders the dash and the unset embedder:\n{absent}"
+        absent.contains(
+            "Tepochcalli 0.1.0 · directorio listo para instalar · embedder: sin configurar"
+        ),
+        "absent runtime announces a ready directory, never a dash:\n{absent}"
+    );
+    assert!(
+        !absent.contains("instalada: —"),
+        "the dash is gone once the header has the ready notice:\n{absent}"
     );
 }
 

@@ -529,7 +529,49 @@ bench-scale-ratio args="": (python-bench-scale-ratio args)
 # Markdown lint de docs/specs/AGENTS.md/SPEC.md/README.md/CHANGELOG.md (markdownlint-cli2 vía npx).
 # Globs explícitos *.md: un directorio desnudo haría lintear también los PNG de docs/img/.
 md-lint:
-    npx --yes markdownlint-cli2 "docs/**/*.md" "specs/**/*.md" AGENTS.md SPEC.md README.md CHANGELOG.md
+    npx --yes markdownlint-cli2 "docs/**/*.md" "specs/**/*.md" "tasks/**/*.md" AGENTS.md SPEC.md README.md CHANGELOG.md
+
+# `git ls-files` excluye por construcción los gitignored (venv/, db/, models/, target/) y
+# se filtra además el payload congelado `.opencode/`; se mide el árbol de trabajo.
+# Cuenta una línea si tiene `//` o `#` al inicio O precedido de espacio (inline).
+# Limitaciones: no cuenta docstrings Python ni bloques `/* */`; el recuento varía con
+# `///`/`//!` y `#[…]`. Banda 10–15 %; >15 % = watch (fix04 §Política de comentarios).
+# Mide la densidad de comentarios de TODO el codebase versionado (.rs/.py), sin compactar.
+comment-density:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    declare -a names=("Rust src" "Rust tests" "Python flow" "Python mcp" "Python tests" "Otros")
+    declare -a nf=(0 0 0 0 0 0) nl=(0 0 0 0 0 0) nc=(0 0 0 0 0 0)
+    while IFS= read -r -d '' f; do
+        [[ "$f" == */.opencode/* ]] && continue
+        case "$f" in
+            crates/*/src/*) i=0 ;;
+            crates/*/tests/*) i=1 ;;
+            */flow/*) i=2 ;;
+            */mcp/*) i=3 ;;
+            tests/*|*/tests/*) i=4 ;;
+            *) i=5 ;;
+        esac
+        nf[$i]=$(( ${nf[$i]} + 1 ))
+        nl[$i]=$(( ${nl[$i]} + $(wc -l < "$f") ))
+        if [[ "$f" == *.rs ]]; then
+            nc[$i]=$(( ${nc[$i]} + $(awk '/(^|[[:space:]])\/\//{n++}END{print n+0}' "$f") ))
+        else
+            nc[$i]=$(( ${nc[$i]} + $(awk '/(^|[[:space:]])#/{n++}END{print n+0}' "$f") ))
+        fi
+    done < <(git ls-files -z '*.rs' '*.py')
+    printf '%-12s %7s %9s %10s %9s\n' AREA FILES LINES COMMENTS DENSITY
+    for i in "${!names[@]}"; do
+        [[ ${nf[$i]} -gt 0 ]] || continue
+        d=$(awk -v c="${nc[$i]}" -v l="${nl[$i]}" 'BEGIN { if (l) printf "%.2f%%", 100*c/l; else printf "n/a" }')
+        printf '%-12s %7d %9d %10d %9s\n' "${names[$i]}" "${nf[$i]}" "${nl[$i]}" "${nc[$i]}" "$d"
+    done
+    tf=0; tl=0; tc=0
+    for i in "${!names[@]}"; do tf=$((tf+${nf[$i]})); tl=$((tl+${nl[$i]})); tc=$((tc+${nc[$i]})); done
+    d=$(awk -v c="$tc" -v l="$tl" 'BEGIN { if (l) printf "%.2f%%", 100*c/l; else printf "n/a" }')
+    printf '%-12s %7d %9d %10d %9s\n' GLOBAL "$tf" "$tl" "$tc" "$d"
+    awk -v c="${nc[0]}" -v l="${nl[0]}" 'BEGIN { if (l && 100*c/l > 15) printf "WATCH: Rust src >15%% (%.2f%%) — no compactar\n", 100*c/l }'
+    printf 'Nota: no cuenta docstrings Python ni bloques /* */; recuento variable con ///, //! y #[…].\n'
 
 # Genera THIRD-PARTY.md desde el grafo del binario (licencias del `Cargo.lock`).
 # Se regenera al subir de versión; el fichero va commiteado.

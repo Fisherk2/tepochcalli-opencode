@@ -4,7 +4,7 @@
 > **Estado:** entregado; **sin commit** (lo integra el orquestador).
 > **Fuente de verdad:** `docs/BACKLOG.md §1 / C7` — «Pueda procesar distintos formatos de
 > texto, si no, utilizar el convertidor Markdown para que pueda manipularse adecuadamente» ·
-> `tasks/plan.md` §Task T8 · `specs/spec-rag-engine.md` §Fuentes · `specs/spec-markitdown.md`
+> (antes `tasks/plan.md` §Task T8) · `specs/spec-rag-engine.md` §Fuentes · `specs/spec-markitdown.md`
 > §Catálogo y §Cadena de fallback · ADR-009 (D28/D36) y ADR-010 (D41/D49).
 > **Jerarquía de evidencia (D8):** lo de §3 es **`medido`** (wire real por stdio + índice real);
 > las celdas GAP de §4 son `medido` = el mensaje que el wire devuelve; la celda `url` de §5 es
