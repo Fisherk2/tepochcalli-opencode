@@ -110,6 +110,9 @@ impl Ui for TtyUi {
                 title: title.to_string(),
                 body: body.to_string(),
             });
+            // Sin este wait el siguiente `select`/`input` sobrescribe `active`
+            // antes de que el watcher pinte el aviso (100 ms de poll).
+            let _ = dialog.wait();
             return;
         }
         render_panel(title, body);

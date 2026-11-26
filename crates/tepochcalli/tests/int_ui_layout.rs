@@ -58,7 +58,7 @@ fn draw_dialog(width: u16, height: u16, dialog: &Dialog) -> Buffer {
     terminal.backend().buffer().clone()
 }
 
-fn draw_menu(width: u16, height: u16) -> Buffer {
+fn draw_menu(width: u16, height: u16, selected: usize) -> Buffer {
     let spec = menu_spec(InstalledState::Ahead);
     let view = MenuView {
         spec: &spec,
@@ -69,7 +69,7 @@ fn draw_menu(width: u16, height: u16) -> Buffer {
     let mut terminal =
         Terminal::new(TestBackend::new(width, height)).expect("in-memory test backend");
     terminal
-        .draw(|frame| render_menu(frame, &view, 0))
+        .draw(|frame| render_menu(frame, &view, selected))
         .expect("draw into the test buffer");
     terminal.backend().buffer().clone()
 }
@@ -163,7 +163,7 @@ fn int_ui_layout_cancelar_sigue_visible_con_dialog_en_los_cuatro_tamanos() {
 #[test]
 fn int_ui_layout_el_menu_tambien_reserva_tres_zonas() {
     for &(width, height) in &SIZES {
-        let buffer = draw_menu(width, height);
+        let buffer = draw_menu(width, height, 0);
         let header = position(&buffer, "Tepochcalli")
             .unwrap_or_else(|| panic!("sin banner a {width}x{height}:\n{}", buffer_text(&buffer)));
         let install = position(&buffer, "Install")
@@ -185,5 +185,62 @@ fn int_ui_layout_el_menu_tambien_reserva_tres_zonas() {
                 buffer_text(&buffer)
             );
         }
+    }
+}
+
+#[test]
+fn int_ui_layout_el_foco_compacto_precede_a_la_fila_activa_a_20x6() {
+    // 20x6 no caben cinco filas: `render_h5` usa el fallback compacto sin
+    // `ListState`, así que el foco solo puede delatarse con el prefijo en la
+    // propia etiqueta (y las filas bloqueadas con `off`).
+    let spec = menu_spec(InstalledState::Ahead);
+    let selected = spec
+        .buttons
+        .iter()
+        .position(|button| button.enabled)
+        .expect("Exit siempre habilitado");
+    let buffer = draw_menu(20, 6, selected);
+    let text = buffer_text(&buffer);
+    let marker =
+        position(&buffer, "›").unwrap_or_else(|| panic!("sin marcador de foco a 20x6:\n{text}"));
+    let exit = position(&buffer, "Exit")
+        .unwrap_or_else(|| panic!("sin Exit en el H5 compacto a 20x6:\n{text}"));
+    assert_eq!(
+        marker.0, exit.0,
+        "el marcador debe estar en la fila de la opción activa:\n{text}"
+    );
+    assert!(
+        marker.1 < exit.1,
+        "el marcador debe preceder a la etiqueta activa: marcador={}, Exit={}:\n{text}",
+        marker.1,
+        exit.1
+    );
+    assert!(
+        text.contains("off"),
+        "las filas deshabilitadas deben marcarse `off` en el modo compacto:\n{text}"
+    );
+}
+
+#[test]
+fn int_ui_layout_la_leyenda_de_teclas_aparece_en_menu_y_dialogos() {
+    let notice = Dialog::Notice {
+        title: "E_MODEL_INVALID".to_string(),
+        body: "vuelve al menú".to_string(),
+    };
+    // El diálogo solo reserva dos filas centrales a 40x12: ahí mandan el
+    // aviso y Cancelar, la leyenda aparece en la terminal de 80x24.
+    for (width, height, text) in [
+        (80, 24, buffer_text(&draw_menu(80, 24, 0))),
+        (40, 12, buffer_text(&draw_menu(40, 12, 0))),
+        (80, 24, buffer_text(&draw_dialog(80, 24, &notice))),
+    ] {
+        assert!(
+            text.contains("↑/↓/k/j/Tab = mover"),
+            "sin leyenda de movimiento a {width}x{height}:\n{text}"
+        );
+        assert!(
+            text.contains("Enter = elegir"),
+            "sin leyenda de confirmación a {width}x{height}:\n{text}"
+        );
     }
 }

@@ -72,6 +72,7 @@ pub(crate) fn dialog_lines(dialog: &Dialog) -> Vec<Line<'_>> {
                 };
                 lines.push(Line::from(format!("{marker}{option}")).style(style));
             }
+            lines.push(help_line());
             lines
         }
         Dialog::Input {
@@ -89,21 +90,29 @@ pub(crate) fn dialog_lines(dialog: &Dialog) -> Vec<Line<'_>> {
                 cancel,
                 Line::from(prompt.clone()).style(bold),
                 Line::from(format!("> {shown}")),
+                help_line(),
             ]
         }
-        Dialog::Notice { title, body } => {
-            vec![
-                cancel,
-                Line::from(title.clone()).style(bold),
-                Line::from(body.clone()),
-            ]
-        }
+        Dialog::Notice { title, body } => vec![
+            cancel,
+            Line::from(title.clone()).style(bold),
+            Line::from(body.clone()),
+            help_line(),
+        ],
     }
 }
 
 fn cancel_line() -> Line<'static> {
     Line::from("⏹ Cancelar — Esc / Ctrl+C")
         .style(Style::new().add_modifier(Modifier::BOLD | Modifier::REVERSED))
+}
+
+/// Leyenda compartida por menú y diálogos: sin ella el frame no enseña qué
+/// tecla mueve, confirma o sale.
+#[must_use]
+pub(crate) fn help_line() -> Line<'static> {
+    Line::from("↑/↓/k/j/Tab = mover · Enter = elegir · Esc = salir")
+        .style(Style::new().add_modifier(Modifier::DIM))
 }
 
 /// Tres bandas compartidas: ARRIBA (`top_rows` fijas), CENTRO (`Min(1)`) y
@@ -135,10 +144,32 @@ pub(crate) fn bottom_areas(area: Rect) -> (Rect, Option<Rect>) {
 }
 
 /// H5 compacto para terminales donde no caben cinco filas: las etiquetas se
-/// reparten entre las filas disponibles con `Wrap`, sin perder ninguna.
+/// reparten entre las filas disponibles con `Wrap`, sin perder ninguna. Sin
+/// `ListState` el foco se marca a mano y el grupo DIM se anuncia con `off:`.
 #[must_use]
-pub(crate) fn compact_labels(labels: &[&str]) -> String {
-    labels.join(" · ")
+pub(crate) fn compact_labels(
+    rows: &[Line<'_>],
+    labels: &[&str],
+    selected: Option<usize>,
+) -> String {
+    let mut parts: Vec<String> = Vec::new();
+    if rows
+        .iter()
+        .any(|row| row.style.add_modifier.contains(Modifier::DIM))
+    {
+        // Un solo `off:` para el grupo: un sufijo por fila no cabe en las
+        // tres filas de la pantalla de hitos a 20x6 y desplazaba `Exit`.
+        parts.push("off:".to_string());
+    }
+    for (index, label) in labels.iter().enumerate() {
+        parts.push(if Some(index) == selected {
+            // Sin `ListState` el foco solo puede delatarse en la etiqueta.
+            format!("› {label}")
+        } else {
+            (*label).to_string()
+        });
+    }
+    parts.join(" ")
 }
 
 /// Header de una sola fila con elipsis cuando no cabe entero.
@@ -182,7 +213,7 @@ pub(crate) fn render_h5<'a>(
 ) {
     if area.height < 5 {
         frame.render_widget(
-            Paragraph::new(compact_labels(labels)).wrap(Wrap { trim: true }),
+            Paragraph::new(compact_labels(&rows, labels, selected)).wrap(Wrap { trim: true }),
             area,
         );
         return;
@@ -334,6 +365,7 @@ pub fn render_stages_with_dialog(
             )
             .style(Style::new().add_modifier(Modifier::DIM)),
         );
+        lines.push(help_line());
         lines
     };
     frame.render_widget(

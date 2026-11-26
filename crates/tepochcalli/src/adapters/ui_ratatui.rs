@@ -11,6 +11,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crossterm::event::{self, Event, KeyCode, KeyModifiers};
+use ratatui::layout::{Constraint, Layout};
 use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span, Text};
 use ratatui::widgets::{Paragraph, Wrap};
@@ -22,7 +23,7 @@ use crate::ports::{
     ProgressSpec,
 };
 
-use super::ui_selection::{bottom_areas, fit_header, render_contact, render_h5, zones};
+use super::ui_selection::{bottom_areas, fit_header, help_line, render_contact, render_h5, zones};
 // Reexporta los nombres que ya ofrecía este módulo: el render del frame vive
 // en `ui_selection`, pero callers y tests siguen cruzando el mismo seam.
 pub use super::ui_selection::{
@@ -53,11 +54,21 @@ pub fn render_menu(frame: &mut Frame, view: &MenuView<'_>, selected: usize) {
     .wrap(Wrap { trim: true });
     frame.render_widget(header, top);
 
+    // La leyenda ocupa la última fila del CENTRO cuando hay sitio: a 20x6
+    // solo cabe una fila y el aviso manda; el H5 no pierde ninguna fila.
+    let notice_area = if center.height >= 2 {
+        let [notice_area, help_area] =
+            Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).areas(center);
+        frame.render_widget(Paragraph::new(help_line()), help_area);
+        notice_area
+    } else {
+        center
+    };
     if let Some(notice) = spec.notice {
         let paragraph = Paragraph::new(notice_text(notice))
             .style(Style::new().add_modifier(Modifier::BOLD))
             .wrap(Wrap { trim: true });
-        frame.render_widget(paragraph, center);
+        frame.render_widget(paragraph, notice_area);
     }
 
     let (rows_area, contact_area) = bottom_areas(bottom);

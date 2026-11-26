@@ -108,10 +108,32 @@ fn int_ui_screen_ownership_con_barra_activa_no_hay_un_segundo_dueño() {
     });
     assert_eq!(typed.expect("respuesta tipada"), "hf-id");
 
-    ui.panel("E_MODEL_INVALID", "vuelve al menú");
+    let mut notice_frame = String::new();
+    std::thread::scope(|scope| {
+        let watcher = scope.spawn(|| {
+            let request = handle
+                .wait_for_request()
+                .expect("el watcher ve el aviso del panel");
+            assert!(
+                matches!(request, Dialog::Notice { .. }),
+                "el panel se pinta en el frame, no se escribe en el TTY: {request:?}"
+            );
+            notice_frame = buffer_text(&dialog_frame(&handle, 0));
+            assert!(
+                handle.handle(DialogKey::Confirm, &cancel),
+                "Enter debe acusar recibo del aviso"
+            );
+        });
+        ui.panel("E_MODEL_INVALID", "vuelve al menú");
+        watcher.join().expect("watcher");
+    });
     assert!(
-        matches!(handle.snapshot(), Some(Dialog::Notice { .. })),
-        "el panel se pinta en el frame, no se escribe en el TTY"
+        notice_frame.contains("E_MODEL_INVALID"),
+        "el aviso estuvo visible en el frame antes del ack:\n{notice_frame}"
+    );
+    assert!(
+        handle.snapshot().is_none(),
+        "el ack retira el aviso del frame"
     );
 
     handle.clear();
@@ -263,11 +285,10 @@ fn int_ui_screen_ownership_input_secret_no_hace_eco_del_valor_bajo_el_watcher() 
 
 #[test]
 fn int_ui_screen_ownership_las_teclas_del_puerto_mueven_el_cursor_y_borran_texto() {
-    // `dialog_key` (ui_selection.rs) es privado: crossterm no alcanza aquí.
     // Se ejerce el contrato del puerto que alimenta: ↑/k/BackTab → Previous,
     // ↓/j/Tab → Next, Enter → Confirm, Backspace → Backspace (documentado en
-    // `DialogKey`). El watcher real solo corre bajo TTY y este target no lo
-    // arranca: el mapeo crossterm→DialogKey queda sin cubrir.
+    // `DialogKey`). El mapeo crossterm→DialogKey se comprueba más abajo con
+    // `ui_ratatui::dialog_key`, reexportado para ese fin.
     let handle = Arc::new(DialogHandle::default());
     let cancel = CancelToken::new();
     handle.request(Dialog::Select {
@@ -467,4 +488,87 @@ fn int_ui_screen_ownership_las_letras_k_y_j_son_texto_en_dialogos_de_entrada() {
     assert!(handle.handle(DialogKey::Confirm, &cancel));
     assert_eq!(handle.wait(), DialogOutcome::Text("kj".to_string()));
     assert!(!cancel.is_cancelled(), "confirmar no cancela");
+}
+
+#[test]
+fn int_ui_screen_ownership_el_aviso_se_resuelve_con_enter_y_no_cancela() {
+    let handle = Arc::new(DialogHandle::default());
+    let cancel = CancelToken::new();
+    handle.request(Dialog::Notice {
+        title: "Advertencia de re-index".to_string(),
+        body: "cambio irreversible".to_string(),
+    });
+
+    assert!(
+        handle.handle(DialogKey::Confirm, &cancel),
+        "Enter acusa recibo del aviso"
+    );
+    let outcome = format!("{:?}", handle.wait());
+    assert!(
+        outcome.contains("Noticed"),
+        "el ack del aviso debe ser tipado, no un aborto: {outcome}"
+    );
+    assert!(
+        handle.snapshot().is_none(),
+        "el aviso sale del frame tras el ack"
+    );
+    assert!(!cancel.is_cancelled(), "leer un aviso no cancela");
+}
+
+#[test]
+fn int_ui_screen_ownership_el_panel_no_pierde_el_aviso_antes_de_la_siguiente_pregunta() {
+    let handle = Arc::new(DialogHandle::default());
+    let cancel = CancelToken::new();
+    let progress = Progress::new(7);
+    set_active_progress(Some(&progress));
+    set_active_dialog(Some(&handle));
+    let ui = TtyUi;
+
+    let mut notice_frame = String::new();
+    let mut next_request = None;
+    std::thread::scope(|scope| {
+        let watcher = scope.spawn(|| {
+            // Caso real: E_MODEL_INVALID → `input_secret` justo después.
+            let first = handle
+                .wait_for_request()
+                .expect("el watcher ve el aviso del panel");
+            let was_notice = matches!(first, Dialog::Notice { .. });
+            // Se fuerza el frame que el watcher pintaría entre `panel` y la
+            // siguiente pregunta.
+            notice_frame = buffer_text(&dialog_frame(&handle, 0));
+            // Siempre se responde lo que haya en el frame: así el test falla
+            // por aserción, nunca por un `wait` colgado.
+            handle.handle(DialogKey::Confirm, &cancel);
+            if was_notice {
+                let second = handle
+                    .wait_for_request()
+                    .expect("el watcher ve la pregunta siguiente");
+                next_request = Some(second);
+                handle.handle(DialogKey::Confirm, &cancel);
+            } else {
+                next_request = Some(first);
+            }
+            assert!(
+                was_notice,
+                "el aviso no debe ser sobrescrito antes de pintarse: {next_request:?}"
+            );
+        });
+        ui.panel("E_MODEL_INVALID", "vuelve al menú");
+        let picked = ui.select("Embedding provider", &["MiniLM"], 0);
+        watcher.join().expect("watcher");
+        assert_eq!(picked.expect("respuesta tipada"), 0);
+    });
+    assert!(
+        notice_frame.contains("E_MODEL_INVALID") && notice_frame.contains("vuelve al menú"),
+        "el texto del aviso estuvo visible antes del select:\n{notice_frame}"
+    );
+    assert!(
+        matches!(next_request, Some(Dialog::Select { .. })),
+        "la siguiente pregunta llega entera al watcher: {next_request:?}"
+    );
+    assert!(!cancel.is_cancelled(), "avisar y elegir no cancela");
+
+    handle.clear();
+    set_active_dialog(None);
+    set_active_progress(None);
 }

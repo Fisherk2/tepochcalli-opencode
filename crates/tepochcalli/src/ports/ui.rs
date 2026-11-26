@@ -153,6 +153,8 @@ pub enum DialogOutcome {
     Index(usize),
     /// Texto introducido en un `input`.
     Text(String),
+    /// Enter acusó recibo de un `Notice`: el frame ya se pintó.
+    Noticed,
     /// El usuario abortó o el watcher cerró la pantalla.
     Aborted,
 }
@@ -243,7 +245,12 @@ impl DialogHandle {
                 DialogKey::Cancel => Some(DialogOutcome::Aborted),
                 _ => return false,
             },
-            Dialog::Notice { .. } => return false,
+            Dialog::Notice { .. } => match key {
+                // El aviso retiene el frame hasta que Enter lo acusa; sin este
+                // ack un `select` posterior borraría el texto sin ser leído.
+                DialogKey::Confirm => Some(DialogOutcome::Noticed),
+                _ => return false,
+            },
         };
         if let Some(outcome) = outcome {
             if outcome == DialogOutcome::Aborted {
