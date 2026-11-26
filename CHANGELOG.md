@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.0-beta.4] - 2026-11-25
+
+<!-- markdownlint-disable-next-line MD024 -->
+### Fixed
+
+- **Wizard: un dueño de la pantalla en F6.** El watcher del TUI posee el frame y atiende la
+  selección, la entrada y el panel; `Ui::select` conserva su firma, sin segundo `try_init()` y con
+  cancelación compartida que compensa por el journal existente.
+- **Wizard: TUI de tres zonas y ETA a la derecha.** Arriba banner/progreso/spinner y ETA en columna
+  propia (`Layout::horizontal`), centro mensajes/opciones/confirmaciones/selección y abajo menú H5
+  y contacto; wrap/elipsis y cota mínima para Cancelar a 80×24, 40×12, 30×8 y 20×6.
+- **Wizard: banner con semántica.** «listo para instalar» sin instalación previa y versión instalada
+  cuando existe `.tepochcalli/pyproject.toml`, reutilizando `READY_NOTICE`.
+- **Wizard: Install elige embedder antes de F3.** La selección ocurre dentro del frame, antes de
+  `run_stages`; el gate test-embed sigue detrás del venv (F5) y el título muestra el destino
+  `<vault>/.tepochcalli/models/`.
+- **Tests: ruta TTY cubierta.** PTY vía `script(1)` sin dependencias nuevas (5/5), con la ruta
+  no-TTY blindada y aserciones posicionales del layout.
+
+### Added (Phase 6.9 — métrica de comentarios)
+
+- **Justfile: receta `comment-density`.** Mide la densidad de comentarios del codebase versionado
+  sin compactar: 7,60 % global (banda 10–15 %, sin acción).
+
 ## [0.1.0-beta.3] - 2026-11-25
 
 <!-- markdownlint-disable-next-line MD024 -->

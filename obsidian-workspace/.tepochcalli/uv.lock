@@ -3539,7 +3539,7 @@ wheels = [
 
 [[package]]
 name = "tepochcalli-flow"
-version = "0.1.0b3"
+version = "0.1.0b4"
 source = { editable = "." }
 dependencies = [
     { name = "cocoindex", extra = ["lancedb", "litellm", "sentence-transformers"] },
