@@ -9,7 +9,7 @@ use std::collections::VecDeque;
 use std::io::IsTerminal;
 use std::sync::Arc;
 
-use crate::domain::{CancelToken, MenuAction, WizardError};
+use crate::domain::{menu_spec, CancelToken, InstalledState, MenuAction, WizardError};
 use crate::ports::{
     active_dialog, has_active_progress, Dialog, DialogHandle, DialogOutcome, MenuView, Progress,
     ProgressSpec, Ui,
@@ -192,11 +192,18 @@ struct LineMenuPlan {
 /// Header line shared by the full-screen menu and the line fallback.
 #[must_use]
 pub fn header_line(view: &MenuView<'_>) -> String {
+    // `READY_NOTICE` es privado en `domain`: se reutiliza vía `menu_spec`, sin
+    // duplicar el literal ni tocar la máquina de estados.
+    let installed = match view.installed {
+        Some(version) => format!("instalada: {version}"),
+        None => menu_spec(InstalledState::NotInstalled)
+            .notice
+            .unwrap_or_default()
+            .to_string(),
+    };
     format!(
-        "Tepochcalli {} · instalada: {} · embedder: {}",
-        view.wizard,
-        view.installed.unwrap_or("—"),
-        view.embedder
+        "Tepochcalli {} · {installed} · embedder: {}",
+        view.wizard, view.embedder
     )
 }
 
@@ -424,6 +431,21 @@ mod tests {
         assert!(
             plan.body.contains("directorio listo para instalar"),
             "the notice reaches the panel:\n{}",
+            plan.body
+        );
+
+        let absent = MenuView {
+            spec: &spec,
+            wizard: "0.1.0",
+            installed: None,
+            embedder: "sin configurar",
+        };
+        let plan = line_menu_plan(&absent).expect("Install keeps the menu alive");
+        assert!(
+            plan.body.starts_with(
+                "Tepochcalli 0.1.0 · directorio listo para instalar · embedder: sin configurar"
+            ),
+            "no installed version means ready, never a dash:\n{}",
             plan.body
         );
     }
