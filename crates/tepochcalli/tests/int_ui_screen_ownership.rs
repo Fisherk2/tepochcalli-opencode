@@ -205,3 +205,163 @@ fn int_ui_screen_ownership_esc_y_ctrl_c_abortan_y_limpian_el_estado() {
         "clear del watcher no inventa cancelación"
     );
 }
+
+#[test]
+fn int_ui_screen_ownership_input_secret_no_hace_eco_del_valor_bajo_el_watcher() {
+    const SECRET: &str = "sk-NO-ECO-9f3a7b";
+    let handle = Arc::new(DialogHandle::default());
+    let cancel = CancelToken::new();
+    let progress = Progress::new(7);
+    set_active_progress(Some(&progress));
+    set_active_dialog(Some(&handle));
+
+    // Los frames se recogen en el watcher y se asertan en la hebra principal:
+    // un fallo allí no debe dejar a `input_secret` esperando una respuesta.
+    let mut frames: Vec<String> = Vec::new();
+    let answered = std::thread::scope(|scope| {
+        let watcher = scope.spawn(|| {
+            let request = handle
+                .wait_for_request()
+                .expect("el watcher ve la petición");
+            assert!(
+                matches!(request, Dialog::Input { secret: true, .. }),
+                "input_secret debe pedir un diálogo sin eco: {request:?}"
+            );
+            for ch in SECRET.chars() {
+                assert!(handle.handle(DialogKey::Char(ch), &cancel));
+                frames.push(buffer_text(&dialog_frame(&handle, 0)));
+            }
+            assert!(handle.handle(DialogKey::Confirm, &cancel));
+        });
+        let answered = TtyUi.input_secret("HF_TOKEN");
+        watcher.join().expect("watcher");
+        answered
+    });
+    let mut typed = String::new();
+    for (index, ch) in SECRET.chars().enumerate() {
+        typed.push(ch);
+        let text = frames.get(index).expect("un frame por carácter tecleado");
+        assert!(
+            typed.len() < 4 || !text.contains(&typed),
+            "el secreto nunca debe aparecer en el frame, ni parcialmente:\n{text}"
+        );
+        assert!(
+            text.contains("<oculto>"),
+            "el frame debe avisar de que hay contenido:\n{text}"
+        );
+        assert!(
+            text.contains("HF_TOKEN"),
+            "el enunciado sigue visible:\n{text}"
+        );
+    }
+    assert_eq!(answered.expect("respuesta tipada"), SECRET);
+    assert!(!cancel.is_cancelled(), "confirmar un secreto no cancela");
+    handle.clear();
+    set_active_dialog(None);
+    set_active_progress(None);
+}
+
+#[test]
+fn int_ui_screen_ownership_las_teclas_del_puerto_mueven_el_cursor_y_borran_texto() {
+    // `dialog_key` (ui_selection.rs) es privado: crossterm no alcanza aquí.
+    // Se ejerce el contrato del puerto que alimenta: ↑/k/BackTab → Previous,
+    // ↓/j/Tab → Next, Enter → Confirm, Backspace → Backspace (documentado en
+    // `DialogKey`). El watcher real solo corre bajo TTY y este target no lo
+    // arranca: el mapeo crossterm→DialogKey queda sin cubrir.
+    let handle = Arc::new(DialogHandle::default());
+    let cancel = CancelToken::new();
+    handle.request(Dialog::Select {
+        prompt: "Embedding provider".to_string(),
+        options: vec![
+            "MiniLM".to_string(),
+            "bge-m3".to_string(),
+            "Configure later".to_string(),
+        ],
+        cursor: 0,
+    });
+
+    assert!(handle.handle(DialogKey::Previous, &cancel));
+    let text = buffer_text(&dialog_frame(&handle, 0));
+    assert!(
+        text.contains("› Configure later"),
+        "Previous envuelve a la última fila:\n{text}"
+    );
+
+    assert!(handle.handle(DialogKey::Next, &cancel));
+    let text = buffer_text(&dialog_frame(&handle, 1));
+    assert!(
+        text.contains("› MiniLM"),
+        "Next envuelve a la primera fila:\n{text}"
+    );
+    assert!(handle.handle(DialogKey::Confirm, &cancel));
+    assert_eq!(handle.wait(), DialogOutcome::Index(0));
+
+    handle.request(Dialog::Input {
+        prompt: "HF id".to_string(),
+        value: String::new(),
+        secret: false,
+    });
+    for ch in "hf-k".chars() {
+        assert!(handle.handle(DialogKey::Char(ch), &cancel));
+    }
+    let text = buffer_text(&dialog_frame(&handle, 0));
+    assert!(
+        text.contains("> hf-k"),
+        "las teclas de texto llegan al valor:\n{text}"
+    );
+    assert!(handle.handle(DialogKey::Backspace, &cancel));
+    let text = buffer_text(&dialog_frame(&handle, 1));
+    assert!(
+        text.contains("> hf-"),
+        "Backspace quita el último carácter:\n{text}"
+    );
+    assert!(
+        !text.contains("hf-k"),
+        "el carácter borrado desaparece:\n{text}"
+    );
+    assert!(handle.handle(DialogKey::Confirm, &cancel));
+    assert_eq!(handle.wait(), DialogOutcome::Text("hf-".to_string()));
+    assert!(!cancel.is_cancelled(), "editar y confirmar no cancela");
+}
+
+#[test]
+fn int_ui_screen_ownership_clear_del_watcher_despierta_al_esperador_y_no_cancela() {
+    let handle = Arc::new(DialogHandle::default());
+    let cancel = CancelToken::new();
+    handle.request(Dialog::Input {
+        prompt: "HF id".to_string(),
+        value: "parcial".to_string(),
+        secret: false,
+    });
+
+    // `ClearDialogOnDrop::drop` (ui_ratatui.rs) llama a este `clear`. Es privado
+    // y solo vive en el watcher TTY: aquí se comprueba el contrato que invoca.
+    handle.clear();
+    assert!(
+        handle.snapshot().is_none(),
+        "clear (lo que hace el Drop del watcher) retira el diálogo"
+    );
+    assert_eq!(handle.wait(), DialogOutcome::Aborted);
+    assert!(
+        !cancel.is_cancelled(),
+        "clear del watcher no inventa cancelación"
+    );
+    let text = buffer_text(&dialog_frame(&handle, 0));
+    assert!(
+        !text.contains("HF id"),
+        "el frame ya no pinta el diálogo:\n{text}"
+    );
+    assert!(
+        !text.contains("parcial"),
+        "el valor pendiente no queda en el frame:\n{text}"
+    );
+
+    // Un clear no envenena la cola: el siguiente diálogo se responde igual.
+    handle.request(Dialog::Select {
+        prompt: "Embedding provider".to_string(),
+        options: vec!["MiniLM".to_string()],
+        cursor: 0,
+    });
+    assert!(handle.handle(DialogKey::Confirm, &cancel));
+    assert_eq!(handle.wait(), DialogOutcome::Index(0));
+}

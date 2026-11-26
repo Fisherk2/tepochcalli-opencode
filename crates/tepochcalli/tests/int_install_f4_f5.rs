@@ -492,3 +492,34 @@ fn resume_con_f6_hecha_no_roba_la_respuesta_del_embedder() {
         "con F6 ya hecha no se consume la cola de respuestas: {guard_at} vs {select_at}"
     );
 }
+
+#[test]
+fn resume_con_f6_hecha_la_guarda_envuelve_la_preseleccion_y_el_take() {
+    let src = install_phases_source();
+    let f6_at = src
+        .find("let f6_cached = flags.resume && is_phase_done(path.as_path(), Phase::F6);")
+        .expect("f6_cached se calcula con resume y F6");
+    let select_at = src
+        .find("preselect_embedder(ui")
+        .expect("la selección sigue en install_phases");
+    let guarded = &src[f6_at..select_at];
+    let condition = guarded.lines().next().expect("línea de la guarda");
+    assert!(
+        condition.contains("flags.resume") && condition.contains("Phase::F6"),
+        "la condición debe ser resume && F6: {condition}"
+    );
+    let guard_at = guarded
+        .find("if !f6_cached {")
+        .expect("la guarda niega f6_cached");
+    let take_at = guarded
+        .find("let _ = take_preselected();")
+        .expect("el buzón se vacía antes de preguntar");
+    assert!(
+        take_at < guard_at,
+        "el buzón se vacía antes de decidir si se pregunta: {take_at} vs {guard_at}"
+    );
+    assert!(
+        guarded.contains("if !f6_cached {") && guarded.contains("take_preselected();"),
+        "guarda y vaciado del buzón deben envolver la preselección"
+    );
+}

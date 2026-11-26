@@ -17,12 +17,15 @@ const SCREEN_MARKER: &str = "directorio listo para instalar";
 /// aparece, no tras un sleep. Sin frame, se mata el hijo y falla — nunca queda
 /// un proceso huérfano esperando una tecla.
 fn run_menu_in_pty(vault: &Path) -> (Option<i32>, String) {
+    run_menu_in_pty_with_cols(vault, 80)
+}
+
+/// Igual que `run_menu_in_pty`, con ancho configurable: el header con
+/// `embedder: local (.tepochcalli/models/)` no cabe en 80 columnas.
+fn run_menu_in_pty_with_cols(vault: &Path, cols: u16) -> (Option<i32>, String) {
+    let setup = format!("stty rows 24 cols {cols}; exec \"$T5_BIN\" --vault \"$T5_VAULT\"");
     let mut child = Command::new("script")
-        .args([
-            "-qec",
-            "stty rows 24 cols 80; exec \"$T5_BIN\" --vault \"$T5_VAULT\"",
-            "/dev/null",
-        ])
+        .args(["-qec", &setup, "/dev/null"])
         .env("T5_BIN", env!("CARGO_BIN_EXE_tepochcalli"))
         .env("T5_VAULT", vault)
         .stdin(Stdio::piped())
@@ -95,6 +98,21 @@ fn tty_menu_renders_full_screen_under_a_real_pty() {
     assert!(
         !output.contains("no TTY detected"),
         "la ruta PTY no debe caer en el fallback; salida: {output:?}"
+    );
+    assert_eq!(status, Some(0), "salir con `q` debe cerrar limpio");
+}
+
+#[test]
+fn tty_menu_muestra_la_ruta_models_del_embedder_local() {
+    let vault = tempfile::tempdir().expect("vault fixture");
+    let models = vault.path().join(".tepochcalli").join("models");
+    std::fs::create_dir_all(&models).expect("fixture models/");
+    std::fs::write(models.join("MiniLM@fixture"), "snapshot").expect("entrada del modelo");
+
+    let (status, output) = run_menu_in_pty_with_cols(vault.path(), 120);
+    assert!(
+        output.contains("models/"),
+        "el header del menú PTY debe mostrar la ruta del modelo: {output:?}"
     );
     assert_eq!(status, Some(0), "salir con `q` debe cerrar limpio");
 }
