@@ -1,6 +1,6 @@
 # Spec: Wizard de instalación (TUI Rust atomico y versionado)
 
-* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal) · **Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19)** (§Enmienda 2026-11-18)
+* **Status:** Approved (FTR Phase 3→4, 2026-10-28 — ver `docs/WORKFLOW.md` §4; deuda nueva M6/D-b/F-T20 en `docs/TECH_DEBT.md`) · **Enmienda 2026-11-13** (estado de soporte de Windows en v1, §Enmienda D-b; canal de instalación `cargo binstall` primero, §Enmienda canal) · **Enmienda 2026-11-18 — flujo destino (Accepted 2026-11-19)** (§Enmienda 2026-11-18) · **Enmienda 2026-11-25 — TUI responsive y propiedad de pantalla** (§Enmienda 2026-11-25)
 * **Date:** 2026-10-21
 * **Author:** Arquitecto (entrevista /spec)
 * **Reviewers:** Product Owner (usuario)
@@ -21,10 +21,8 @@ Preguntas abiertas de BACKLOG.md: ¿qué gestor de paquetes?, ¿debo registrarme
 
 ### Goals
 
-* Canal de instalación recomendado: **`cargo binstall tepochcalli`** (ADR-013), seguido del
-  segundo paso `tepochcalli install`; fallback sin toolchain:
-  `curl -L https://github.com/Fisherk2/tepochcalli-opencode/releases/latest/download/install.sh | sh`
-  (o `install.ps1`). Ver §Enmienda canal 2026-11-13.
+* Canal de instalación: **`uvx tepochcalli`** (ADR-014, §Enmienda 2026-11-18); `cargo binstall`
+  y los scripts `install.sh`/`install.ps1` quedan como canal heredado.
 * Flujo atómico de 8 fases con rollback por compensación (ver Detailed Design).
 * Idempotencia: re-ejecutar = reparación/no-op, nunca duplicados.
 * Flags `--offline` (usa cachés locales, sin red — válido solo con `models/` o config API presente) y `--skip-model` (equivale a la salida 5 del menú embedder: instalar sin provider).
@@ -35,8 +33,7 @@ Preguntas abiertas de BACKLOG.md: ¿qué gestor de paquetes?, ¿debo registrarme
 * Actualizaciones automáticas del vault del usuario (se re-ejecuta el wizard; upgrade asistido = futuro).
 * Gestionar la instalación de Obsidian ni de OpenCode (solo detectar; el wizard abre instrucciones si faltan).
 * Editor de la config RAG (eso es `tepochcalli.toml`, spec-embeddings).
-* Gestionar la instalación del binario en el host: la hace `cargo binstall` (o el fallback
-  `install.sh`/`install.ps1`), no el wizard; `tepochcalli uninstall` tampoco borra el binario.
+* Gestionar el binario del host: lo gestiona `uvx` (§Enmienda 2026-11-18); `uninstall` no lo borra.
 
 ## Proposed Solution
 
@@ -175,14 +172,12 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 * (P2, nice-to-have D8.4) `tepochcalli models list` / `tepochcalli models prune` — higiene de la cache `models/` tras swaps: inventario con procedencia (medido/declarado) y limpieza de modelos huérfanos.
 * Checklist de re-entrada (salida 5): `tepochcalli config embedder` → provider + descarga/API → `index_refresh()` (o re-ejecutar `install --resume`) → smoke-test `search`. El wizard lo imprime al terminar la instalación degraded.
 
-### Versionado y release (D5/ADR-003)
+### Versionado y release (D5/ADR-003; canal superado por ADR-014)
 
-* semver en el crate; tags `tepochcalli-v<ver>` → CI cargo-dist → release con `install.sh`/`install.ps1` + artefactos (x86_64/aarch64 Linux, macOS, Windows) + SHA-256.
-* El payload viaja como asset de la misma release (`tepochcalli-workspace-<ver>.tar.gz`): wizard y vault versionan juntos — el binario v0.3.x instala siempre payload v0.3.x (one-version rule).
-* `cargo binstall tepochcalli` resuelve el asset **solo** con `[package.metadata.binstall]`
-  (`pkg-url` explícito): el namespace `tepochcalli-v<ver>` no coincide con los defaults de
-  binstall (`{ version }`/`v{ version }`). Sin ese bloque, binstall no encuentra asset y compila.
-* Orden de release: tag → release con assets → `cargo publish` (ADR-013 §6(e)).
+* One-version rule: el binario y el payload comparten semver; el wizard instala siempre
+  `tepochcalli-workspace-<ver>.tar.gz` de su misma versión (tag `tepochcalli-v<ver>`).
+* El detalle del canal heredado (cargo-dist/binstall, metadatos y orden de publicación) vive en
+  la §Enmienda canal 2026-11-13 y en §Enmienda 2026-11-18; ADR-003/013/014 son la fuente.
 
 ### UX de fallo
 
@@ -206,8 +201,8 @@ El wizard usa una TUI line-based con `dialoguer` (`Select` con default preselecc
 
 * Matrix: VM limpia por plataforma (Ubuntu latest, macOS arm64, Windows) — acceptance: "clean VM → installed vault with one command incl. deps" (Phase 3 exit, docs/WORKFLOW.md). **Windows: soportado con verificación pendiente** — objetivo nunca ejecutado, ver §Enmienda D-b.
 * Idempotencia: `install` dos veces → mismo estado, cero duplicados en `opencode.json` ni en `00-resources/` (SPEC.md §Testing).
-* Fallo inducido: matar la red en fase 5/6 → assert del rollback correspondiente y `.bak` intacto.
-* `--offline` segunda corrida (con cachés) → éxito sin red (fixture en CI con cache uv/`models/` pre-cargados).
+* Fallo inducido y `--offline` con/sin cachés → rollback, `.bak` intacto y `E_OFFLINE_NO_CACHE`
+  (detalle en §Enmienda 2026-11-20).
 * Salida 5 del menú embedder (y `--skip-model`): assert de instalación COMPLETA sin fase 7 + checklist degraded impreso + `search` → `E_NO_EMBEDDER` + `rag_status` → `degraded` con `fix_hint` (ADR-007 §8).
 * Gate test-embed: fixture con ID HF no-embedding → rechazo en fase 6, sin half-config escrita, fallback a salida 5 (no abort).
 * D8.1/D8.2: host fixture de 4 GB → fila `BAAI/bge-m3` con badge `no recomendado` pero SELECCIONABLE; fila MiniLM `recommended`; todo número muestra etiqueta `medido`/`estimado`/`declarado`.
@@ -482,6 +477,16 @@ la fila 4 de §Fases, el layout D2 de spec-vault-structure y la ubicación físi
 * **Evidencia:** `medido` en el mount fuseblk/NTFS-3G (exit 0, F4+F5 verdes, `venv/bin/python` →
   CPython 3.12.14). Citas: `application/prereqs.rs:97-107`,
   `application/installer.rs:184-193,387-402,444-456`, `cli/install_phases.rs:150,244,266,316`.
+
+## Enmienda 2026-11-25 — TUI responsive y propiedad de pantalla
+
+**Status: Accepted 2026-11-25** — UX reversible sin ADR nuevo (D1-D8 intactas), registrada en `docs/WORKFLOW.md` §Phase 6.9 y `docs/BACKLOG.md` §8. Supera la §TUI (D23), el orden de H6 y la barra indeterminada de la §Enmienda 2026-11-24; sin tag/Release/PyPI.
+
+* **Un dueño del frame (C1):** el watcher de `adapters/ui_ratatui.rs` pinta y lee; selección, entrada y panel son estado del frame junto a `ACTIVE_PROGRESS` (`ports/ui.rs`). `Ui::select` conserva su firma, sin segundo `try_init()`; Esc/Ctrl+C cancela y compensa con el journal.
+* **Tres zonas y ETA (C2):** ARRIBA banner/progreso/spinner y ETA en columna derecha (`Layout::horizontal`), CENTRO mensajes/opciones/confirmaciones/selección y ABAJO menú H5 y contacto; wrap/elipsis y cota mínima para Cancelar a 80×24, 40×12, 30×8 y 20×6.
+* **Orden de Install (C3):** la selección de embedder es la primera interacción, dentro del frame y antes de F3 (`run_stages`); el gate test-embed sigue tras el venv (F5) y el título nombra `<vault>/.tepochcalli/models/` como destino (ADR-015 intacto).
+* **Banner semántico (C4):** «listo para instalar» si `installed_version()` no halla `.tepochcalli/pyproject.toml`; si lo halla, la versión instalada, reutilizando `READY_NOTICE` sin tocar `installed_version`, `home_view`, `MenuView` ni `installed_state`.
+* **Evidencia:** `int_ui_screen_ownership`, `int_ui_layout`, `int_embedder_menu`, `int_install_f4_f5` y `e2e_install_tty` (PTY con `script(1)`), `just ci` completo en verde y `just comment-density` ≈7,6 %.
 
 ## References
 
