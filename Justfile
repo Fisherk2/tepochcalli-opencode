@@ -529,7 +529,7 @@ bench-scale-ratio args="": (python-bench-scale-ratio args)
 # Markdown lint de docs/specs/AGENTS.md/SPEC.md/README.md/CHANGELOG.md (markdownlint-cli2 vía npx).
 # Globs explícitos *.md: un directorio desnudo haría lintear también los PNG de docs/img/.
 md-lint:
-    npx --yes markdownlint-cli2 "docs/**/*.md" "specs/**/*.md" AGENTS.md SPEC.md README.md CHANGELOG.md
+    npx --yes markdownlint-cli2 "docs/**/*.md" "specs/**/*.md" "tasks/**/*.md" AGENTS.md SPEC.md README.md CHANGELOG.md
 
 # Genera THIRD-PARTY.md desde el grafo del binario (licencias del `Cargo.lock`).
 # Se regenera al subir de versión; el fichero va commiteado.
